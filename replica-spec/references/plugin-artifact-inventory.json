@@ -1,0 +1,142 @@
+{
+  "observed_date": "2026-10-23",
+  "registry_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/plugins.json",
+  "registry_sha256": "a514c083b372a2016a2a87ba0425d559caa8432372176ec78cdce346350643ef",
+  "plugins": [
+    {
+      "internal_name": "DdysProvider",
+      "version": 2,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/DdysProvider.cs3",
+      "sha256": "3ea4fc02ccf84851d6d9db33daf78a9100948f7969d4a75981b7eea9b2cee092",
+      "downloaded_bytes": 17375,
+      "index_file_size": 17375,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 2,
+        "pluginClassName": "com.horis.cloudstreamplugins.DdysPlugin",
+        "name": "DdysProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/DdysProvider.cs3"
+    },
+    {
+      "internal_name": "DramacoolProvider",
+      "version": 4,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/DramacoolProvider.cs3",
+      "sha256": "18f24e79af973c6a2f7d8b9a29ddf7c686befd180790c40ce00cd52115710899",
+      "downloaded_bytes": 13344,
+      "index_file_size": 13344,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 4,
+        "pluginClassName": "com.horis.cloudstreamplugins.DramacoolPlugin",
+        "name": "DramacoolProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/DramacoolProvider.cs3"
+    },
+    {
+      "internal_name": "LibvioProvider",
+      "version": 8,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/LibvioProvider.cs3",
+      "sha256": "12cbf144f4d1a2b4d485890a845b4116d6b893ca7d8801f720baa21aa0e3bd20",
+      "downloaded_bytes": 18090,
+      "index_file_size": 18090,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 8,
+        "pluginClassName": "com.horis.cloudstreamplugins.LibvioPlugin",
+        "name": "LibvioProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/LibvioProvider.cs3"
+    },
+    {
+      "internal_name": "MxplayerProvider",
+      "version": 3,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/MxplayerProvider.cs3",
+      "sha256": "fbee832df12810c9bef61a43b43a82efead924755c01ba6098ca68c1cbd21511",
+      "downloaded_bytes": 31617,
+      "index_file_size": 31617,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 3,
+        "pluginClassName": "com.horis.cloudstreamplugins.MxplayerPlugin",
+        "name": "MxplayerProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/MxplayerProvider.cs3"
+    },
+    {
+      "internal_name": "SuperVod",
+      "version": 12,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/SuperVod.cs3",
+      "sha256": "4715ded85ec33ccd561c52e173cc0c00716a9ed936a2d04856f63a6d209c656a",
+      "downloaded_bytes": 52115,
+      "index_file_size": 52115,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 12,
+        "pluginClassName": "com.horis.cloudstreamplugins.SuperVodPlugin",
+        "name": "SuperVod"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/SuperVod.cs3"
+    },
+    {
+      "internal_name": "YjysProvider",
+      "version": 1,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/YjysProvider.cs3",
+      "sha256": "027d17b81133fbb49808e21a69ee34c5aa8b78ee1e262e3c6ccbcff01088ca86",
+      "downloaded_bytes": 23376,
+      "index_file_size": 23376,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 1,
+        "pluginClassName": "com.horis.cloudstreamplugins.YjysPlugin",
+        "name": "YjysProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/YjysProvider.cs3"
+    },
+    {
+      "internal_name": "ZxzjProvider",
+      "version": 1,
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/builds/ZxzjProvider.cs3",
+      "sha256": "be9e14f242dd3f648ba0169eb3e2654b05cf7472da3b97440139442c3a6a7eb4",
+      "downloaded_bytes": 20411,
+      "index_file_size": 20411,
+      "entries": [
+        "manifest.json",
+        "classes.dex"
+      ],
+      "plugin_manifest": {
+        "requiresResources": false,
+        "version": 1,
+        "pluginClassName": "com.horis.cloudstreamplugins.ZxzjPlugin",
+        "name": "ZxzjProvider"
+      },
+      "pinned_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/ZxzjProvider.cs3"
+    }
+  ],
+  "registry_commit": "d411c9597e16f1e12f51f563ef75cd8d00ace002",
+  "pinned_registry_url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/d411c9597e16f1e12f51f563ef75cd8d00ace002/plugins.json"
+}

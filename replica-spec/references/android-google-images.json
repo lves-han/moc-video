@@ -1,0 +1,9 @@
+{
+  "url": "https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml",
+  "packages": [
+    "system-images;android-35;google_apis;arm64-v8a",
+    "system-images;android-35;google_apis;x86_64",
+    "system-images;android-35;google_apis_ps16k;arm64-v8a",
+    "system-images;android-35;google_apis_ps16k;x86_64"
+  ]
+}

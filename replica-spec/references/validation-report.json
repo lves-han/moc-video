@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-26",
+  "spec_version": "1.5.0",
+  "stack": "Tauri 2 + Rust; Vue 3 + TypeScript + Vite",
+  "openapi": "OpenAPI 3.1 validator passed; schema refs, operation IDs, auth, and examples checked",
+  "paths": 17,
+  "operations": 23,
+  "bridge_schemas": 54,
+  "app_definitions": 88,
+  "tauri_commands": 17,
+  "schema_refs_checked": 461,
+  "embedded_examples_validated": 6,
+  "embedded_source_bindings": "all embedded examples and positive fixtures checked recursively",
+  "structural_cases": 179,
+  "structural_positive": 98,
+  "structural_negative": 81,
+  "semantic_cases": 89,
+  "lifecycle_vectors": 6,
+  "task_cards": {
+    "desktop": 29,
+    "new_source_tasks": 3,
+    "mobile_follow_up": 6
+  },
+  "task_dependency_graph": "acyclic; card/diagram edges match; HTTP milestone independent of Android tasks",
+  "markdown_files": 5,
+  "static_app_evidence_snippets": 13,
+  "original_artifact_verification": {
+    "status": "verified",
+    "snippets_verified": 13
+  },
+  "document_invariants": "lazy Android startup, T02->T04 and native independence, AppState names, seven Cloudstream and six HTTP identity hashes checked",
+  "architecture_contract_checks": {
+    "cancel_identity": "all positive command examples recursively checked; self-target negative vector checked",
+    "request_budgets": "machine values match operation table; parent/child/grace bounds checked",
+    "http_task_acceptance": "T06-T11 pass conditions exclude deferred original-provider checks",
+    "policy_vectors": "publication generation/sequence, session ownership, manifest commit, public peer binding, resource response identity",
+    "scope": "authored contracts and policy predicates; runtime fault-injection remains in task cards",
+    "playback_binding": "metadata/playback source roles, cross-source match and provider resolution/session binding checked",
+    "history": "canonical identity, metadata origin and progress bounds checked; SQLite runtime deferred to T18",
+    "home_sections": "original index uniqueness, scoped response and retry merge vectors checked",
+    "lifecycle": "line switch, late close/release, explicit release and stop-before-plugin-commit vectors checked",
+    "integration_prerequisites": "T20 includes SQLite T18; T17 includes homepage; T21 includes N02/T12; challenge sampling assigned to N02",
+    "inline_streams": "Stremio media ignored; metadata role resolve=false; original protocol fixture retained"
+  },
+  "plugins": "7 artifact inventories retained; pinned registry snapshot hash checked",
+  "validation_dependencies": {
+    "openapi-spec-validator": "0.7.2",
+    "jsonschema": "4.25.1"
+  },
+  "not_run": [
+    "original application execution",
+    "application builds",
+    "Android plugin execution",
+    "live provider requests",
+    "desktop and mobile playback/packaging"
+  ]
+}

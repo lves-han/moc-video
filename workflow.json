@@ -1,0 +1,41 @@
+{
+  "project": "映象视频",
+  "agent_command": null,
+  "review_command": null,
+  "session_seconds": 10800,
+  "idle_seconds": 2700,
+  "max_sessions": 2,
+  "poll_seconds": 15,
+  "command_seconds": 7200,
+  "review_seconds": 1800,
+  "memory_mib": 4096,
+  "jobs": 2,
+  "heavy_lock": null,
+  "verify": [
+    {
+      "id": "verify-workflow",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/tests",
+        "-p",
+        "test_*.py"
+      ],
+      "kind": "test",
+      "report": "unittest"
+    },
+    {
+      "id": "verify-project",
+      "argv": [
+        "{python}",
+        "-B",
+        "scripts/check-project.py"
+      ],
+      "kind": "command"
+    }
+  ]
+}
