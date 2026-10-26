@@ -145,6 +145,7 @@ class WorkflowTests(unittest.TestCase):
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
         cfg.update(project="Fixture", poll_seconds=1, idle_seconds=30, heavy_lock=str(base / "heavy.lock"),
                    agent_command=[sys.executable, str(tool_dir / "agent.py"), "--prompt-file", "{prompt_file}"],
+                   review_command=None,
                    verify=[dict(id="verify-project", argv=ARGV, kind="test", report="unittest")])
         cfg_path.write_text(json.dumps(cfg), encoding="utf-8", newline="\n")
         (self.repo / "src").mkdir()

@@ -59,3 +59,10 @@
 监管：当前聊天heartbeat每5分钟，取得当前版本独立文档CLEAR且调度工具成功后启动原drive.py --once。Git提交仅T编号/WIP T编号/docs前缀，卡内声明依赖与SDK/工具链及真实验收网络按默认授权代办。若开发CLI写.git受限，外层核验后代办完成提交。
 停止：用户暂停/停止、阶段门、全部桌面完成、预算耗尽、需用户决定的阻塞、冻结修订、凭据/设备/付费或必需操作权限受阻时依PROMPT-START/SUPERVISE处理；保留失败证据及累计额度。
 验证：命令自检、validate、task check、完整verify、配置变更后的独立文档复审及调度/真实CLI身份核对另记PROGRESS与evidence/drive/supervision.md。业务验收当前全部NOT RUN。ADR-007的AUTHORIZED机制同时取代ADR-006中N1的旧阶段门收尾方式。
+
+## ADR-009 2026-10-26T10:22:51.723468+00:00 — 已采纳：新版CLI与启动前测试隔离
+
+来源：当前聊天用户“再次尝试一下 模型使用`gpt-6.1-sol`”“帮我升级brew里的codex”，以及最新“现在正式开发任务”。继续原开发授权与PROMPT-START默认预算/范围；Homebrew0.164.0已由实际请求验证模型可用。
+决定：两条既有Codex exec命令显式加入-m gpt-6.1-sol；开发workspace-write、巡检read-only，沿用PATH已验证的/opt/homebrew/bin/codex。解释器仍/Users/eason/jp/application/.venv/bin/python。
+启动前最小验收修订：scripts/tests/test_workflow.py的setUp在复制真实workflow.json后显式review_command=None；要求巡检的测试继续用enable_review配置本地替身。原4项失败由夹具继承真实巡检命令造成，证据evidence/drive/start-validate.log。此一行只修正自测隔离，按PROMPT-START第3步“只涉及配置、措辞或验收可执行性的问题，由外层最小修订后再复审”执行；用户明确指令是正式开始开发，未将此记录为用户逐字批准补丁。原脚本运行逻辑、预算、门槛、任务、需求及失败历史均保持。当前current=null，尚无业务卡冻结基线。此前PROGRESS中的该修复待授权记录由此启动前修订说明接续。
+验证：开发写读删除/Git权限和巡检只读自检、原validate、完整verify及独立文档复审结果见后续PROGRESS；独立审阅须核对该修订的范围及来源。取得CLEAR及真实heartbeat后仅drive.py --once启动，每卡完成后独立巡检；29张桌面卡结束或遇停止条件暂停，移动阶段保持单独授权。

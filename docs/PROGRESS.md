@@ -70,3 +70,18 @@
 - 实际验证：validate.py退出1，116测试，105通过/4失败/7平台跳过；日志evidence/drive/start-validate.log，报告evidence/script-validation.json。tests夹具setUp复制workflow.json后只重置agent_command，未清空review_command，3个本地无巡检测试调用真实CLI而失败，1个无配置巡检断言失效。最小候选差异evidence/drive/proposed-fixture-isolation.patch（setUp cfg.update增加review_command=None），尚未应用；控制测试修改待用户授权。
 - 独立复审：已启动只读agent，因Selected model is at capacity错误中断；原始错误与尝试记录docs/reviews/doc-review/startup-review-attempt.md。当前protected=23031107fe29a14379c5c37817cc9e977374a4289285501d1871f9f1df3b99f1，尚无新CLEAR。
 - 当前状态：task current=null，所有卡业务NOT RUN；未启动项目drive/开发/巡检，监管任务未创建。等待可用CLI模型及测试夹具最小修复授权，之后完成自检、validate、完整verify、独立复审、调度及真实CLI身份核对。evidence/drive/supervision.md保存操作日志。
+
+## 正式开发启动前验证 2026-10-26T10:27:49.169032+00:00
+
+- 用户当前聊天“现在正式开发任务”，继续ADR-008默认授权并按先前指定固定gpt-6.1-sol；Homebrew Codex0.164.0，项目/解释器绑定保持。范围29桌面卡、macOS arm64，移动阶段单独授权；每卡2会话×10800秒、4096MiB RSS采样、jobs2、测试线程1、全局共享锁与原超时保持。
+- 最小改动：workflow两条命令显式-m gpt-6.1-sol；控制测试夹具setUp增加review_command=None，详ADR-009。运行控制逻辑/需求/契约/卡正文保持。
+- CLI实际自检：development/review均退出0；项目临时文件写读删除PASS；.git创建被沙箱拒绝，按PROMPT-START由外层Git代办。日志evidence/drive/formal-start/development-selftest.log、review-selftest.log。
+- 原validate.py退出0，116项/109通过/7平台跳过，89.591秒；报告evidence/drive/formal-start/validation.json。原4失败已消除，旧失败日志保留。
+- 原verify.py all退出0，六项PASS；收据evidence/verify/20261026T102513614415.json，日志evidence/drive/formal-start/verify.log。verify-workflow109通过/7跳过，前端8测试与构建通过，16归档规格完整性及协议门通过。原生fmt/check/clippy/test与所有任务卡业务验收NOT RUN；保留既有Vite单包体积提示。
+- 当前protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a；独立只读文档复审正在进行，取得当前CLEAR后建立每5分钟heartbeat，再后台原drive.py --once并核对真实CLI身份。此记录时current=null，尚未启动业务卡。
+
+## 文档独立复审 round-7 2026-10-26T10:30:26.910395+00:00
+
+- 独立只读审阅agent原始报告docs/reviews/doc-review/round-7.md，末行DOC-REVIEW-VERDICT: CLEAR；protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，ADR001..009按原分段摘要绑定。已核对报告主要文件摘要与当前文件一致。
+- 覆盖113条、35卡/36验收；命令、平台范围、夹具一行修订及运行约束均无阻断。长卡实测预算、汇总cases子用例和T24验收前独立报告时机按报告执行提醒落实。
+- 实现验收仍NOT RUN；下一步建立当前聊天5分钟heartbeat，再后台原drive --once。
