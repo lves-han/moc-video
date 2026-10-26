@@ -27,3 +27,26 @@
 - 最终完整verify六项PASS，收据`evidence/verify/20261026T060541740575.json`；日志`evidence/initialization/verify-final.log`。该次真实verify在控制夹具测试结束后完整执行，保留此前失败/中断夹具收据。
 - 独立CLEAR基线protected保持`66dd658f514e260908070127ffcf180f419bbf88a04460acf89908fcbea59520`；只有此后正常运行记录追加，无受审定义变更。
 - 业务实现仍全部NOT RUN；开发/巡检命令均null，监管未建立。
+
+## 文档修订 ADR-005 2026-10-26T06:23:56Z
+
+- 范围：按用户指示macOS first，并最小修复TASKS审核意见；详见ADR-005。修改docs/TASKS.md、docs/ARCHITECTURE.md，追加DECISIONS/PROGRESS；SPEC与replica-spec未改。
+- 实际验证：task.py check为35 cards；check-project导入规格16文件一致；完整verify六项PASS，收据`evidence/verify/20261026T062209394159.json`。
+- 新protected：`a03036895150128ed5343fe9a58553ec7e9d26809f2c225e32fde429488c040a`。round-3 CLEAR对应旧基线，已失效；需按PROMPT-DOC-REVIEW独立复审后才可开发。
+- 业务验收仍全部NOT RUN；未提交Git，开发/巡检命令仍null，监管未建立。
+
+## 文档复审 round-4 2026-10-26T06:30:36Z
+
+- 独立只读复审原始报告`evidence/doc-review/round-4/report.md`，末行`DOC-REVIEW-VERDICT: BLOCKING`；受审protected`a03036895150128ed5343fe9a58553ec7e9d26809f2c225e32fde429488c040a`。
+- 阻断R4-B1：macOS x86_64降级缺少用户明确确认，待用户选择确认仅arm64或恢复x86_64构建/Rosetta功能运行。非阻断N1（门禁记录需docs提交）、N2（T24轮次排序）待随修订处理。
+
+## 文档修订 ADR-006 2026-10-26T06:33:46Z
+
+- 用户确认macOS只要求本机arm64、Intel x86_64列NOT RUN，追加ADR-006解决R4-B1；同批修复N1（T0.29门禁记录与RESOLVED以docs:提交）、N2（T24报告目录round-<N>按数值取最大）。
+- 实际验证：task.py check为35 cards；完整verify六项PASS，收据`evidence/verify/20261026T063151250090.json`（日志中exit=130一行来自控制器自测夹具，真实evidence无该收据）。
+- 新protected：`0c4710cb082b788f215ee76746ebc1192fcb3d82dbbd18f7244667a109db6ecf`；待round-5独立复审。业务验收仍全部NOT RUN，未提交Git。
+
+## 文档复审 round-5 2026-10-26T06:38:14Z
+
+- 独立只读复审原始报告`evidence/doc-review/round-5/report.md`，末行`DOC-REVIEW-VERDICT: CLEAR`；受审protected`0c4710cb082b788f215ee76746ebc1192fcb3d82dbbd18f7244667a109db6ecf`，ADR001..006。
+- R4-B1、N1、N2已解决；余下非阻断说明（可选文字收紧N1′、超时/内存预算、agent/review命令待配置）留待开发前处理。业务验收仍全部NOT RUN，未授权开发，未提交Git。

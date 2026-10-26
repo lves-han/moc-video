@@ -85,7 +85,7 @@ Settings v2原子JSON与v1迁移，单前端写队列+同宿主提交锁；未�
 
 Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事务失败保留数据，参数化SQL。watch_history完整列及索引按SPEC逐项落实；长期仅保存MetadataIdentity/video/季集/source与展示快照，临时URL/cap/Session/Cookie/令牌留在原生命周期。
 
-按影片合并最近一集/今天昨天更早；约5秒为成功调度写入目标，暂停/seek/切集/离页/退出/后台提交捕获快照；世代与单调写序号防乱序/时钟回拨。删除/清空确认及写队列共用串行入口，旧快照作废，写错保留可重试快照并显示未保存。续播先定位原config/addon→当前详情/video→重新匹配播放源→新会话，loadedmetadata后恢复且裁剪新时长；EOS仅当前集完成，重播0。T18/T20三平台真实SQLite跨重启与失败证据。
+按影片合并最近一集/今天昨天更早；约5秒为成功调度写入目标，暂停/seek/切集/离页/退出/后台提交捕获快照；世代与单调写序号防乱序/时钟回拨。删除/清空确认及写队列共用串行入口，旧快照作废，写错保留可重试快照并显示未保存。续播先定位原config/addon→当前详情/video→重新匹配播放源→新会话，loadedmetadata后恢复且裁剪新时长；EOS仅当前集完成，重播0。T18/T20 macOS arm64真实SQLite跨重启与失败证据。
 
 ### C13 Cloudstream生命周期与更新（SPEC §5/§6.1）
 
@@ -95,13 +95,13 @@ Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事
 
 ### C14 平台、性能与资源（SPEC §5.1/§13；moc-init运行约束）
 
-目标macOS14+ arm64/x86_64、Windows11 x86_64、Ubuntu24.04 x86_64 X11/Wayland；构建与真实运行分别记录。Windows/Intel/Linux/移动机器与CI访问尚待T00/M00实际确认，当前本机成功仅写当前环境。公开最低配置在发行前实测；16GB内存/12GB磁盘、AVD 2核3072MB保持资源预算起点。缓存128MiB/256MiB保持初始观察预算。
+必需目标为本机macOS14+ arm64（ADR-005，macOS first）；构建与真实运行分别记录。原规格的macOS x86_64、Windows11 x86_64、Ubuntu24.04 X11/Wayland降为非阻断记录项：代码保持cfg可移植，报告写NOT RUN与复现命令，后续另行授权；移动机器在M00确认。公开最低配置在发行前实测；16GB内存/12GB磁盘、AVD 2核3072MB保持资源预算起点。缓存128MiB/256MiB保持初始观察预算。
 
 工作流当前模板值memory_mib=4096、jobs=2、command_seconds=7200、session_seconds=10800、max_sessions=2；这是保留的控制器默认配置，开发启动前核实用户预算及每卡完整长命令覆盖。宿主macOS使用RSS采样，Linux原cgroup；线程1。AVD/JVM超出可用预算时先报告所需预算与完整命令，按授权调整配置并重审后运行。
 
 真实集群测试服务成员Docker部署，逐容器硬内存上限；容器硬上限合计+宿主进程树采样RSS纳入批准总预算，运行时同时记录actual usage，成功/失败/取消仅清理带本次身份标签的自产容器/网络/卷。桌面应用与Android AVD依SPEC在目标系统运行；普通单进程fixture/真实集群部署类型在测试报告明确。当前未批准具体集群拓扑/容器预算；涉及该场景时须先明确额度并满足Docker契约，T21/M04对应验收拒绝漏项。
 
-以下逐项保留SPEC §13的目标强度，T22逐平台记录原始样本、测量起止、样本数/p95、CPU/GPU/OS/SDK镜像、依赖版本、分辨率/帧率/码率/RSS/AVD内存。参考机定义及本地桥接样本数在T00/T22测量方案实证后锁定；缺失时标为待验证，禁止把本机校准写成产品硬门槛。目标未达需明确差距与复现；关键可靠性问题清零后再进入发行。
+以下逐项保留SPEC §13的目标强度，T22在macOS arm64记录原始样本、测量起止、样本数/p95、CPU/GPU/OS/SDK镜像、依赖版本、分辨率/帧率/码率/RSS/AVD内存。参考机定义及本地桥接样本数在T00/T22测量方案实证后锁定；缺失时标为待验证，禁止把本机校准写成产品硬门槛。目标未达需明确差距与复现；关键可靠性问题清零后再进入发行。
 
 | 项目 | 目标与测量条件 |
 |---|---|
@@ -112,13 +112,13 @@ Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事
 | 播放 | 自有1080p30/H264+AAC样本连续30分钟，音画正常、可seek |
 | 本地代理吞吐 | 20Mbps受控流，连续10分钟且保持流式内存上界 |
 | 连续切集 | 50次切换后无旧音频、旧帧、悬挂会话或单调资源增长 |
-| 三平台UI | 最小窗口、125%/150%/200%DPI与常见全屏状态可用 |
+| macOS UI | 最小窗口、125%/150%/200%DPI（或macOS等效缩放）与常见全屏状态可用 |
 
 ### C15 移动复用与发行（SPEC §10.4/§14/§16）
 
 桌面lib.rs移动公共入口/cfg隔离；移动后续复用DTO/状态/页面/Rust HTTP、匹配及SQLite。Android同机双APK同签名、显式signature Service、原Context；iOS配对受信HTTPS远程原DEX引擎，TLS/撤销/多客户端隔离/断线恢复。360/390/768、44px触控目标、safe area/playsinline/系统返回、旋转、音频中断、前后台暂停及进程回收真机验收。最低OS/工具链M00实测，MG0..3逐项证据。
 
-三平台干净安装、初始化、升级/卸载、签名公证、WebView2/WebKitGTK/GStreamer codec、SDK获取、GPL/原插件许可与源码对应、离线打包资源均按T23/T24。签名或机器缺失按具体平台blocked保留；真实源失败在同原包参考环境复核。
+macOS arm64干净安装、初始化、升级/卸载、签名公证、SDK获取、GPL/原插件许可与源码对应、离线打包资源均按T23/T24；WebView2/WebKitGTK/GStreamer等其他平台项列NOT RUN。缺Apple签名凭据时产出未签名包并列为发行待办；真实源失败在同原包参考环境复核。
 
 ### C16 历史IPC的最小实现契约（SPEC §11.4/§18.6的规划细化）
 
@@ -147,11 +147,11 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 
 每卡完整来源工作/通过/验证/停止条件原样纳入TASKS；覆盖表给准确验收ID。未来`tests/acceptance/<原卡号小写>.py`是该卡真实行为验收脚本，随当前卡实现，目前均NOT RUN。它调用真实前端/Rust/Android/设备入口及必要fixture，断言每个列出用例；入口不存在、用例缺失、未执行、非零失败、必需平台缺失、证据陈旧均失败。各卡scope允许相应测试。跨平台与长测可分会话累计，但每一验收完整执行并落原run.py收据。
 
-脚本`--report evidence/acceptance/<原卡号>.json`输出UTF-8 JSON，至少包含card、suite、utc_started/finished、tested_source_digest、platform/arch/OS/WebView/dependency版本、commands(argv/exit/log)、cases(id/输入/预期/实得/结果/证据)、required/ran/passed/failed/skipped计数、资源部署/采样/清理与NOT RUN原因。case集合以卡内“完整原卡义务”和覆盖表为要求，脚本需逐项关联；只读导入旧报告/空用例/预填passed时退出非零。真实平台报告须匹配该平台真实执行环境及本次构建摘要；外部机器按原规格可由人类运行准确命令后带版本回填。长测保留时间序列、样本和清理日志。报告生成及断言由同一次当前代码运行完成；全量source摘要、完成资格与会话额度仍由原控制器判定。
+脚本`--report evidence/acceptance/<原卡号>-<suite>.json`输出UTF-8 JSON，至少包含card、suite、utc_started/finished、tested_source_digest、platform/arch/OS/WebView/dependency版本、commands(argv/exit/log)、cases(id/输入/预期/实得/结果/证据)、required/ran/passed/failed/skipped计数、资源部署/采样/清理与NOT RUN原因。case集合以卡内“完整原卡义务”和覆盖表为要求，脚本需逐项关联；只读导入旧报告/空用例/预填passed时退出非零。同一次运行还以`--junit`写JUnit XML，控制器据此核对本次生成、非零通过与零失败；每个testcase名以本卡“需求”行中的ID开头（如`R27/range-416`），该行每个ID至少一条testcase，缺ID即失败。skipped仅用于ADR-005非macOS平台项和卡内明确允许的条件项（如基线未出现DASH），并写明原因；macOS arm64必需项skipped视为失败。真实平台报告须匹配该平台真实执行环境及本次构建摘要；外部机器按原规格可由人类运行准确命令后带版本回填。长测保留时间序列、样本和清理日志。报告生成及断言由同一次当前代码运行完成；全量source摘要、完成资格与会话额度仍由原控制器判定。
 
 T01测试专用最小loopback服务只入tests/fixtures，随机端口/cap/CORS/Range及超时清理；正式构建检查其排除。T06..T11以HTTP和共用合成fixture验收，原包真实条目转N02，T20/T21最终复测。所有原包运行、真实来源、平台运行、安装、性能逐类别单独统计。
 
-workflow.verify分别校验原归档契约与实际protocol/契约（scripts/check-contracts.py），覆盖全部本地/跨文件引用、原有DTO/17命令兼容、原正负例和语义/生命周期不变量。四个历史命令为既定追加集合，T18的history.rs存在时必须全部发布并为每个Args/Result补正负例。归档原始定义及回归向量保持不变，实际protocol/追加契约；此入口始终执行，缺文件即失败。另覆盖现有npm行为测试、类型/构建、导入摘要，以及Rust存在后的fmt/check/clippy/test。verify-workflow仅控制流程测试。Android每卡构建/instrumentation、三平台长媒体/故障/安装按具名卡执行，保留固定源码/制品/期望结果。当前业务长验收NOT RUN；Rust未创建时check-project明确记录NOT RUN，T01/T05创建后自动执行原生检查。
+workflow.verify分别校验原归档契约与实际protocol/契约（scripts/check-contracts.py），覆盖全部本地/跨文件引用、原有DTO/17命令兼容、原正负例和语义/生命周期不变量。四个历史命令为既定追加集合，T18的history.rs存在时必须全部发布并为每个Args/Result补正负例。归档原始定义及回归向量保持不变，实际protocol/追加契约；此入口始终执行，缺文件即失败。另覆盖现有npm行为测试、类型/构建、导入摘要，以及Rust存在后的fmt/check/clippy/test。verify-workflow仅控制流程测试。Android每卡构建/instrumentation、macOS长媒体/故障/安装按具名卡执行，保留固定源码/制品/期望结果。当前业务长验收NOT RUN；Rust未创建时check-project明确记录NOT RUN，T01/T05创建后自动执行原生检查。
 
 ## 输入摘要绑定
 
