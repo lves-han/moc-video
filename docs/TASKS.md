@@ -203,6 +203,19 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T00-all.xml",
+    "cases": [
+      "U02",
+      "U06",
+      "R02",
+      "R08",
+      "R09",
+      "R33",
+      "R50",
+      "R57",
+      "C-PATH",
+      "C-RESOURCE",
+      "REQ-T00"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -220,6 +233,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.2 T01 三平台 Tauri WebView 视频技术样机
 - [ ] 完成
 - 依赖：T0.1
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U01, U04, R30, R32, R48, R49, R50, REQ-T01 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `src/player.ts`, `src/views/`, `tests/fixtures/`, `packaging/`, `tests/`, `docs/PROGRESS.md`, `package.json`, `package-lock.json`, `src/main.ts`, `src/App.vue`, `vite.config.ts`, `index.html`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t01.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -242,6 +256,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T01-all.xml",
+    "cases": [
+      "U01",
+      "U04",
+      "R30",
+      "R32",
+      "R48",
+      "R49",
+      "R50",
+      "REQ-T01"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -280,6 +304,26 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T05-all.xml",
+    "cases": [
+      "U01",
+      "U06",
+      "R01",
+      "R06",
+      "R08",
+      "R10",
+      "R17",
+      "R19",
+      "R31",
+      "R36",
+      "R38",
+      "R39",
+      "R44",
+      "R51",
+      "R58",
+      "R63",
+      "R64",
+      "REQ-T05"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -327,6 +371,17 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/N00-all.xml",
+    "cases": [
+      "U08",
+      "R06",
+      "R39",
+      "R46",
+      "R49",
+      "R58",
+      "R59",
+      "R64",
+      "REQ-N00"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -364,6 +419,21 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/N01-all.xml",
+    "cases": [
+      "U08",
+      "R06",
+      "R19",
+      "R39",
+      "R46",
+      "R49",
+      "R58",
+      "R60",
+      "R61",
+      "R62",
+      "R64",
+      "R65",
+      "REQ-N01"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -403,6 +473,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T06-all.xml",
+    "cases": [
+      "R15",
+      "R18",
+      "R19",
+      "R21",
+      "R35",
+      "R59",
+      "R60",
+      "REQ-T06"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -440,6 +520,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T07-all.xml",
+    "cases": [
+      "R05",
+      "R17",
+      "R18",
+      "R22",
+      "R31",
+      "R59",
+      "R60",
+      "REQ-T07"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -477,6 +567,19 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T08-all.xml",
+    "cases": [
+      "U08",
+      "R05",
+      "R19",
+      "R22",
+      "R25",
+      "R59",
+      "R61",
+      "R65",
+      "R66",
+      "R67",
+      "REQ-T08"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -516,6 +619,21 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T09-all.xml",
+    "cases": [
+      "R06",
+      "R12",
+      "R19",
+      "R25",
+      "R26",
+      "R27",
+      "R31",
+      "R34",
+      "R37",
+      "R44",
+      "R46",
+      "R63",
+      "REQ-T09"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -553,6 +671,11 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T10-all.xml",
+    "cases": [
+      "R26",
+      "R28",
+      "REQ-T10"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -590,6 +713,11 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T11-all.xml",
+    "cases": [
+      "R26",
+      "R29",
+      "REQ-T11"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -628,6 +756,15 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T12-all.xml",
+    "cases": [
+      "R08",
+      "R23",
+      "R30",
+      "R32",
+      "R34",
+      "R48",
+      "REQ-T12"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -665,6 +802,22 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T13-all.xml",
+    "cases": [
+      "U07",
+      "U09",
+      "R01",
+      "R08",
+      "R20",
+      "R24",
+      "R31",
+      "R35",
+      "R36",
+      "R40",
+      "R52",
+      "R62",
+      "R67",
+      "REQ-T13"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -708,6 +861,15 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T14-all.xml",
+    "cases": [
+      "U03",
+      "R01",
+      "R21",
+      "R34",
+      "R35",
+      "R37",
+      "REQ-T14"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -745,6 +907,11 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T15-all.xml",
+    "cases": [
+      "U03",
+      "R22",
+      "REQ-T15"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -782,6 +949,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T16-all.xml",
+    "cases": [
+      "U03",
+      "U09",
+      "R23",
+      "R25",
+      "R32",
+      "R42",
+      "R67",
+      "REQ-T16"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -821,6 +998,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T17-all.xml",
+    "cases": [
+      "R01",
+      "R13",
+      "R24",
+      "R58",
+      "REQ-T17"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -858,6 +1042,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T02-all.xml",
+    "cases": [
+      "U05",
+      "R03",
+      "R12",
+      "R45",
+      "REQ-T02"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -897,6 +1088,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T03-all.xml",
+    "cases": [
+      "U02",
+      "U05",
+      "R04",
+      "R18",
+      "REQ-T03"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -912,6 +1110,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.21 T04 RuntimeManager 与专用 AVD
 - [ ] 完成
 - 依赖：T0.1, T0.19
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U04, R09, R10, R11, R12, R13, R45, REQ-T04 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/runtime.rs`, `src/views/SetupView.vue`, `src-tauri/src/lib.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t04.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -934,6 +1133,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T04-all.xml",
+    "cases": [
+      "U04",
+      "R09",
+      "R10",
+      "R11",
+      "R12",
+      "R13",
+      "R45",
+      "REQ-T04"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -972,6 +1181,28 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/N02-all.xml",
+    "cases": [
+      "U02",
+      "U05",
+      "U08",
+      "R03",
+      "R05",
+      "R06",
+      "R10",
+      "R13",
+      "R15",
+      "R16",
+      "R24",
+      "R26",
+      "R27",
+      "R29",
+      "R36",
+      "R49",
+      "R50",
+      "R63",
+      "R66",
+      "REQ-N02"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1010,6 +1241,21 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T18-all.xml",
+    "cases": [
+      "U01",
+      "U09",
+      "R11",
+      "R36",
+      "R38",
+      "R39",
+      "R40",
+      "R41",
+      "R42",
+      "R43",
+      "R64",
+      "R65",
+      "REQ-T18"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -1049,6 +1295,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T19-all.xml",
+    "cases": [
+      "R02",
+      "R04",
+      "R14",
+      "R44",
+      "REQ-T19"
+    ],
     "timeout_seconds": 3600
   }
 ]
@@ -1064,6 +1317,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.24 T20 原包兼容与产品端到端
 - [ ] 完成
 - 依赖：T0.14, T0.15, T0.16, T0.17, T0.18, T0.23, T0.22
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U02, U03, U04, U05, U08, U09, R07, R10, R16, R20, R40, R41, R42, R43, R50, R62, R63, R66, R67, REQ-T20 → A1（覆盖表含精确对应）
 - 范围：`android-engine/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -1086,6 +1340,28 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T20-all.xml",
+    "cases": [
+      "U02",
+      "U03",
+      "U04",
+      "U05",
+      "U08",
+      "U09",
+      "R07",
+      "R10",
+      "R16",
+      "R20",
+      "R40",
+      "R41",
+      "R42",
+      "R43",
+      "R50",
+      "R62",
+      "R63",
+      "R66",
+      "R67",
+      "REQ-T20"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1125,6 +1401,24 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T21-all.xml",
+    "cases": [
+      "R05",
+      "R12",
+      "R19",
+      "R26",
+      "R27",
+      "R28",
+      "R29",
+      "R34",
+      "R37",
+      "R44",
+      "R46",
+      "R48",
+      "R49",
+      "R50",
+      "C-RESOURCE",
+      "REQ-T21"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1140,6 +1434,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.26 T22 三平台性能与故障注入
 - [ ] 完成
 - 依赖：T0.18, T0.23, T0.24, T0.25
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：R09, R47, R48, C-RESOURCE, REQ-T22 → A1, A2（覆盖表含精确对应）
 - 范围：`src/`, `src-tauri/`, `android-engine/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t22.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -1162,6 +1457,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T22-startup-ui.xml",
+    "cases": [
+      "R09",
+      "R47",
+      "R48",
+      "C-RESOURCE",
+      "REQ-T22"
+    ],
     "timeout_seconds": 7200
   },
   {
@@ -1180,6 +1482,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T22-macos-arm64.xml",
+    "cases": [
+      "R09",
+      "R47",
+      "R48",
+      "C-RESOURCE",
+      "REQ-T22"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1195,6 +1504,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.27 T23 发行安装包
 - [ ] 完成
 - 依赖：T0.26
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U04, R30, R33, R45, R50, REQ-T23 → A1（覆盖表含精确对应）
 - 范围：`packaging/`, `src-tauri/`, `android-engine/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t23.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -1217,6 +1527,14 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T23-all.xml",
+    "cases": [
+      "U04",
+      "R30",
+      "R33",
+      "R45",
+      "R50",
+      "REQ-T23"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1235,7 +1553,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 - 需求：U06, U07, R01, R07, R50, R51, R57, REQ-T24 → A1（覆盖表含精确对应）
 - 范围：`src/`, `src-tauri/`, `android-engine/`, `packaging/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t24.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 独立验收：本卡必须由独立只读审阅者审查固定构建及受验提交，作者按报告修复后再次复审。审阅原始报告保存于`evidence/independent-review/T24/round-<N>/report.md`，正文写明所审提交SHA与源码摘要，末行`ACCEPTANCE-VERDICT: CLEAR`或`ACCEPTANCE-VERDICT: BLOCKING`；t24.py只读取N数值最大的轮次，提交/摘要与本次构建不一致、末行缺失或为BLOCKING时失败。
+- 独立验收：本卡必须由独立只读审阅者审查固定构建及受验提交，作者按报告修复后再次复审。审阅原始报告保存于`docs/reviews/T24/round-<N>.md`（随文档提交），正文写明所审提交SHA与源码摘要，末行`ACCEPTANCE-VERDICT: CLEAR`或`ACCEPTANCE-VERDICT: BLOCKING`；t24.py只读取N数值最大的轮次，提交/摘要与本次构建不一致、末行缺失或为BLOCKING时失败。
 - 验收：
 ```json
 [
@@ -1255,6 +1573,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T24-all.xml",
+    "cases": [
+      "U06",
+      "U07",
+      "R01",
+      "R07",
+      "R50",
+      "R51",
+      "R57",
+      "REQ-T24"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1271,9 +1599,10 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T0.29 T25 开发交付与最终说明
 - [ ] 完成
 - 依赖：T0.28
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U06, R33, R51, C-PATH, REQ-T25 → A1（覆盖表含精确对应）
 - 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
-- 阶段门：本卡完成提交且独立巡检CLEAR后，外层监管在PROGRESS追加`## T1.1 移动阶段授权门 <UTC时间>`及`- 结果：BLOCKED`，写明待人类授权移动阶段，然后停止桌面监管；原控制器据此停止选卡。人类明确授权后才追加同卡`- 结果：RESOLVED`。门禁记录与RESOLVED各自由监管以`docs:`提交，保持完成树干净。
+- 移动阶段：本卡完成并独立巡检CLEAR后停止桌面监管，报告移动清单；T1.1的阶段门由控制器拦截，等待人类授权（ADR-007）。
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/t25.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
@@ -1294,6 +1623,13 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/T25-all.xml",
+    "cases": [
+      "U06",
+      "R33",
+      "R51",
+      "C-PATH",
+      "REQ-T25"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1309,6 +1645,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 ### T1.1 M00 Android / iOS 真机可行性与版本基线
 - [ ] 完成
 - 依赖：T0.29, T0.3, T0.12, T0.13
+- 阶段门：移动阶段（M00..M05）需人类明确授权，并给出真实设备、签名与引擎位置
 - 需求：U07, R52, R53, R54, R56, REQ-M00 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `android-engine/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列完整原卡义务；提供`tests/acceptance/m00.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -1332,6 +1669,14 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M00-all.xml",
+    "cases": [
+      "U07",
+      "R52",
+      "R53",
+      "R54",
+      "R56",
+      "REQ-M00"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1371,6 +1716,11 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M01-all.xml",
+    "cases": [
+      "U07",
+      "R53",
+      "REQ-M01"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1409,6 +1759,12 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M02-all.xml",
+    "cases": [
+      "U07",
+      "R53",
+      "R55",
+      "REQ-M02"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1447,6 +1803,12 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M03-all.xml",
+    "cases": [
+      "U07",
+      "R53",
+      "R56",
+      "REQ-M03"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1485,6 +1847,12 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M04-all.xml",
+    "cases": [
+      "U07",
+      "R54",
+      "C-RESOURCE",
+      "REQ-M04"
+    ],
     "timeout_seconds": 7200
   }
 ]
@@ -1523,6 +1891,14 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
     ],
     "kind": "test",
     "report": "junit:evidence/acceptance/M05-all.xml",
+    "cases": [
+      "U07",
+      "R52",
+      "R54",
+      "R55",
+      "R56",
+      "REQ-M05"
+    ],
     "timeout_seconds": 7200
   }
 ]

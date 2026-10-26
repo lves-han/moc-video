@@ -249,9 +249,10 @@ class WorkflowTests(unittest.TestCase):
 
     def test_interrupted_verify_cannot_reuse_previous_success(self):
         self.finish()
-        with patch.object(self.w, "run_command", side_effect=KeyboardInterrupt):
+        with patch.object(self.w, "run_command", side_effect=KeyboardInterrupt), contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaises(KeyboardInterrupt):
                 self.w.verify(["all"])
+        self.assertIn("verify all FAIL: exit=130", output.getvalue())
         with self.assertRaisesRegex(self.w.WorkflowError, "verify"):
             self.w.done("T0.1")
 
@@ -521,6 +522,168 @@ class WorkflowTests(unittest.TestCase):
         with path.open("a", encoding="utf-8", newline="\n") as stream:
             stream.write("\n## T0.1 resolved\n- 结果：RESOLVED\n用户决定\n")
         self.assertEqual(self.w.next_card()["id"], "T0.1")
+
+    def append_progress(self, text):
+        with (self.repo / "docs/PROGRESS.md").open("a", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+
+    def test_blocked_card_only_freezes_its_branch(self):
+        (self.repo / "docs/TASKS.md").write_text(card_text() + card_text("T0.2", "T0.1") + card_text("T0.3"), encoding="utf-8", newline="\n")
+        self.append_progress("\n## T0.1 blocked\n- 结果：BLOCKED\n原因\n")
+        self.assertEqual(self.w.next_card()["id"], "T0.3")
+        self.append_progress("\n## T0.1 resolved\n- 结果：RESOLVED\n用户决定\n")
+        self.assertEqual(self.w.next_card()["id"], "T0.1")
+
+    def test_block_without_known_card_stops_everything(self):
+        (self.repo / "docs/TASKS.md").write_text(card_text() + card_text("T0.3"), encoding="utf-8", newline="\n")
+        for heading in ("全局决定", "T9.9 typo"):
+            self.append_progress(f"\n## {heading}\n- 结果：BLOCKED\n原因\n")
+            with self.assertRaises(self.w.WorkflowError) as caught:
+                self.w.next_card()
+            self.assertEqual(caught.exception.code, 11)
+            self.assertIn("全局", str(caught.exception))
+            self.append_progress(f"\n## {heading}\n- 结果：RESOLVED\n用户决定\n")
+
+    def test_blocked_active_card_moves_on_only_with_clean_tree_and_keeps_own_scope(self):
+        other = card_text("T0.3").replace("`src/`、`tests/`", "`other/`")
+        (self.repo / "docs/TASKS.md").write_text(card_text() + other, encoding="utf-8", newline="\n")
+        self.commit("plan independent cards")
+        self.w.start("T0.1")
+        (self.repo / "src/extra.txt").write_text("B", encoding="utf-8", newline="\n")
+        self.append_progress("\n## T0.1 blocked\n- 结果：BLOCKED\n需要用户决定\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "未提交") as caught:
+            self.w.next_card()
+        self.assertEqual(caught.exception.code, 11)
+        self.commit("WIP T0.1: handoff")
+        self.assertEqual(self.w.next_card()["id"], "T0.3")
+        self.w.start("T0.3")
+        self.assertTrue(self.w.state("T0.1")["paused"])
+        (self.repo / "other").mkdir()
+        (self.repo / "other/x.txt").write_text("x", encoding="utf-8", newline="\n")
+        self.commit("WIP T0.3: other work")
+        self.append_progress("\n## T0.1 resolved\n- 结果：RESOLVED\n用户决定\n")
+        self.assertEqual(self.w.next_card()["id"], "T0.3", "an active unblocked card keeps priority")
+        self.append_progress("\n## T0.3 blocked\n- 结果：BLOCKED\n需要用户决定\n")
+        self.commit("docs: record decisions")
+        self.assertEqual(self.w.next_card()["id"], "T0.1")
+        self.w.start("T0.1")
+        self.assertEqual(self.w.scope_problems("T0.1"), [])
+        (self.repo / "other/y.txt").write_text("y", encoding="utf-8", newline="\n")
+        self.assertEqual(self.w.scope_problems("T0.1"), ["other/y.txt"])
+        self.assertEqual(self.w.state("T0.3")["segments"][0]["end"], self.git("rev-parse", "HEAD"))
+
+    def test_phase_gate_waits_for_recorded_human_authorization(self):
+        gated = card_text().replace("- 依赖：无\n", "- 依赖：无\n- 阶段门：移动阶段需人类授权\n")
+        path = self.repo / "docs/TASKS.md"
+        path.write_text(gated + card_text("T0.2"), encoding="utf-8", newline="\n")
+        self.assertEqual(self.w.get_card("T0.1")["gate"], "移动阶段需人类授权")
+        self.assertEqual(self.w.next_card()["id"], "T0.2")
+        path.write_text(gated, encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "阶段门") as caught:
+            self.w.next_card()
+        self.assertEqual(caught.exception.code, 11)
+        self.append_progress("\n## T0.1 移动授权\n- 结果：AUTHORIZED\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "阶段门"):
+            self.w.next_card()
+        self.append_progress("\n## T0.1 移动授权\n- 结果：AUTHORIZED\n- 授权：用户原话“开始移动阶段”\n")
+        self.assertEqual(self.w.next_card()["id"], "T0.1")
+        path.write_text(gated.replace("移动阶段需人类授权", " "), encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "阶段门"):
+            self.w.cards()
+
+    def junit_check(self, **extra):
+        check = dict(id="A1", description="冻结用例逐项通过", argv=["{python}", "-B", "tests/write_junit.py"], kind="test",
+                     report="junit:evidence/acceptance/A1.xml", cases=["R1/a", "R2/b"], skippable=["R2/b"])
+        check.update(extra)
+        return {key: value for key, value in check.items() if value is not None}
+
+    def test_cases_definition_is_validated(self):
+        path = self.repo / "docs/TASKS.md"
+        for check, message in ((dict(id="A1", description="x", argv=ARGV, kind="test", report="unittest", cases=["R1/a"]), "JUnit"),
+                               (self.junit_check(cases=["R1/a", "R1/a"], skippable=None), "唯一"),
+                               (self.junit_check(cases=[], skippable=None), "唯一"),
+                               (self.junit_check(skippable=["R9/z"]), "子集"),
+                               (self.junit_check(cases=None), "skippable")):
+            path.write_text(card_text(check=check), encoding="utf-8", newline="\n")
+            with self.assertRaisesRegex(self.w.WorkflowError, message):
+                self.w.cards()
+
+    def test_frozen_cases_must_each_pass_unless_skippable(self):
+        (self.repo / "tests/write_junit.py").write_text(
+            "from pathlib import Path\nout = Path('evidence/acceptance/A1.xml')\nout.parent.mkdir(parents=True, exist_ok=True)\n"
+            "out.write_text(Path('tests/cases.xml').read_text(encoding='utf-8'), encoding='utf-8')\n", encoding="utf-8", newline="\n")
+        cases = self.repo / "tests/cases.xml"
+        (self.repo / "docs/TASKS.md").write_text(card_text(check=self.junit_check()), encoding="utf-8", newline="\n")
+        cases.write_text('<testsuite><testcase name="R1/a"/><testcase name="R2/b"><skipped/></testcase></testsuite>', encoding="utf-8", newline="\n")
+        self.commit("junit cases card")
+        self.w.start("T0.1")
+        check = self.w.get_card("T0.1")["checks"][0]
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = self.w.run_command("A1", check["argv"])
+        self.assertEqual(result["exit"], 0, result)
+        self.w.verify_evidence(result)
+        for xml, problem in (('<testsuite><testcase name="R1/a"/><testcase name="extra"/></testsuite>', "R2/b 未执行"),
+                             ('<testsuite><testcase name="R1/a"><skipped/></testcase><testcase name="R2/b"/></testsuite>', "R1/a 被跳过")):
+            cases.write_text(xml, encoding="utf-8", newline="\n")
+            self.w.task(["note", "调整用例报告"])
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = self.w.run_command("A1", check["argv"])
+            self.assertEqual(result["exit"], 3, result)
+            self.assertIn(problem, result["note"])
+        artifact = self.repo / result["report_artifact"]
+        self.assertEqual(self.w.case_problems(check, artifact.read_bytes()), ["R1/a 被跳过但未声明 skippable"])
+
+    def test_environment_field_and_unique_junit_reports(self):
+        path = self.repo / "docs/TASKS.md"
+        with_env = card_text().replace("- 依赖：无\n", "- 依赖：无\n- 环境：macos-arm64 必需；linux 记录\n")
+        path.write_text(with_env, encoding="utf-8", newline="\n")
+        self.assertEqual(self.w.get_card("T0.1")["environment"], "macos-arm64 必需；linux 记录")
+        path.write_text(with_env.replace("macos-arm64 必需；linux 记录", ""), encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "环境"):
+            self.w.cards()
+        shared = self.junit_check(cases=None, skippable=None)
+        path.write_text(card_text(check=shared) + card_text("T0.2", check=shared), encoding="utf-8", newline="\n")
+        with self.assertRaisesRegex(self.w.WorkflowError, "唯一"):
+            self.w.cards()
+
+    def test_adr_digests_stay_stable_when_later_adr_is_appended(self):
+        path = self.repo / "docs/DECISIONS.md"
+        path.write_text("# 决策\n\n## ADR-001 决定\n内容一\n", encoding="utf-8", newline="\n")
+        first = self.w.adr_digests()
+        path.write_text("# 决策\r\n\r\n## ADR-001 决定\r\n内容一\r\n\r\n## ADR-002 新决定\r\n内容二\r\n", encoding="utf-8", newline="")
+        second = self.w.adr_digests()
+        self.assertEqual(first["ADR-001"], second["ADR-001"])
+        self.assertEqual(sorted(second), ["ADR-001", "ADR-002"])
+        result = self.command("task", "status")
+        self.assertEqual(json.loads(result.stdout)["adr"], second)
+
+    def test_check_rejects_acceptance_beyond_session_budget(self):
+        cfg_path = self.repo / "workflow.json"
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        cfg.update(session_seconds=600, max_sessions=2)
+        cfg["verify"][0]["timeout_seconds"] = 100
+        cfg_path.write_text(json.dumps(cfg), encoding="utf-8", newline="\n")
+        check = dict(id="A1", description="长测", argv=ARGV, kind="test", report="unittest", timeout_seconds=900)
+        (self.repo / "docs/TASKS.md").write_text(card_text(check=check), encoding="utf-8", newline="\n")
+        result = self.command("task", "check")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("须跨会话续跑", result.stdout)
+        check["timeout_seconds"] = 1200
+        (self.repo / "docs/TASKS.md").write_text(card_text(check=check), encoding="utf-8", newline="\n")
+        result = self.command("task", "check")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("会话预算", result.stderr)
+
+    def test_committed_review_reports_are_records_outside_source_and_scope(self):
+        self.w.start("T0.1")
+        before = self.w.snapshot()
+        report = self.repo / "docs/reviews/doc-review/round-1.md"
+        report.parent.mkdir(parents=True)
+        report.write_text("DOC-REVIEW-VERDICT: CLEAR\n", encoding="utf-8", newline="\n")
+        self.assertEqual(self.w.snapshot(), before)
+        self.assertEqual(self.w.scope_problems("T0.1"), [])
+        self.commit("docs: record review")
+        self.assertEqual(self.w.snapshot(self.git("rev-parse", "HEAD")), before)
 
     def test_exact_acceptance_argv_is_required(self):
         self.w.start("T0.1")
@@ -1070,6 +1233,17 @@ with w.runtime.FileLock(w.heavy_path()) as lock:
             self.assertIn(call["card"], prompt_file.parent.parent.name)
         self.assertEqual(self.git("status", "--porcelain"), "")
 
+    def test_driver_develops_independent_card_around_blocked_branch(self):
+        (self.repo / "docs/TASKS.md").write_text(card_text() + card_text("T0.2", "T0.1") + card_text("T0.3"), encoding="utf-8", newline="\n")
+        self.append_progress("\n## T0.1 blocked\n- 结果：BLOCKED\n需要用户决定\n")
+        self.commit("plan with blocked branch")
+        with patch.dict(os.environ, FIXTURE_AGENT_MODE="complete"):
+            result = self.command("drive")
+        self.assertEqual(result.returncode, 11, result.stdout + result.stderr)
+        calls = json.loads((self.repo / "evidence/agent-argv.json").read_text(encoding="utf-8"))
+        self.assertEqual([call["card"] for call in calls], ["T0.3"])
+        self.assertIn("T0.1（BLOCKED）", self.w.read_json(self.repo / "evidence/drive/state.json")["reason"])
+
     def test_driver_stops_on_unverified_changes_after_completion_commit(self):
         (self.repo / "docs/TASKS.md").write_text(card_text() + "\n" + card_text("T0.2", "T0.1"), encoding="utf-8", newline="\n")
         self.commit("plan two cards before dirty completion")
@@ -1192,6 +1366,8 @@ with w.runtime.FileLock(w.heavy_path()) as lock:
         child = self.w.runtime.launch([sys.executable, "-B", "scripts/drive.py"], cwd=self.repo, env=env,
                                       detached=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         token = self.w.identity(child.pid)
+        # Cleanups run last-in first-out: stop, terminate, then reap so no Popen is left unwaited.
+        self.addCleanup(lambda: child.wait(timeout=10))
         self.addCleanup(lambda: self.w.runtime.terminate([dict(pid=child.pid, identity=token)]))
         self.addCleanup(lambda: self.command("drive", "stop"))
         deadline = time.monotonic() + 10

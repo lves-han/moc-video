@@ -34,7 +34,12 @@ class ReviewBlocked(WorkflowError):
 
 REPO = Path(__file__).resolve().parents[1]
 APPEND_ONLY = ("docs/PROGRESS.md", "docs/DECISIONS.md", "docs/BACKLOG.md")
-DYNAMIC = {*APPEND_ONLY, "docs/TASKS.md"}
+# Review reports are committed records; like progress they never count as tested source.
+DYNAMIC = (*APPEND_ONLY, "docs/TASKS.md", "docs/reviews/")
+
+
+def is_dynamic(name):
+    return any(name == p or (p.endswith("/") and name.startswith(p)) for p in DYNAMIC)
 PROTECTED = ("AGENTS.md", "CLAUDE.md", "docs/SPEC.md", "docs/ARCHITECTURE.md", "docs/TASKS.md",
              "workflow.json", ".gitattributes", "scripts/workflow.py", "scripts/platform_runtime.py", "scripts/windows_job.py", "scripts/task.py",
              "scripts/run.py", "scripts/verify.py", "scripts/drive.py", "scripts/validate.py", "scripts/requirements.txt",
@@ -109,6 +114,18 @@ def validate_checks(checks, acceptance=False):
                 path = relative_path(report[6:])
                 if not path.as_posix().startswith("evidence/"):
                     raise WorkflowError("JUnit 报告须位于被忽略的 evidence/ 内")
+        cases, skippable = item.get("cases"), item.get("skippable")
+        if cases is not None:
+            # Frozen case IDs let the controller, not the script author, decide coverage.
+            if not acceptance or not str(report).startswith("junit:"):
+                raise WorkflowError(f"{name}: cases 只用于卡片 JUnit 验收")
+            if (not isinstance(cases, list) or not cases or len(set(cases)) != len(cases)
+                    or not all(isinstance(c, str) and re.fullmatch(r"[A-Za-z0-9._/:-]+", c) for c in cases)):
+                raise WorkflowError(f"{name}: cases 须为唯一用例 ID 的非空数组")
+            if skippable is not None and (not isinstance(skippable, list) or not set(skippable) <= set(cases)):
+                raise WorkflowError(f"{name}: skippable 须为 cases 的子集")
+        elif skippable is not None:
+            raise WorkflowError(f"{name}: skippable 需配合 cases")
         timeout = item.get("timeout_seconds", 1)
         if type(timeout) is not int or timeout <= 0:
             raise WorkflowError(f"{name}: timeout_seconds 须为正整数")
@@ -152,6 +169,12 @@ def cards(text=None):
         checkbox = re.findall(r"^- \[([ x])\] 完成$", body, re.M)
         dependencies = re.search(r"^- 依赖：([^\n]+)$", body, re.M)
         scope = re.search(r"^- 范围：([^\n]+)$", body, re.M)
+        gate = re.search(r"^- 阶段门：([^\n]*)$", body, re.M)
+        if gate and not gate.group(1).strip():
+            raise WorkflowError(f"{cid}: 阶段门须写明需要的人类授权")
+        environment = re.search(r"^- 环境：([^\n]*)$", body, re.M)
+        if environment and not environment.group(1).strip():
+            raise WorkflowError(f"{cid}: 环境须写明必需与非阻断的执行环境")
         blocks = re.findall(r"^```json\s*\n(.*?)\n```\s*$", body, re.M | re.S)
         if len(checkbox) != 1 or not dependencies or not scope or len(blocks) != 1 or "- 交付物：" not in body:
             raise WorkflowError(f"{cid}: 卡片字段或唯一 JSON 验收块不完整")
@@ -170,8 +193,14 @@ def cards(text=None):
         validate_checks(checks, acceptance=True)
         normalized = re.sub(r"^- \[[ x]\] 完成$", "- [ ] 完成", body, flags=re.M)
         result.append(dict(id=cid, title=heading.group(2), body=body, done=checkbox[0] == "x",
-                           deps=deps, scope=paths, checks=checks, spec=digest(normalized)))
+                           deps=deps, scope=paths, checks=checks, spec=digest(normalized),
+                           gate=gate.group(1).strip() if gate else None,
+                           environment=environment.group(1).strip() if environment else None))
         seen.add(cid)
+    reports = [check["report"][6:] for item in result for check in item["checks"] if check.get("report", "").startswith("junit:")]
+    if len(reports) != len(set(reports)):
+        # A shared path would let one card's fresh report stand in for another check.
+        raise WorkflowError("JUnit 报告路径须在全部卡片验收中唯一；建议 evidence/acceptance/<卡号>-<验收ID>.xml")
     return result
 
 
@@ -211,6 +240,20 @@ def blocked():
                 else:
                     pending.pop(cid, None)
     return pending
+
+
+def global_blocks(pending, items):
+    """BLOCKED without a known card ID in its heading stops every card."""
+    known = {item["id"] for item in items}
+    return [cid for cid in pending if cid not in known]
+
+
+def authorized(cid):
+    for entry in progress_entries():
+        if (cid in re.findall(r"T\d+\.\d+", entry.splitlines()[0]) and re.search(r"^- 结果：AUTHORIZED\s*$", entry, re.M)
+                and re.search(r"^- 授权：\S[^\n]*$", entry, re.M)):
+            return True
+    return False
 
 
 def is_protected(name):
@@ -254,7 +297,7 @@ def snapshot(commit=None):
             meta, name = entry.split(b"\t", 1)
             mode, kind, oid = meta.split()
             name = name.decode("utf-8", errors="surrogateescape")
-            if name in DYNAMIC:
+            if is_dynamic(name):
                 continue
             if kind != b"blob":
                 raise WorkflowError("源码快照暂不支持 Git submodule")
@@ -275,7 +318,7 @@ def snapshot(commit=None):
             if not raw:
                 continue
             name = raw.decode("utf-8", errors="surrogateescape")
-            if name in DYNAMIC:
+            if is_dynamic(name):
                 continue
             path = REPO / name
             if path.is_symlink():
@@ -341,22 +384,47 @@ def check_completion_tree(cid):
         raise WorkflowError("存在未完成的重命令，不能报告全部完成")
 
 
+def frozen_cards(items, pending, verified):
+    """Cards held by an unresolved BLOCKED or a phase gate, plus everything depending on them."""
+    frozen = {cid: "BLOCKED" for cid in pending}
+    for item in items:
+        if item["gate"] and item["id"] not in verified and not authorized(item["id"]):
+            frozen[item["id"]] = "阶段门待人类授权：" + item["gate"]
+    for item in items:
+        held = next((dep for dep in item["deps"] if dep in frozen), None)
+        if held and item["id"] not in frozen:
+            frozen[item["id"]] = f"依赖 {held}"
+    return frozen
+
+
 def next_card():
-    if blocked():
-        raise WorkflowError("BLOCKED：存在未被同卡 RESOLVED 解除的决定", 11)
     items = cards()
     if not items:
         raise WorkflowError("DRAFT：尚无可执行任务卡", 12)
+    pending = blocked()
+    hard = global_blocks(pending, items)
+    if hard:
+        raise WorkflowError("BLOCKED：存在未关联已知卡号的全局决定，所有卡暂停", 11)
     verified = {item["id"] for item in items if completed(item)}
     active = current()
     if active in verified:
         check_completion_tree(active)
-    for item in items:
-        if item["id"] not in verified and all(dep in verified for dep in item["deps"]):
+    frozen = frozen_cards(items, pending, verified)
+    if active and active not in verified and state(active):
+        item = next(value for value in items if value["id"] == active)
+        if active not in frozen and all(dep in verified for dep in item["deps"]):
             return item
-    if len(verified) == len(items):
+        if active in frozen and (git("status", "--porcelain") or any(run["status"] != "finished" for run in receipts())):
+            raise WorkflowError(f"{active} 已阻塞但仍有未提交改动或未完成重命令；先提交 WIP 并交接，才能转向其他卡", 11)
+    for item in items:
+        if item["id"] not in verified and item["id"] not in frozen and all(dep in verified for dep in item["deps"]):
+            return item
+    if len(verified) == len(items) and not pending:
         check_completion_tree(items[-1]["id"])
         raise WorkflowError("ALL_DONE", 10)
+    held = [f"{cid}（{why}）" for cid, why in frozen.items() if cid not in verified or cid in pending]
+    if held:
+        raise WorkflowError("BLOCKED：没有可执行的卡；" + "；".join(held), 11)
     raise WorkflowError("没有依赖已完成的任务卡", 12)
 
 
@@ -364,7 +432,17 @@ def start(cid):
     item = next_card()
     if item["id"] != cid:
         raise WorkflowError(f"当前卡是 {item['id']}，不能开始 {cid}")
+    previous = current()
+    if previous and previous != cid and state(previous) and not completed(get_card(previous)):
+        # next_card only moves away from a frozen card with a clean tree; close its scope segment at HEAD.
+        old = state(previous)
+        old.setdefault("segments", []).append(dict(base=old.pop("resume_base", old["base"]), end=git("rev-parse", "HEAD")))
+        old["paused"] = True
+        write_json(card_dir(previous) / "state.json", old)
     node = state(cid)
+    if node.get("paused"):
+        node.update(paused=False, resume_base=git("rev-parse", "HEAD"))
+        write_json(card_dir(cid) / "state.json", node)
     if not node:
         head = git("rev-parse", "HEAD")
         prefixes = {}
@@ -406,8 +484,13 @@ def rebaseline(cid, frozen):
     if frozen != protected_hash() or frozen == node["protected"]:
         raise WorkflowError("批准摘要与当前修订不一致，或冻结内容没有变化")
     check_append_only(node)
-    if blocked():
+    items = cards()
+    pending = blocked()
+    if cid in pending or global_blocks(pending, items):
         raise WorkflowError("仍有未解除的 BLOCKED，不能更新基线", 11)
+    others = [item["id"] for item in items if item["id"] != cid and state(item["id"]) and not completed(item)]
+    if others:
+        raise WorkflowError("其他已开始未完成的卡会因基线变化失效：" + ", ".join(others) + "；先完成它们或交用户决定")
     decisions = [entry for entry in progress_entries() if cid in re.findall(r"T\d+\.\d+", entry.splitlines()[0])
                  and re.search(r"^- 结果：(BLOCKED|RESOLVED)\s*$", entry, re.M)]
     if len(decisions) < 2 or not re.search(r"^- 结果：BLOCKED\s*$", decisions[-2], re.M):
@@ -439,7 +522,11 @@ def rebaseline(cid, frozen):
 
 def scope_problems(cid):
     item, node = get_card(cid), state(cid)
-    paths = set(git("diff", "--no-renames", "--name-only", "-z", node["base"], binary=True).split(b"\0"))
+    # A paused card owns only the commits made while it was active, not other cards' work in between.
+    paths = set()
+    for segment in node.get("segments", []):
+        paths |= set(git("diff", "--no-renames", "--name-only", "-z", segment["base"], segment["end"], binary=True).split(b"\0"))
+    paths |= set(git("diff", "--no-renames", "--name-only", "-z", node.get("resume_base", node["base"]), binary=True).split(b"\0"))
     paths |= set(git("ls-files", "--others", "--exclude-standard", "-z", binary=True).split(b"\0"))
     allowed = [*item["scope"], *DYNAMIC, *node.get("rebaseline_scope", [])]
     return sorted(p.decode("utf-8", errors="surrogateescape") for p in paths if p and not any(
@@ -468,6 +555,10 @@ def verify_evidence(item):
         artifact = REPO / item["report_artifact"]
         if not artifact.is_file() or digest(artifact.read_bytes()) != item["report_hash"]:
             raise WorkflowError("测试报告缺失或被改写；保留现场并重新验收")
+    if item["check"].get("cases"):
+        problems = case_problems(item["check"], (REPO / item["report_artifact"]).read_bytes()) if item.get("report_artifact") else ["缺少 JUnit 报告"]
+        if problems:
+            raise WorkflowError("验收用例证据不完整：" + "；".join(problems[:5]))
 
 
 def completion_evidence(item, source, frozen, generation, gates):
@@ -538,11 +629,38 @@ def done(cid):
     print(f"{cid} 验证完成；现在提交 git commit -m '{cid}: <摘要>'，提交前不再改源码")
 
 
+def adr_digests():
+    """Per-ADR digests that ignore trailing blank lines, so appending a new ADR leaves earlier ones stable."""
+    path = REPO / "docs/DECISIONS.md"
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n") if path.exists() else ""
+    parts = re.split(r"(?m)^(?=## ADR-\d+)", text)
+    return {re.match(r"## (ADR-\d+)", part).group(1): digest(part.rstrip().encode("utf-8"))
+            for part in parts if re.match(r"## ADR-\d+", part)}
+
+
+def budget_problems(cfg, items):
+    """A card must fit its full acceptance plus every verify gate inside the configured session budget."""
+    total_budget, problems, notes = cfg["session_seconds"] * cfg["max_sessions"], [], []
+    gates = sum(check.get("timeout_seconds", cfg["command_seconds"]) for check in cfg["verify"])
+    for item in items:
+        timeouts = [check.get("timeout_seconds", cfg["command_seconds"]) for check in item["checks"]]
+        if sum(timeouts) + gates > total_budget:
+            problems.append(f"{item['id']}: 验收{sum(timeouts)}s+verify{gates}s 超过会话额度{total_budget}s")
+        notes += [f"{item['id']}/{check['id']}: 超时{value}s 超过单会话{cfg['session_seconds']}s，须跨会话续跑"
+                  for check, value in zip(item["checks"], timeouts) if value > cfg["session_seconds"]]
+    return problems, notes
+
+
 def task(args):
     command = args[0] if args else "status"
     if command == "check":
-        config()
+        cfg = config()
         items = cards()
+        problems, notes = budget_problems(cfg, items)
+        for note in notes:
+            print("note: " + note)
+        if problems:
+            raise WorkflowError("会话预算无法覆盖完整验收：" + "；".join(problems))
         print(f"roadmap OK: {len(items)} cards" + ("; DRAFT，不能启动驱动器" if not items else ""))
     elif command == "next":
         print(next_card()["id"])
@@ -585,7 +703,7 @@ def task(args):
     elif command == "status":
         cid = current()
         print(json.dumps(dict(current=cid, state=state(cid) if cid else {},
-                              protected=protected_hash(), blocked=list(blocked()), runs=receipts(cid) if cid else []), ensure_ascii=False, indent=2))
+                              protected=protected_hash(), adr=adr_digests(), blocked=list(blocked()), runs=receipts(cid) if cid else []), ensure_ascii=False, indent=2))
     else:
         raise WorkflowError("task.py: check|next|show [ID]|start ID|rebaseline ID --protected SHA256|note TEXT|handoff TEXT|scope|done ID|status|recover")
     return 0
@@ -691,6 +809,25 @@ def test_counts(log, report, started_ns, old_report):
     return dict(passed=len(cases) - failed - skipped, failed=failed, skipped=skipped)
 
 
+def case_problems(check, data):
+    """Every frozen case ID must appear as a JUnit testcase name and pass, unless declared skippable."""
+    outcomes = {}
+    for case in ET.fromstring(data).iter("testcase"):
+        outcome = ("failed" if list(case.iter("failure")) or list(case.iter("error"))
+                   else "skipped" if list(case.iter("skipped")) else "passed")
+        outcomes.setdefault(case.get("name", ""), set()).add(outcome)
+    allowed, problems = set(check.get("skippable") or []), []
+    for name in check.get("cases") or []:
+        seen = outcomes.get(name)
+        if not seen:
+            problems.append(f"{name} 未执行")
+        elif "failed" in seen:
+            problems.append(f"{name} 失败")
+        elif "passed" not in seen and name not in allowed:
+            problems.append(f"{name} 被跳过但未声明 skippable")
+    return problems
+
+
 def failure_signature(log, rc, note):
     names = re.findall(r"(?m)^(?:test .* \.\.\. FAILED|FAIL: .*|ERROR: .*|FAILED .*|thread .* panicked.*)$", log)
     causes = re.findall(r"(?m)^(?:error(?:\[E\d+\])?:.*|AssertionError:.*|[A-Za-z]+Error:.*)$", log)
@@ -765,6 +902,10 @@ def execute_receipt(path):
                 counts = test_counts(log, report, started_ns, old_report)
                 if rc == 0 and (counts["passed"] == 0 or counts["failed"]):
                     rc, note = 3, "零个通过测试或存在失败；不能视为成功"
+                if rc == 0 and run["check"].get("cases"):
+                    problems = case_problems(run["check"], (REPO / relative_path(report[6:])).read_bytes())
+                    if problems:
+                        rc, note = 3, "验收用例不完整：" + "；".join(problems[:5])
             if report.startswith("junit:") and (REPO / report[6:]).is_file():
                 report_copy = path.parent / "test-report.xml"
                 shutil.copyfile(REPO / report[6:], report_copy)
@@ -1102,7 +1243,8 @@ def drive(args):
             check_completion_tree(cid)
             if heavy_active():
                 raise WorkflowError("重命令仍占用全局锁，等待结束后再独立巡检")
-            if blocked():
+            decisions = blocked()
+            if cid in decisions or global_blocks(decisions, cards()):
                 raise WorkflowError("BLOCKED：存在未被同卡 RESOLVED 解除的决定", 11)
             if pending and last["verdict"] == "BLOCKING" and last["commit"] == git("rev-parse", "HEAD"):
                 require_review(last)

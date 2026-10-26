@@ -50,3 +50,14 @@
 
 - 独立只读复审原始报告`evidence/doc-review/round-5/report.md`，末行`DOC-REVIEW-VERDICT: CLEAR`；受审protected`0c4710cb082b788f215ee76746ebc1192fcb3d82dbbd18f7244667a109db6ecf`，ADR001..006。
 - R4-B1、N1、N2已解决；余下非阻断说明（可选文字收紧N1′、超时/内存预算、agent/review命令待配置）留待开发前处理。业务验收仍全部NOT RUN，未授权开发，未提交Git。
+
+## 文档修订 ADR-007 2026-10-26T07:17:50Z
+
+- 按用户指示将控制器与提示词升级到最新moc-init（分支级BLOCKED、阶段门、冻结cases、环境字段、会话预算检查、审查报告入docs/reviews、ADR分段摘要）；详见ADR-007。T1.1改用控制器阶段门，verify-project超时7200s降为3600s以满足T0.26预算。
+- 实际验证：task.py check为35 cards，next=T0.1，T1.1..T1.6因阶段门冻结；validate.py 116测试/109通过/7平台跳过；完整verify六项PASS，收据`evidence/verify/20261026T071557733715.json`。
+- 文档审查报告round-1..5已原样复制到`docs/reviews/doc-review/`。新protected：`d6cdedc4a4ca0160b71a44991a61ba98482d1315798e51a27dd430f96d1f0625`；round-5 CLEAR对应旧基线已失效，待round-6独立复审。业务验收仍全部NOT RUN，未提交Git。
+
+## 文档复审 round-6 2026-10-26T07:27:12Z
+
+- 独立只读复审原始报告`docs/reviews/doc-review/round-6.md`，末行`DOC-REVIEW-VERDICT: CLEAR`；受审protected`d6cdedc4a4ca0160b71a44991a61ba98482d1315798e51a27dd430f96d1f0625`，ADR001..007按task.py status的adr摘要绑定。
+- 无阻断项。非阻断：N3′汇总级cases粒度、N4′会话内装箱待Rust实测、N5环境矩阵分散、N6阶段门授权需同时取得设备/签名/引擎位置、N7 T24独立审阅者启动流程未写明、N8 ADR-007未点名取代ADR-006 N1、N9审查报告待提交。业务验收仍全部NOT RUN，未提交Git。
