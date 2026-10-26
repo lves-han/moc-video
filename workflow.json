@@ -26,7 +26,49 @@
         "test_*.py"
       ],
       "kind": "test",
-      "report": "unittest"
+      "report": "unittest",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "verify-contracts",
+      "argv": [
+        "{python}",
+        "-B",
+        "replica-spec/validate_contracts.py",
+        "--report",
+        "evidence/contracts-validation.json"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-working-contracts",
+      "argv": [
+        "{python}",
+        "-B",
+        "scripts/check-contracts.py"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-frontend-tests",
+      "argv": [
+        "npm",
+        "test"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-frontend-build",
+      "argv": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "kind": "command",
+      "timeout_seconds": 300
     },
     {
       "id": "verify-project",
@@ -35,7 +77,8 @@
         "-B",
         "scripts/check-project.py"
       ],
-      "kind": "command"
+      "kind": "command",
+      "timeout_seconds": 7200
     }
   ]
 }

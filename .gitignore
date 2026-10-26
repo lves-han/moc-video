@@ -17,3 +17,4 @@ __pycache__/
 !.env.example
 
 .DS_Store
+/src-tauri/target/

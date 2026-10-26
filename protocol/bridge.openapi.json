@@ -1,0 +1,4910 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tauri Video Android Bridge",
+    "version": "1.5.0",
+    "description": "Cloudstream Android桥接HTTP契约及共用内容/播放DTO。此处Source/Health及会话Bearer只描述Android客体；Rust应用层三类来源、配置、宿主epoch与命令契约见app.schema.json和开发规格18。原始cs3包与固定基线保持不变。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:{forwarded_port}",
+      "variables": {
+        "forwarded_port": {
+          "default": "18471",
+          "description": "仅文档示例，真实端口由adb forward tcp:0分配"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "sessionBearer": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "runtime"
+    },
+    {
+      "name": "catalog"
+    },
+    {
+      "name": "content"
+    },
+    {
+      "name": "playback"
+    },
+    {
+      "name": "resources"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "获取兼容引擎状态",
+        "tags": [
+          "runtime"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/sources": {
+      "get": {
+        "operationId": "listSources",
+        "summary": "列出全部插件及注册源",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceListEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/catalog/sync": {
+      "post": {
+        "operationId": "syncCatalog",
+        "summary": "同步固定仓库并原子加载原包",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogSyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSyncResultEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/home": {
+      "post": {
+        "operationId": "getHome",
+        "summary": "调用所选源首页",
+        "tags": [
+          "content"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomePageEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "description": "按HomeRequest的section_ref决定完整首页或单栏；请求与返回栏目绑定，index跨重试/翻页保持，前端按请求范围整体替换/局部替换/追加。"
+      }
+    },
+    "/v1/search": {
+      "post": {
+        "operationId": "search",
+        "summary": "插件兼容搜索方法，首版UI可延后",
+        "tags": [
+          "content"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/details": {
+      "post": {
+        "operationId": "getDetails",
+        "summary": "按原始opaque引用加载详情",
+        "tags": [
+          "content"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetailsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailsEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/resolve": {
+      "post": {
+        "operationId": "resolve",
+        "summary": "解析集数并登记候选",
+        "tags": [
+          "content"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/resolutions/{resolution_id}": {
+      "delete": {
+        "operationId": "releaseResolution",
+        "summary": "释放未使用解析结果",
+        "tags": [
+          "playback"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resolution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AckEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "description": "幂等释放指定候选表；已释放/到期返回ok=true。已有Session独立持有网络上下文，其他解析句柄保持。"
+      }
+    },
+    "/v1/playback-sessions": {
+      "post": {
+        "operationId": "createPlaybackSession",
+        "summary": "创建当前候选播放会话",
+        "tags": [
+          "playback"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSessionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/playback-sessions/{session_id}": {
+      "delete": {
+        "operationId": "closePlaybackSession",
+        "summary": "释放会话并取消上游请求",
+        "tags": [
+          "playback"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AckEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "description": "幂等关闭指定Session并取消其上游流；保持Resolution和其他Session。迟到的旧关闭按目标ID定位，返回ok=true。"
+      }
+    },
+    "/v1/requests/{request_id}/cancel": {
+      "post": {
+        "operationId": "cancelRequest",
+        "summary": "取消指定元数据任务",
+        "tags": [
+          "runtime"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResultEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "description": "X-Request-Id必须不同于目标path request_id，相同时BAD_REQUEST。独立控制路径，目标已结束时cancelled=false，父取消级联全部子任务。"
+      }
+    },
+    "/v1/interactions": {
+      "post": {
+        "operationId": "beginInteraction",
+        "summary": "在已切换的可见AVD登记源站交互",
+        "tags": [
+          "runtime"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/interactions/{interaction_id}/finish": {
+      "post": {
+        "operationId": "finishInteraction",
+        "summary": "完成或取消源站交互并同步会话数据",
+        "tags": [
+          "runtime"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "interaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InteractionFinishRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/media/{session_id}/{resource_id}": {
+      "get": {
+        "operationId": "getMediaResource",
+        "summary": "经原始拦截器获取登记媒体资源",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "description": "单Range请求"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/dash+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "head": {
+        "operationId": "headMediaResource",
+        "summary": "查询登记媒体资源头",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "description": "单Range请求"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "options": {
+        "operationId": "preflightGetMediaResource",
+        "summary": "资源CORS预检，仅返回固定允许列表中的元数据",
+        "tags": [
+          "resources"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Access-Control-Request-Method",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "HEAD"
+              ]
+            }
+          },
+          {
+            "name": "Access-Control-Request-Headers",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "允许列表匹配；只返回CORS元数据。GET/HEAD仍需Bearer或cap鉴权。",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "精确匹配配置允许列表的请求Origin"
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GET, HEAD"
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "配置允许的Authorization/Range/If-Range/If-None-Match，按实际请求验证"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/media/{session_id}/templates/{template_id}": {
+      "get": {
+        "operationId": "getDashTemplateResource",
+        "summary": "仅按登记模板的约束展开变量",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "number",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "bandwidth",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "representation_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "description": "单Range请求"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/dash+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "head": {
+        "operationId": "headDashTemplateResource",
+        "summary": "获取登记模板展开资源头",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "number",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "bandwidth",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "representation_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "description": "单Range请求"
+            }
+          },
+          {
+            "name": "If-Range",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "options": {
+        "operationId": "preflightGetDashTemplateResource",
+        "summary": "资源CORS预检，仅返回固定允许列表中的元数据",
+        "tags": [
+          "resources"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Access-Control-Request-Method",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "HEAD"
+              ]
+            }
+          },
+          {
+            "name": "Access-Control-Request-Headers",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "允许列表匹配；只返回CORS元数据。GET/HEAD仍需Bearer或cap鉴权。",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "精确匹配配置允许列表的请求Origin"
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GET, HEAD"
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "配置允许的Authorization/Range/If-Range/If-None-Match，按实际请求验证"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/images/{resource_id}": {
+      "get": {
+        "operationId": "getImage",
+        "summary": "按原始图片上下文获取已登记资源",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.apple.mpegurl": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/dash+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "head": {
+        "operationId": "headImage",
+        "summary": "获取已登记图片资源头",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "完整资源或按原始类型重写的清单",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "206": {
+            "description": "上游真实部分响应",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "仅配置允许的应用Origin"
+              },
+              "Access-Control-Expose-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Content-Range, Accept-Ranges, Content-Length, ETag"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "416": {
+            "description": "不可满足的真实区间"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        },
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "resourceCapability": []
+          }
+        ],
+        "description": "接受Bearer或限本资源/媒体会话的cap。缺少有效凭据返回401，已鉴权但资源过期返回410。CORS允许固定应用Origin，Range等响应头显式开放；cap查询字段在本地终止。"
+      },
+      "options": {
+        "operationId": "preflightGetImage",
+        "summary": "资源CORS预检，仅返回固定允许列表中的元数据",
+        "tags": [
+          "resources"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "已登记的不透明标识",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Access-Control-Request-Method",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "HEAD"
+              ]
+            }
+          },
+          {
+            "name": "Access-Control-Request-Headers",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "允许列表匹配；只返回CORS元数据。GET/HEAD仍需Bearer或cap鉴权。",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "精确匹配配置允许列表的请求Origin"
+              },
+              "Access-Control-Allow-Methods": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GET, HEAD"
+              },
+              "Access-Control-Allow-Headers": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "配置允许的Authorization/Range/If-Range/If-None-Match，按实际请求验证"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    },
+    "/v1/resource-status": {
+      "get": {
+        "operationId": "getResourceStatus",
+        "summary": "读取网关资源状态，不访问上游或续租",
+        "tags": [
+          "resources"
+        ],
+        "parameters": [
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "UUID",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "playback",
+                "image"
+              ]
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "X-Request-Timeout-Ms",
+            "in": "header",
+            "required": false,
+            "description": "Rust发送剩余预算，客体取该值与操作上限的较小值；排队/子请求共用单调deadline。直接调用未提供时采用操作表默认预算。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceStatusEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "410": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "502": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApiError"
+          },
+          "504": {
+            "$ref": "#/components/responses/ApiError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "256位随机会话令牌；非JWT；每次引擎会话刷新"
+      },
+      "resourceCapability": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "cap",
+        "description": "256位随机资源凭据，base64url无填充。图片限单资源；媒体限单个PlaybackSession登记资源的GET/HEAD，覆盖受约束DASH模板。随epoch/资源过期或会话撤销失效；控制端点只接受sessionBearer。cap在网关终止并从日志脱敏。"
+      }
+    },
+    "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "BAD_REQUEST",
+          "UNAUTHORIZED",
+          "SOURCE_NOT_FOUND",
+          "REVISION_MISMATCH",
+          "SESSION_EXPIRED",
+          "PLUGIN_LOAD_FAILED",
+          "INTERACTION_REQUIRED",
+          "MEDIA_UNSUPPORTED",
+          "RESOURCE_LIMIT",
+          "UPSTREAM_FAILED",
+          "ENGINE_NOT_READY",
+          "UPSTREAM_TIMEOUT",
+          "CANCELLED",
+          "INTERNAL_ERROR",
+          "CAPABILITY_UNAVAILABLE"
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "description": "可显示的脱敏说明"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "脱敏诊断。code=INTERACTION_REQUIRED时必须包含source_id、source_revision、operation、reason、host，供start_interaction与重试使用。"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "code": {
+                  "const": "INTERACTION_REQUIRED"
+                }
+              },
+              "required": [
+                "code"
+              ]
+            },
+            "then": {
+              "required": [
+                "details"
+              ],
+              "properties": {
+                "details": {
+                  "type": "object",
+                  "required": [
+                    "source_id",
+                    "source_revision",
+                    "operation",
+                    "reason",
+                    "host"
+                  ],
+                  "properties": {
+                    "source_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "source_revision": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": [
+                        "home",
+                        "details",
+                        "resolve",
+                        "media"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "challenge",
+                        "login",
+                        "captcha",
+                        "unknown"
+                      ]
+                    },
+                    "host": {
+                      "type": "string",
+                      "description": "需要交互的源站主机名，仅主机名不含路径/查询",
+                      "pattern": "^[A-Za-z0-9.-]{1,253}$"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "code": {
+                  "enum": [
+                    "UPSTREAM_FAILED",
+                    "UPSTREAM_TIMEOUT"
+                  ]
+                },
+                "details": {
+                  "required": [
+                    "reason"
+                  ],
+                  "properties": {
+                    "reason": {
+                      "const": "manifest_sync_failed"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "details"
+              ]
+            },
+            "then": {
+              "properties": {
+                "details": {
+                  "required": [
+                    "failed_addon_indices"
+                  ],
+                  "properties": {
+                    "failed_addon_indices": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 16,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 15
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "error"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "request_id": "a9e10c2e-0c43-43d9-8d3f-4c0d4afc5297",
+            "engine_epoch": "43ca45df-e76c-4914-83a7-89179c949398",
+            "error": {
+              "code": "REVISION_MISMATCH",
+              "message": "数据源已更新，请重新加载详情",
+              "retryable": true
+            }
+          }
+        ]
+      },
+      "MediaRef": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "data": {
+            "type": "string",
+            "description": "原始provider不透明字符串；maxLength约束Unicode字符数，服务端另外验证UTF-8编码长度<=524288字节。保持原内容；禁止URL重写/JSON重序列化。",
+            "maxLength": 524288,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "home": {
+            "type": "boolean"
+          },
+          "search": {
+            "type": "boolean"
+          },
+          "details": {
+            "type": "boolean"
+          },
+          "resolve": {
+            "type": "boolean"
+          },
+          "sequential_home": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "home",
+          "search",
+          "details",
+          "resolve",
+          "sequential_home"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "sequential_home": {
+                  "const": true
+                }
+              },
+              "required": [
+                "sequential_home"
+              ]
+            },
+            "then": {
+              "properties": {
+                "home": {
+                  "const": true
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件SHA256、Cloudstream runtime commit、mapping_version决定的修订摘要",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "plugin_internal_name": {
+            "type": "string",
+            "description": "原包internalName"
+          },
+          "plugin_sha256": {
+            "type": "string",
+            "description": "制品摘要",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "registration_key": {
+            "type": "string",
+            "description": "H(\"registration\", qualified_provider_class, initial_main_url, duplicate_ordinal)的64位小写十六进制SHA-256摘要；UTF-8长度前缀编码见DATA_STRUCTURES.md第5节。",
+            "pattern": "^[a-f0-9]{64}$",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "description": "源显示名"
+          },
+          "language": {
+            "type": "string",
+            "description": "源语言"
+          },
+          "content_types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "保留源类型名"
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "runtime_status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "failed"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "source_revision",
+          "plugin_internal_name",
+          "plugin_sha256",
+          "registration_key",
+          "name",
+          "language",
+          "content_types",
+          "capabilities",
+          "runtime_status"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "runtime_status": {
+                  "const": "failed"
+                }
+              },
+              "required": [
+                "runtime_status"
+              ]
+            },
+            "then": {
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "error": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PluginReport": {
+        "type": "object",
+        "properties": {
+          "internal_name": {
+            "type": "string",
+            "description": "包名"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "artifact_sha256": {
+            "type": "string",
+            "description": "原包SHA256",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "loaded",
+              "failed"
+            ]
+          },
+          "provider_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "确定性provider实例ID",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "internal_name",
+          "version",
+          "artifact_sha256",
+          "status",
+          "provider_ids"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "required": [
+                "error"
+              ],
+              "properties": {
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "error": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SourceList": {
+        "type": "object",
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginReport"
+            }
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        },
+        "required": [
+          "plugins",
+          "providers"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "api_version": {
+            "const": "1"
+          },
+          "runtime_version": {
+            "type": "string",
+            "description": "已锁定引擎构建版本"
+          },
+          "cloudstream_revision": {
+            "type": "string",
+            "description": "已验证上游commit"
+          },
+          "registry_sha256": {
+            "type": "string",
+            "description": "已加载目录摘要"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "initializing",
+              "ready",
+              "failed"
+            ]
+          },
+          "loaded_plugin_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "provider_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "display_mode": {
+            "type": "string",
+            "enum": [
+              "headless",
+              "windowed"
+            ]
+          }
+        },
+        "required": [
+          "api_version",
+          "runtime_version",
+          "cloudstream_revision",
+          "registry_sha256",
+          "status",
+          "loaded_plugin_count",
+          "provider_count",
+          "display_mode"
+        ],
+        "additionalProperties": false
+      },
+      "CatalogSyncRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "baseline",
+              "refresh"
+            ]
+          },
+          "expected_registry_sha256": {
+            "type": "string",
+            "description": "可选目录摘要",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "CatalogSyncResult": {
+        "type": "object",
+        "properties": {
+          "registry_sha256": {
+            "type": "string",
+            "description": "目录摘要"
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "plugins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginReport"
+            }
+          },
+          "provider_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "registry_sha256",
+          "changed",
+          "plugins",
+          "provider_count"
+        ],
+        "additionalProperties": false
+      },
+      "ImageRef": {
+        "type": "object",
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "description": "已登记图片ID"
+          },
+          "path": {
+            "type": "string",
+            "description": "受鉴权的相对网关路径",
+            "pattern": "^/images/[A-Za-z0-9_-]+$"
+          },
+          "capability": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "256位随机资源访问凭据，base64url无填充；从日志、诊断与上游请求移除"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "当前租约快照。同一engine_epoch内按(source_id, 上游URL, 请求头摘要)去重，复用同一resource_id与capability，使WebView HTTP缓存可命中；每次合法访问或被新DTO引用时续期30分钟；登记数超上限(默认4096)按最久未用淘汰；epoch变更立即撤销。淘汰或到期返回410。"
+          }
+        },
+        "required": [
+          "resource_id",
+          "path",
+          "capability",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "MediaCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "内容稳定摘要ID"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series",
+              "anime",
+              "other"
+            ]
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "年份/更新等辅助文字"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 9999
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "update_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "源明确提供的更新/完结展示文本"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "源明确提供的总集数",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "原质量展示标签，不参与集数ID解析"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "源原始TvType名称"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ref",
+          "title",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "HomeRequest": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "section_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "由引擎返回的栏目引用",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "缺省/null仅配page=1为全量；非空配page=1为单栏首屏重试，page>=2为翻页。"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision",
+          "page"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "source_id": "src_fixture_ddys",
+            "source_revision": "sha256:3ea4fc02ccf84851d6d9db33daf78a9100948f7969d4a75981b7eea9b2cee092",
+            "section_ref": null,
+            "page": 1
+          }
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "page": {
+                  "minimum": 2
+                }
+              },
+              "required": [
+                "page"
+              ]
+            },
+            "then": {
+              "required": [
+                "section_ref"
+              ],
+              "properties": {
+                "section_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "HomeSection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "栏目ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "栏目标题"
+          },
+          "section_ref": {
+            "type": "string",
+            "description": "原MainPage请求的受控映射引用"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaCard"
+            }
+          },
+          "has_next": {
+            "type": "boolean"
+          },
+          "next_page": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前栏目页；源序号从1开始",
+            "minimum": 1
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "完整首页快照中的零起始原始栏目位置；重试/翻页保持SectionRecord中登记值。"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "section_ref",
+          "items",
+          "has_next",
+          "next_page",
+          "page",
+          "index"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "has_next": {
+                  "const": true
+                }
+              },
+              "required": [
+                "has_next"
+              ]
+            },
+            "then": {
+              "properties": {
+                "next_page": {
+                  "type": "integer",
+                  "minimum": 2
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "next_page": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "HomePage": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeSection"
+            }
+          },
+          "failed_sections": {
+            "type": "array",
+            "description": "仅完整首页的栏目级失败，按原index顺序；无失败为[]。section_ref非空的单栏调用失败走整体错误包络。",
+            "items": {
+              "$ref": "#/components/schemas/HomeSectionFailure"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision",
+          "sections",
+          "failed_sections"
+        ],
+        "additionalProperties": false,
+        "description": "全量首页：成功与失败栏目的index合并后连续覆盖0..N-1。单栏调用：成功只返回目标栏且failed_sections=[]，失败走错误包络。",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "failed_sections": {
+                  "minItems": 1
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "sections": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SearchRequest": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "query": {
+            "type": "string",
+            "description": "搜索词",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision",
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaCard"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "DetailsRequest": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "ref": {
+              "source_id": "src_fixture_ddys",
+              "source_revision": "sha256:3ea4fc02ccf84851d6d9db33daf78a9100948f7969d4a75981b7eea9b2cee092",
+              "data": "fixture:detail:movie-001"
+            }
+          }
+        ]
+      },
+      "Episode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "集数ID"
+          },
+          "label": {
+            "type": "string",
+            "description": "原集名"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "description": "源明确集号，可含小数；特别篇保留原label"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          },
+          "index": {
+            "type": "integer",
+            "description": "组内零起始源序号，保持源返回顺序",
+            "minimum": 0
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "源单集标题；label为选择按钮文字"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "纯文本单集简介"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "毫秒；JSON安全整数",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "ref",
+          "index"
+        ],
+        "additionalProperties": false
+      },
+      "EpisodeGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "分组ID"
+          },
+          "title": {
+            "type": "string",
+            "description": "源提供的组名"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "season",
+              "route",
+              "dub",
+              "other"
+            ]
+          },
+          "dub_status": {
+            "$ref": "#/components/schemas/DubStatus"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "分组明确语言标记"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "episodes",
+          "kind",
+          "dub_status"
+        ],
+        "additionalProperties": false
+      },
+      "Details": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          },
+          "title": {
+            "type": "string",
+            "description": "标题"
+          },
+          "plot": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "纯文本简介"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poster": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 9999
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "标签"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series",
+              "anime",
+              "other"
+            ]
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EpisodeGroup"
+            }
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaCard"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "与MediaCard同一内容ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "backdrop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "update_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "episode_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonCredit"
+            }
+          },
+          "directors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonCredit"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "源明确提供的地区文字"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "源明确提供的语言文字"
+            }
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "毫秒；JSON安全整数",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/SourceWarning"
+            },
+            "description": "Stremio资源部分失败诊断；缺省空数组，addon_index绑定本响应source_revision的manifest顺序。"
+          }
+        },
+        "required": [
+          "ref",
+          "title",
+          "kind",
+          "groups",
+          "tags",
+          "related",
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "ResolveRequest": {
+        "type": "object",
+        "properties": {
+          "episode_ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          }
+        },
+        "required": [
+          "episode_ref"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "episode_ref": {
+              "source_id": "src_fixture_ddys",
+              "source_revision": "sha256:3ea4fc02ccf84851d6d9db33daf78a9100948f7969d4a75981b7eea9b2cee092",
+              "data": "fixture:episode:movie-001-01"
+            }
+          }
+        ]
+      },
+      "ResolvedStream": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "引擎登记的link候选ID"
+          },
+          "label": {
+            "type": "string",
+            "description": "线路/候选名"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "description": "明确视频高度，如720/1080；未知为null",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "progressive",
+              "hls",
+              "dash",
+              "drm",
+              "unknown"
+            ]
+          },
+          "has_interceptor": {
+            "type": "boolean"
+          },
+          "playable": {
+            "type": "boolean",
+            "description": "引擎已知的格式/资源前提通过；客户端另验证平台codec与播放能力"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "不可播放的明确原因"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "明确媒体类型；未知为空"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "has_interceptor",
+          "playable"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "playable": {
+                  "const": false
+                }
+              },
+              "required": [
+                "playable"
+              ]
+            },
+            "then": {
+              "required": [
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "reason": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "drm",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "playable": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Subtitle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "字幕ID"
+          },
+          "label": {
+            "type": "string",
+            "description": "字幕名"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "语言"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "vtt",
+              "srt",
+              "ass",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "format"
+        ],
+        "additionalProperties": false
+      },
+      "Resolution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "解析结果ID"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "到期时间",
+            "format": "date-time"
+          },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedStream"
+            },
+            "minItems": 1
+          },
+          "subtitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subtitle"
+            }
+          },
+          "episode_ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          },
+          "warnings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/SourceWarning"
+            },
+            "description": "Stremio资源部分失败诊断；缺省空数组，addon_index绑定本响应source_revision的manifest顺序。"
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "source_revision",
+          "expires_at",
+          "streams",
+          "subtitles",
+          "episode_ref"
+        ],
+        "additionalProperties": false,
+        "description": "五分钟候选选择租约；回收/DELETE后禁止新建Session，已建Session独立持有LinkRecord与网络上下文。"
+      },
+      "PlaybackSessionRequest": {
+        "type": "object",
+        "properties": {
+          "resolution_id": {
+            "type": "string",
+            "description": "解析ID"
+          },
+          "stream_id": {
+            "type": "string",
+            "description": "已登记候选ID"
+          }
+        },
+        "required": [
+          "resolution_id",
+          "stream_id"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "resolution_id": "res_fixture_001",
+            "stream_id": "stream_fixture_1080"
+          }
+        ]
+      },
+      "PlayableSubtitle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "字幕ID"
+          },
+          "label": {
+            "type": "string",
+            "description": "字幕名"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "语言"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "format": {
+            "const": "vtt"
+          },
+          "media_path": {
+            "type": "string",
+            "description": "字幕相对媒体网关路径",
+            "pattern": "^/media/"
+          },
+          "source_format": {
+            "type": "string",
+            "enum": [
+              "vtt",
+              "srt",
+              "ass",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "format",
+          "media_path",
+          "source_format"
+        ],
+        "additionalProperties": false
+      },
+      "PlaybackSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "播放会话ID"
+          },
+          "stream_id": {
+            "type": "string",
+            "description": "候选ID"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "media_path": {
+            "type": "string",
+            "description": "相对受鉴权媒体路径",
+            "pattern": "^/media/"
+          },
+          "subtitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayableSubtitle"
+            }
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "当前服务端空闲租约快照。活动请求钉住会话；active_requests=0且距last_activity>=5分钟时到期；停止/epoch变更立即撤销。客户端不按旧快照终止活跃播放。",
+            "format": "date-time"
+          },
+          "media_capability": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "256位随机资源访问凭据，base64url无填充；从日志、诊断与上游请求移除"
+          },
+          "resolution_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "episode_ref": {
+            "$ref": "#/components/schemas/MediaRef"
+          },
+          "stream_kind": {
+            "type": "string",
+            "enum": [
+              "progressive",
+              "hls",
+              "dash"
+            ]
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "stream_id",
+          "source_id",
+          "media_path",
+          "subtitles",
+          "expires_at",
+          "media_capability",
+          "resolution_id",
+          "source_revision",
+          "episode_ref",
+          "stream_kind"
+        ],
+        "additionalProperties": false
+      },
+      "Ack": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "additionalProperties": false
+      },
+      "CancelResult": {
+        "type": "object",
+        "properties": {
+          "target_request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "cancelled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "target_request_id",
+          "cancelled"
+        ],
+        "additionalProperties": false
+      },
+      "InteractionRequest": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "source_revision": {
+            "type": "string",
+            "description": "插件制品与运行时映射修订",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "source_id",
+          "source_revision"
+        ],
+        "additionalProperties": false
+      },
+      "Interaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "交互ID"
+          },
+          "source_id": {
+            "type": "string",
+            "description": "确定性provider实例ID",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "completed",
+              "failed"
+            ]
+          },
+          "required_display_mode": {
+            "const": "windowed"
+          },
+          "message": {
+            "type": "string",
+            "description": "用户可见说明"
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "status",
+          "required_display_mode",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "InteractionFinishRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "cancelled"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "HealthEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Health"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SourceListEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SourceList"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CatalogSyncResultEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CatalogSyncResult"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "HomePageEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/HomePage"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SearchResultEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SearchResult"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "DetailsEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Details"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "ResolutionEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Resolution"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PlaybackSessionEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PlaybackSession"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false,
+        "examples": [
+          {
+            "request_id": "a9e10c2e-0c43-43d9-8d3f-4c0d4afc5297",
+            "engine_epoch": "43ca45df-e76c-4914-83a7-89179c949398",
+            "data": {
+              "id": "play_fixture_001",
+              "stream_id": "stream_fixture_1080",
+              "source_id": "src_fixture_ddys",
+              "media_path": "/media/play_fixture_001/resource_fixture_master",
+              "subtitles": [],
+              "expires_at": "2026-10-23T12:00:00Z",
+              "media_capability": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "resolution_id": "resolution_fixture_001",
+              "source_revision": "revision_fixture_001",
+              "episode_ref": {
+                "source_id": "src_fixture_ddys",
+                "source_revision": "revision_fixture_001",
+                "data": "{\"vod_id\":\"fixture\",\"episode\":\"2\"}"
+              },
+              "stream_kind": "hls",
+              "mime_type": "application/vnd.apple.mpegurl"
+            }
+          }
+        ]
+      },
+      "AckEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Ack"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CancelResultEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CancelResult"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "InteractionEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Interaction"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "ContentStatus": {
+        "type": "string",
+        "enum": [
+          "ongoing",
+          "completed",
+          "upcoming",
+          "unknown"
+        ]
+      },
+      "DubStatus": {
+        "type": "string",
+        "enum": [
+          "dubbed",
+          "subbed",
+          "unspecified"
+        ]
+      },
+      "Rating": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "scale": {
+            "const": 10
+          }
+        },
+        "required": [
+          "value",
+          "scale"
+        ],
+        "additionalProperties": false,
+        "description": "统一10分评分；由已知刻度转换，未知整体为null。展示可保留一位小数，传输保留精度。"
+      },
+      "PersonCredit": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "纯文本姓名",
+            "minLength": 1
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "角色名或身份，由源明确提供"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "description": "人物元数据；源未提供的角色/照片为空。"
+      },
+      "HomeSectionFailure": {
+        "type": "object",
+        "description": "完整首页中失败栏目的原index/标题与可重试引用；成功与失败按index合并。全部失败时返回整体错误。",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "原MainPageData.name"
+          },
+          "section_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可重试时为当前epoch登记的栏目引用；不可重试为null"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "完整首页快照中的零起始原始栏目位置；重试/翻页保持SectionRecord中登记值。"
+          }
+        },
+        "required": [
+          "title",
+          "section_ref",
+          "error",
+          "index"
+        ],
+        "additionalProperties": false
+      },
+      "SourceWarning": {
+        "type": "object",
+        "properties": {
+          "addon_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "catalog",
+              "meta",
+              "stream",
+              "subtitles"
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "addon_index",
+          "operation",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "ResourceStatusInput": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "playback",
+              "image"
+            ]
+          },
+          "target_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "kind",
+          "target_id"
+        ],
+        "additionalProperties": false
+      },
+      "ResourceStatus": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "playback",
+              "image"
+            ]
+          },
+          "target_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "expired",
+              "failed"
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "target_id",
+          "state",
+          "error"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "ready"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "error": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "expired"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiError"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "const": "SESSION_EXPIRED"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResourceStatusEnvelope": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "engine_epoch": {
+            "type": "string",
+            "description": "UUID",
+            "format": "uuid"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResourceStatus"
+          }
+        },
+        "required": [
+          "request_id",
+          "engine_epoch",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "ApiError": {
+        "description": "结构化失败；code区分失败原因",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    }
+  }
+}

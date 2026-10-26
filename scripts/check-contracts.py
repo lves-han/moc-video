@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Check the working wire contracts, retaining the archived compatibility cases."""
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+
+from jsonschema import Draft202012Validator, FormatChecker
+from openapi_spec_validator import validate
+from referencing import Registry, Resource
+
+ROOT = Path(__file__).resolve().parents[1]
+HISTORY = {'list_history', 'save_history', 'remove_history', 'clear_history'}
+
+
+def check(directory):
+    module = importlib.util.spec_from_file_location('archived_contracts', ROOT / 'replica-spec/validate_contracts.py')
+    original = importlib.util.module_from_spec(module)
+    module.loader.exec_module(original)
+    read = lambda name: json.loads((directory / name).read_text(encoding='utf-8'))
+    bridge, app, fixture = (read(name) for name in ('bridge.openapi.json', 'app.schema.json', 'examples/contract-cases.json'))
+    baseline_app = original.read('app.schema.json')
+    baseline_fixture = original.read('examples/contract-cases.json')
+    assert bridge == original.read('bridge.openapi.json'), 'Existing Android bridge contract changed'
+    for name, definition in baseline_app['$defs'].items():
+        assert app['$defs'][name] == definition, f'Existing DTO changed: {name}'
+    for key in ('x-command-contracts', 'x-event-contracts', 'x-request-budgets', 'x-stremio-capability-rule'):
+        for name, definition in baseline_app[key].items():
+            assert app[key][name] == definition, f'Existing {key} changed: {name}'
+    commands = app['x-command-contracts']
+    additions = set(commands) - set(baseline_app['x-command-contracts'])
+    assert additions in (set(), HISTORY), 'History commands must be introduced as one complete set'
+    if (ROOT / 'src-tauri/src/history.rs').exists():
+        assert additions == HISTORY, 'Native history requires all four IPC contracts'
+    validate(bridge)
+    Draft202012Validator.check_schema(app)
+    registry = Registry().with_resource(original.BRIDGE_URI, Resource.from_contents({
+        '$schema': 'https://json-schema.org/draft/2020-12/schema', '$id': original.BRIDGE_URI, **bridge,
+    })).with_resource(app['$id'], Resource.from_contents(app))
+    documents = {'bridge.openapi.json': bridge, 'app.schema.json': app}
+    def refs(value, owner):
+        if isinstance(value, dict):
+            if '$ref' in value:
+                target, pointer = value['$ref'].split('#', 1)
+                selected = documents[target or owner]
+                for part in pointer.lstrip('/').split('/'):
+                    selected = selected[part.replace('~1', '/').replace('~0', '~')]
+            for child in value.values():
+                refs(child, owner)
+        elif isinstance(value, list):
+            for child in value:
+                refs(child, owner)
+    for name, document in documents.items():
+        refs(document, name)
+    for key in ('cases', 'semantic_cases', 'lifecycle_vectors'):
+        for case in baseline_fixture[key]:
+            assert case in fixture[key], f'Archived regression case changed: {key}'
+    cases = fixture['cases']
+    assert cases and len({case['name'] for case in cases}) == len(cases), 'Missing or duplicate cases'
+    for case in cases:
+        pointer = (f'{original.BRIDGE_URI}#/components/schemas/{case["schema"]}' if case['document'] == 'bridge'
+                   else f'{app["$id"]}#/$defs/{case["schema"]}')
+        validator = Draft202012Validator({'$ref': pointer}, registry=registry, format_checker=FormatChecker())
+        assert (not list(validator.iter_errors(case['value']))) == case['expected_valid'], case['name']
+        if case['expected_valid']:
+            for fn in (original.check_source_bindings, original.check_playback_resolutions,
+                       original.check_cancel_identities, original.check_home_positions):
+                fn(case['value'])
+            if case['schema'] == 'WatchHistoryRecord':
+                assert original.history_record(case['value']), case['name']
+    names = {case['name'] for case in cases}
+    for command in commands:
+        assert commands[command] == {'args': {'$ref': '#/$defs/Args_' + command}, 'result': {'$ref': '#/$defs/Result_' + command}}, command
+        assert {'args_' + command, 'result_' + command} <= names, f'Missing command cases: {command}'
+    for command in additions:
+        for prefix in ('Args_', 'Result_'):
+            expected = {case['expected_valid'] for case in cases if case['schema'] == prefix + command}
+            assert expected == {True, False}, f'History needs positive and negative cases: {prefix}{command}'
+    for case in fixture['semantic_cases']:
+        assert original.semantic(case) == case['expected_valid'], case['name']
+    for case in fixture['lifecycle_vectors']:
+        assert original.lifecycle(case), case['name']
+    return {'result': 'PASS', 'commands': len(commands), 'structural_cases': len(cases),
+            'semantic_cases': len(fixture['semantic_cases']), 'lifecycle_vectors': len(fixture['lifecycle_vectors'])}
+
+
+if __name__ == '__main__':
+    if not __debug__:
+        raise SystemExit('Contract checks require assertions; remove -O')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--protocol-dir', type=Path, default=ROOT / 'protocol')
+    options = parser.parse_args()
+    print(json.dumps(check(options.protocol_dir), ensure_ascii=False))

@@ -82,10 +82,24 @@ Stremio 继续作为元数据接入方向。`getStremioLanguage()` 从页面语�
 
 用户确认 SQLite 为技术约定，本轮先写入方案。当前工程保持 Vue 前端预览，历史数据使用会话内 Map；刷新后从空列表开始。播放进度大约每5秒更新，暂停、seek、切集、切源与离页时记录当前进度。历史中的影片身份与播放来源分开保存；语言切换沿用同一影片记录。看完标记针对当前集，重新播放从该集起点开始。
 
-正式宿主按 [开发规格11.4](../replica-spec/DEVELOPMENT_SPEC.md#114-观看历史与-sqlite) 使用 SQLite，保存位置为应用数据目录；由 Rust 负责迁移和参数化读写。接入时替换 `src/data/history.ts`，继续使用已有历史视图与播放事件入口。当前 `demo:<kind>:<id>` 身份服务于虚构预览；真实数据使用 Stremio 的稳定内容/video身份，重新匹配当前 Cloudstream/MacCMS 播放引用后续播。
+正式宿主按 [开发规格11.4](replica-spec/DEVELOPMENT_SPEC.md#114-观看历史与-sqlite) 使用 SQLite，保存位置为应用数据目录；由 Rust 负责迁移和参数化读写。接入时替换 `src/data/history.ts`，继续使用已有历史视图与播放事件入口。当前 `demo:<kind>:<id>` 身份服务于虚构预览；真实数据使用 Stremio 的稳定内容/video身份，重新匹配当前 Cloudstream/MacCMS 播放引用后续播。
 
 `npm test` 验证按影片更新、来源独立、排序、删除/清空、无效进度与临时会话字段校验；`npm run build` 执行类型检查和打包。SQLite 跨重启持久化、迁移、写入失败与三平台运行在宿主接入阶段验收。
 
 本轮前端验证（2026-10-26）：构建和8项测试通过；浏览器验证桌面/390px无横向溢出、空态、按影片更新集数、原来源恢复、进度续播、当前集看完与从头重播、删除/清空确认取消。实际SQLite读写与三平台宿主验证留待T18/T20。构建主JS约519kB（gzip约158kB），Vite报告单包体积提示。
 
 文档方案已更新至1.5.0：Stremio元数据→match_playback→Cloudstream主播放，MacCMS可选；元数据与播放源分别选择。当前界面仍使用本地fixture与会话内历史，真实匹配、双来源状态和SQLite宿主接入按replica-spec实施。
+
+
+## 项目初始化与开发路线（2026-10-26）
+
+项目根目录：`/Users/eason/jp/application`。当前交付为文档规划基线，原有前端已原样纳入 Git。
+
+- [产品规格](docs/SPEC.md)、[架构契约](docs/ARCHITECTURE.md)、[任务与需求覆盖](docs/TASKS.md)。
+- [工作流用法](docs/WORKFLOW.md)、[当前进度](docs/PROGRESS.md)、[初始化决定](docs/DECISIONS.md)。
+- [原前端说明](docs/FRONTEND_BASELINE.md)、[完整原始规格包](replica-spec/README.md)。原说明中的相对路径以初始化前布局为来源记录，当前机器契约统一从项目内 replica-spec/ 读取。
+
+控制解释器为项目 `.venv/bin/python`（Windows恢复时使用`.venv/Scripts/python.exe`）。首次恢复依赖：`.venv/bin/python -m pip install -r scripts/requirements.txt`；业务源码依赖沿用`npm ci`。
+检查文档结构：`.venv/bin/python -B scripts/task.py check`；基础业务检查：`.venv/bin/python -B scripts/verify.py all`。每卡验收按TASKS的准确argv执行。
+
+后续实际开发采用原单卡驱动及独立只读巡检。开发/巡检CLI、模型和权限保留待定；当前无开发会话和定时监管。跨平台、原包执行、真实来源、SQLite及发行验收均待开发阶段执行。

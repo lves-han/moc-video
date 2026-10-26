@@ -1,0 +1,18 @@
+{
+  "AI_TASKS.md": "89acb3b77e37366e6df6b7645faac06c345620a337d84a1c7d46eee847827c61",
+  "DATA_STRUCTURES.md": "90d13c6a3f9554c868063bea40990bf0bb50af976f61cf92bfcb3520f96d0b74",
+  "DEVELOPMENT_SPEC.md": "a9f03980c41e38f8a2e06f0f33d80b3f0262313b3f7b67d579dc092e8478f5b8",
+  "README.md": "b027aa63702d9d3a5c2eb5353a55715231e2a7df58a2ee69ff69da41040228ae",
+  "app.schema.json": "6ab4da36b7b7e32be41a1cc1eb5581a72da2588022d0bc964e0b45cd2a098204",
+  "bridge.openapi.json": "55c3e4ac4c5a7fd0c18e9dcca5c602236450437a48361f59641c48595564110d",
+  "examples/contract-cases.json": "6df0d8d48c541bb9a6194373ff30d5ad7a491c8bd3b576c3019001bde2711ff7",
+  "references/SOURCES.md": "b090a93ed5194128c89834a38ffc450712ce7588c07048f5f1d7da72fa6b75a5",
+  "references/android-aosp-images.json": "17876f1253308f01e1daf96809bc5d5a3b90f3c02f52ae0849c9108262b7a889",
+  "references/android-google-images.json": "515bd488a54fc93e92dee725dc24306ef1ba68e996d3a97a2c8c5ad74a73db39",
+  "references/app-data-evidence.json": "451f0e156dcc0d8371893d1d0ac437fd37c129af15948c5c51c3105a46848792",
+  "references/app-model-rea-evidence.json": "89557245477b6c2210b20217ebc83c99d784e95ddce9a277b6e14c49ad98afcf",
+  "references/plugin-artifact-inventory.json": "290f670e3f86719f76a7239a98dc21c2d0d112463e1543ceeecd0162023e516b",
+  "references/plugins.snapshot.json": "a514c083b372a2016a2a87ba0425d559caa8432372176ec78cdce346350643ef",
+  "references/validation-report.json": "9e4ea6981e7f910fe4cc21be50ab02cefbd80a025f6ed75f98352ac0d202105e",
+  "validate_contracts.py": "9f6bc407045563a60118c72a1baf6ea6c1632d8d2852793f8fb73876a6bc39e9"
+}
