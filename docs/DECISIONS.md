@@ -50,3 +50,12 @@
 适配：BLOCKED改为只冻结同卡及依赖卡；T1.1增加`- 阶段门：`由控制器拦截，取代ADR-005中T0.29由监管追加BLOCKED的做法，T0.29改为“移动阶段”说明。每项验收增加冻结`cases`，取本卡“需求”行全部ID，脚本为每个ID输出同名汇总testcase；ARCHITECTURE验收契约同步。T0.2/T0.21/T0.24/T0.26/T0.27/T0.29增加`- 环境：`记录ADR-005/006的平台范围。T24独立报告路径改为提交的`docs/reviews/T24/round-<N>.md`；文档审查报告round-1..5原样复制到`docs/reviews/doc-review/`，此后报告随文档提交。
 预算：新控制器核对每卡验收与完整verify超时之和不超过会话额度。T0.26原为14400s+8640s，超过21600s。作者将verify-project超时7200s降为3600s（现实际运行数秒，Rust加入后含fmt/check/clippy/test），合计19440s；超时只会让超时显式失败，验收强度不变。用户可改为恢复7200s并提高max_sessions。
 验证与影响：见PROGRESS；受审定义变化，需独立复审round-6。
+
+## ADR-008 2026-10-26T08:22:44.841305+00:00 — 已采纳：按默认授权启动开发
+
+来源：用户当前聊天原话“[$moc-init](/Users/eason/.codex/skills/moc-init/SKILL.md) 现在开始启动开发任务”；按docs/PROMPT-START.md默认授权表执行。
+决定：唯一根目录/Users/eason/jp/application；项目解释器/Users/eason/jp/application/.venv/bin/python。agent_command采用["codex","exec","-s","workspace-write","--color","never","-"]；review_command采用["codex","exec","-s","read-only","--color","never","-"]，模型沿用CLI默认值。仅配置两条原为null的命令，控制脚本保持。
+范围：TASKS全部29张桌面卡T0.1..T0.29，T1.1移动阶段门及其后续等待单独授权；必需平台沿ADR-005/006仅本机macOS arm64。预算原值：session_seconds=10800、idle_seconds=2700、max_sessions=2、command_seconds=7200、review_seconds=1800、memory_mib=4096、jobs=2、测试线程1、共享重任务锁沿原全局路径。
+监管：当前聊天heartbeat每5分钟，取得当前版本独立文档CLEAR且调度工具成功后启动原drive.py --once。Git提交仅T编号/WIP T编号/docs前缀，卡内声明依赖与SDK/工具链及真实验收网络按默认授权代办。若开发CLI写.git受限，外层核验后代办完成提交。
+停止：用户暂停/停止、阶段门、全部桌面完成、预算耗尽、需用户决定的阻塞、冻结修订、凭据/设备/付费或必需操作权限受阻时依PROMPT-START/SUPERVISE处理；保留失败证据及累计额度。
+验证：命令自检、validate、task check、完整verify、配置变更后的独立文档复审及调度/真实CLI身份核对另记PROGRESS与evidence/drive/supervision.md。业务验收当前全部NOT RUN。ADR-007的AUTHORIZED机制同时取代ADR-006中N1的旧阶段门收尾方式。

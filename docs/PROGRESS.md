@@ -61,3 +61,12 @@
 
 - 独立只读复审原始报告`docs/reviews/doc-review/round-6.md`，末行`DOC-REVIEW-VERDICT: CLEAR`；受审protected`d6cdedc4a4ca0160b71a44991a61ba98482d1315798e51a27dd430f96d1f0625`，ADR001..007按task.py status的adr摘要绑定。
 - 无阻断项。非阻断：N3′汇总级cases粒度、N4′会话内装箱待Rust实测、N5环境矩阵分散、N6阶段门授权需同时取得设备/签名/引擎位置、N7 T24独立审阅者启动流程未写明、N8 ADR-007未点名取代ADR-006 N1、N9审查报告待提交。业务验收仍全部NOT RUN，未提交Git。
+
+## 开发启动前置检查 2026-10-26T08:26:49.783924+00:00
+
+- 授权：当前聊天用户“现在开始启动开发任务”，显式调用moc-init；采用PROMPT-START默认授权，详ADR-008。唯一项目根/Users/eason/jp/application，Python3.12.14，/Users/eason/jp/application/.venv/bin/python；Codex CLI0.141.0 /opt/homebrew/bin/codex。
+- 修改：workflow.json两条命令配置为Codex exec workspace-write/read-only，CLI默认gpt-6.1-sol；资源/会话/超时、卡范围、需求及控制脚本保持。29桌面卡，T1.1阶段门及后续单独授权；监管拟每5分钟，尚未建立。
+- 实际验证：task.py check通过35卡，next=T0.1；git diff --check通过。两条CLI最小自检均退出1，日志evidence/drive/selftest-development.log和selftest-review.log，报400 model_not_found（当前ChatGPT登录通道拒绝gpt-6.1-sol）及429。临时文件写读删除、Git写权限自检尚未执行，完整verify与业务验收NOT RUN。
+- 实际验证：validate.py退出1，116测试，105通过/4失败/7平台跳过；日志evidence/drive/start-validate.log，报告evidence/script-validation.json。tests夹具setUp复制workflow.json后只重置agent_command，未清空review_command，3个本地无巡检测试调用真实CLI而失败，1个无配置巡检断言失效。最小候选差异evidence/drive/proposed-fixture-isolation.patch（setUp cfg.update增加review_command=None），尚未应用；控制测试修改待用户授权。
+- 独立复审：已启动只读agent，因Selected model is at capacity错误中断；原始错误与尝试记录docs/reviews/doc-review/startup-review-attempt.md。当前protected=23031107fe29a14379c5c37817cc9e977374a4289285501d1871f9f1df3b99f1，尚无新CLEAR。
+- 当前状态：task current=null，所有卡业务NOT RUN；未启动项目drive/开发/巡检，监管任务未创建。等待可用CLI模型及测试夹具最小修复授权，之后完成自检、validate、完整verify、独立复审、调度及真实CLI身份核对。evidence/drive/supervision.md保存操作日志。
