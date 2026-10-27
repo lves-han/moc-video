@@ -372,3 +372,10 @@
 - 决定：当前聊天用户原话“同意，仅将 T0.2 的开发会话上限从 3 次增至 4 次，让原脚本修复窗口尺寸和 JUnit 失败报告生成问题，你负责复验，现有权限和资源限制保持不变。”；按ADR-014仅本卡一次第4会话，原脚本实现、外层复验，严格原质量门。另按ADR-015当前最早未完成卡为T0.2，禁止开启后卡。
 - 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
 - 保留：原sessions3/失败6/generation1、窗口尺寸与JUnit原失败/媒体基准/源码历史均保持；workflow默认2及原资源/权限/时长保持。独立文档round-12 CLEAR后，原next/start恢复T0.2并唯一一次原--once --max-sessions 4。T0.4补host.rs批准已记录ADR-016，按原顺序及冻结基线路线随后落实。
+
+
+## T0.2 第四会话与严格顺序独立文档复审 2026-10-27T07:55:06.073348+00:00
+
+- 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-12.md`，受审HEAD7ec98bd、source=58899d110b87588c71310ad6949d39c947b7ee08fb1486a3e8bdec38fef5b711、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1，全部关键文件/新增ADR摘要逐项匹配。
+- 当前最早未完成卡/current/原next均T0.2；旧驱动/CLI/重命令均退出，T0.13 WIP及Git隔离历史保留，原会话计数3/失败6保持。恢复同一监管任务并仅按ADR-014启动一次原--once --max-sessions 4；其他卡默认2。严格顺序启动前核对包含前卡固定提交独立CLEAR，遇前卡阻塞等待。
+- T0.4仅补host.rs的范围批准已获并保持；原多未完成卡rebaseline限制仍需后续原路线决定，本次未改TASKS/控制代码/基线，不提前开启后卡。
