@@ -18,7 +18,8 @@ async function until(predicate: () => boolean, message: string, timeout = 15000)
 export async function automate(video: HTMLVideoElement, player: Player, open: (source: PlaybackSource) => unknown) {
   const config = window.__T01_BOOTSTRAP__;
   require(config, "T01 automation requires the native test bootstrap");
-  const url = (path: string) => `${config.base}${path}?cap=${config.cap}`;
+  const { base, cap } = config;
+  const url = (path: string) => `${base}${path}?cap=${cap}`;
   const post = async (path: string, value: unknown) => {
     const response = await fetch(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value), credentials: "omit" });
     require(response.ok, "Fixture telemetry submission failed");
@@ -144,7 +145,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       case "security": {
         const valid = await fetch(url("media/clip.mp4"), { headers: { Range: "bytes=0-15" } });
         require(valid.status === 206 && (await valid.arrayBuffer()).byteLength === 16, "Authenticated WebView Range failed");
-        const invalid = await fetch(`${config.base}media/clip.mp4?cap=invalid`);
+        const invalid = await fetch(`${base}media/clip.mp4?cap=invalid`);
         require(invalid.status === 403, "Invalid capability accepted");
         let corsDenied = false;
         try { await fetch(url("probe/cors-denied")); } catch { corsDenied = true; }
