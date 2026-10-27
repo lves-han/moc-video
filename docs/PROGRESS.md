@@ -134,3 +134,14 @@
 - 下一步：等待当前开发/重进程退出并核对源码稳定，按runtime.lock的execution_order运行rust_toolchain→prepare→准确A1→直接verify.py all。A1已包含全部25个行为用例；negatives仅供隔离诊断。仅把外层argv首项`{python}`替换为项目解释器，run.py的`--`后`{python}`字面值原样保留，由原执行器展开，匹配task.py show。
 - Git与完成：Git交外层按ADR-010代办，建议WIP标题`WIP T0.1: implement environment baseline acceptance`。全部原质量门后由外层记录真实结果、勾卡、done、受验完成提交及独立巡检。当前保留未提交工作树供接续。
 - 剩余风险：行为、构建与固定URL获取结果待外层实跑；Android和发行材料保持上述后续卡待验证状态。源码稳定后保持实现文件不变，外层发现错误时沿原工作流及预算/失败规则处理。
+
+## T0.1 外层准确验收与工具版本漂移 2026-10-27T02:07:03.282944+00:00
+
+- 结果：BLOCKED
+- 实现WIP已由外层按既有Git授权提交cb0a472；原driver、开发CLI和本次执行器退出后核对源码稳定、范围和保护摘要。外层未修改业务或验收实现。
+- 准备验证：原rust-toolchain命令退出0，收据evidence/runs/20261027T020048523187-t00-rust-toolchain/receipt.json；原prepare退出0，21项通过，收据evidence/runs/20261027T020237077067-t00-prepare/receipt.json。7包原字节/长度/SHA/ZIP/manifest全部核验并保留，候选资料获取完成；缺失的可选原扩展LICENSE按既定T23待办。
+- 验收 A1：FAIL，退出1；日志：`evidence/runs/20261027T020418934918-A1/output.log`；断言：25行为用例通过、7包身份通过，原JSON子检查18通过/2失败/4非必需平台跳过；JUnit含需求汇总24通过/7失败/4跳过。准确argv与task.py show保持一致。
+- 因果链：声明的rustup toolchain install默认自更新，将manager从锁记录的1.29.1更新到1.29.2；live version已复核。R33/core-official-versions严格版本门拒绝漂移，继而R33/core-minimum-builds明确NOT RUN。原rustup help确认--no-self-update可禁止该副作用。
+- 根因证据与最小修复方向：evidence/drive/t00-outer-validation/findings.md。应交原开发脚本修正准备命令自更新及真实版本记录、补回归，保持原严格断言；外层未通过改弱断言或环境回退掩盖缺陷。
+- 完整verify：NOT RUN（准确A1未通过）；未勾卡、未done、无完成提交或固定提交独立CLEAR。
+- 需要用户决定：T0.1开发会话2/2已用完，建议仅本卡再授权1次开发会话修复并由外层复验；资源、单次时长、权限与原失败历史保持。当前暂停推进，不自行扩额/重置会话/伪造RESOLVED。
