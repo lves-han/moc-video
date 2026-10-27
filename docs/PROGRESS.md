@@ -269,3 +269,11 @@
 - 完整verify：PASS，最近完整尝试`evidence/verify/20261027T060430212174.json` exit0，6门均通过：控制109通过/7平台跳过、归档与工作协议、前端测试/构建、原生fmt/check/clippy -D warnings/test；原生16行为再次通过。各收据及原报告日志摘要由原completion_evidence核验。
 - 基线与资源：source=9b54463679cecef26eff16365c098ffdf01918f71501fc6d21327f378a5517d3、protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a、generation=0；A1与完整verify同源码/冻结摘要。所有旧执行器/payload身份均已退出，两锁释放后收尾。macOS arm64进程树RSS采样4096MiB、jobs2、线程1保持；普通单进程loopback与MockRuntime，无真实集群。外层按ADR-010仅执行验收/Git与记录，源码由原开发CLI实现。
 - 保留项：T0.2实际GUI/媒体长测仍待其第三会话修复后原完整质量门；Android与后续业务适配按原卡，macOS x86_64/Windows/Linux X11/Wayland仍NOT RUN。T0.3完成提交及固定提交独立巡检在本记录后继续，取得CLEAR再按原next选择T0.2；ADR-012一次授权及原计数保持。
+
+
+## T0.3 固定提交独立巡检完成 2026-10-27T06:14:53.947693+00:00
+
+- 独立巡检：CLEAR；原review-only记录`evidence/reviews/20261027T060737937726-T0.3/review.json`，报告`evidence/reviews/20261027T060737937726-T0.3/output.log`，exit0，固定受验完成提交b1ad724a974a252947d6d849581b0b31610a00e0。原脚本收尾check_completion_tree通过、工作树干净；当前A1/完整verify/完成提交/固定提交CLEAR完整成立。
+- 原审阅核对17命令、16Rust/8Node行为、原子失败/权限/取消/世代/未知提交反例及39JUnit和六门收据，同源码/保护摘要一致，未发现高严重度缺陷。其他平台/Android/后续接线保持原卡与NOT RUN记录。
+- 进程与锁：巡检驱动64694及CLI64719真实身份均退出；本次通过原FileLock.acquire显式核对driver与global heavy均可获得并即释放。此前外层bool(FileLock对象)锁探测缺少acquire的记录，已在supervision.md追加纠正；原run/drive自身锁控制始终保持，独立审阅确认收据执行区间无重叠。
+- 接续：原next确为T0.2，按ADR-012和独立文档round-10 CLEAR恢复该卡保留的2次会话/4失败/暂停区段；原start恢复后补准确handoff，唯一一次原--once --max-sessions 3，其他卡继续默认2。
