@@ -100,3 +100,10 @@
 - WIP提交阻塞：先尝试`git add docs/runtime.lock.json`，退出128，创建`.git/index.lock`被沙箱拒绝；原错误与拟提交标题保留在`evidence/task-state/T0.1/session-1/git-wip-failure.log`。WIP尚未提交，保留工作树供外层按ADR-008/009代办；因实际Git权限受阻，此记录明确保留先提交WIP要求未满足的事实。
 - 需要外层处理：在现有授权内恢复原全局锁访问及macOS进程枚举的执行前提，代办`WIP T0.1: record observed environment and sandbox blocker`提交。若需修改开发CLI权限或冻结配置，由用户明确决定并按原修订流程执行。仅恢复环境后继续同卡；保留会话1额度及原失败收据。
 - 最小下一步：先复测原资源探测；成功后实现T00真实验收，检查SDK实际安装路径，获取冻结七包并校验长度/SHA/manifest，完成Core最小构建及许可锁记录，再执行准确A1和完整verify。
+
+## T0.1 外层收尾与执行环境诊断 2026-10-27T01:16:27.704245+00:00
+
+- 已核对原driver、开发包装器、真实CLI及原失败执行器的PID+创建时间均已退出，两把原锁可用；无活跃写入者后按已有Git代办授权提交WIP `10fbe00`，包含runtime.lock.json与原BLOCKED记录。
+- 同一项目、解释器、原脚本、共享锁及预算下，外层执行 `run.py t00-resource-probe-outer -- <项目Python> -c ...` 退出0；原payload实际打印T00 outer resource probe。收据evidence/runs/20261027T011517912651-t00-resource-probe-outer/receipt.json。此为执行环境诊断，业务验收A1/完整verify仍NOT RUN；原CLI内EPERM失败收据保留。
+- 执行前提差异已确认：开发CLI内共享锁写入和psutil进程枚举被沙箱拒绝，外层最小受监管命令成功。未改变权限、配置、共享锁、阈值或预算；未自行写RESOLVED、重启开发或消耗第2会话。
+- 当前T0.1保持BLOCKED，sessions=1/2；监管任务automation已通过app工具更新为PAUSED并核对持久化状态。等待用户对执行分工/环境作决定；建议保留CLI workspace-write，由外层通过原run.py代跑构建和验收，再按原流程恢复同卡。
