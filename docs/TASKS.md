@@ -179,7 +179,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 所有本卡“原始义务”是归档原文，路径按ADR-001适配；其中调用其他原卡由映射表定位。原文中的任务状态记录统一到docs/PROGRESS.md。
 
 ### T0.1 T00 版本与环境基线
-- [ ] 完成
+- [x] 完成
 - 依赖：无
 - 需求：U02, U06, R02, R08, R09, R33, R50, R57, C-PATH, C-RESOURCE, REQ-T00 → A1（覆盖表含精确对应）
 - 范围：`docs/runtime.lock.json`, `docs/PROGRESS.md`, `rust-toolchain.toml`, `package-lock.json`, `src-tauri/Cargo.lock`, `android-engine/`, `licenses/`, `tests/`

@@ -171,3 +171,14 @@
 - 外层准确argv清单：`evidence/task-state/T0.1/session-3/outer-commands.json`，顺序rust_toolchain→prepare→acceptance→verify，均来自runtime.lock。仅首项{python}换为项目解释器；run.py之后的payload占位符保持字面值。verify直接调用并沿用frontend.build_worker_overrides的进程局部环境；A1通过后才执行verify。额外negatives为可选诊断，A1已含28例。
 - 下一步：当前开发及旧重进程退出、源码稳定后，外层按既有分工代办`WIP T0.1: prevent rustup self-update during toolchain preparation`。通过原执行器运行修正安装，核对前后rustup均1.29.2且无自更新，再按上述准确命令复验。全部原质量门成立后由外层记录真实结果、勾卡/done、受验提交及独立巡检。
 - 剩余：修正安装的实际副作用、28例行为、A1与完整verify均待外层执行；旧失败报告保留。Git已移交外层，当前修复保留在工作树供代办WIP；本会话按授权分工结束，不重复探测既知权限。
+
+## T0.1 T00 版本与环境基线验收完成 2026-10-27T03:11:48.967977+00:00
+
+- 结果：DONE
+- 实际修改：原脚本完成版本/环境/许可证清单、真实原包校验及Core最小构建验收入口，修复Rustup自更新副作用并增加3个回归；外层仅负责原执行器复验、Git及完成收尾。实现WIP cb0a472，修复WIP c342c67；原3次会话、2条失败及旧报告保留。
+- 验收 A1：PASS；日志：`evidence/runs/20261027T025857493536-A1/output.log`；断言：真实exit=0，JUnit31通过/0失败/4获准延期平台跳过，11需求汇总全PASS，必需子检查20/20通过；28行为用例、7包长度/SHA/ZIP/manifest与原字节保留均通过；Rust二进制编译运行、Xcode/WebKit编译链接和类查找、npm ci/type/Vite构建实际通过。
+- 修复复验：原修正安装exit0，Rustup安装前后保持1.29.2且无self-update；原prepare exit0、21检查通过。收据evidence/runs/20261027T025809295381-t00-rust-toolchain/receipt.json、evidence/runs/20261027T025810861339-t00-prepare/receipt.json；对比evidence/drive/t00-reverification-20261027T025808Z/rustup-before-after.json。
+- 完整verify：PASS；收据：`evidence/verify/20261027T030031640590.json`，finished/exit0、六项全部通过；控制器109通过/7平台跳过、前端8测试通过、类型检查/构建及协议/16归档完整性通过。最新A1及全部verify子收据的source/protected/generation与当前一致，支撑日志/JUnit由原completion_evidence核对成功。
+- 资源：沿用原process-watchdog/RSS采样4096MiB、jobs2、测试线程1及原全局heavy锁，进程局部Rolldown/Rayon配置保持；三次开发额度仅本卡有来源例外，其他卡默认2。当前全部本项目写入者与重命令已退出，验收后源码保持。
+- 后续卡待验证：Tauri app crate原生fmt/check/clippy/test、真实窗口/媒体长测留T01/T05；Android实际ABI/镜像/AVD留T02/T04；生产Cloudstream commit仍候选未推广。原扩展LICENSE404及完整发行材料按T23待办，其他平台按ADR-005/006保留NOT RUN。现有Vite单包体积提示保留。
+- 完成收尾：按原task.py done与受验完成提交流程处理，固定提交的原review-only独立巡检待执行；取得CLEAR后才接续下一卡。
