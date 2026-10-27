@@ -7,8 +7,7 @@ import {
   ref,
   watch,
 } from "vue";
-import { NAlert, NButton, NModal, NRadioGroup, NRadioButton, NSwitch, useMessage } from "naive-ui";
-import { palette, paletteOptions } from "./ui/theme";
+import { NAlert, NButton, NModal, NSwitch, useMessage } from "naive-ui";
 import SettingsView from "./views/SettingsView.vue";
 import HistoryView from "./views/HistoryView.vue";
 import { historyRepository } from "./data/history";
@@ -25,29 +24,24 @@ import {
   type FilmKind,
   type Source,
 } from "./data/demo";
-import { locale, t, type Message } from "./i18n";
-import { app } from "./app";
-import { applyPreferences, restorePreferences } from "./preferences";
-import type { Settings } from "./models";
-import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
+import { locale, setLocale, t, type Message } from "./i18n";
 
 const films = computed(() => baseFilms.map(localizeFilm));
 const messages = useMessage();
-const preferenceError = ref("");
 const languageOptions = [
   { label: "EN", value: "en" },
   { label: "中文", value: "zh-CN" },
 ];
 
 type Page = "home" | "film" | "watch" | "sources" | "settings" | "history";
-function readRoute(hash = window.location.hash): {
+function readRoute(): {
   page: Page;
   id: string;
   kind: FilmKind | "";
   episode: number;
   resume: boolean;
 } {
-  const [path, query = ""] = hash.replace(/^#\/?/, "").split("?");
+  const [path, query = ""] = window.location.hash.replace(/^#\/?/, "").split("?");
   const [name = "home", id = "", episodeValue = "1"] = path!.split("/");
   const resume = name === "watch" && new URLSearchParams(query).get("resume") === "1";
   const episode = Math.max(1, Math.floor(Number(episodeValue) || 1));
@@ -57,16 +51,9 @@ function readRoute(hash = window.location.hash): {
     return { page: name as Page, id, kind: "", episode, resume };
   return { page: "home", id: "", kind: "", episode: 1, resume: false };
 }
-const hash = ref(window.location.hash);
-const route = computed(() => {
-  const presentation = readRoute(hash.value);
-  const stored = app.state.route;
-  const page: Page = stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name === "setup" ? "sources" : stored.name;
-  const id = stored.name === "details" ? JSON.parse(stored.ref.data).id : stored.name === "playback" ? JSON.parse(stored.context.metadata_ref.content_ref.data).id : "";
-  return { ...presentation, page, id };
-});
+const route = ref(readRoute());
 const sources = ref<Source[]>(initialSources.map((source) => ({ ...source })));
-const sourceId = computed(() => previewSourceId(app.state.selected_playback_source));
+const sourceId = ref(sources.value[0]!.id);
 const source = computed(
   () =>
     sources.value.find((item) => item.id === sourceId.value) ||
@@ -79,7 +66,8 @@ const homeSnapshots = new Map<
   string,
   { genre: Message; expanded: boolean; hero: number; scroll: number }
 >();
-const loading = computed(() => app.state.home.phase === "loading");
+const loading = ref(false);
+let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 const heroFilms = computed(() =>
   route.value.kind
     ? films.value.filter((film) => film.kind === route.value.kind)
@@ -151,21 +139,22 @@ const nav = computed(() => [
 function notify(text: string) {
   messages.info(text, { duration: 3200 });
 }
-let sourceSelectionSequence = 0;
-async function changeSource(id: string) {
-  if (id === sourceId.value) return;
-  const sequence = ++sourceSelectionSequence;
+function changeSource(id: string) {
   void flushHistory();
-  try { await app.selectSource(previewSourceKey(id).source_id, "playback"); }
-  catch (error) { if (sequence === sourceSelectionSequence) preferenceError.value = error instanceof Error ? error.message : String(error); return; }
-  if (sequence !== sourceSelectionSequence) return;
   historyContext = null;
   playbackSequence++;
-  if (app.state.route.name === "playback") {
-    await app.resolve();
-    await nextTick();
-    void preparePlayback();
-  }
+  rememberHome();
+  sourceId.value = id;
+  activeGenre.value = "All";
+  expanded.value = false;
+  heroIndex.value = 0;
+  if (route.value.page === "watch")
+    window.location.hash = `#/film/${selectedFilm.value.id}`;
+  loading.value = true;
+  clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => {
+    loading.value = false;
+  }, 350);
   notify(
     t("Selected {name} · Using the demo catalog", {
       name: sourceText(source.value).name,
@@ -173,31 +162,15 @@ async function changeSource(id: string) {
   );
 }
 
-async function changeLanguage(value: string) {
+function changeLanguage(value: string) {
   if (value !== "en" && value !== "zh-CN") return;
   messages.destroyAll();
-  preferenceError.value = "";
-  try { await savePreference(settings => ({ ...settings, ui_locale: value })); }
-  catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
-}
-async function savePreference(change: (value: Settings) => Settings) {
-  const value = await app.updateSettings(change);
-  applyPreferences(value);
-  // index.html consumes these small first-frame mirrors; the queue owns confirmation.
-  try {
-    localStorage.setItem("yingxiang-video.locale", value.ui_locale ?? "en");
-    localStorage.setItem("yingxiang-video.palette", value.color_palette ?? "lime");
-  } catch (error) { preferenceError.value = String(error); }
-}
-async function changePalette(value: string) {
-  preferenceError.value = "";
-  if (!["lime", "ocean", "violet", "rose", "amber"].includes(value)) return;
-  try { await savePreference(settings => ({ ...settings, color_palette: value as NonNullable<typeof settings.color_palette> })); }
-  catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
-}
-async function retryPreferences() {
-  try { app.state.settings = await restorePreferences(); app.diagnostics.splice(0); preferenceError.value = ""; }
-  catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
+  if (!setLocale(value))
+    notify(
+      t(
+        "Language changed, but the preference could not be saved on this device. Reloading will restore English.",
+      ),
+    );
 }
 watch(
   locale,
@@ -217,14 +190,12 @@ function updateDocumentTitle() {
 
 const aboutOpen = ref(false);
 const aboutTrigger = ref<HTMLButtonElement>();
-const appearanceOpen = ref(false);
-const paletteTrigger = ref<HTMLButtonElement>();
 function addSource(value: Source) {
   sources.value.push(value);
   notify(t("Source added to this preview. Live connections will follow."));
 }
 function toggleSource(item: Source) {
-  if (item.id === sourceId.value || item.id === previewSourceId(app.state.selected_metadata_source)) {
+  if (item.id === sourceId.value) {
     notify(t("Switch to another source before disabling the current one."));
     return;
   }
@@ -239,12 +210,12 @@ const mediaBusy = ref(false);
 const mediaError = ref(false);
 const position = ref(0);
 const duration = ref(0);
-const volume = computed({ get: () => app.state.playback.volume, set: value => { app.state.playback.volume = value; } });
-const muted = computed({ get: () => app.state.playback.muted, set: value => { app.state.playback.muted = value; } });
-const speed = computed({ get: () => app.state.playback.speed, set: value => { app.state.playback.speed = value; } });
+const volume = ref(0.65);
+const muted = ref(false);
+const speed = ref(1);
 const subtitles = ref(false);
 const episode = ref(Math.min(route.value.episode, selectedFilm.value.episodes));
-const autoNext = computed({ get: () => app.state.settings.auto_next, set: value => { void savePreference(settings => ({ ...settings, auto_next: value })).catch(error => messages.error(String(error))); } });
+const autoNext = ref(true);
 const activeLine = ref(0);
 const historySaveError = ref<string | null>(null);
 const resumeError = ref<string | null>(null);
@@ -320,11 +291,7 @@ async function preparePlayback() {
       if (!saved || saved.episode !== episode.value) throw new Error(t('No saved progress was found for this episode.'));
       const savedSource = sources.value.find(item=>item.id===saved!.source_id && item.enabled);
       if (!savedSource) throw new Error(t('The saved playback source is unavailable. Enable it in Sources before continuing.'));
-      if (sourceId.value !== savedSource.id) {
-        await app.selectSource(previewSourceKey(savedSource.id).source_id, "playback");
-        await app.resolve();
-        if (sequence !== playbackSequence || route.value.page !== 'watch') return;
-      }
+      sourceId.value = savedSource.id;
     }
     if (sequence !== playbackSequence || route.value.page !== 'watch') return;
     const film = baseFilms.find(item=>item.id===selectedFilm.value.id)!;
@@ -332,8 +299,6 @@ async function preparePlayback() {
     pendingSeek = saved && !saved.completed ? saved.position_ms / 1000 : 0;
     lastHistoryWrite = 0;
     preparingResume = false;
-    await nextTick();
-    if (sequence !== playbackSequence || route.value.page !== 'watch') return;
     setDuration();
     await startMedia();
   } catch (failure) {
@@ -373,7 +338,6 @@ async function startMedia() {
   video.value.muted = muted.value;
   video.value.playbackRate = speed.value;
   mediaError.value = false;
-  if (!video.value.getAttribute("src")) { video.value.src = "/demo.mp4"; video.value.load(); }
   try {
     await video.value.play();
   } catch {
@@ -445,8 +409,10 @@ function selectEpisode(value: number) {
   playbackSequence++;
   video.value?.pause();
   episode.value = value;
-  window.location.hash = `#/watch/${selectedFilm.value.id}/${value}`;
+  window.history.replaceState(null,"",`#/watch/${selectedFilm.value.id}/${value}`);
+  route.value = { ...route.value, episode: value, resume: false };
   position.value = 0;
+  void preparePlayback();
 }
 function onEnded() {
   isPlaying.value = false;
@@ -468,7 +434,7 @@ function reloadVideo() {
   video.value?.load();
   void startMedia();
 }
-async function onHashChange() {
+function onHashChange() {
   void flushHistory();
   historyContext = null;
   playbackSequence++;
@@ -477,28 +443,7 @@ async function onHashChange() {
   resumeError.value = null;
   rememberHome();
   video.value?.pause();
-  hash.value = window.location.hash;
-  const next = readRoute(hash.value);
-  const sequence = playbackSequence;
-  if (next.page === "film" || next.page === "watch") {
-    const film = baseFilms.find(film => film.id === next.id);
-    if (!film) { app.navigate({ name: "home" }); window.location.hash = "#/home"; return; }
-    app.navigate({ name: "details", ref: previewRef(film.id) });
-    await app.loadDetails(previewRef(film.id));
-    if (sequence !== playbackSequence) return;
-    if (next.page === "watch") {
-      const value = Math.min(next.episode, film.episodes);
-      await app.match(`${film.id}:${value}`);
-      if (sequence !== playbackSequence) return;
-      if (!app.state.playback.context) return;
-      await app.resolve();
-      if (sequence !== playbackSequence) return;
-    }
-  } else {
-    app.navigate({ name: next.page === "home" ? "home" : next.page });
-    if (next.page === "home" && !app.state.home.data) await app.loadHome();
-  }
-  if (sequence !== playbackSequence) return;
+  route.value = readRoute();
   const home =
     route.value.page === "home"
       ? homeSnapshots.get(`${sourceId.value}:${route.value.kind}`)
@@ -514,14 +459,13 @@ async function onHashChange() {
   subtitles.value = false;
   activeLine.value = 0;
   updateDocumentTitle();
-  await nextTick();
-  if (sequence !== playbackSequence) return;
-  window.scrollTo({ top: home?.scroll || 0, behavior: "instant" });
-  focusMain();
-  if (route.value.page === "watch") void preparePlayback();
+  nextTick(() => {
+    window.scrollTo({ top: home?.scroll || 0, behavior: "instant" });
+    if (route.value.page === "watch") void preparePlayback();
+  });
 }
 function onKeydown(event: KeyboardEvent) {
-  if (aboutOpen.value || document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+  if (aboutOpen.value) return;
   if (
     route.value.page !== "watch" ||
     (event.target as HTMLElement).closest(
@@ -551,17 +495,18 @@ watch(volume, (value) => {
   if (video.value) video.value.volume = value;
 });
 onMounted(() => {
-  void onHashChange();
   updateDocumentTitle();
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("pagehide", onPageHide);
   document.addEventListener("visibilitychange", onVisibilityChange);
+  if (route.value.page === "watch") void preparePlayback();
 });
 onBeforeUnmount(() => {
   void flushHistory(false,true);
   historyContext = null;
   playbackSequence++;
+  clearTimeout(loadingTimer);
   window.removeEventListener("hashchange", onHashChange);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("pagehide", onPageHide);
@@ -659,15 +604,14 @@ onBeforeUnmount(() => {
           }}</span>
         </div>
         <div class="header-actions">
-          <button
-            ref="paletteTrigger"
+          <a
             class="icon-button palette-shortcut"
-            @click="appearanceOpen = true"
+            href="#/settings"
             :aria-label="t('Customize colors')"
             :title="t('Customize colors')"
           >
             <Icon name="palette" :size="19" />
-          </button>
+          </a>
           <select
             class="language-picker compact-select"
             :value="locale"
@@ -690,7 +634,7 @@ onBeforeUnmount(() => {
               @change="changeSource(($event.target as HTMLSelectElement).value)"
             >
               <option
-                v-for="item in sources.filter((item) => item.enabled && item.kind !== 'stremio')"
+                v-for="item in sources.filter((item) => item.enabled)"
                 :key="item.id"
                 :value="item.id"
               >
@@ -708,8 +652,6 @@ onBeforeUnmount(() => {
       </header>
 
       <main id="main-content" tabindex="-1">
-        <NAlert v-if="preferenceError" type="error" class="history-alert preference-alert" :title="t('Preference could not be saved')">{{ preferenceError }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
-        <NAlert v-for="(diagnostic, index) in app.diagnostics" :key="index" type="error" class="history-alert" :title="t('Settings are unavailable')">{{ diagnostic.message }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
         <template v-if="route.page === 'home'">
           <div class="page-heading">
             <div>
@@ -1035,7 +977,6 @@ onBeforeUnmount(() => {
           </div>
           <div ref="videoFrame" class="video-frame">
             <video
-              :key="app.state.playback.playback_epoch"
               ref="video"
               src="/demo.mp4"
               :poster="selectedFilm.artwork"
@@ -1280,8 +1221,6 @@ onBeforeUnmount(() => {
           v-model:speed="speed"
           v-model:auto-next="autoNext"
           @notice="notify"
-          @language="changeLanguage"
-          @palette="changePalette"
         />
         <footer class="page-footer">
           <span
@@ -1307,14 +1246,7 @@ onBeforeUnmount(() => {
         ><Icon name="layers" :size="20" /><span>{{ t("Sources") }}</span></a
       >
     </nav>
-  <NModal v-model:show="appearanceOpen" preset="card" role="dialog" :aria-label="t('Appearance')" :title="t('Appearance')" :style="{ width: 'min(560px, calc(100vw - 32px))' }" @after-leave="paletteTrigger?.focus()">
-    <p>{{ t('Light and dark mode automatically follow your system.') }}</p>
-    <NRadioGroup :value="palette" name="quick-color-palette" class="palette-grid" :aria-label="t('Color palette')" @update:value="value => changePalette(String(value))">
-      <NRadioButton v-for="item in paletteOptions" :key="item.value" :value="item.value">{{ t(item.label) }}</NRadioButton>
-    </NRadioGroup>
-    <NButton class="appearance-close" @click="appearanceOpen = false">{{ t('Close') }}</NButton>
-  </NModal>
-  <NModal
+    <NModal
       v-model:show="aboutOpen"
       preset="card"
       role="dialog"

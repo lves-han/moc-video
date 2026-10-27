@@ -2,12 +2,6 @@ import type { Bridge_ApiError, Command, CommandData, CommandInput, Settings } fr
 import { REQUEST_BUDGETS } from "./models.ts";
 
 export type Invoke = (command: string, args: { request_id: string; input: unknown }) => Promise<unknown>;
-export type ApiResponse<C extends Command> = { request_id: string; engine_epoch: string | null; data: CommandData<C> };
-export interface AppApi {
-  request<C extends Command>(command: C, input: CommandInput<C>, requestId?: string): Promise<ApiResponse<C>>;
-  call<C extends Command>(command: C, input: CommandInput<C>, requestId?: string): Promise<CommandData<C>>;
-  cancel(target: string): Promise<CommandData<"cancel_request">>;
-}
 type Timer = { set: (callback: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
 const timers: Timer = {
   set: (callback, ms) => setTimeout(callback, ms),
@@ -38,7 +32,6 @@ const nativeInvoke: Invoke = async (command, args) => {
 
 export class Api {
   private sourceKinds = new Map<string, string>();
-  private sourceRequest: string | null = null;
   private readonly invoke: Invoke;
   private readonly timer: Timer;
   constructor(invoke: Invoke = nativeInvoke, timer: Timer = timers) { this.invoke = invoke; this.timer = timer; }
@@ -61,13 +54,8 @@ export class Api {
   }
 
   async call<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID()): Promise<CommandData<C>> {
-    return (await this.request(command, input, requestId)).data;
-  }
-
-  async request<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID()): Promise<ApiResponse<C>> {
     if (!commands.includes(command)) throw new Error("Unknown business command");
     if (!uuid.test(requestId)) throw new Error("request_id must be UUID");
-    if (command === "get_sources") this.sourceRequest = requestId;
     let handle: unknown;
     const timeout = new Promise<never>((_, reject) => {
       handle = this.timer.set(() => reject(new UnknownCommit(requestId, "Transport deadline exhausted")), this.budget(command, input) + REQUEST_BUDGETS.transport_grace_ms);
@@ -96,11 +84,11 @@ export class Api {
         }
       }
       if (!["get_settings", "save_settings", "cancel_request", "runtime_status", "runtime_prepare"].includes(command) && response.engine_epoch === null) throw new UnknownCommit(requestId, "Missing host epoch");
-      if (command === "get_sources" && this.sourceRequest === requestId && record(response.data) && Array.isArray(response.data.providers)) {
+      if (command === "get_sources" && record(response.data) && Array.isArray(response.data.providers)) {
         this.sourceKinds.clear();
         for (const source of response.data.providers) if (record(source) && typeof source.id === "string" && typeof source.kind === "string") this.sourceKinds.set(source.id, source.kind);
       }
-      return response as ApiResponse<C>;
+      return response.data as CommandData<C>;
     } catch (error) {
       if (error instanceof ApiFailure) throw error;
       if (command !== "cancel_request" && command !== "save_settings") {
@@ -127,9 +115,9 @@ export class SettingsQueue {
   private accepting = true;
   private recovery: Promise<void> | null = null;
   private initialization: Promise<Settings> | null = null;
-  private readonly api: AppApi;
+  private readonly api: Api;
   private readonly onError: (error: unknown) => void;
-  constructor(api: AppApi, onError: (error: unknown) => void = () => {}) { this.api = api; this.onError = onError; }
+  constructor(api: Api, onError: (error: unknown) => void = () => {}) { this.api = api; this.onError = onError; }
 
   get value(): Settings | null { return this.confirmed && structuredClone(this.confirmed); }
   get paused(): boolean { return this.unknown !== null; }

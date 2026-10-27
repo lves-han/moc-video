@@ -2,15 +2,17 @@
 import { computed } from "vue";
 import { NRadioGroup, NRadioButton, NSwitch, NTag, useOsTheme } from "naive-ui";
 import Icon from "../components/Icon.vue";
-import { locale, getStremioLanguage, t } from "../i18n";
+import { locale, setLocale, getStremioLanguage, t } from "../i18n";
 import {
   palette,
   paletteOptions,
+  setPalette,
+  type PaletteId,
 } from "../ui/theme";
 
 const speed = defineModel<number>("speed", { required: true });
 const autoNext = defineModel<boolean>("autoNext", { required: true });
-const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string] }>();
+const emit = defineEmits<{ notice: [message: string] }>();
 const osTheme = useOsTheme();
 const metadataLanguage = computed(() => getStremioLanguage(locale.value));
 const languageOptions = [
@@ -23,10 +25,22 @@ const speedOptions = [0.5, 1, 1.25, 1.5, 2].map((value) => ({
 }));
 function changeLanguage(value: string) {
   if (value !== "en" && value !== "zh-CN") return;
-  emit("language", value);
+  if (!setLocale(value))
+    emit(
+      "notice",
+      t(
+        "Language changed, but the preference could not be saved on this device. Reloading will restore English.",
+      ),
+    );
 }
 function changePalette(value: string | number | boolean) {
-  emit("palette", String(value));
+  if (!setPalette(value as PaletteId))
+    emit(
+      "notice",
+      t(
+        "Color palette changed, but the preference could not be saved on this device.",
+      ),
+    );
 }
 </script>
 
