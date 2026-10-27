@@ -182,3 +182,16 @@
 - 资源：沿用原process-watchdog/RSS采样4096MiB、jobs2、测试线程1及原全局heavy锁，进程局部Rolldown/Rayon配置保持；三次开发额度仅本卡有来源例外，其他卡默认2。当前全部本项目写入者与重命令已退出，验收后源码保持。
 - 后续卡待验证：Tauri app crate原生fmt/check/clippy/test、真实窗口/媒体长测留T01/T05；Android实际ABI/镜像/AVD留T02/T04；生产Cloudstream commit仍候选未推广。原扩展LICENSE404及完整发行材料按T23待办，其他平台按ADR-005/006保留NOT RUN。现有Vite单包体积提示保留。
 - 完成收尾：按原task.py done与受验完成提交流程处理，固定提交的原review-only独立巡检待执行；取得CLEAR后才接续下一卡。
+
+## T0.2 T01 第1会话实现交接 2026-10-27T03:52:40.826870+00:00
+
+- 实施状态：WIP；按ADR-010交外层实跑与Git收尾，当前卡保持未勾选。
+- 最小方案：补Tauri 2.12.5/tauri-build2.7.4原生壳、player.ts及独立样机页；保留原App入口。MP4原生video，HLS原生能力优先及hls.js1.7.3回退；沿原npm锁加入固定T00元数据的tarball/integrity。正式窗口只有固定全屏命令、主WebView权限和受限CSP/ATS；测试feature/mode及额外权限独立。
+- 验收实现：tests/acceptance/t01.py提供prepare/build/all/negatives；prepare生成自有1080p30/H264+AAC MP4/HLS并冻结首代摘要；build分别保存生产与测试.app及源码/产物绑定；准确A1覆盖真实WebView MP4/HLS各1800秒、20次完整窗口开关、PCM能量/440Hz峰、字幕cue、seek/暂停/音量/倍速/原生全屏、窄屏与DPI、Origin/cap/CORS/CSP/Range/If-Range/HEAD/OPTIONS及生产构建排除。新增fixture与证据验证器行为回归，尚待执行。
+- 资源：原run.py共享锁与4096MiB RSS采样/jobs2/测试线程1保持；测试构建通过已查WebKit SPI读取当前WebView的renderer/GPU/network PID，结合PID创建时间补齐launchd XPC的RSS采样和回收。生产产物检查排除测试桥与SPI标识。正常退出仍需强制回收时A1失败；失败/取消按真实身份清理自产进程，保留forced_cleanup。日志cap脱敏。普通单进程loopback fixture，无集群。
+- 真实静态验证：3个Python AST、5个JSON、Cargo TOML、Info.plist解析成功；rustfmt --check、git diff --check、task.py check（35卡）及scope（all changes inside scope）均退出0。日志：`evidence/task-state/T0.2/session-1/static-review.log`。本会话行为测试0次，原生构建0次，媒体长测0次；均NOT RUN。
+- 验收 A1：NOT RUN；完整verify.py all：NOT RUN。未执行done、完成提交或独立巡检，未修改任何冻结定义。
+- 外层准确argv：`packaging/t01-commands.json`；操作说明与系统依赖在`packaging/T01.md`。顺序prepare→build→准确A1→直接verify；仅外层argv首项{python}替换为当前项目解释器，run.py后payload占位符原样保留。prepare首次实际生成Cargo.lock，须保留并纳入受验源码；build/A1对源码摘要保持严格一致。verify沿T00进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2。
+- 平台：本机macOS14+ arm64为必需；macOS x86_64、Windows x86_64、Ubuntu X11/Wayland均NOT RUN，报告及packaging给出原生build/launch argv、系统依赖和完整媒体验收适配待授权事实。
+- 剩余与风险：实际Rust/TS编译、媒体解码、autoplay/AudioContext、WebKit诊断SPI可用性、20次回收与完整verify待外层；音频PCM输出已设计真实测量，物理扬声器听感尚待人工确认。任何真实渲染/音频/依赖失败应保留最小复现并交原开发工作流，保持原断言与预算。
+- Git交接：按ADR-010由外层代办`WIP T0.2: implement native Tauri video prototype and media gate`，本会话保留范围内工作树；当前CLI退出及源码稳定前外层不并发构建/验收。

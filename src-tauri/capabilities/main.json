@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Only the packaged main WebView can toggle the player window fullscreen.",
+  "windows": ["main"],
+  "permissions": ["allow-player-fullscreen"]
+}
