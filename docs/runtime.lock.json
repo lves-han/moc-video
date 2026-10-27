@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "card": "T0.1",
+  "status": "BLOCKED",
+  "observed_at": "2026-10-27T01:09:52.766978+00:00",
+  "completion_note": "WIP: tool metadata only; T00 acceptance and Core minimum builds NOT RUN.",
+  "binding": {
+    "root": "/Users/eason/jp/application",
+    "python": "/Users/eason/jp/application/.venv/bin/python",
+    "python_version": "3.12.14",
+    "source_baseline": "d2122afb0f0861f45e62cda3db5a3eed27df12e7",
+    "protected": "bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a",
+    "driver_lock": "/Users/eason/jp/application/evidence/drive/driver.lock",
+    "driver_process": {
+      "pid": 8306,
+      "identity": "created:1793010717.56732",
+      "actual_identity": "created:1793010717.56732",
+      "argv": [
+        "/Users/eason/jp/application/.venv/bin/python",
+        "-B",
+        "scripts/drive.py",
+        "--once"
+      ]
+    },
+    "agent_wrapper_process": {
+      "pid": 23551,
+      "identity": "created:1793063235.822286",
+      "actual_identity": "created:1793063235.822286"
+    },
+    "global_heavy_lock": "/Users/eason/Library/Caches/agent-project-workflow/heavy.lock",
+    "process_tree_inspection": "BLOCKED: psutil.Process(driver_pid).children(recursive=True) raises PermissionError: sysctl() malloc 1/3"
+  },
+  "host": {
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "architecture": "arm64",
+    "gpu": "NOT RUN",
+    "virtualization": "NOT RUN"
+  },
+  "observed_tools": {
+    "rustc": {
+      "path": "/Users/eason/.cargo/bin/rustc",
+      "argv": [
+        "/Users/eason/.cargo/bin/rustc",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "rustc 1.98.1 (48a229cea 2026-09-01)\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "cargo": {
+      "path": "/Users/eason/.cargo/bin/cargo",
+      "argv": [
+        "/Users/eason/.cargo/bin/cargo",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "rustup": {
+      "path": "/Users/eason/.cargo/bin/rustup",
+      "argv": [
+        "/Users/eason/.cargo/bin/rustup",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "rustup 1.29.1 (d95a37b6a 2026-08-13)\n",
+      "stderr": "info: This is the version for the rustup toolchain manager, not the rustc compiler.\ninfo: the currently active `rustc` version is `rustc 1.98.1 (48a229cea 2026-09-01)`\n",
+      "status": "version_observed"
+    },
+    "node": {
+      "path": "/opt/homebrew/bin/node",
+      "argv": [
+        "/opt/homebrew/bin/node",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "v26.11.1\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "npm": {
+      "path": "/opt/homebrew/bin/npm",
+      "argv": [
+        "/opt/homebrew/bin/npm",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "11.20.0\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "xcode-select": {
+      "path": "/usr/bin/xcode-select",
+      "argv": [
+        "/usr/bin/xcode-select",
+        "-p"
+      ],
+      "exit": 0,
+      "stdout": "/Applications/Xcode.app/Contents/Developer\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "xcrun": {
+      "path": "/usr/bin/xcrun",
+      "argv": [
+        "/usr/bin/xcrun",
+        "--show-sdk-version"
+      ],
+      "exit": 0,
+      "stdout": "27.0\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "java": {
+      "path": "/opt/homebrew/opt/openjdk/bin/java",
+      "argv": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-version"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "openjdk version \"27\" 2026-09-15\nOpenJDK Runtime Environment Homebrew (build 27)\nOpenJDK 64-Bit Server VM Homebrew (build 27, mixed mode, sharing)\n",
+      "status": "version_observed"
+    }
+  },
+  "webview": {
+    "source": "/System/Library/Frameworks/WebKit.framework/Resources/Info.plist",
+    "bundle_identifier": "com.apple.WebKit",
+    "version": "22625",
+    "build": "22625.1.29.11.28",
+    "status": "system_framework_metadata_observed",
+    "link_and_runtime": "NOT RUN; resource probe blocked",
+    "acquisition": "Provided by installed macOS; Xcode selected at /Applications/Xcode.app/Contents/Developer"
+  },
+  "frontend": {
+    "packages": {
+      "vue": {
+        "version": "3.5.44",
+        "license": "MIT",
+        "source": "node_modules/vue/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "naive-ui": {
+        "version": "2.45.3",
+        "license": "MIT",
+        "source": "node_modules/naive-ui/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "typescript": {
+        "version": "5.9.3",
+        "license": "Apache-2.0",
+        "source": "node_modules/typescript/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "vite": {
+        "version": "8.3.5",
+        "license": "MIT",
+        "source": "node_modules/vite/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "@vitejs/plugin-vue": {
+        "version": "6.0.10",
+        "license": "MIT",
+        "source": "node_modules/@vitejs/plugin-vue/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "vue-tsc": {
+        "version": "3.3.13",
+        "license": "MIT",
+        "source": "node_modules/vue-tsc/package.json",
+        "status": "installed_metadata_observed"
+      }
+    },
+    "lock": "package-lock.json",
+    "lock_sha256": "0ea6cdbeee8190a7ed2c37f4801d8938cb15c227614d221374d61c43369c9649",
+    "build_status": "NOT RUN in this session",
+    "reproduce_argv": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "t00-frontend-build",
+      "--",
+      "npm",
+      "run",
+      "build"
+    ]
+  },
+  "candidate_versions": {
+    "tauri": {
+      "major": 2,
+      "exact_version": null,
+      "status": "NOT RUN; resolve and lock in Core baseline"
+    },
+    "hls.js": {
+      "exact_version": null,
+      "status": "NOT RUN; absent from current package.json"
+    },
+    "cloudstream": {
+      "repository": "https://github.com/recloudstream/cloudstream",
+      "commit": "a7ac454af8fbd64574c96847a936905855911720",
+      "source": "replica-spec/DEVELOPMENT_SPEC.md section 2.2",
+      "status": "candidate; upstream checkout and ABI loading NOT RUN",
+      "production_commit": null
+    }
+  },
+  "android": {
+    "status": "BLOCKED pending T02/T04 tool and SDK validation",
+    "jdk_observed": "27",
+    "compatible_jdk": null,
+    "gradle": null,
+    "emulator_build": null,
+    "sdk_tools_revision": null,
+    "platform_tools_revision": null,
+    "system_image": {
+      "package": "system-images;android-35;default;arm64-v8a",
+      "revision": null,
+      "sha256": null,
+      "status": "planned; installed package inspection NOT RUN"
+    },
+    "note": "gradle/adb/emulator/sdkmanager absent from PATH; ~/Library/Android/sdk exists and awaits inspection; no SDK license action taken"
+  },
+  "artifacts": {
+    "inventory": "replica-spec/references/plugin-artifact-inventory.json",
+    "inventory_sha256": "290f670e3f86719f76a7239a98dc21c2d0d112463e1543ceeecd0162023e516b",
+    "expected_count": 7,
+    "verified_count": 0,
+    "registry_snapshot": "replica-spec/references/plugins.snapshot.json",
+    "status": "NOT RUN; original cs3 archives must be fetched at pinned URLs and checked for bytes, SHA256, entries, manifest"
+  },
+  "licenses": {
+    "installed_direct_dependencies": "Observed above from installed package metadata",
+    "transitive_inventory": "NOT RUN",
+    "cloudstream": "GPL-3.0 per archived SOURCES.md S16; fixed upstream LICENSE review NOT RUN in this session",
+    "original_plugins": "NOT RUN; review fixed source license before distribution",
+    "release_materials": "NOT RUN; T23 must include dependency notices, corresponding upstream source and original artifact acquisition/license records"
+  },
+  "platforms": [
+    {
+      "target": "macOS 14+ arm64",
+      "machine": "current local host",
+      "required": true,
+      "status": "BLOCKED",
+      "reason": "shared heavy lock access and process enumeration denied by current development sandbox",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-resource-probe",
+        "--",
+        "/Users/eason/jp/application/.venv/bin/python",
+        "-c",
+        "print(\"T00 resource probe\")"
+      ]
+    },
+    {
+      "target": "macOS x86_64",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "No operable machine/CI established; ADR-005/006 defers platform execution",
+      "reproduce_after_t00_implementation": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "A1",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "all",
+        "--report",
+        "evidence/acceptance/T00-all.json",
+        "--junit",
+        "evidence/acceptance/T00-all.xml"
+      ]
+    },
+    {
+      "target": "Windows 11 x86_64",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "No operable machine/CI established; ADR-005/006 defers platform execution",
+      "reproduce_after_t00_implementation": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "A1",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "all",
+        "--report",
+        "evidence/acceptance/T00-all.json",
+        "--junit",
+        "evidence/acceptance/T00-all.xml"
+      ]
+    },
+    {
+      "target": "Ubuntu 24.04 x86_64 X11",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "No operable machine/CI established; ADR-005/006 defers platform execution",
+      "reproduce_after_t00_implementation": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "A1",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "all",
+        "--report",
+        "evidence/acceptance/T00-all.json",
+        "--junit",
+        "evidence/acceptance/T00-all.xml"
+      ]
+    },
+    {
+      "target": "Ubuntu 24.04 x86_64 Wayland",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "No operable machine/CI established; ADR-005/006 defers platform execution",
+      "reproduce_after_t00_implementation": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "A1",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "all",
+        "--report",
+        "evidence/acceptance/T00-all.json",
+        "--junit",
+        "evidence/acceptance/T00-all.xml"
+      ]
+    }
+  ],
+  "resource_probe": {
+    "receipt": "evidence/runs/20261027T010843115773-t00-resource-probe/receipt.json",
+    "log": "evidence/runs/20261027T010843115773-t00-resource-probe/output.log",
+    "exit": 2,
+    "payload_started": false,
+    "backend": {
+      "python": "3.12.14",
+      "platform": "darwin",
+      "backend": "process-watchdog",
+      "memory_enforcement": "rss-sampled",
+      "cpu_enforcement": "build-jobs",
+      "memory_mib": 4096,
+      "jobs": 2,
+      "test_threads": 1
+    },
+    "note": "[Errno 1] Operation not permitted: '/Users/eason/Library/Caches/agent-project-workflow/heavy.lock'"
+  },
+  "pending": [
+    "Restore access to original shared lock and macOS process inspection in authorized execution environment",
+    "Implement tests/acceptance/t00.py with real assertions and negative cases",
+    "Fetch and verify all seven pinned cs3 artifacts; retain original manifests",
+    "Complete exact candidate/version/license inventory and minimum Core build through original run.py",
+    "Run exact A1 then verify.py all before marking T0.1 complete"
+  ]
+}

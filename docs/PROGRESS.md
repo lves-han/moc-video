@@ -85,3 +85,18 @@
 - 独立只读审阅agent原始报告docs/reviews/doc-review/round-7.md，末行DOC-REVIEW-VERDICT: CLEAR；protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，ADR001..009按原分段摘要绑定。已核对报告主要文件摘要与当前文件一致。
 - 覆盖113条、35卡/36验收；命令、平台范围、夹具一行修订及运行约束均无阻断。长卡实测预算、汇总cases子用例和T24验收前独立报告时机按报告执行提醒落实。
 - 实现验收仍NOT RUN；下一步建立当前聊天5分钟heartbeat，再后台原drive --once。
+
+## T0.1 T00 环境前提与资源权限阻塞 2026-10-27T01:10:37.940719+00:00
+
+- 结果：BLOCKED
+- 执行环境表：当前可操作机器为本机macOS 27.0.1 arm64；GPU及虚拟化NOT RUN。macOS x86_64、Windows 11 x86_64、Ubuntu 24.04 X11/Wayland均无已确认可操作机器或CI，按ADR-005/006列NOT RUN。逐目标状态和后续准确argv见`docs/runtime.lock.json`。
+- 实际修改：新增WIP环境清单，绑定根目录、venv、基线`d2122afb0f0861f45e62cda3db5a3eed27df12e7`、protected、原driver/global锁及已知driver/agent wrapper的PID+创建时间。记录八项工具version输出、六项已安装前端版本/许可与系统WebKit元数据；候选和未实测项分列。无工具安装、依赖变更或冻结定义修改。
+- 已知进程：driver PID8306创建时间1793010717.56732；本会话agent wrapper PID23551创建时间1793063235.822286，均与原state.json匹配。完整进程树枚举被sysctl权限拒绝，未声称已排除全部其他写入者。
+- 实际探测：Rust1.98.1、Cargo1.98.1、Rustup1.29.1、Node26.11.1、npm11.20.0、Xcode选择路径及SDK27.0、JDK27的官方version命令退出0。WebKit系统plist为22625/build22625.1.29.11.28；此处仅为工具/文件元数据，最小编译、链接、窗口及媒体运行NOT RUN。
+- 资源探测：原`run.py t00-resource-probe -- <项目Python> -c ...`退出2，payload未启动；日志：`evidence/runs/20261027T010843115773-t00-resource-probe/output.log`；收据：`evidence/runs/20261027T010843115773-t00-resource-probe/receipt.json`。报错为全局锁`/Users/eason/Library/Caches/agent-project-workflow/heavy.lock`写入EPERM；另有psutil进程树枚举sysctl EPERM。收据后端process-watchdog/rss-sampled、4096MiB、jobs2、测试线程1；资源监管尚未实际启动。
+- 根因与已尝试方案：当前开发沙箱仅允许项目及临时目录写入；已用原run.py最小payload确认共享锁受阻。已知PID身份可读，完整进程枚举受限。保留原共享锁路径、原监管和权限；未作绕过。
+- 验收 A1：NOT RUN；`tests/acceptance/t00.py`尚未实现。完整`verify.py all`：NOT RUN。原七包静态核验0/7，下载/manifest保留、固定上游检视、依赖完整许可清单、Core最小构建及Rust/Tauri/hls.js精确锁尚待继续；未写完成勾选或done。
+- 本次静态检查：JSON已通过项目Python加载；git diff --check退出0；task.py check退出0（35卡），start T0.1退出0，task.py scope退出0（all changes inside scope）。非零测试数：0，业务测试NOT RUN。
+- WIP提交阻塞：先尝试`git add docs/runtime.lock.json`，退出128，创建`.git/index.lock`被沙箱拒绝；原错误与拟提交标题保留在`evidence/task-state/T0.1/session-1/git-wip-failure.log`。WIP尚未提交，保留工作树供外层按ADR-008/009代办；因实际Git权限受阻，此记录明确保留先提交WIP要求未满足的事实。
+- 需要外层处理：在现有授权内恢复原全局锁访问及macOS进程枚举的执行前提，代办`WIP T0.1: record observed environment and sandbox blocker`提交。若需修改开发CLI权限或冻结配置，由用户明确决定并按原修订流程执行。仅恢复环境后继续同卡；保留会话1额度及原失败收据。
+- 最小下一步：先复测原资源探测；成功后实现T00真实验收，检查SDK实际安装路径，获取冻结七包并校验长度/SHA/manifest，完成Core最小构建及许可锁记录，再执行准确A1和完整verify。
