@@ -258,3 +258,14 @@
 - 文档复审：CLEAR；独立原报告`docs/reviews/doc-review/round-10.md`，受审HEAD3e7ab44、source=bf32eb1ab5562ad5db4e4ec990fb2eedc3621cfcb65bba0b905ce23b63a1988f，protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，报告文件摘要逐项核对。
 - ADR-012真实授权与在途优先/暂停恢复及局部参数均已核对。T0.3 current/next保持，第1会话WIP先由外层准备/构建/准确A1/完整verify/原收尾。原next选择T0.2后通过原handoff更新本次授权，再按唯一一次第三会话条件接续。
 - 原task check exit0；原validate exit0，116项中109通过/7项平台跳过，报告evidence/script-validation.json。业务验收仍待实跑；原计数/失败及workflow默认2保持。
+
+
+## T0.3 Rust宿主与统一命令验收完成 2026-10-27T06:07:16.624201+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261027T060249413815-A1/output.log`；断言：准确原argv exit0，39个JUnit全通过/0失败/0跳过，18冻结需求汇总全部通过；16个Rust真实宿主/文件/IPC行为和8个Node生产api.ts队列行为实际执行。17命令原生包络100条经独立Python协议校验；179结构/89语义/6生命周期向量及4个协议缺失/漂移反例通过。
+- 行为核对：HTTP-only宿主准备与真实loopback健康探测、空/已配置来源；Settings v1迁移/v2与禁止URL/重复UUID/容量反例；真实rename失败保持文件及内存/来源世代，取消排队保存保持原值；父子级联/自身取消/活动UUID、可控单调deadline、删除再添加墓碑/同步乱序旧结果拒绝；前端单写队列/未知提交取消重读/恢复失败暂停/迟到结果隔离均通过。固定主WebView权限由真实Tauri IPC handler的MockRuntime测试及权限负例验证。
+- 构建：原t05-build exit0，收据evidence/runs/20261027T060215960137-t05-build/receipt.json；cargo check --locked --all-targets通过。首次prepare生成真实Cargo.lock触发稳定源码门exit6，原失败与note保留；真实锁WIP4a8d682后稳定prepare20261027T060208056629-t05-prepare exit0，既有锁定版本保持。
+- 完整verify：PASS，最近完整尝试`evidence/verify/20261027T060430212174.json` exit0，6门均通过：控制109通过/7平台跳过、归档与工作协议、前端测试/构建、原生fmt/check/clippy -D warnings/test；原生16行为再次通过。各收据及原报告日志摘要由原completion_evidence核验。
+- 基线与资源：source=9b54463679cecef26eff16365c098ffdf01918f71501fc6d21327f378a5517d3、protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a、generation=0；A1与完整verify同源码/冻结摘要。所有旧执行器/payload身份均已退出，两锁释放后收尾。macOS arm64进程树RSS采样4096MiB、jobs2、线程1保持；普通单进程loopback与MockRuntime，无真实集群。外层按ADR-010仅执行验收/Git与记录，源码由原开发CLI实现。
+- 保留项：T0.2实际GUI/媒体长测仍待其第三会话修复后原完整质量门；Android与后续业务适配按原卡，macOS x86_64/Windows/Linux X11/Wayland仍NOT RUN。T0.3完成提交及固定提交独立巡检在本记录后继续，取得CLEAR再按原next选择T0.2；ADR-012一次授权及原计数保持。

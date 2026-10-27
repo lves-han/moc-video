@@ -280,7 +280,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 - 停止条件：某平台出现渲染/音频/依赖问题，提交最小复现并修复；禁止先堆业务UI掩盖技术门失败。
 
 ### T0.3 T05 Rust宿主与统一命令契约
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.1
 - 需求：U01, U06, R01, R06, R08, R10, R17, R19, R31, R36, R38, R39, R44, R51, R58, R63, R64, REQ-T05 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `src/api.ts`, `src/models.ts`, `protocol/`, `tests/`, `docs/PROGRESS.md`, `package.json`, `package-lock.json`, `src/main.ts`, `src/App.vue`, `vite.config.ts`, `index.html`
