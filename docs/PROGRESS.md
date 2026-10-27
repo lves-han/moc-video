@@ -451,3 +451,14 @@
 - 补充诊断：原evidence/runs/20261027T094322135992-t01-native-stall-diagnostic/receipt.json exit1，完整现场evidence/acceptance/T01-6ab00cc141124ff893205b6889d380ae/results-0.jsonl。视频帧3245→3386、媒体时间20.186681→25.205951秒仍前进，RAF6486→6486，paused=false/media_error=null；WebView为hidden/focused=false，visibilitychange=110084ms与last_raf=110081ms对应，原生visible=true/focused=false/minimized=false。复合断言的触发项已定位为RAF不前进，进一步核对可见性和前台条件，不据此将其归为视频停播。
 - 原生GUI前台是packaging既有运行条件，外层此前未充分核实。本次CUA观察真实窗口、Raise及AX刷新未成功确认前台（控制会话未激活/超时），原记录保持。此诊断保留原断言，未改源码/回归或准确A1门。
 - 所有原执行器/payload/应用/WebKit身份已退出，fixture清理按原记录保留；新增真实诊断失败后原累计失败现9条，sessions5/generation1保持。诊断evidence/drive/t01-fifth-validation-20261027T092323Z/runtime-probe/visibility-findings.md。将两项已确认问题及运行前提一并交原第6会话，避免仅采集后再次缺少现场。
+
+## T0.2 第六会话装载及前台条件修复交接 2026-10-27T09:55:39.744255+00:00
+
+- 实施状态：WIP；按ADR-010/018完成局部实现与静态核对，第6/6会话。真实WebView复验交外层，原失败、generation、首代媒体均保留。未勾卡/done/rebaseline，未写DONE/BLOCKED/RESOLVED/AUTHORIZED，严格等待本卡完成后再推进。
+- 问题与依据：CommonJS转译的导入require被automation.ts同名断言函数提升遮蔽，原Node10失败；原真实诊断index21/110440ms的视频帧/媒体时钟前进、RAF不前进，hidden事件110084ms与last_raf110081ms对应，原生focused=false。原生前台运行条件已有文档说明，旧运行缺少激活与读回。
+- Changed：断言函数改名assertCondition，保留全部旧门；测试专用t01_control增加foreground动作，复用Tauri应用show、窗口unminimize/show/set_focus和WebView set_focus。identity/open/long先激活、等待文档visible/hasFocus并读回原生visible/focused/minimized；长播计时从确认之后开始。每段保留原RAF/帧/音频/时钟断言，附加前台状态及累计隐藏/失焦中断门，短暂隐藏后恢复同样保留失败；长播期间持续采样，激活在测量之前进行。
+- Changed：采样读取现有Vue播放进度input的实际值，要求每段变化、位于时长范围内、与媒体循环时钟距离≤1秒；此附加断言依据现有250ms位置发布及30秒循环片段。宿主验证器同样校验前台确认、每段状态/中断计数和进度UI，保留完整失败区间/最近64事件/native诊断/results JSONL。测试专用功能沿用固定主窗口授权和生产排除门，未改产品UI、媒体、依赖、冻结文件或控制脚本。
+- Changed：Node新增12项行为回归（激活恢复/请求失败/确认失败、持续及短暂隐藏/文档失焦/原生失焦/隐藏/最小化、进度控件停滞/错值/缺失），原10项保持；Python新增3项前台与UI证据验证回归，原30项保持。均尚待真实运行，实际行为测试数0。
+- Verified：task.py check/start T0.2/show/scope均exit0，35卡及all changes inside scope；项目解释器ast.parse对t01.py/test_t01.py共2文件解析成功，git diff --check exit0。实际锁定Tauri2.12.5/tao0.37.2/wry0.57.1源码已核对set_focus、makeKeyAndOrderFront、activateIgnoringOtherApps及makeFirstResponder调用。在线docs.rs读取失败，API结论采用本机锁定源码；若干读取路径缺失/未匹配glob均已task.py note保留并改读实际文件。
+- 验收 A1：NOT RUN；本版构建、33项Python/22项Node预期回归、两格式各1800秒真实播放、20窗口生命周期及完整verify均NOT RUN。ADR-010分工保持，无重任务/权限/.git写入重复探测，未启动服务或原生应用。物理扬声器听感仍沿原交接待人工确认。
+- 外层下一步：本CLI退出且源码稳定后代办WIP T0.2: fix automation loading and confirm foreground playback；按packaging/t01-commands.json原build → optional_negatives → acceptance数组执行。外层argv首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后保留字面{python}。macOS会话保持解锁/屏幕唤醒/样机前台可见，激活读回与每段前台门由真实应用执行；原--suite all/T01-all.json/xml/7200秒/4096MiB RSS采样/jobs2/线程1/项目锁保持。A1成功后以原进程局部环境直接verify.py all，再原勾卡/记录/done/受验提交/独立CLEAR。失败先note并读取同次results与samples，保留全部证据及第6/6额度。

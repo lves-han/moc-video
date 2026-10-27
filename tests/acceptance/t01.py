@@ -485,8 +485,23 @@ def validate_long(value, samples):
     require(all(s["width"] == 1920 and s["height"] == 1080 and not s["paused"] and s["media_error"] is None
         and s["audio_state"] == "running" and s["audio_rms"] > 0.001 and abs(s["audio_peak_hz"] - 440) < 30
         for s in samples), "long-play video/audio sample failed")
+    confirmed = value.get("foreground", {}).get("confirmed", {})
+    require(confirmed.get("visible") is True and confirmed.get("focused") is True
+        and confirmed.get("minimized") is False, "long-play foreground activation confirmation missing")
+    require(all(s.get("visibility") == "visible" and s.get("focused") is True
+        and s.get("foreground_interruptions") == value["initial"].get("foreground_interruptions")
+        and s.get("foreground_interruptions") is not None
+        and s.get("native", {}).get("visible") is True and s.get("native", {}).get("focused") is True
+        and s.get("native", {}).get("minimized") is False for s in samples),
+        "long-play foreground condition lost or evidence missing")
+    require(all(isinstance(s.get("ui_position"), (int, float)) and math.isfinite(s["ui_position"])
+        and 0 <= s["ui_position"] <= s["duration"]
+        and min(abs(s["ui_position"] - s["position"]),
+                abs(s["duration"] - abs(s["ui_position"] - s["position"]))) <= 1 for s in samples),
+        "long-play progress UI differs from media clock or evidence missing")
     require(samples[-1]["host_received_monotonic"] - samples[0]["host_received_monotonic"] >= 1790, "host-observed duration too short")
     require(all(b["time"] > a["time"] and b["frames"] > a["frames"] and b["raf"] > a["raf"] for a, b in zip(samples, samples[1:])), "frame/UI sample sequence stalled")
+    require(all(b["ui_position"] != a["ui_position"] for a, b in zip(samples, samples[1:])), "progress UI sample sequence stalled")
     require(all(0 < b["host_received_monotonic"] - a["host_received_monotonic"] < 15 for a, b in zip(samples, samples[1:])), "host sample gap exceeds 15s")
     return dict(duration_seconds=value["duration_seconds"], media_seconds=value["media_seconds"], samples=len(samples),
         presented_frames=value["final"]["frames"] - value["initial"]["frames"], dropped_frames=value["final"]["dropped_frames"] - value["initial"]["dropped_frames"],

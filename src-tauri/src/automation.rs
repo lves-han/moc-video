@@ -1,5 +1,5 @@
 //! Compiled only by the explicit T01 acceptance build. No filesystem or process command API.
-use tauri::{LogicalSize, WebviewWindow};
+use tauri::{LogicalSize, Manager, WebviewWindow};
 
 pub fn bootstrap() -> Result<String, Box<dyn std::error::Error>> {
     let base = std::env::var("T01_FIXTURE_BASE")?;
@@ -33,6 +33,17 @@ pub async fn t01_control(
     super::require_main(&window)?;
     match action.as_str() {
         "identity" => {}
+        "foreground" => {
+            // The harness launches the executable directly, so explicitly activate
+            // its app/window before measuring foreground WebView rendering.
+            #[cfg(target_os = "macos")]
+            window.app_handle().show().map_err(|e| e.to_string())?;
+            window.unminimize().map_err(|e| e.to_string())?;
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            let webview: &tauri::Webview = window.as_ref();
+            webview.set_focus().map_err(|e| e.to_string())?;
+        }
         "width" => {
             let width = value.ok_or("width required")?;
             if ![360.0, 390.0, 768.0, 960.0, 1200.0].contains(&width) {

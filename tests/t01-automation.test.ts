@@ -12,6 +12,7 @@ const source = ts.transpileModule(readFileSync(new URL("./fixtures/t01/automatio
 
 async function scenario(fault: string) {
   let now = 1;
+  let focused = fault !== "needs-activation";
   let frame: ((time: number, metadata: object) => void) | undefined;
   let pulse: (() => void) | undefined;
   const rect = { toJSON: () => ({ left: 0, top: 0, width: 960, height: 540 }) };
@@ -26,7 +27,10 @@ async function scenario(fault: string) {
     getBoundingClientRect: () => rect,
   });
   const document = Object.assign(new EventTarget(), {
-    visibilityState: "visible", hasFocus: () => true,
+    visibilityState: focused ? "visible" : "hidden", hasFocus: () => focused,
+    querySelector: () => fault === "ui-missing" ? null : ({
+      value: String(fault === "ui-stalled" ? 1 : fault === "ui-wrong" ? video.currentTime + 5 : video.currentTime),
+    }),
     createElement: () => ({ width: 0, height: 0, toDataURL: () => "synthetic-preview",
       getContext: () => ({ drawImage: () => {}, getImageData: () => ({ data: new Uint8Array([64, now / 5000 % 255, 0, 255]) }) }) }),
   });
@@ -34,14 +38,23 @@ async function scenario(fault: string) {
   const player = { setSpeed: () => {}, setVolume: () => {}, stop: () => {}, diagnostics: () => ({ engine: "native" }) };
   const results: any[] = [];
   const samples: any[] = [];
-  const native = { visible: true, focused: true, minimized: false };
+  const native = { visible: true, focused, minimized: false };
+  const actions: string[] = [];
   let next = 0;
   const exports: Record<string, any> = {};
   runInNewContext(source, {
     exports, Event, AbortController, Float32Array, Uint8Array,
     require: () => ({ nativeInvoke: async (_command: string, args: { action: string }) => {
-      if (fault === "native-error" && args.action === "identity") throw new Error("native identity unavailable");
-      return native;
+      actions.push(args.action);
+      if (args.action === "foreground") {
+        if (fault === "activation-error") throw new Error("native activation unavailable");
+        if (fault !== "activation-unconfirmed") {
+          native.focused = focused = true;
+          document.visibilityState = "visible";
+        } else native.focused = false;
+      }
+      if (fault === "native-error" && args.action === "identity" && now > 1) throw new Error("native identity unavailable");
+      return { ...native };
     } }),
     window, document, performance: { now: () => now },
     requestAnimationFrame: (callback: typeof pulse) => { pulse = callback; return 1; },
@@ -55,6 +68,18 @@ async function scenario(fault: string) {
       if (fault === "media-error") video.error = { code: 3 };
       if (fault === "resolution") video.videoWidth = 1280;
       if (fault === "clock") video.currentTime = 1;
+      if (fault === "hidden" || fault === "transient-hidden") {
+        document.visibilityState = "hidden";
+        document.dispatchEvent(new Event("visibilitychange"));
+        if (fault === "transient-hidden") {
+          document.visibilityState = "visible";
+          document.dispatchEvent(new Event("visibilitychange"));
+        }
+      }
+      if (fault === "blur") { focused = false; window.dispatchEvent(new Event("blur")); }
+      if (fault === "native-unfocused") native.focused = false;
+      if (fault === "native-hidden") native.visible = false;
+      if (fault === "native-minimized") native.minimized = true;
       if (fault === "events") {
         document.visibilityState = "hidden";
         document.dispatchEvent(new Event("visibilitychange"));
@@ -82,7 +107,7 @@ async function scenario(fault: string) {
     },
   });
   await exports.automate(video, player, () => {});
-  return { result: results.find(result => result.id === 1), samples, native };
+  return { result: results.find(result => result.id === 1), samples, native, actions };
 }
 
 for (const fault of ["paused", "media-error", "frames", "raf", "resolution", "audio", "clock"]) {
@@ -125,11 +150,54 @@ test("T01 event history remains bounded and retains the latest media/visibility 
 });
 
 test("T01 healthy simulated intervals still require all 1800 seconds and changing frames", async () => {
-  const { result, samples } = await scenario("healthy");
+  const { result, samples, actions } = await scenario("healthy");
   assert.equal(result.ok, true);
   assert.equal(result.value.duration_seconds, 1800);
   assert.equal(result.value.media_seconds, 1800);
   assert.equal(result.value.samples, 360);
   assert.equal(samples.length, 360);
   assert.ok(result.value.unique_frames > 2);
+  assert.equal(actions.filter(action => action === "foreground").length, 1);
+  assert.equal(result.value.foreground.confirmed.focused, true);
+  assert.ok(samples.every(sample => sample.ui_position === sample.position && sample.native.focused));
 });
+
+test("T01 foreground activation restores and reads back an initially hidden WebView", async () => {
+  const { result, samples, actions } = await scenario("needs-activation");
+  assert.equal(result.ok, true);
+  assert.deepEqual(actions.slice(0, 2), ["foreground", "identity"]);
+  assert.equal(result.value.foreground.visibility, "visible");
+  assert.equal(samples.length, 360);
+});
+
+for (const fault of ["activation-error", "activation-unconfirmed"]) {
+  test(`T01 ${fault} fails before beginning the measured playback`, async () => {
+    const { result, samples } = await scenario(fault);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /activation/i);
+    assert.equal(result.diagnostics.long, null);
+    assert.equal(samples.length, 0);
+  });
+}
+
+for (const fault of ["hidden", "transient-hidden", "blur", "native-unfocused", "native-hidden", "native-minimized"]) {
+  test(`T01 ${fault} fails with the foreground interval even while frames and RAF advance`, async () => {
+    const { result, samples } = await scenario(fault);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Foreground condition lost/);
+    const { previous, current } = result.diagnostics.long;
+    assert.ok(current.frames > previous.frames && current.raf > previous.raf);
+    assert.equal(samples.length, 0);
+  });
+}
+
+for (const fault of ["ui-stalled", "ui-wrong", "ui-missing"]) {
+  test(`T01 ${fault} rejects a broken progress control while media and RAF advance`, async () => {
+    const { result, samples } = await scenario(fault);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /progress UI stalled/);
+    const { previous, current } = result.diagnostics.long;
+    assert.ok(current.frames > previous.frames && current.raf > previous.raf && current.position !== previous.position);
+    assert.equal(samples.length, 0);
+  });
+}

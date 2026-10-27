@@ -160,9 +160,13 @@ class EvidenceTests(unittest.TestCase):
         self.samples = [dict(width=1920, height=1080, paused=False, media_error=None, audio_state="running",
             audio_rms=0.1, audio_peak_hz=440, time=(i + 1) * 5000, frames=(i + 1) * 150,
             raf=(i + 1) * 300, host_received_monotonic=(i + 1) * 5, max_raf_gap_ms=20,
+            visibility="visible", focused=True, foreground_interruptions=0,
+            native=dict(visible=True, focused=True, minimized=False),
+            position=((i + 1) * 5) % 30, ui_position=((i + 1) * 5) % 30, duration=30,
             owned_rss_bytes=1000000) for i in range(360)]
         self.value = dict(duration_seconds=1800.1, media_seconds=1800, samples=360, unique_frames=10,
-            initial=dict(frames=0, dropped_frames=0), final=dict(frames=54000, dropped_frames=3))
+            foreground=dict(confirmed=dict(visible=True, focused=True, minimized=False)),
+            initial=dict(frames=0, dropped_frames=0, foreground_interruptions=0), final=dict(frames=54000, dropped_frames=3))
 
     def test_valid_long_evidence(self):
         self.assertEqual(t01.validate_long(self.value, self.samples)["samples"], 360)
@@ -186,6 +190,40 @@ class EvidenceTests(unittest.TestCase):
         samples = copy.deepcopy(self.samples)
         samples[100]["host_received_monotonic"] += 20
         with self.assertRaises(ValueError):
+            t01.validate_long(self.value, samples)
+
+    def test_unconfirmed_foreground_fails(self):
+        for confirmed in ({}, dict(visible=False, focused=True, minimized=False),
+                          dict(visible=True, focused=False, minimized=False),
+                          dict(visible=True, focused=True, minimized=True)):
+            value = copy.deepcopy(self.value)
+            value["foreground"]["confirmed"] = confirmed
+            with self.subTest(confirmed=confirmed), self.assertRaisesRegex(ValueError, "activation confirmation"):
+                t01.validate_long(value, self.samples)
+
+    def test_foreground_loss_or_missing_evidence_fails(self):
+        for change in (dict(visibility="hidden"), dict(focused=False), dict(foreground_interruptions=1),
+                       dict(foreground_interruptions=None), dict(native={}),
+                       dict(native=dict(visible=True, focused=False, minimized=False)),
+                       dict(native=dict(visible=False, focused=True, minimized=False)),
+                       dict(native=dict(visible=True, focused=True, minimized=True))):
+            samples = copy.deepcopy(self.samples)
+            samples[100].update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "foreground condition"):
+                t01.validate_long(self.value, samples)
+
+    def test_stalled_wrong_or_missing_progress_ui_fails(self):
+        for position in (None, float("nan"), float("inf"), -1, 31, self.samples[100]["position"] + 5):
+            samples = copy.deepcopy(self.samples)
+            samples[100]["ui_position"] = position
+            with self.subTest(position=position), self.assertRaisesRegex(ValueError, "progress UI"):
+                t01.validate_long(self.value, samples)
+        samples = copy.deepcopy(self.samples)
+        # Adjacent near-loop readings can agree with both clocks yet still fail
+        # the separate requirement that the rendered progress control advances.
+        samples[99]["position"] = samples[100]["position"] = 1
+        samples[99]["ui_position"] = samples[100]["ui_position"] = 1
+        with self.assertRaisesRegex(ValueError, "progress UI sample sequence stalled"):
             t01.validate_long(self.value, samples)
 
     def test_production_rejects_test_bridge_and_source_files(self):
