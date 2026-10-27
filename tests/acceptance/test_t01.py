@@ -147,6 +147,29 @@ class NativeResultTests(unittest.TestCase):
         self.session.observe = mock.Mock()
         self.session.drain_samples = mock.Mock()
 
+    def test_wake_guard_is_bound_to_and_accounted_with_native_session(self):
+        self.session.process = mock.Mock(pid=1234)
+        self.session.owned = {}
+        wake = mock.Mock(pid=5678)
+        wake.poll.return_value = None
+        with mock.patch.object(t01.subprocess, "Popen", return_value=wake) as launch, \
+             mock.patch.object(t01.workflow.runtime, "identity", return_value="created:fixture"):
+            self.session.start_wake_guard()
+        self.assertEqual(launch.call_args.args[0], ["/usr/bin/caffeinate", "-d", "-i", "-w", "1234"])
+        self.assertEqual(self.session.owned, {5678: "created:fixture"})
+        self.assertEqual(self.session.record["wake_guard"]["identity"], "created:fixture")
+
+    def test_wake_guard_start_failure_is_explicit(self):
+        self.session.process = mock.Mock(pid=1234)
+        self.session.owned = {}
+        wake = mock.Mock(pid=5678)
+        wake.poll.return_value = 1
+        with mock.patch.object(t01.subprocess, "Popen", return_value=wake), \
+             mock.patch.object(t01.workflow.runtime, "identity", return_value=None):
+            with self.assertRaisesRegex(ValueError, "wake guard could not start"):
+                self.session.start_wake_guard()
+        self.assertEqual(self.session.owned, {})
+
     def result_log(self):
         path = t01.ROOT / self.session.record["result_log"]
         return [json.loads(line) for line in path.read_text().splitlines()]

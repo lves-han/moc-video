@@ -356,6 +356,22 @@ class NativeSession:
         self.record = dict(pid=self.process.pid, identity=self.identity, executable_sha256=file_hash(executable),
             log=str(self.path.relative_to(ROOT)), index=index, started_utc=dt.datetime.now(dt.timezone.utc).isoformat())
         run.observed.setdefault("native_sessions", []).append(self.record)
+        self.wake_process = None
+        try:
+            self.start_wake_guard()
+        except Exception:
+            self.close(graceful=False)
+            raise
+
+    def start_wake_guard(self):
+        # Keep the GUI test awake without changing the user's lock/sleep settings.
+        # -w also releases the assertion if the native app exits unexpectedly.
+        argv = ["/usr/bin/caffeinate", "-d", "-i", "-w", str(self.process.pid)]
+        self.wake_process = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        token = workflow.runtime.identity(self.wake_process.pid)
+        require(token and self.wake_process.poll() is None, "native GUI wake guard could not start")
+        self.owned[self.wake_process.pid] = token
+        self.record["wake_guard"] = dict(pid=self.wake_process.pid, identity=token, argv=argv)
 
     def observe(self, enforce_budget=True):
         process = workflow.runtime.process_for(self.process.pid, self.identity)
@@ -467,6 +483,8 @@ class NativeSession:
                 forced = [pid for pid, token in self.owned.items() if workflow.runtime.identity(pid) == token]
                 workflow.runtime.terminate([dict(pid=pid, identity=token) for pid, token in self.owned.items()])
                 self.process.wait(timeout=10)
+                if self.wake_process is not None:
+                    self.record.setdefault("wake_guard", {})["exit"] = self.wake_process.wait(timeout=5)
                 self.output_thread.join(timeout=5)
                 require(not self.output_thread.is_alive(), "native output pipe remains open")
                 self.process.stdout.close()
