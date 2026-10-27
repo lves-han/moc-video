@@ -106,6 +106,10 @@ def validate_artifact(path, expected):
 def validate_plan(lock):
     require(lock["schema_version"] == 2 and lock["card"] == "T0.1", "unsupported T00 environment schema")
     require(lock["status"] == "WIP", "committed environment describes the plan; results belong in current reports")
+    preparation = lock["commands"]["rust_toolchain"]
+    # Installing the compiler must preserve the independently observed rustup version.
+    require("--no-self-update" in preparation[preparation.index("--") + 1:],
+            "Rust toolchain preparation must disable rustup self-update in the install payload")
     for name in CORE_TOOLS:
         validate_tool(name, lock["observed_tools"][name])
     require(set(lock["observed_tools"]) == set(CORE_TOOLS) | {"xcode-select", "xcrun", "java"},

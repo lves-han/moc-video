@@ -159,3 +159,15 @@
 - 独立只读原始报告docs/reviews/doc-review/round-9.md，末行DOC-REVIEW-VERDICT: CLEAR；protected保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，ADR001..011按原分段摘要绑定，已核对报告主要文件摘要。
 - 原脚本局部--max-sessions参数与--once语义已独立核对；当前/next=T0.1、sessions2，真实单卡授权可用原drive --once --max-sessions 3仅启动一次第三会话，其它卡默认2保持。
 - 原失败收据、计数、权限和资源保持；修复及准确A1/完整verify均待后续执行。下一步恢复同一监管并交原脚本修复。
+
+## T0.1 T00 第3会话版本漂移修复交接 2026-10-27T02:52:50.059663+00:00
+
+- 实施状态：WIP；按ADR-010/011交外层复验及Git收尾，本会话只处理T0.1。
+- 因果链：已读取原安装与A1失败日志，默认安装自更新令rustup 1.29.1变为1.29.2；严格版本门拒绝该漂移。当前官方`rustup --version`实际退出0，输出1.29.2 (d8c92c676 2026-10-21)；`rustup toolchain install --help`实际退出0并说明`--no-self-update`。原始输出及逐项时间见`evidence/task-state/T0.1/session-3/rustup-observation.json`。
+- 最小修改：`docs/runtime.lock.json`安装payload增加`--no-self-update`，仅刷新rustup真实观测行并附观测时间/证据；其他工具原观测保持。`tests/acceptance/t00.py`在计划校验中要求该参数位于原run.py的payload。`tests/acceptance/test_t00.py`保留原25例并增加3例：接受禁用自更新的计划、拒绝缺失参数、拒绝参数只在wrapper出现；共28例，准确A1会自动加载。
+- 原严格live版本比较、七包/源码/资源/JUnit门和冻结文件保持；没有执行环境回退、安装、权限探测或控制脚本改动。原两条失败、全部收据及累计3次会话保持。
+- 真实静态验证：两个Python文件AST、环境JSON及工具链TOML解析成功；git diff --check退出0、task.py check退出0（35卡）、task.py scope退出0（all changes inside scope）、show/status退出0。日志`evidence/task-state/T0.1/session-3/static-review.log`；protected保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，generation未改。
+- 验收 A1：NOT RUN for session-3 source；本会话行为测试数0，新增3例与原25例均待复跑。Core最小构建、修正后的安装/prepare及完整verify.py all：NOT RUN。本会话没有写完成勾选或调用done。
+- 外层准确argv清单：`evidence/task-state/T0.1/session-3/outer-commands.json`，顺序rust_toolchain→prepare→acceptance→verify，均来自runtime.lock。仅首项{python}换为项目解释器；run.py之后的payload占位符保持字面值。verify直接调用并沿用frontend.build_worker_overrides的进程局部环境；A1通过后才执行verify。额外negatives为可选诊断，A1已含28例。
+- 下一步：当前开发及旧重进程退出、源码稳定后，外层按既有分工代办`WIP T0.1: prevent rustup self-update during toolchain preparation`。通过原执行器运行修正安装，核对前后rustup均1.29.2且无自更新，再按上述准确命令复验。全部原质量门成立后由外层记录真实结果、勾卡/done、受验提交及独立巡检。
+- 剩余：修正安装的实际副作用、28例行为、A1与完整verify均待外层执行；旧失败报告保留。Git已移交外层，当前修复保留在工作树供代办WIP；本会话按授权分工结束，不重复探测既知权限。

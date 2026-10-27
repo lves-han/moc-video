@@ -67,9 +67,11 @@
         "--version"
       ],
       "exit": 0,
-      "stdout": "rustup 1.29.1 (d95a37b6a 2026-08-13)\n",
+      "stdout": "rustup 1.29.2 (d8c92c676 2026-10-21)\n",
       "stderr": "info: This is the version for the rustup toolchain manager, not the rustc compiler.\ninfo: the currently active `rustc` version is `rustc 1.98.1 (48a229cea 2026-09-01)`\n",
-      "status": "version_observed"
+      "status": "version_observed",
+      "observed_at": "2026-10-27T02:51:17.030925+00:00",
+      "observation_evidence": "evidence/task-state/T0.1/session-3/rustup-observation.json"
     },
     "node": {
       "path": "/opt/homebrew/bin/node",
@@ -701,7 +703,8 @@
       "--component",
       "rustfmt",
       "--component",
-      "clippy"
+      "clippy",
+      "--no-self-update"
     ],
     "prepare": [
       "{python}",
@@ -919,7 +922,7 @@
     "commands.acceptance",
     "commands.verify"
   ],
-  "plan_updated_utc": "2026-10-27T01:46:53.610771+00:00",
-  "negative_suite_note": "commands.negatives is an optional isolated diagnostic. Exact A1 already runs all 25 regression cases; a separate negative run is unnecessary when A1 succeeds.",
+  "plan_updated_utc": "2026-10-27T02:52:02.768924+00:00",
+  "negative_suite_note": "commands.negatives is an optional isolated diagnostic. Exact A1 already runs all 28 regression cases, including rejection of rustup self-update preparation; a separate negative run is unnecessary when A1 succeeds.",
   "command_expansion": "Replace only the first {python} in an outer command array with the project interpreter. Preserve the {python} after run.py -- exactly as declared by task.py show; the original executor expands it for the payload."
 }

@@ -132,6 +132,24 @@ class T00ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "successful official version"):
             t00.validate_tool("rustc", row)
 
+    def test_plan_accepts_toolchain_install_without_self_update(self):
+        lock = t00.read_json(t00.ROOT / "docs/runtime.lock.json")
+        self.assertEqual(t00.validate_plan(lock)["required_platform"], "macos-arm64")
+
+    def test_plan_rejects_toolchain_install_with_default_self_update(self):
+        lock = t00.read_json(t00.ROOT / "docs/runtime.lock.json")
+        lock["commands"]["rust_toolchain"].remove("--no-self-update")
+        with self.assertRaisesRegex(ValueError, "must disable rustup self-update"):
+            t00.validate_plan(lock)
+
+    def test_plan_rejects_self_update_flag_outside_install_payload(self):
+        lock = t00.read_json(t00.ROOT / "docs/runtime.lock.json")
+        preparation = lock["commands"]["rust_toolchain"]
+        preparation.remove("--no-self-update")
+        preparation.insert(0, "--no-self-update")
+        with self.assertRaisesRegex(ValueError, "must disable rustup self-update"):
+            t00.validate_plan(lock)
+
     def npm_fixture(self):
         package = dict(version="1.0.0", license="MIT", integrity="sha512-synthetic",
                        resolved="https://example.test/synthetic-1.0.0.tgz")
