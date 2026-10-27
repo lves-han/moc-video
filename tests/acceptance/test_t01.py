@@ -149,14 +149,51 @@ class EvidenceTests(unittest.TestCase):
             asset = frontend / "app.js"
             asset.write_text("console.log('production')")
             t01.validate_production(frontend, executable)
-            for marker in (b"T01_FIXTURE_CAP", b"/control/next", b"t01_control"):
-                executable.write_bytes(marker)
-                with self.subTest(marker=marker), self.assertRaises(ValueError):
-                    t01.validate_production(frontend, executable)
+            for marker in (b"T01_FIXTURE_CAP", b"/control/next", b"control/next", b"t01_control"):
+                for destination in (executable, asset):
+                    executable.write_bytes(b"synthetic native")
+                    asset.write_bytes(b"console.log('production')")
+                    destination.write_bytes(marker)
+                    with self.subTest(marker=marker, destination=destination.name), self.assertRaises(ValueError):
+                        t01.validate_production(frontend, executable)
             executable.write_bytes(b"synthetic native")
+            asset.write_bytes(b"console.log('production')")
             (frontend / "server.py").write_text("pass")
             with self.assertRaises(ValueError):
                 t01.validate_production(frontend, executable)
+
+
+class AutomationArtifactTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="t01-automation-regression-")
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
+        self.frontend = root / "frontend"
+        self.frontend.mkdir()
+        self.executable = root / "native"
+        self.executable.write_bytes(b"T01_FIXTURE_CAP")
+
+    def test_real_built_automation_artifacts_are_accepted(self):
+        # The build suite precedes these regressions in the native acceptance gate.
+        t01.validate_automation(t01.ROOT / "target/t01/frontend-automation",
+            t01.DATA / "YingxiangVideoT01.app/Contents/MacOS/yingxiang-video")
+
+    def test_missing_frontend_transport_or_native_bridge_fails(self):
+        asset = self.frontend / "automation.js"
+        for data in (b"", b"control/next", b"t01_control"):
+            asset.write_bytes(data)
+            with self.subTest(data=data), self.assertRaisesRegex(ValueError, "automation frontend mode"):
+                t01.validate_automation(self.frontend, self.executable)
+
+    def test_missing_frontend_chunk_fails(self):
+        with self.assertRaisesRegex(ValueError, "automation frontend mode"):
+            t01.validate_automation(self.frontend, self.executable)
+
+    def test_missing_native_bootstrap_fails(self):
+        (self.frontend / "automation.js").write_bytes(b"control/next t01_control")
+        self.executable.write_bytes(b"production native")
+        with self.assertRaisesRegex(ValueError, "automation native feature"):
+            t01.validate_automation(self.frontend, self.executable)
 
 
 if __name__ == "__main__":

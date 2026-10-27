@@ -277,3 +277,13 @@
 - 原审阅核对17命令、16Rust/8Node行为、原子失败/权限/取消/世代/未知提交反例及39JUnit和六门收据，同源码/保护摘要一致，未发现高严重度缺陷。其他平台/Android/后续接线保持原卡与NOT RUN记录。
 - 进程与锁：巡检驱动64694及CLI64719真实身份均退出；本次通过原FileLock.acquire显式核对driver与global heavy均可获得并即释放。此前外层bool(FileLock对象)锁探测缺少acquire的记录，已在supervision.md追加纠正；原run/drive自身锁控制始终保持，独立审阅确认收据执行区间无重叠。
 - 接续：原next确为T0.2，按ADR-012和独立文档round-10 CLEAR恢复该卡保留的2次会话/4失败/暂停区段；原start恢复后补准确handoff，唯一一次原--once --max-sessions 3，其他卡继续默认2。
+
+## T0.2 T01 第3会话构建产物校验修复交接 2026-10-27T06:18:06+00:00
+
+- 实施状态：WIP；仅处理ADR-012授权的产物校验误判与回归。当前sessions=3、4条既有失败保留，protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，generation=0。本卡保持未勾选。
+- 根因与最小修复：源automation.ts将带尾斜杠base与相对control/next拼接，真实Vite自动化chunk保留control/next与t01_control。tests/acceptance/t01.py抽出validate_automation供build和回归共用，保留原生T01_FIXTURE_CAP门，要求实际JS同时含相对路径和原生桥标记；生产扫描同步拒绝control/next，涵盖带前导斜杠与相对路径。未改产品UI、T0.3宿主、冻结定义、原控制脚本或媒体基准。
+- 回归实现：tests/acceptance/test_t01.py新增4个测试，直接检查实际构建目录与自动化.app可执行文件可被接受，并拒绝缺失前端chunk、缺失传输/原生桥标记、缺失原生bootstrap。既有生产泄漏测试扩展到前端和可执行文件，覆盖相对路径并保留原带斜杠/凭据/桥标记及源码文件拒绝。共定义19个行为测试；本会话实际执行0，NOT RUN。真实产物正例要求先完成build，随后执行negatives/A1；缺产物时显式失败，无跳过。
+- 真实静态验证：两份修改Python AST解析成功；task.py check（35卡）、scope（all changes inside scope）、git diff --check均exit0；记录evidence/task-state/T0.2/session-3/static-review.json与static-review.log。另已实际执行check/start T0.2/show/status；状态确认current=T0.2、sessions=3、原4失败。静态记录未声称行为验证通过。
+- 外层准确argv：沿用packaging/t01-commands.json原build → optional_negatives → acceptance → verify；依赖与首代媒体已在原prepare准备，保留Cargo.lock和全部失败证据。将每条外层argv首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后payload的{python}原样交原脚本展开。build为scripts/run.py t01-build -- {python} -B tests/acceptance/t01.py --suite build --report evidence/acceptance/T01-build.json --junit evidence/acceptance/T01-build.xml；negatives为scripts/run.py t01-negatives -- {python} -B tests/acceptance/t01.py --suite negatives --report evidence/acceptance/T01-negatives.json --junit evidence/acceptance/T01-negatives.xml；A1逐字沿task.py show及manifest，完整verify直接scripts/verify.py all。所有上述scripts入口均以项目解释器及-B调用。完整verify沿manifest使用进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2。
+- 执行分工：按ADR-010，开发CLI静态核对后退出，外层确认本CLI/旧重命令退出与源码稳定后代办WIP T0.2: fix automation artifact validation and regressions，再由原run.py执行重新build、19行为回归、准确A1（MP4/HLS各1800秒及20生命周期），随后直接完整verify；原完成门和固定提交独立CLEAR保持。已知全局锁/进程枚举/.git权限按分工处理，本会话未重复探测或尝试扩大权限。
+- Remaining：本次重新build、新增回归、准确A1/GUI长测与完整verify均NOT RUN；原编译子命令成功与15诊断通过仅沿原记录保留。新源码需要新收据；完成记录、勾卡、done、受验完成提交及独立巡检待外层实际质量门通过后执行。当前三文件范围内未提交修改保留供外层WIP，未写DONE/BLOCKED/RESOLVED/AUTHORIZED。

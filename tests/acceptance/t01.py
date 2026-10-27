@@ -202,7 +202,7 @@ def tree_hashes(folder):
 
 
 def validate_production(frontend, executable):
-    forbidden = (b"/control/next", b"/probe/cors-denied", b"T01_FIXTURE_CAP", b"T01_FIXTURE_BASE", b"t01_control",
+    forbidden = (b"control/next", b"/probe/cors-denied", b"T01_FIXTURE_CAP", b"T01_FIXTURE_BASE", b"t01_control",
                  b"_webProcessIdentifier", b"_gpuProcessIdentifier", b"_networkProcessIdentifier")
     for path in [executable, *frontend.rglob("*")]:
         if path.is_file():
@@ -210,6 +210,14 @@ def validate_production(frontend, executable):
             require(not any(marker in data for marker in forbidden), f"test bridge leaked into production: {path.name}")
             require(path.suffix not in {".py", ".ts", ".rs"}, f"test/source asset in production: {path.name}")
     return dict(forbidden_markers=[m.decode() for m in forbidden], executable_sha256=file_hash(executable), frontend_files=len(tree_hashes(frontend)))
+
+
+def validate_automation(frontend, executable):
+    require(b"T01_FIXTURE_CAP" in executable.read_bytes(), "automation native feature was not built")
+    # The base URL supplies the leading slash; Vite preserves the relative path.
+    require(any(all(marker in data for marker in (b"control/next", b"t01_control"))
+                for data in (p.read_bytes() for p in frontend.rglob("*.js"))),
+            "automation frontend mode was not built: command transport or native bridge missing")
 
 
 def bundle(run, name, binary):
@@ -251,8 +259,7 @@ def build(run):
         run.command(["cargo", "build", "--locked", "--release", "--manifest-path", "src-tauri/Cargo.toml",
             "--features", "t01-automation"], timeout=3000)
     automation = bundle(run, "YingxiangVideoT01", ROOT / "target/release/yingxiang-video")
-    require(b"T01_FIXTURE_CAP" in (automation / "Contents/MacOS/yingxiang-video").read_bytes(), "automation native feature was not built")
-    require(any(b"/control/next" in p.read_bytes() for p in (ROOT / "target/t01/frontend-automation").rglob("*.js")), "automation frontend mode was not built")
+    validate_automation(ROOT / "target/t01/frontend-automation", automation / "Contents/MacOS/yingxiang-video")
     receipt = dict(source=run.source, protected=workflow.protected_hash(), cargo_lock=file_hash(ROOT / "src-tauri/Cargo.lock"),
         production=dict(path=str(production.relative_to(ROOT)), files=tree_hashes(production)),
         automation=dict(path=str(automation.relative_to(ROOT)), files=tree_hashes(automation)),
