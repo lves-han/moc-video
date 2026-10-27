@@ -1,11 +1,16 @@
 use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
+pub mod commands;
+pub mod contracts;
+pub mod gateway;
+pub mod host;
+pub mod requests;
+pub mod settings;
+pub mod source_dispatch;
+
 fn require_main(window: &WebviewWindow) -> Result<(), String> {
     let url = window.url().map_err(|e| e.to_string())?;
-    if window.label() == "main"
-        && ((url.scheme() == "tauri" && url.host_str() == Some("localhost"))
-            || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost")))
-    {
+    if contracts::authorized(window.label(), &url) {
         Ok(())
     } else {
         Err("Player command requires the packaged main WebView".into())
@@ -27,15 +32,27 @@ mod automation;
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(feature = "t01-automation")]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        player_fullscreen,
-        automation::t01_control
-    ]);
+    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
+        tauri::generate_handler![player_fullscreen, automation::t01_control];
     #[cfg(not(feature = "t01-automation"))]
-    let builder = builder.invoke_handler(tauri::generate_handler![player_fullscreen]);
+    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
+        tauri::generate_handler![player_fullscreen];
+    let business = commands::handler::<tauri::Wry>();
+    let builder = builder.invoke_handler(move |invoke| {
+        if contracts::COMMANDS.contains(&invoke.message.command()) {
+            business(invoke)
+        } else {
+            prototype(invoke)
+        }
+    });
 
     builder
         .setup(|app| {
+            let settings_path = app.path().app_data_dir()?.join("settings.json");
+            app.manage(
+                host::Host::open(settings_path)
+                    .map_err(|error| std::io::Error::other(error.message))?,
+            );
             let window = WebviewWindowBuilder::new(
                 app,
                 "main",

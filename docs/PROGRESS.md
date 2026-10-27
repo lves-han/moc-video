@@ -227,3 +227,18 @@
 - 最新两份收据source/after_source/protected/generation及日志摘要已核对，所有原执行器/payload已退出，源码稳定、工作树干净。准确A1、GUI/媒体长测与完整verify仍NOT RUN；未勾卡/done或生成完成收据。
 - 需要用户决定：仅本卡追加一次开发会话（2→3），由原脚本修复产物检查误判并补回归，再由外层复验。既有失败/两次会话保留，权限/资源/单次时长保持，不自行扩额或借用T0.1例外。
 - 分支处理：本卡及依赖由原BLOCKED规则隔离；记录提交后使用原next读取独立可执行卡并继续，保持技术样机门FAIL事实，不推进依赖该门的UI/播放器卡，不擅自暂停独立后端分支。
+
+## T0.3 T05 第1会话实现交接 2026-10-27T05:48:58+00:00
+
+- 实施状态：WIP；当前第1/2会话，仅处理T0.3，按ADR-010交外层实跑与Git收尾。本卡保持未勾选。
+- 最小方案与实现：沿用现有Tauri crate、实际protocol三份机器契约及原兼容检查。增加host_epoch、三类SourceKind分发、按配置顺序的来源注册表、runtime_status/application准备/get_sources及独立本机取消路径；接入17个固定业务命令与主WebView权限。保留原前端和技术样机隔离入口；后续HTTP适配、匹配、媒体资源与Cloudstream接线命令返回明确错误，按原卡边界继续由N00/N01/T06..T09/N02交付。
+- 宿主准备：实现真实loopback监听、256位随机控制Bearer、受限健康探测与有界请求读取；健康探测成功才返回ready。默认application路径保持Cloudstream stopped及独立null客体epoch；未接入Android启动。此处为宿主网关传输准备，媒体/图片路由按T09交付。
+- 设置与请求：Settings v2验证、v1保留字段迁移、未知版本/损坏保留诊断、同目录临时文件同步后原子替换、同一锁下发布设置/来源世代；替换前检查取消，替换开始后完成内存发布。保留删除世代墓碑、同世代同步序号、来源隔离与旧结果拒绝。请求UUID规范身份比较、活动去重、父子级联/finally清理、按入站时间计单调deadline、子请求/连接裁剪及提前1000ms停止聚合子任务。
+- 前端契约：src/models.ts由工作协议确定生成；src/api.ts提供固定命令调用、关联ID/包络与ready检查、固定操作预算和2000ms传输余量。唯一settingsQueue在执行时使用最近确认值构造完整对象；业务失败保留确认值，未知提交先取消、同提交锁重读后恢复，重读失败保持暂停，可显式恢复并排空退出。package.json仅把测试并发固定为1。
+- 验收实现：tests/acceptance/t05.py覆盖原准确A1及18个需求ID，调用16个Rust真实宿主/设置文件/来源提交/取消/可控时钟行为测试（含实际Tauri IPC handler的MockRuntime权限测试）和8个Node生产api.ts队列行为测试；将原生实际包络交独立Python协议验证器复核，保存命令退出码、测试数、日志和JSON/JUnit。工作协议缺失/漂移、空ready、字段漂移、未知提交、取消、同世代乱序、删除再添加、32配置/16manifest/UTF-8字节预算均有反例。以上行为测试均NOT RUN。
+- 真实静态验证：2个Python AST、8个JSON及Cargo.toml/Cargo.lock语法解析成功；task.py check（35卡）、scope（all changes inside scope）、show T0.3、status、git diff --check及cargo fmt --check共6条命令均exit0。日志：`evidence/task-state/T0.3/session-1/static-review.log`，结构记录：同目录`static-review.json`。本会话实际行为测试数0，原生构建数0。
+- 授权与资源：current=T0.3、sessions=1，protected保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a。控制脚本、冻结需求/架构/任务/配置和协议归档保持；未调用rebaseline，未写DONE/BLOCKED/RESOLVED/AUTHORIZED。已知heavy.lock/进程枚举/.git限制沿ADR-010分工，未重复探测；默认10800秒/2会话/4096MiB RSS采样/jobs2/测试线程1保持。
+- 准备、构建、准确A1、完整verify.py all：全部NOT RUN。新增Rust依赖尚需外层通过原run.py的cargo update --workspace生成真实Cargo.lock；保留原锁版本并仅处理新依赖必要解析，保留实际结果后再对稳定源码验收。未手写依赖锁或伪造报告。
+- 外层准确argv与顺序：`tests/acceptance/t05-commands.json`的prepare → build → acceptance → verify。仅外层argv首项{python}替换为项目解释器；run.py后payload占位符原样保留，准确A1与task.py show一致。直接verify并沿用进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2；A1继承原资源收据并严格核对前后源码。macOS以外四目标仍NOT RUN。
+- Git交接：待本开发CLI及旧重进程退出、核对源码稳定后，外层按ADR-010代办`WIP T0.3: implement native host and unified command contracts`，准备后保留真实依赖锁。原A1与完整verify都通过后才记录真实收据、勾卡、done、受验完成提交及原review-only独立巡检；实现问题沿原工作流交回剩余第2会话。当前保留范围内未提交工作树，T0.2既有BLOCKED与原失败历史保持。
+- Remaining：真实依赖解析、Rust/TypeScript编译与clippy、16+8个行为测试、准确A1及完整verify均待外层执行；当前静态检查只证明语法/排版/范围和原状态读取。真实Android、后续业务适配和其他平台按各原卡接续。

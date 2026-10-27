@@ -1,0 +1,69 @@
+{
+  "card": "T0.3",
+  "execution": "ADR-010: after the development CLI and old heavy processes exit, the outer agent runs these argv sequentially in the original project. Replace only the outer {python}; the runner expands the payload placeholder.",
+  "prepare": [
+    "{python}",
+    "-B",
+    "scripts/run.py",
+    "t05-prepare",
+    "--",
+    "cargo",
+    "update",
+    "--workspace",
+    "--manifest-path",
+    "src-tauri/Cargo.toml"
+  ],
+  "prepare_note": "Resolve new direct dependencies while preserving existing locked registry versions where their constraints permit. Retain the real resulting Cargo.lock as source before build/A1. No handwritten or fabricated lock entries.",
+  "build": [
+    "{python}",
+    "-B",
+    "scripts/run.py",
+    "t05-build",
+    "--",
+    "cargo",
+    "check",
+    "--locked",
+    "--manifest-path",
+    "src-tauri/Cargo.toml",
+    "--all-targets"
+  ],
+  "acceptance": [
+    "{python}",
+    "-B",
+    "scripts/run.py",
+    "A1",
+    "--",
+    "{python}",
+    "-B",
+    "tests/acceptance/t05.py",
+    "--suite",
+    "all",
+    "--report",
+    "evidence/acceptance/T05-all.json",
+    "--junit",
+    "evidence/acceptance/T05-all.xml"
+  ],
+  "verify": [
+    "{python}",
+    "-B",
+    "scripts/verify.py",
+    "all"
+  ],
+  "process_environment": {
+    "ROLLDOWN_WORKER_THREADS": "2",
+    "RAYON_NUM_THREADS": "2"
+  },
+  "resource_note": "Keep original global heavy lock, process-watchdog/RSS sampling 4096 MiB, build jobs 2, test threads 1. No nested run.py. A1 inherits its owner's receipt and checks source stability.",
+  "actual_status_at_implementation_handoff": {
+    "prepare": "NOT RUN",
+    "build": "NOT RUN",
+    "A1": "NOT RUN",
+    "verify": "NOT RUN"
+  },
+  "implementation_references": [
+    "https://docs.rs/jsonschema/0.33.0/jsonschema/struct.ValidationOptions.html",
+    "pinned local tauri 2.12.5 ipc/test/macros source",
+    "pinned local tauri-build 2.7.4 AppManifest source"
+  ],
+  "finish": "Only after exact A1 and full verify pass on stable source: record actual receipts, check this card, task.py done T0.3, completion commit and original review-only. Development CLI leaves WIP for outer Git handling."
+}

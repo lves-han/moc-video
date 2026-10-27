@@ -7,14 +7,31 @@ fn main() {
             std::fs::remove_file(test_permission).expect("remove stale test-only permission");
         }
     }
-    let commands: &[&str] = if std::env::var_os("CARGO_FEATURE_T01_AUTOMATION").is_some() {
-        &["player_fullscreen", "t01_control"]
-    } else {
-        &["player_fullscreen"]
-    };
+    const COMMANDS: &[&str] = &[
+        "player_fullscreen",
+        "runtime_status",
+        "runtime_prepare",
+        "get_sources",
+        "sync_catalog",
+        "get_home",
+        "get_details",
+        "resolve_episode",
+        "open_playback",
+        "close_playback",
+        "cancel_request",
+        "start_interaction",
+        "finish_interaction",
+        "get_settings",
+        "save_settings",
+        "get_resource_status",
+        "release_resolution",
+        "match_playback",
+        #[cfg(feature = "t01-automation")]
+        "t01_control",
+    ];
     tauri_build::try_build(
         tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(commands))
+            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS))
             .codegen(tauri_build::CodegenContext::new()),
     )
     .expect("Tauri configuration and permission generation failed");

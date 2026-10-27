@@ -15,6 +15,16 @@ tauri-build = { version = "=2.7.4", features = ["codegen"] }
 [dependencies]
 tauri = { version = "=2.12.5", features = [] }
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+url = "2"
+tempfile = "3"
+jsonschema = { version = "=0.33.0", default-features = false }
+getrandom = "0.4"
+
+[dev-dependencies]
+tauri = { version = "=2.12.5", features = ["test"] }
 
 [features]
 default = ["custom-protocol"]
