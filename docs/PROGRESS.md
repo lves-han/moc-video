@@ -242,3 +242,12 @@
 - 外层准确argv与顺序：`tests/acceptance/t05-commands.json`的prepare → build → acceptance → verify。仅外层argv首项{python}替换为项目解释器；run.py后payload占位符原样保留，准确A1与task.py show一致。直接verify并沿用进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2；A1继承原资源收据并严格核对前后源码。macOS以外四目标仍NOT RUN。
 - Git交接：待本开发CLI及旧重进程退出、核对源码稳定后，外层按ADR-010代办`WIP T0.3: implement native host and unified command contracts`，准备后保留真实依赖锁。原A1与完整verify都通过后才记录真实收据、勾卡、done、受验完成提交及原review-only独立巡检；实现问题沿原工作流交回剩余第2会话。当前保留范围内未提交工作树，T0.2既有BLOCKED与原失败历史保持。
 - Remaining：真实依赖解析、Rust/TypeScript编译与clippy、16+8个行为测试、准确A1及完整verify均待外层执行；当前静态检查只证明语法/排版/范围和原状态读取。真实Android、后续业务适配和其他平台按各原卡接续。
+
+
+## T0.2 单卡第三会话真实授权记录 2026-10-27T05:56:24.422836+00:00
+
+- 结果：RESOLVED
+- 决定：当前聊天用户原话“同意，仅将 T0.2 的开发会话上限从 2 次增至 3 次，让原脚本修复构建产物校验误判，你负责复验，现有权限和资源限制保持不变。”；落实为ADR-012，限本卡一次第三会话修复构建产物校验误判，外层复验，全部权限/资源/时长/原门保持。
+- 批准摘要：bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a
+- 当前安全交接边界：T0.3第1会话已WIP退出，原驱动/CLI身份及两锁均已核对释放，WIP66bd498保留。current/next仍T0.3；原规则优先完成该在途卡，随后按next选择T0.2。
+- 原T0.2 sessions=2、4条失败、暂停区段及generation=0保持。原build FAIL、准确A1/GUI长测/完整verify仍待修复后执行；授权记录尚待独立文档复审，不记录为已启动第三会话。

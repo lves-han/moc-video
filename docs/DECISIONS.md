@@ -82,3 +82,13 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 最小实现：保持workflow.json max_sessions=2及全部受保护文件原值；确认原next_card仍为T0.1且sessions=2后，唯一一次用原scripts/drive.py --once --max-sessions 3启动第3会话。原脚本已支持该非交互参数；此为当前人类明确授权的仅本卡例外。不得将该参数用于其他卡或借此重复追加会话；T0.1结束后其他卡仍原drive.py --once、默认max_sessions=2。独立--review-only不增加开发会话。
 限制：gpt-6.1-sol、开发workspace-write/巡检read-only、单次10800秒、原命令超时、4096MiB RSS采样、jobs2、测试线程1和原全局heavy锁均保持；不加session-hours，不修改原控制脚本、全局配置、需求/验收/cases，不代写产品实现，不改弱断言或伪造结果。
 基线与接续：保护摘要保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a、generation=0，未修改冻结定义，不调用rebaseline。追加本卡真实RESOLVED及原handoff、独立文档复审CLEAR后恢复同一监管任务并进行一次有来源的预算例外。修复后源码稳定再由外层通过原run.py执行新准备/准确A1，全部通过后完整verify及原完成提交/独立CLEAR。
+
+
+## ADR-012 2026-10-27T05:56:24.422836+00:00 — 已采纳：仅T0.2追加一次构建产物校验修复会话
+
+来源：当前聊天用户原话“同意，仅将 T0.2 的开发会话上限从 2 次增至 3 次，让原脚本修复构建产物校验误判，你负责复验，现有权限和资源限制保持不变。”
+决定：只将T0.2累计开发会话上限从2次增至3次，用于原脚本修复已复现的构建产物校验误判及对应回归，外层按ADR-010负责复验。现有2次会话、4条失败、暂停区段及全部原收据保持；ADR-011的T0.1例外已使用完毕，本决定独立生效。
+实施：workflow.json默认max_sessions=2及原控制脚本保持。先完成当前独立在途T0.3的正常质量门；原next_card优先当前活跃卡。仅当原current/next确为T0.2、sessions=2、全部旧写入者/重命令退出、此次独立只读文档复审CLEAR后，唯一一次使用原scripts/drive.py --once --max-sessions 3。此局部参数仅用于本卡第3会话，其余新卡普通--once/默认2；保留原计数与失败，不加session-hours，不手工切current或伪造阻塞。
+范围：修正tests/acceptance/t01.py对真实打包JS的control/next路径及自动化标记判断，补接受真实产物/拒绝缺失与生产泄漏的回归；保持生产与测试构建隔离、严格断言、原准确A1和GUI长测。外层从稳定源码重新build、准确A1、完整verify、done/Git与固定提交独立CLEAR。编译子命令和15个诊断用例沿原记录保留，实际GUI长测待执行。
+约束：gpt-6.1-sol、开发workspace-write/巡检read-only、单次10800秒、原命令超时、4096MiB RSS采样、jobs2、测试线程1、原全局heavy锁及既有桌面范围/移动阶段门保持；外层负责验收/Git，产品与验收实现交原开发工作流。
+基线：protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，generation=0，受保护定义保持，沿原计数恢复，未调用rebaseline。第三会话退出后按原质量门复验；后续需要开发时依原流程记录新决定。
