@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
+import xml.etree.ElementTree as ET
 
 spec = importlib.util.spec_from_file_location("t01", Path(__file__).with_name("t01.py"))
 t01 = importlib.util.module_from_spec(spec)
@@ -149,7 +151,7 @@ class EvidenceTests(unittest.TestCase):
             asset = frontend / "app.js"
             asset.write_text("console.log('production')")
             t01.validate_production(frontend, executable)
-            for marker in (b"T01_FIXTURE_CAP", b"/control/next", b"control/next", b"t01_control"):
+            for marker in (b"T01_FIXTURE_CAP", b"/control/next", b"control/next", b"t01_control", b"_topContentInset"):
                 for destination in (executable, asset):
                     executable.write_bytes(b"synthetic native")
                     asset.write_bytes(b"console.log('production')")
@@ -161,6 +163,111 @@ class EvidenceTests(unittest.TestCase):
             (frontend / "server.py").write_text("pass")
             with self.assertRaises(ValueError):
                 t01.validate_production(frontend, executable)
+
+
+class WindowGeometryTests(unittest.TestCase):
+    def geometry(self, width=1200, scale=2, inset=32, zoom=1):
+        return dict(native=dict(physical_width=width * scale, physical_height=800 * scale,
+                                scale_factor=scale, top_content_inset=inset),
+                    layout=dict(inner_width=round(width / zoom), inner_height=round((800 - inset) / zoom),
+                                scroll_width=round(width / zoom)))
+
+    def test_native_frame_and_measured_titlebar_inset_define_viewport(self):
+        # Reproduces the recorded 2400x1600 / scale 2 frame and 1200x768 viewport.
+        for inset in (0, 28, 32, 38):
+            value = self.geometry(inset=inset)
+            self.assertIs(t01.validate_window(value), value)
+
+    def test_resized_and_zoomed_viewports_keep_native_dimensions(self):
+        for width in (360, 390, 768, 960, 1200):
+            for scale in (1, 2):
+                for zoom in (1, 1.25, 1.5, 2):
+                    with self.subTest(width=width, scale=scale, zoom=zoom):
+                        t01.validate_window(self.geometry(width, scale, zoom=zoom), width, zoom)
+
+    def test_wrong_native_size_or_unexplained_viewport_loss_fails(self):
+        for section, change in (("native", dict(physical_height=1536)),
+                                ("native", dict(physical_width=2398)),
+                                ("native", dict(top_content_inset=0)),
+                                ("layout", dict(inner_height=800)),
+                                ("layout", dict(inner_width=1190)),
+                                ("layout", dict(scroll_width=1210))):
+            value = self.geometry()
+            value[section].update(change)
+            with self.subTest(section=section, change=change), self.assertRaises(ValueError):
+                t01.validate_window(value)
+
+    def test_invalid_scale_or_inset_fails(self):
+        for key, numbers in (("scale_factor", (0, -1, float("nan"), float("inf"))),
+                             ("top_content_inset", (-1, 800, float("nan"), float("inf")))):
+            for number in numbers:
+                value = self.geometry()
+                value["native"][key] = number
+                with self.subTest(key=key, number=number), self.assertRaises(ValueError):
+                    t01.validate_window(value)
+
+
+class ReportTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = self.enterContext(tempfile.TemporaryDirectory(prefix="t01-report-regression-"))
+        root = Path(self.temp)
+        self.enterContext(mock.patch.object(t01, "ROOT", root))
+        self.enterContext(mock.patch.object(t01.workflow, "snapshot", return_value="synthetic-source"))
+        self.enterContext(mock.patch.object(t01.workflow, "protected_hash", return_value="synthetic-protected"))
+        self.run = t01.Acceptance("all", root / "report.json", root / "junit.xml")
+
+    def output(self):
+        status = self.run.save()
+        report = t01.read_json(self.run.report_path)
+        xml = ET.parse(self.run.junit_path).getroot()
+        self.assertEqual(int(xml.get("tests")), len(xml.findall("testcase")))
+        self.assertEqual(int(xml.get("failures")), len(xml.findall("testcase/failure")))
+        return status, report, {node.get("name"): node for node in xml.findall("testcase")}
+
+    def test_failed_child_writes_json_and_junit_with_original_details(self):
+        self.run.case("native-geometry", list(t01.IDS), "expected native geometry",
+                      lambda: t01.require(False, "default window size differs: 1200x768"))
+        self.run.cases[0]["evidence"] = ["synthetic-native.log"]
+        status, report, nodes = self.output()
+        self.assertEqual(status, 1)
+        child = report["cases"][0]
+        self.assertEqual(child["actual"], "ValueError: default window size differs: 1200x768")
+        self.assertEqual(nodes[child["id"]].find("failure").text, child["actual"])
+        for identifier in t01.IDS:
+            with self.subTest(identifier=identifier):
+                failure = nodes[identifier].find("failure")
+                self.assertIsNotNone(failure)
+                self.assertIn(child["actual"], failure.text)
+                self.assertIn(child["id"], failure.text)
+                self.assertIn("synthetic-native.log", failure.text)
+                summary = next(s for s in report["summaries"] if s["id"] == identifier)
+                self.assertEqual(summary["actual"]["failures"][0]["actual"], child["actual"])
+
+    def test_missing_requirement_children_fail_even_with_zero_failed_cases(self):
+        self.run.case("only-one-requirement", ["REQ-T01"], "synthetic pass", lambda: True)
+        status, report, nodes = self.output()
+        self.assertEqual((status, report["counts"]["failed"]), (1, 0))
+        for identifier in t01.IDS[:-1]:
+            summary = next(s for s in report["summaries"] if s["id"] == identifier)
+            self.assertFalse(summary["actual"]["children_present"])
+            self.assertIsNotNone(nodes[identifier].find("failure"))
+
+    def test_required_skip_preserves_failure_reason(self):
+        self.run.case("covered", list(t01.IDS), "synthetic pass", lambda: True)
+        self.run.cases.append(dict(id="U01/native-missing", requirements=["U01"], required=True,
+            expected="native run", actual="native run missing", result="SKIP", evidence=[]))
+        status, report, nodes = self.output()
+        self.assertEqual((status, report["counts"]["skipped"]), (1, 1))
+        self.assertIn("native run missing", nodes["U01"].find("failure").text)
+        self.assertEqual(nodes["U01/native-missing"].find("skipped").get("message"), "native run missing")
+
+    def test_deferred_platform_skips_preserve_passing_summaries(self):
+        self.run.case("covered", list(t01.IDS), "synthetic pass", lambda: True)
+        t01.platform_matrix(self.run)
+        status, report, nodes = self.output()
+        self.assertEqual((status, report["counts"]["failed"], report["counts"]["skipped"]), (0, 0, 4))
+        for identifier in t01.IDS:
+            self.assertIsNone(nodes[identifier].find("failure"))
 
 
 class AutomationArtifactTests(unittest.TestCase):

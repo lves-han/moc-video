@@ -62,12 +62,35 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       output_channels: audio.destination.maxChannelCount, media_error: video.error?.code ?? null,
       diagnostics: player.diagnostics() };
   };
+  const controls = () => [...document.querySelectorAll<HTMLElement>(".prototype-controls button, .prototype-controls input, .prototype-controls select")];
+  const targets = () => [...document.querySelectorAll<HTMLElement>(".prototype-controls button, .prototype-controls label")];
+  const rect = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    return { label: el.getAttribute("aria-label") ?? el.textContent, left: r.left, right: r.right,
+      top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+  };
   const layout = () => {
-    const controls = [...document.querySelectorAll<HTMLElement>(".prototype-controls button, .prototype-controls input, .prototype-controls select")];
     return { inner_width: innerWidth, inner_height: innerHeight, dpr: devicePixelRatio,
       scroll_width: document.documentElement.scrollWidth,
-      controls: controls.map(el => { const r = el.getBoundingClientRect(); return { label: el.getAttribute("aria-label") ?? el.textContent, left: r.left, right: r.right, width: r.width, height: r.height }; }),
+      controls: controls().map(rect), targets: targets().map(rect),
       video_rect: video.getBoundingClientRect().toJSON() };
+  };
+  const usableLayout = async () => {
+    const observed = layout();
+    require(observed.scroll_width <= observed.inner_width + 1, "Horizontal overflow");
+    require(observed.controls.every(c => c.left >= 0 && c.right <= innerWidth + 1 && c.width > 0 && c.height > 0), "Control clipped or empty");
+    // Labels provide the clickable area for native checkboxes and selects.
+    require(observed.targets.every(c => c.width >= 44 && c.height >= 44), "Control target too small");
+    const reachable = [];
+    for (const target of targets()) {
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+      await delay(50);
+      const r = rect(target);
+      const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+      require(r.top >= 0 && r.bottom <= innerHeight + 1 && hit && target.contains(hit), "Control target is unreachable or obscured");
+      reachable.push(r);
+    }
+    return { ...layout(), reachable_targets: reachable };
   };
   const click = async (action: string) => {
     const button = document.querySelector<HTMLButtonElement>(`[data-action="${action}"]`);
@@ -128,18 +151,15 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       case "layout": {
         await nativeInvoke("t01_control", { action: "width", value: command.value });
         await delay(350);
-        const observed = layout();
+        const observed = await usableLayout();
         require(Math.abs(observed.inner_width - command.value!) <= 2, "Native resize did not produce requested CSS width");
-        require(observed.scroll_width <= observed.inner_width + 1, "Horizontal overflow");
-        require(observed.controls.every(c => c.left >= 0 && c.right <= innerWidth + 1 && c.width > 0 && c.height >= 40), "Control clipped or too small");
-        return observed;
+        return { native: await nativeInvoke("t01_control", { action: "identity" }), layout: observed };
       }
       case "zoom": {
         await nativeInvoke("t01_control", { action: "zoom", value: command.value });
         await delay(350);
-        const observed = layout();
+        const observed = await usableLayout();
         require(Math.abs(observed.inner_width - 1200 / command.value!) <= 3, "Native zoom did not change effective CSS scale");
-        require(observed.scroll_width <= observed.inner_width + 1 && observed.controls.every(c => c.left >= 0 && c.right <= innerWidth + 1), "Zoom caused clipped controls");
         return { requested_zoom: command.value, native: await nativeInvoke("t01_control", { action: "identity" }), layout: observed };
       }
       case "security": {

@@ -62,19 +62,20 @@ pub async fn t01_control(
     }
     let size = window.inner_size().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    let webkit_pids = webkit_pids(&window)?;
+    let (webkit_pids, top_content_inset) = webkit_diagnostics(&window)?;
     #[cfg(not(target_os = "macos"))]
-    let webkit_pids = serde_json::Value::Null;
+    let (webkit_pids, top_content_inset) = (serde_json::Value::Null, 0.0);
     Ok(serde_json::json!({
         "label": window.label(), "fullscreen": window.is_fullscreen().map_err(|e|e.to_string())?,
         "physical_width": size.width, "physical_height": size.height,
         "scale_factor": window.scale_factor().map_err(|e|e.to_string())?,
-        "pid": std::process::id(), "tauri": tauri::VERSION, "webkit_pids": webkit_pids
+        "pid": std::process::id(), "tauri": tauri::VERSION, "webkit_pids": webkit_pids,
+        "top_content_inset": top_content_inset
     }))
 }
 
 #[cfg(target_os = "macos")]
-fn webkit_pids(window: &WebviewWindow) -> Result<serde_json::Value, String> {
+fn webkit_diagnostics(window: &WebviewWindow) -> Result<(serde_json::Value, f64), String> {
     use std::ffi::{c_char, c_void};
     #[link(name = "objc")]
     unsafe extern "C" {
@@ -90,6 +91,8 @@ fn webkit_pids(window: &WebviewWindow) -> Result<serde_json::Value, String> {
                 let get: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void =
                     std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
                 let pid: unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32 =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let scalar: unsafe extern "C" fn(*mut c_void, *mut c_void) -> f64 =
                     std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
                 let responds: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> bool =
                     std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
@@ -116,7 +119,27 @@ fn webkit_pids(window: &WebviewWindow) -> Result<serde_json::Value, String> {
                     }
                     values.insert(name.into(), serde_json::json!(pid(object, selector)));
                 }
-                failure.map_or_else(|| Ok(serde_json::Value::Object(values)), Err)
+                if let Some(error) = failure {
+                    Err(error)
+                } else {
+                    // WebKit subtracts its automatic title-bar inset from the CSS
+                    // viewport; Tauri inner_size reports the whole WKWebView frame.
+                    let selector = sel_registerName(c"_topContentInset".as_ptr());
+                    if !responds(
+                        view,
+                        sel_registerName(c"respondsToSelector:".as_ptr()),
+                        selector,
+                    ) {
+                        Err("WebKit top content inset diagnostic unavailable".into())
+                    } else {
+                        let inset = scalar(view, selector);
+                        if inset.is_finite() && inset >= 0.0 {
+                            Ok((serde_json::Value::Object(values), inset))
+                        } else {
+                            Err("WebKit top content inset is invalid".into())
+                        }
+                    }
+                }
             };
             let _ = send.send(result);
         })

@@ -379,3 +379,14 @@
 - 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-12.md`，受审HEAD7ec98bd、source=58899d110b87588c71310ad6949d39c947b7ee08fb1486a3e8bdec38fef5b711、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1，全部关键文件/新增ADR摘要逐项匹配。
 - 当前最早未完成卡/current/原next均T0.2；旧驱动/CLI/重命令均退出，T0.13 WIP及Git隔离历史保留，原会话计数3/失败6保持。恢复同一监管任务并仅按ADR-014启动一次原--once --max-sessions 4；其他卡默认2。严格顺序启动前核对包含前卡固定提交独立CLEAR，遇前卡阻塞等待。
 - T0.4仅补host.rs的范围批准已获并保持；原多未完成卡rebaseline限制仍需后续原路线决定，本次未改TASKS/控制代码/基线，不提前开启后卡。
+
+## T0.2 第四会话窗口尺寸与失败报告修复交接 2026-10-27T08:03:10+00:00
+
+- 实施状态：WIP；按ADR-010/014完成本卡局部实现与静态核对，外层负责重任务/Git/验收收尾。本会话未写DONE/BLOCKED/RESOLVED/AUTHORIZED，未启动后卡；原会话、失败、generation与媒体基准保持。
+- 根因证据：原真实GUI收据20261027T064841885921-A1及归档first-native-failure.json记录物理2400×1600、scale2、CSS1200×768。锁定tauri-runtime-wry2.12.3的macOS inner_size实际读取WKWebView frame；WebKit官方291818@main说明自动top inset取决于窗口content layout/titlebar，WKWebViewMac.mm的_topContentInset读取实际obscuredContentInsets.top。原断言直接要求CSS高度800，缺少这层尺寸语义。实际新诊断读数待真实GUI复验。
+- Changed：src-tauri/src/automation.rs复用测试feature内既有Objective-C诊断通道读取_topContentInset，缺失/无效读数明确失败；tests/acceptance/t01.py精确检查原生逻辑1200×800，并以实测inset/zoom核对CSS尺寸，新增标识纳入生产排除门。tests/fixtures/t01/automation.ts保留原始表单控件尺寸，44px门改测按钮及关联label点击区域，并逐个滚动/命中验证可达性；原记录中checkbox/select视觉高度12/22由label提供完整点击区域。未改产品窗口/样式、依赖、首代媒体或长测时长。
+- Changed：需求汇总行增加实际失败子用例ID、expected、actual和evidence，修复save写JUnit时无actual的KeyError，保留原始失败及缺失覆盖状态。test_t01.py新增8项行为回归：尺寸/inset/缩放的正负例，失败JSON/JUnit生成与详情、缺失需求子用例、必需项SKIP失败、延期平台SKIP保持非阻断；生产排除原回归另覆盖新增诊断标识。packaging/T01.md追加根因、官方依据与执行交接。
+- Verified：原task.py check/start T0.2/show/scope均exit0；check确认35卡，scope输出all changes inside scope。项目解释器以ast.parse实际解析t01.py/test_t01.py，2文件语法OK、exit0；git diff --check exit0。上述均为静态核对，行为测试实际运行数0。
+- 定位记录：若干源码路径读取缺失/无匹配及task.py --help用法exit2已逐次task.py note保留；最终定位到实际rsproxy registry中的锁定版源码。未执行重任务、进程枚举、锁权限或.git写权限探测。
+- 验收 A1：NOT RUN；本次build、新增回归、真实MP4/HLS各1800秒、20窗口生命周期及完整verify均NOT RUN。Browser plugin/browser skill未列于本会话，当前目标为打包Tauri WKWebView；沿ADR-010由外层执行原生自动验收，浏览器/Playwright未运行。物理扬声器听感沿原说明待人工确认，非本次静态核对结果。
+- 外层下一步：本CLI退出且源码稳定后，先代办`WIP T0.2: fix native viewport geometry and failure reports`，随后按packaging/t01-commands.json原准确argv执行build → optional_negatives → acceptance；首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后字面{python}保留。A1仍为原`--suite all --report evidence/acceptance/T01-all.json --junit evidence/acceptance/T01-all.xml`，7200秒/4096MiB RSS采样/jobs2/线程1及项目专属锁保持。通过后以原manifest进程局部环境直接verify.py all，再原勾卡、真实记录、done、受验完成提交与固定提交独立CLEAR。失败先note并保留全部证据；新源码需新收据，旧成功记录沿其原受验版本保留。

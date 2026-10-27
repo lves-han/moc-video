@@ -12,6 +12,7 @@ import hashlib
 import http.client
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -64,7 +65,11 @@ class Acceptance(BaseAcceptance):
                 children = [c for c in self.cases if identifier in c["requirements"]]
                 passed = bool(children) and all(c["result"] == "PASS" or
                     (c["result"] == "SKIP" and not c["required"]) for c in children)
-                summaries.append(dict(id=identifier, result="PASS" if passed else "FAIL", children=[c["id"] for c in children]))
+                failures = [dict(id=c["id"], result=c["result"], expected=c["expected"],
+                                 actual=c["actual"], evidence=c["evidence"])
+                            for c in children if c["result"] == "FAIL" or (c["result"] == "SKIP" and c["required"])]
+                summaries.append(dict(id=identifier, result="PASS" if passed else "FAIL",
+                    children=[c["id"] for c in children], actual=dict(children_present=bool(children), failures=failures)))
         counts = {name: sum(c["result"] == result for c in self.cases)
                   for name, result in (("passed", "PASS"), ("failed", "FAIL"), ("skipped", "SKIP"))}
         report = dict(card="T0.2", original_card="T01", suite=self.suite,
@@ -203,7 +208,7 @@ def tree_hashes(folder):
 
 def validate_production(frontend, executable):
     forbidden = (b"control/next", b"/probe/cors-denied", b"T01_FIXTURE_CAP", b"T01_FIXTURE_BASE", b"t01_control",
-                 b"_webProcessIdentifier", b"_gpuProcessIdentifier", b"_networkProcessIdentifier")
+                 b"_webProcessIdentifier", b"_gpuProcessIdentifier", b"_networkProcessIdentifier", b"_topContentInset")
     for path in [executable, *frontend.rglob("*")]:
         if path.is_file():
             data = path.read_bytes()
@@ -482,6 +487,23 @@ def validate_long(value, samples):
         audio_measurement="real media-element PCM analyser connected to default WebAudio output; physical speaker audibility is not instrumented")
 
 
+def validate_window(value, width=1200, zoom=1):
+    native, layout = value["native"], value["layout"]
+    scale, inset = native["scale_factor"], native["top_content_inset"]
+    require(math.isfinite(scale) and scale > 0 and math.isfinite(inset) and 0 <= inset < 800,
+            "invalid native scale or top content inset")
+    require(native["physical_width"] == width * scale and native["physical_height"] == 800 * scale,
+            "native logical window size differs")
+    # WKWebView's automatic title-bar inset is measured in native logical points.
+    # Keep the requested window size exact, and derive the CSS viewport from it.
+    require(abs(layout["inner_width"] - width / zoom) <= 1
+            and abs(layout["inner_height"] - (800 - inset) / zoom) <= 1,
+            "WebView viewport differs from native frame, inset and zoom")
+    require(layout["inner_width"] > 0 and layout["inner_height"] > 0
+            and layout["scroll_width"] <= layout["inner_width"] + 1, "WebView layout overflows horizontally")
+    return value
+
+
 def native_all(run, fixture, receipt):
     executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
     session = NativeSession(run, fixture, executable, 0)
@@ -492,9 +514,10 @@ def native_all(run, fixture, receipt):
         require(identity["native"]["pid"] == session.process.pid and identity["native"]["label"] == "main"
             and identity["native"]["tauri"] == "2.12.5", "real native host handshake differs")
         require(identity["origin"] == "tauri://localhost", "unexpected macOS packaged WebView Origin")
-        require(identity["layout"]["inner_width"] == 1200 and identity["layout"]["inner_height"] == 800, "default window size differs")
         run.observed["webview"] = identity
-        run.case("packaged-native-window", ["U01", "R30", "REQ-T01"], "one native Tauri WKWebView, 1200x800", lambda: identity)
+        require(run.case("packaged-native-window", ["U01", "R30", "R32", "REQ-T01"],
+            "1200x800 native logical frame; CSS viewport matches measured WebKit inset",
+            lambda: validate_window(identity)), "native window geometry gate failed")
         require(run.case("webview-security", ["R48", "REQ-T01"], "actual WebView Range/cap/CORS/CSP and rejected privileged IPC", lambda: session.command("security")), "WebView security gate failed")
         for kind in ("mp4", "hls"):
             opened = session.command("open", kind=kind)
@@ -506,9 +529,9 @@ def native_all(run, fixture, receipt):
             require(run.case(kind + "-30-minutes", ["U01", "U04", "R30", "R50", "REQ-T01"], "1800s real WebView wall time, frames/audio/UI samples", lambda: validate_long(value, session.samples[before:])), "Long playback gate failed")
             run.case(kind + "-release", ["R50", "REQ-T01"], "stop removes source/tracks/HLS/listeners and old frames", lambda: session.command("stop"))
         for width in (360, 390, 768, 960, 1200):
-            run.case(f"layout-{width}", ["R32", "REQ-T01"], "real window resize and visible controls", lambda width=width: session.command("layout", value=width))
+            run.case(f"layout-{width}", ["R32", "REQ-T01"], "real window resize and visible controls", lambda width=width: validate_window(session.command("layout", value=width), width=width))
         for zoom in (1.25, 1.5, 2, 1):
-            run.case(f"dpi-{zoom}", ["R32", "REQ-T01"], "native WKWebView zoom with usable controls", lambda zoom=zoom: session.command("zoom", value=zoom))
+            run.case(f"dpi-{zoom}", ["R32", "REQ-T01"], "native WKWebView zoom with usable controls", lambda zoom=zoom: validate_window(session.command("zoom", value=zoom), zoom=zoom))
     except Exception:
         failed = True
         raise
