@@ -120,3 +120,17 @@
 - 独立只读原始报告docs/reviews/doc-review/round-8.md，末行DOC-REVIEW-VERDICT: CLEAR；protected保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，ADR001..010按原分段摘要绑定。保存报告后核对主要受审文件摘要一致。
 - 原控制器check_frozen/check/scope及原next_card验证通过；新增分工可沿原generation=0接续。会话/失败记录保持1/2与原1条失败，原业务A1和完整verify仍NOT RUN。
 - 真实用户决定与原handoff已明确：原驱动CLI开发实现，外层经原执行器验收/Git/独立巡检；待源码稳定后取得全部原质量门证据。下一步恢复同一heartbeat及原drive --once进入第2会话。
+
+## T0.1 T00 第2会话实现交接 2026-10-27T01:57:26.042243+00:00
+
+- 实施状态：WIP；按ADR-010交外层执行验收，卡完成结果由原工作流判定。
+- 最小修改：完善`docs/runtime.lock.json`，保留现有前端及npm锁；新增Rust精确工具链、Android候选依赖计划、许可清单、`tests/acceptance/t00.py`、25个验证器行为用例及Rust/WebKit最小构建样本。许可清单覆盖91个锁定npm依赖，绑定62份可见license/notice文件摘要；发行材料保留T23待办。
+- 验收实现：prepare获取固定URL原包并保留manifest原字节；all重新断言七包长度/SHA256/ZIP/manifest、官方工具version、Rust编译运行、npm ci/type/Vite构建、WebKit编译链接及类查找、根/venv/源码/原锁与当前PID创建时间收据。JSON/JUnit同次生成11个需求汇总及子用例，并核对源码前后摘要。缺包、错误摘要/manifest、未知版本伪填均失败。
+- 原始资料与候选：SDK source.properties显示emulator35.2.10/build12414864、platform-tools35.0.2、cmdline-tools16.0和API34镜像，执行/启动仍NOT RUN。API35候选revision及官方archive元数据由prepare/A1记录，镜像实际SHA256与启动留T04；Cloudstream生产commit保持null，Gradle/JDK/ABI留T02/T04。Tauri/hls.js候选与当前实测工具分列；实际app crate/Cargo.lock留T01/T05，播放验证留T01。
+- 平台：本机macOS arm64为必需；其他四目标availability=BLOCKED、执行NOT RUN，给出所需机器与原run.py包装的环境检测argv，迁移先按C1重绑。A1中延期目标以带原因的skipped子用例记录。
+- 资源：沿原共享锁、RSS采样4096MiB、jobs2与测试线程1；T00子命令使用Rolldown官方线程变量请求每池2个worker并记录env_overrides。外层verify使用`frontend.build_worker_overrides`同样的进程局部环境；实际后端保持采样/构建并行度，CPU quota未提供。控制脚本及配置保持原冻结摘要。
+- 真实静态检查：两个Python文件AST、四个JSON与工具链TOML解析成功；git diff --check、task.py check（35卡）及scope（all changes inside scope）均退出0。日志：`evidence/task-state/T0.1/session-2/static-review.log`。本会话行为测试数为0，行为测试NOT RUN。
+- 验收 A1：NOT RUN；本会话原7包核验0/7，固定上游输入获取、Core构建及完整verify.py all均NOT RUN，按ADR-010移交外层。失败历史与2/2会话额度保留。
+- 下一步：等待当前开发/重进程退出并核对源码稳定，按runtime.lock的execution_order运行rust_toolchain→prepare→准确A1→直接verify.py all。A1已包含全部25个行为用例；negatives仅供隔离诊断。仅把外层argv首项`{python}`替换为项目解释器，run.py的`--`后`{python}`字面值原样保留，由原执行器展开，匹配task.py show。
+- Git与完成：Git交外层按ADR-010代办，建议WIP标题`WIP T0.1: implement environment baseline acceptance`。全部原质量门后由外层记录真实结果、勾卡、done、受验完成提交及独立巡检。当前保留未提交工作树供接续。
+- 剩余风险：行为、构建与固定URL获取结果待外层实跑；Android和发行材料保持上述后续卡待验证状态。源码稳定后保持实现文件不变，外层发现错误时沿原工作流及预算/失败规则处理。

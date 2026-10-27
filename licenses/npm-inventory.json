@@ -1,0 +1,1607 @@
+{
+  "schema_version": 1,
+  "card": "T0.1",
+  "package_lock_sha256": "0ea6cdbeee8190a7ed2c37f4801d8938cb15c227614d221374d61c43369c9649",
+  "review": "Every locked direct/transitive dependency is included. Available installed license/notice texts are bound by SHA256; missing optional platform archives and final redistribution notices are listed for T23.",
+  "packages": [
+    {
+      "path": "node_modules/@babel/helper-string-parser",
+      "version": "7.29.7",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@babel/helper-string-parser/-/helper-string-parser-7.29.7.tgz",
+      "integrity": "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@babel/helper-string-parser/LICENSE",
+          "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@babel/helper-validator-identifier",
+      "version": "7.29.7",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@babel/helper-validator-identifier/-/helper-validator-identifier-7.29.7.tgz",
+      "integrity": "sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@babel/helper-validator-identifier/LICENSE",
+          "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@babel/parser",
+      "version": "7.29.9",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@babel/parser/-/parser-7.29.9.tgz",
+      "integrity": "sha512-CjXrNHTnvqBVqHgdBysY3vk2T8tpJHb5/RMeHJBTyVa9xgugCB0CJTx/3oO8RV2QRQP391RWpB7D6hLjm8V9uA==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@babel/parser/LICENSE",
+          "sha256": "2e97627cb278aa7556fb9e8817368302301a595b6c7582512b8d74c57b773652"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@babel/types",
+      "version": "7.29.8",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@babel/types/-/types-7.29.8.tgz",
+      "integrity": "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@babel/types/LICENSE",
+          "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@css-render/plugin-bem",
+      "version": "0.15.14",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@css-render/plugin-bem/-/plugin-bem-0.15.14.tgz",
+      "integrity": "sha512-QK513CJ7yEQxm/P3EwsI+d+ha8kSOcjGvD6SevM41neEMxdULE+18iuQK6tEChAWMOQNQPLG/Rw3Khb69r5neg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@css-render/vue3-ssr",
+      "version": "0.15.14",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@css-render/vue3-ssr/-/vue3-ssr-0.15.14.tgz",
+      "integrity": "sha512-//8027GSbxE9n3QlD73xFY6z4ZbHbvrOVB7AO6hsmrEzGbg+h2A09HboUyDgu+xsmj7JnvJD39Irt+2D0+iV8g==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@emotion/hash",
+      "version": "0.8.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@emotion/hash/-/hash-0.8.0.tgz",
+      "integrity": "sha512-kBJtf7PH6aWwZ6fka3zQ0p6SBYzx4fl1LoZXE2RrnYST9Xljm7WfKJrU4g/Xr3Beg72MLrp1AWNUmuYJTL7Cow==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@emotion/hash/LICENSE",
+          "sha256": "6e8d23763cf7cb707ad8f6677aa502ebeca1dda447e6d6e57f6549c1625b9c4a"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@jridgewell/sourcemap-codec",
+      "version": "1.6.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz",
+      "integrity": "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@jridgewell/sourcemap-codec/LICENSE",
+          "sha256": "769d154fbde32a915af110b1123650bc79f4cbe675acc66e005265bf069c6c6c"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@juggle/resize-observer",
+      "version": "3.4.0",
+      "license": "Apache-2.0",
+      "resolved": "https://registry.npmmirror.com/@juggle/resize-observer/-/resize-observer-3.4.0.tgz",
+      "integrity": "sha512-dfLbk+PwWvFzSxwk3n5ySL0hfBog779o8h68wK/7/APo/7cgyWp5jcXockbxdk5kFRkbeXWm4Fbi9FrdN381sA==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@juggle/resize-observer/LICENSE",
+          "sha256": "293c905e2ec4f6c30c4684592898fd24215ac735f0601b07b158d1588c8a5af7"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@oxc-project/types",
+      "version": "0.155.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@oxc-project/types/-/types-0.155.0.tgz",
+      "integrity": "sha512-SeE8JPwW1xs1tHeNycjUtUBdhorRa8o4jlvjwk49R7/Z291i+4DQa7JJIgOm/TaYQZx+QrPQbVJ/9c8dMIZN8Q==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@oxc-project/types/LICENSE",
+          "sha256": "95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-android-arm-eabi",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-android-arm-eabi/-/binding-android-arm-eabi-1.2.15.tgz",
+      "integrity": "sha512-aLcgK9gIJ3YRvrrtfSBbRa27F5WrpiTaPulnFpsHPxpUHgFlSgnU4854MHwoRGEBhfRJDWCS2WQ7lIjskE9Olw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "android"
+      ],
+      "cpu": [
+        "arm"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-android-arm64",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-android-arm64/-/binding-android-arm64-1.2.15.tgz",
+      "integrity": "sha512-xD7DdZCrbThKuxNg7ooQmvp07ys4J/pnSEMTG3/OdOWl6daC67m/Q4fL78sRHMxTH/N4fGUbYhcPM0MF5WFHkg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "android"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-darwin-arm64",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-darwin-arm64/-/binding-darwin-arm64-1.2.15.tgz",
+      "integrity": "sha512-m2WuQ6r0B4OTYxyPpNLtXaMRbRDUbG8YQV2Q3KTdSSK8Th6KHCnC8jVCJt8bvYeSB5WivkkNbc85mKadaSdOxA==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-darwin-x64",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-darwin-x64/-/binding-darwin-x64-1.2.15.tgz",
+      "integrity": "sha512-5RtnsHM36nodM9WbMy+zip0LGS/G+y5wro5RHrpOlr4ac24+1zSi9kiV2MP1myZeZ/ifEHfulQcWjnAXzc2C2A==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-freebsd-x64",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-freebsd-x64/-/binding-freebsd-x64-1.2.15.tgz",
+      "integrity": "sha512-g3l09pyFqhu+135JKkbkwiKGQmwU5hUMUPJ4VdBADvuqR8d33L6H578rh8m7rtxbdp+VmX/+nzI7nvhSZlzpUQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "freebsd"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-arm-gnueabihf",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-arm-gnueabihf/-/binding-linux-arm-gnueabihf-1.2.15.tgz",
+      "integrity": "sha512-nIe3VugI97nGQtspPxDqA4sXMUpeiocKIP/CqpY/u/vgbT+alX+cVxu1C/oVBPKg4feNTmYovE91v4DgXvXNwQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-arm64-gnu",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-arm64-gnu/-/binding-linux-arm64-gnu-1.2.15.tgz",
+      "integrity": "sha512-iTBjXx+B5QSvgI89lJfmqh4wTh8NabR1YZIIN3hNx4zSG0EVfVqkOvLulNpG4251pbd6/IAmZ/LefVk1Y4rPhw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-arm64-musl",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-arm64-musl/-/binding-linux-arm64-musl-1.2.15.tgz",
+      "integrity": "sha512-uN26XOnVR7rqQupG3V9oAG2EGGatWjcJHOeDOHUFCh4TBWmP2tHTFoVN13aYbwfm0aHqJAEmcwhAu6sooIjfqQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-ppc64-gnu",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-ppc64-gnu/-/binding-linux-ppc64-gnu-1.2.15.tgz",
+      "integrity": "sha512-9nWkcdd+H+XhaA3fQIwpHnKIrfx/PQ6rO0pivr78Og07tXlUlctBBJoEYLPfhTmCR/QxEVdn6uPjHV5SymPhdw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "ppc64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-s390x-gnu",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-s390x-gnu/-/binding-linux-s390x-gnu-1.2.15.tgz",
+      "integrity": "sha512-Ggh0ciFjLwIusLSLz7LZYEaGdxOAUJXI+Qu5JCbhPJJHEt8vP+IjRATTJheiJsdzzTYgUiHUiw3X1Ea3ZpMBdA==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "s390x"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-x64-gnu",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.2.15.tgz",
+      "integrity": "sha512-FHg60rS6DBePAYZ9X9F67x+JObFdmgn6tupA1C/a3B+CufFmTD4mX+e8M75tCiAO3foR/6xwVBI0KQiI7sn/rw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-linux-x64-musl",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-linux-x64-musl/-/binding-linux-x64-musl-1.2.15.tgz",
+      "integrity": "sha512-/cvV/7v5VGz/moiz0XKRj2dE8DzsKyhIu1KpOvJGPjRywg3yscON889UGvAe8zfiJLHup7VLjBduoGWi3HusWQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-openharmony-arm64",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-openharmony-arm64/-/binding-openharmony-arm64-1.2.15.tgz",
+      "integrity": "sha512-MyzC5Hrv/sm+Z7TSGKP/j8001RO2xQm1zOpCNVL4j0cY/VhBZviludA2YFQ7i4lH6ZAXxQm0lcMdBzM+99mE7w==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "openharmony"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-win32-arm64-msvc",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-win32-arm64-msvc/-/binding-win32-arm64-msvc-1.2.15.tgz",
+      "integrity": "sha512-+PgYiS+AH5omy6L45ZLxybasauJaj3M8buoT83D+nzPmCayXlxUV9hydhciCKVyIg0B/v0BtXPDE1uGqNwCPpg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "win32"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/binding-win32-x64-msvc",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.2.15.tgz",
+      "integrity": "sha512-HFZd2QNQYn1JbIi+Hpd7H+r/lkWxcfIu28nirZ6eCn2LafuvmExMlb/P96Sfx5tf7pPArw39IdhmCF8vmV+NhQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "win32"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/@rolldown/pluginutils",
+      "version": "1.0.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz",
+      "integrity": "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@rolldown/pluginutils/LICENSE",
+          "sha256": "e1919b3b98b8bf6c1b99fcc60a0ed46027c97ac947432e1278446c9606f50161"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@types/lodash",
+      "version": "4.17.27",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@types/lodash/-/lodash-4.17.27.tgz",
+      "integrity": "sha512-VenMRv/eKNrspX9v3H4dbmjsrnCOYdYBG3kxXKk3dG6X+urBGcj2Prww3xw1U5K4FV/mE4h5GbWd0szEKf+9ew==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@types/lodash/LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@types/lodash-es",
+      "version": "4.17.12",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@types/lodash-es/-/lodash-es-4.17.12.tgz",
+      "integrity": "sha512-0NgftHUcV4v34VhXm8QBSftKVXtbkBG3ViCjs6+eJ5a6y6Mi/jiFGPc1sC7QK+9BFhWrURE3EOggmWaSxL9OzQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@types/lodash-es/LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vitejs/plugin-vue",
+      "version": "6.0.10",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vitejs/plugin-vue/-/plugin-vue-6.0.10.tgz",
+      "integrity": "sha512-b80aUQh3n+qEzzZm5oQp3rT2QImeCx58K6eFl/RkJ3d65KW0kTuv5lNsLRVAjbW9YRUpo/wzmvzMgV34bTAItA==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vitejs/plugin-vue/LICENSE",
+          "sha256": "29b68325fe026047d13e187b44c33b2acacf7dc647dec4583702e59f235e13b5"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@volar/language-core",
+      "version": "2.4.28",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@volar/language-core/-/language-core-2.4.28.tgz",
+      "integrity": "sha512-w4qhIJ8ZSitgLAkVay6AbcnC7gP3glYM3fYwKV3srj8m494E3xtrCv6E+bWviiK/8hs6e6t1ij1s2Endql7vzQ==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@volar/language-core/LICENSE",
+          "sha256": "a56351045b45475385a9479d7310208ff0be9489babdb4e635fcea5d7dc1fb02"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@volar/source-map",
+      "version": "2.4.28",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@volar/source-map/-/source-map-2.4.28.tgz",
+      "integrity": "sha512-yX2BDBqJkRXfKw8my8VarTyjv48QwxdJtvRgUpNE5erCsgEUdI2DsLbpa+rOQVAJYshY99szEcRDmyHbF10ggQ==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@volar/source-map/LICENSE",
+          "sha256": "a56351045b45475385a9479d7310208ff0be9489babdb4e635fcea5d7dc1fb02"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@volar/typescript",
+      "version": "2.4.28",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@volar/typescript/-/typescript-2.4.28.tgz",
+      "integrity": "sha512-Ja6yvWrbis2QtN4ClAKreeUZPVYMARDYZl9LMEv1iQ1QdepB6wn0jTRxA9MftYmYa4DQ4k/DaSZpFPUfxl8giw==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@volar/typescript/LICENSE",
+          "sha256": "a56351045b45475385a9479d7310208ff0be9489babdb4e635fcea5d7dc1fb02"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/compiler-core",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/compiler-core/-/compiler-core-3.5.44.tgz",
+      "integrity": "sha512-k34nCytbK8PQ1gR2mGROYOw6Pnv/mumqIdrZ3x2tbyXZDWm7ViKGLTfdB+DRrWqEQsLgGJvn0WN9jBif5zCTLQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/compiler-core/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/compiler-dom",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/compiler-dom/-/compiler-dom-3.5.44.tgz",
+      "integrity": "sha512-W5AoBFWdw1lQAKiHowkfgFKFab82oSRT6sGsPfw/q1GRjsy/ZJFLHGhJyBRIFN9APLTUduDH9U2JAiPOIyKuYg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/compiler-dom/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/compiler-sfc",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/compiler-sfc/-/compiler-sfc-3.5.44.tgz",
+      "integrity": "sha512-dzHmQ4jXTpdr5FjIQUeykVakN/uzqFbUo9/C5ikBFg3a3PeM6uRxeczx1ZbXBML0/zJstEh3ygYipzR5Z7b2Pw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/compiler-sfc/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/compiler-ssr",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/compiler-ssr/-/compiler-ssr-3.5.44.tgz",
+      "integrity": "sha512-xr5gb1JVHlfXJwSlRz1FeP6uxoazdzHuMTVLE7up+4Vrqxk219CvxLPxD9NXBt47yvZW7+p4DXfyp4O1fkByIA==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/compiler-ssr/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/language-core",
+      "version": "3.3.13",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/language-core/-/language-core-3.3.13.tgz",
+      "integrity": "sha512-axA0Xemn5LuUKuKWob0/kVq7xQ2mJJM6VqA9Exvt35nM9yRC31goWVve/G/Zb2ZCLsXC8FHYjjfXlnshknSCew==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/language-core/LICENSE",
+          "sha256": "a56351045b45475385a9479d7310208ff0be9489babdb4e635fcea5d7dc1fb02"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/reactivity",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/reactivity/-/reactivity-3.5.44.tgz",
+      "integrity": "sha512-u+QJdKeBBEADkPdevsL+6E12QlYVfBD8Zcw5qjDQKtamI6l14KyqazJMobhCKelhWN5zpyKUiEDoTyHE93cqWw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/reactivity/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/runtime-core",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/runtime-core/-/runtime-core-3.5.44.tgz",
+      "integrity": "sha512-uEa/ndwjhrrhnOfb2p+sZy6zeoamJOISqaLSJGk/8R6nABT1ZldpzcJoPzKj+zHVomVBPcmQYyC2r4LtvDV6CQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/runtime-core/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/runtime-dom",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/runtime-dom/-/runtime-dom-3.5.44.tgz",
+      "integrity": "sha512-3fc4ARcXVhVBaJ3ujWiNZJARD6pkyRcwG+ZYhMzjKtKUp7MAY0HLwr7r3Smep3Li6ZaWT6ewdmx8XqdaD5oNZg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/runtime-dom/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/server-renderer",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/server-renderer/-/server-renderer-3.5.44.tgz",
+      "integrity": "sha512-R4S1UoH4h5Frrauv8Z5XE5TxV9oBiUSgWIC4TyVK1FK+RocRnOLwFA5Xcmo2011RlgJp+AbZCnw6afrhlgRuUQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/server-renderer/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/@vue/shared",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/@vue/shared/-/shared-3.5.44.tgz",
+      "integrity": "sha512-H82XLH0DjmSOdbEwO15x3QTo1f5PWEtv237eLpYKc0mqLu+B8hnq16lFWmuBmNurkeiG3wr+oM1FhOll/YVFRg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/@vue/shared/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/alien-signals",
+      "version": "3.2.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/alien-signals/-/alien-signals-3.2.1.tgz",
+      "integrity": "sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/alien-signals/LICENSE",
+          "sha256": "75863f712f8f0603b0dba33edf4b725bab80fc858a51756e5905a3c4c8087169"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/async-validator",
+      "version": "4.2.5",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/async-validator/-/async-validator-4.2.5.tgz",
+      "integrity": "sha512-7HhHjtERjqlNbZtqNqy2rckN/SpOOlmDliet+lP7k+eKZEjPk3DgyeU9lIXLdeLz0uBbbVp+9Qdow9wJWgwwfg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/async-validator/LICENSE.md",
+          "sha256": "5d0427088e37071c4b942de990f6365d5c2d195f3e957ce925322d184784e2eb"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/css-render",
+      "version": "0.15.14",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/css-render/-/css-render-0.15.14.tgz",
+      "integrity": "sha512-9nF4PdUle+5ta4W5SyZdLCCmFd37uVimSjg1evcTqKJCyvCEEj12WKzOSBNak6r4im4J4iYXKH1OWpUV5LBYFg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/css-render/node_modules/csstype",
+      "version": "3.0.11",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/csstype/-/csstype-3.0.11.tgz",
+      "integrity": "sha512-sa6P2wJ+CAbgyy4KFssIb/JNMLxFvKF1pCYCSXS8ZMuqZnMsrxqI2E5sPyoTpxoPU/gVZMzr2zjOfg8GIZOMsw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/css-render/node_modules/csstype/LICENSE",
+          "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/csstype",
+      "version": "3.2.3",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/csstype/-/csstype-3.2.3.tgz",
+      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/csstype/LICENSE",
+          "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/date-fns",
+      "version": "4.4.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/date-fns/-/date-fns-4.4.0.tgz",
+      "integrity": "sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/date-fns/LICENSE.md",
+          "sha256": "8d3951c38967b964b1fe259bfd200c2647cc04c858b55a4414e3122a60f1ef4b"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/date-fns-tz",
+      "version": "3.2.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/date-fns-tz/-/date-fns-tz-3.2.0.tgz",
+      "integrity": "sha512-sg8HqoTEulcbbbVXeg84u5UnlsQa8GS5QXMqjjYIhS4abEVVKIUwe0/l/UhrZdKaL/W5eWZNlbTeEIiOXTcsBQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/date-fns-tz/LICENSE.md",
+          "sha256": "54a4274bc32c7e4f8db2f4169e7d5a1affab53625573eea780bed67ff7cd1f4b"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/detect-libc",
+      "version": "2.1.2",
+      "license": "Apache-2.0",
+      "resolved": "https://registry.npmmirror.com/detect-libc/-/detect-libc-2.1.2.tgz",
+      "integrity": "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/detect-libc/LICENSE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/entities",
+      "version": "7.0.1",
+      "license": "BSD-2-Clause",
+      "resolved": "https://registry.npmmirror.com/entities/-/entities-7.0.1.tgz",
+      "integrity": "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/entities/LICENSE",
+          "sha256": "cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/estree-walker",
+      "version": "2.0.2",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/estree-walker/-/estree-walker-2.0.2.tgz",
+      "integrity": "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/estree-walker/LICENSE",
+          "sha256": "8a6dcbabe7179f9c8489c08a7d874d0f1e093ae7449e03756ccf87cb9d0e296e"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/evtd",
+      "version": "0.2.4",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/evtd/-/evtd-0.2.4.tgz",
+      "integrity": "sha512-qaeGN5bx63s/AXgQo8gj6fBkxge+OoLddLniox5qtLAEY5HSnuSlISXVPxnSae1dWblvTh4/HoMIB+mbMsvZzw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/evtd/LICENSE",
+          "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/fdir",
+      "version": "6.5.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/fdir/-/fdir-6.5.0.tgz",
+      "integrity": "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/fdir/LICENSE",
+          "sha256": "9a39f2aadab11a3697edd668ff2d8ad885b649737b7ab4d3bf12b34e5ada0c86"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/fsevents",
+      "version": "2.3.3",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/fsevents/-/fsevents-2.3.3.tgz",
+      "integrity": "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "darwin"
+      ],
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/fsevents/LICENSE",
+          "sha256": "2a8a5d6197bb97a018b8a190dd3ed853d750ca87c8e80c17aad41d6c6ff448e1"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/highlight.js",
+      "version": "11.12.0",
+      "license": "BSD-3-Clause",
+      "resolved": "https://registry.npmmirror.com/highlight.js/-/highlight.js-11.12.0.tgz",
+      "integrity": "sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/highlight.js/LICENSE",
+          "sha256": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/lightningcss",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss/-/lightningcss-1.33.0.tgz",
+      "integrity": "sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/lightningcss/LICENSE",
+          "sha256": "5eba353fe5076ac3432177f8ab1cf75e3afcd0584251e37c3bfead5f447d040e"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/lightningcss-android-arm64",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-android-arm64/-/lightningcss-android-arm64-1.33.0.tgz",
+      "integrity": "sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "android"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-darwin-arm64",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-darwin-arm64/-/lightningcss-darwin-arm64-1.33.0.tgz",
+      "integrity": "sha512-Sciaz8eenNTKn9b3t7+xr0ipTp9YxKQY4npwQ3mrRuL0BAVHBLyZxofhaKBAVtzmtRZ/zTyo0/to4B1uWG/Djg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [
+        {
+          "path": "node_modules/lightningcss-darwin-arm64/LICENSE",
+          "sha256": "5eba353fe5076ac3432177f8ab1cf75e3afcd0584251e37c3bfead5f447d040e"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/lightningcss-darwin-x64",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-darwin-x64/-/lightningcss-darwin-x64-1.33.0.tgz",
+      "integrity": "sha512-Z5UPAxzrjlWNNyGy6i65cJzzvgJ5D3T6wMvs+gWpY9d7qRhANrxqAp6LhxIgZhWEw18RfJTGcRxjuLIBr+m8XQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-freebsd-x64",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-freebsd-x64/-/lightningcss-freebsd-x64-1.33.0.tgz",
+      "integrity": "sha512-QQM/Ti/hQajJwCY+RiWuCZ9sdtI/XQk7nDK5vC8kkdwixezOlDgvDx7+RT+QjK6FcFT4MpsuoBnHIo/O3StRRg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "freebsd"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-linux-arm-gnueabihf",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-linux-arm-gnueabihf/-/lightningcss-linux-arm-gnueabihf-1.33.0.tgz",
+      "integrity": "sha512-N7FVBe6iS24MlM6R/4RBTxGhQheZGs7tiQ9U32UtF75NzP5Q7xWPRqLBCKxlRQRk3rY1jCIPLzx7WzOhuUIRLQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-linux-arm64-gnu",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-linux-arm64-gnu/-/lightningcss-linux-arm64-gnu-1.33.0.tgz",
+      "integrity": "sha512-j2v/itmy4HlNxlc6voKXYgBqNi0Ng2LShg4z7GufpEgs05P+2suBVyi9I6YHq5uoVFx9ETin3eCEhLVyXGQnKg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-linux-arm64-musl",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-linux-arm64-musl/-/lightningcss-linux-arm64-musl-1.33.0.tgz",
+      "integrity": "sha512-yiO5ROMuYQgXbC60yjZU5CYSFZGKXL0HFATXt9mHJn1+zW55oCtMI9NfcVhYLMFDL7gV7oBPon/EmMMGg2OvtQ==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-linux-x64-gnu",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-linux-x64-gnu/-/lightningcss-linux-x64-gnu-1.33.0.tgz",
+      "integrity": "sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-linux-x64-musl",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-linux-x64-musl/-/lightningcss-linux-x64-musl-1.33.0.tgz",
+      "integrity": "sha512-RYiYbkokw0trfKqqzfF55lginwEPrD3OJDfTuJzFs1MK6iFnDenaz1fqLLtX4ITG3OktJQXOeTaw1awrBAlZPw==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-win32-arm64-msvc",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-win32-arm64-msvc/-/lightningcss-win32-arm64-msvc-1.33.0.tgz",
+      "integrity": "sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "win32"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lightningcss-win32-x64-msvc",
+      "version": "1.33.0",
+      "license": "MPL-2.0",
+      "resolved": "https://registry.npmmirror.com/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.33.0.tgz",
+      "integrity": "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA==",
+      "optional": true,
+      "dev": true,
+      "os": [
+        "win32"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "materials": [],
+      "status": "optional platform package; archive text collection pending T23"
+    },
+    {
+      "path": "node_modules/lodash",
+      "version": "4.18.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/lodash/-/lodash-4.18.1.tgz",
+      "integrity": "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/lodash/LICENSE",
+          "sha256": "f71e8ed126b46346494aad5486874cd8f0aafe95092ed67d2e3cb6110f939abc"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/lodash-es",
+      "version": "4.18.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/lodash-es/-/lodash-es-4.18.1.tgz",
+      "integrity": "sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/lodash-es/LICENSE",
+          "sha256": "f71e8ed126b46346494aad5486874cd8f0aafe95092ed67d2e3cb6110f939abc"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/magic-string",
+      "version": "0.30.21",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/magic-string/-/magic-string-0.30.21.tgz",
+      "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/magic-string/LICENSE",
+          "sha256": "1cbe51b907662f6cb1492b16c359384a595180bf0e4d101603ed525e75c4e484"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/muggle-string",
+      "version": "0.4.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/muggle-string/-/muggle-string-0.4.1.tgz",
+      "integrity": "sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/muggle-string/LICENSE",
+          "sha256": "df52411dcd3c8f5897bbbec8c94e971519e13e75818c263e9a99a86255dd301b"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/naive-ui",
+      "version": "2.45.3",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/naive-ui/-/naive-ui-2.45.3.tgz",
+      "integrity": "sha512-D83gJ+6zUdkQ5DuUbmlfyaM1t8pV5WMPa6KmL9mByqQuiL12qBdA0n/iEIth4dQw1x/duNGpOS2anpt5FKO1kw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/naive-ui/LICENSE",
+          "sha256": "2c99595f1c2723ceb24fd513bb3ae2bbc90927f8e43039b940320eae2842c528"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/nanoid",
+      "version": "3.3.20",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/nanoid/-/nanoid-3.3.20.tgz",
+      "integrity": "sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/nanoid/LICENSE",
+          "sha256": "da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/path-browserify",
+      "version": "1.0.1",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/path-browserify/-/path-browserify-1.0.1.tgz",
+      "integrity": "sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/path-browserify/LICENSE",
+          "sha256": "a22b9d5763f574e5db347c30acc0b33eaf4846767c03d2e27d012e864e79a824"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/picocolors",
+      "version": "1.1.1",
+      "license": "ISC",
+      "resolved": "https://registry.npmmirror.com/picocolors/-/picocolors-1.1.1.tgz",
+      "integrity": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/picocolors/LICENSE",
+          "sha256": "6582629e2979466878f6014313dcc2f3756c9616148682227ce3063dde310750"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/picomatch",
+      "version": "4.0.7",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/picomatch/-/picomatch-4.0.7.tgz",
+      "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/picomatch/LICENSE",
+          "sha256": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/postcss",
+      "version": "8.5.31",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/postcss/-/postcss-8.5.31.tgz",
+      "integrity": "sha512-YUbWYCgErwnMAVkjUnYa+KlMBzGpHwiIt/DE7f0G33AuX2LH9UcTk6KgWxd3zRU+pN3u/C+Xl3EnMLM4Hea7Sg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/postcss/LICENSE",
+          "sha256": "5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/rolldown",
+      "version": "1.2.15",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/rolldown/-/rolldown-1.2.15.tgz",
+      "integrity": "sha512-6odND+fel5zVw3I4Yc2e69gvguDnX0CAAGiNDZSq4ik5WUcaLrkD2GLuog0XcODbor31hZ5ayEMgVDno+KPV5g==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/rolldown/LICENSE",
+          "sha256": "23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/seemly",
+      "version": "0.3.10",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/seemly/-/seemly-0.3.10.tgz",
+      "integrity": "sha512-2+SMxtG1PcsL0uyhkumlOU6Qo9TAQ/WyH7tthnPIOQB05/12jz9naq6GZ6iZ6ApVsO3rr2gsnTf3++OV63kE1Q==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/seemly/LICENSE",
+          "sha256": "1f4c7e24e43b143513db53c9a715fdb21e2872b0758ef64d2cbac6a6f5a7167b"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/source-map-js",
+      "version": "1.2.2",
+      "license": "BSD-3-Clause",
+      "resolved": "https://registry.npmmirror.com/source-map-js/-/source-map-js-1.2.2.tgz",
+      "integrity": "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/source-map-js/LICENSE",
+          "sha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/tinyglobby",
+      "version": "0.2.17",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/tinyglobby/-/tinyglobby-0.2.17.tgz",
+      "integrity": "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/tinyglobby/LICENSE",
+          "sha256": "22c68811e174cbbfb3813d4135918df4f540959c14d872e601d9abe83d3cde8f"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/treemate",
+      "version": "0.3.11",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/treemate/-/treemate-0.3.11.tgz",
+      "integrity": "sha512-M8RGFoKtZ8dF+iwJfAJTOH/SM4KluKOKRJpjCMhI8bG3qB74zrFoArKZ62ll0Fr3mqkMJiQOmWYkdYgDeITYQg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/treemate/LICENSE",
+          "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "resolved": "https://registry.npmmirror.com/typescript/-/typescript-5.9.3.tgz",
+      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/typescript/LICENSE.txt",
+          "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vdirs",
+      "version": "0.1.8",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vdirs/-/vdirs-0.1.8.tgz",
+      "integrity": "sha512-H9V1zGRLQZg9b+GdMk8MXDN2Lva0zx72MPahDKc30v+DtwKjfyOSXWRIX4t2mhDubM1H09gPhWeth/BJWPHGUw==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vite",
+      "version": "8.3.5",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vite/-/vite-8.3.5.tgz",
+      "integrity": "sha512-z1YpjieJ9g0ebTmQpLBv/oq9E3F9EIlOe+7LahW8SrE3LTiG3udBRUXQOlYXP9b+IC2q2phHeVxj9xGlw34OEQ==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vite/LICENSE.md",
+          "sha256": "a22152baa1aef74402443008e767e7c689a524c0909d19b0431d97f5ab066a13"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vooks",
+      "version": "0.2.12",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vooks/-/vooks-0.2.12.tgz",
+      "integrity": "sha512-iox0I3RZzxtKlcgYaStQYKEzWWGAduMmq+jS7OrNdQo1FgGfPMubGL3uGHOU9n97NIvfFDBGnpSvkWyb/NSn/Q==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vooks/LICENSE",
+          "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vscode-uri",
+      "version": "3.2.0",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vscode-uri/-/vscode-uri-3.2.0.tgz",
+      "integrity": "sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vscode-uri/LICENSE.md",
+          "sha256": "c669138cb1eb01fbb745e8e460b291e4f2869c14a40061390b6095d845ed4c82"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vue",
+      "version": "3.5.44",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vue/-/vue-3.5.44.tgz",
+      "integrity": "sha512-dvvmaOCG7lAMkJTPqPwWeGMsPS6DIsFsfZDUgBp9V6mHf9b3+/wyVwYR4Es+WV6uJC0FKRxp81Obcq0ZwUcGFQ==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vue/LICENSE",
+          "sha256": "1bb85cc9b13b81ef41c81c51866172fc345e0503c86726a6755b796590b70175"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vue-tsc",
+      "version": "3.3.13",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vue-tsc/-/vue-tsc-3.3.13.tgz",
+      "integrity": "sha512-jE4/bXdOMSHVxEGgQCqNllJy+9N3Gx6tfSAsg0yhFK/MAN6eXqISihupnDEKSCt12VVnjN2gI3AqLYcqoh5x/A==",
+      "optional": false,
+      "dev": true,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vue-tsc/LICENSE",
+          "sha256": "a56351045b45475385a9479d7310208ff0be9489babdb4e635fcea5d7dc1fb02"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    },
+    {
+      "path": "node_modules/vueuc",
+      "version": "0.4.66",
+      "license": "MIT",
+      "resolved": "https://registry.npmmirror.com/vueuc/-/vueuc-0.4.66.tgz",
+      "integrity": "sha512-hHrZl+0AsrUvqYPBXSXQ2QaSrO3razjeUseLAhJWlOS/Hdfw/Y2MU05fOTP1qn1A3121gMxsHLaEz2V6CkWdTg==",
+      "optional": false,
+      "dev": false,
+      "os": null,
+      "cpu": null,
+      "materials": [
+        {
+          "path": "node_modules/vueuc/LICENSE",
+          "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+        }
+      ],
+      "status": "installed metadata and available text inspected"
+    }
+  ]
+}

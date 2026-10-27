@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "card": "T0.1",
+  "materials": [
+    {
+      "component": "npm direct and transitive dependencies",
+      "source": "package-lock.json; licenses/npm-inventory.json",
+      "required_material": "Copy full dependency license/notice texts for the shipped target from verified archives; include copyright and Apache NOTICE where present. Review optional target packages and bundled third-party notices.",
+      "status": "pending T23"
+    },
+    {
+      "component": "Tauri and Rust dependencies",
+      "source": "docs/runtime.lock.json#/candidate_versions/tauri; future src-tauri/Cargo.lock",
+      "required_material": "After T01/T05 resolution, inventory every actual locked crate and preserve its license/notice texts; Tauri offers Apache-2.0 OR MIT. Preserve the selected license with the binary.",
+      "status": "pending T23"
+    },
+    {
+      "component": "hls.js",
+      "source": "https://github.com/video-dev/hls.js/tree/v1.7.3",
+      "required_material": "When installed by T01, preserve Apache-2.0 license and applicable third-party notices from the exact shipped package.",
+      "status": "pending T23"
+    },
+    {
+      "component": "Cloudstream engine",
+      "source": "https://github.com/recloudstream/cloudstream/tree/a7ac454af8fbd64574c96847a936905855911720",
+      "required_material": "Preserve GPLv3 license, copyright and modification notices, corresponding source for the actual shipped engine including patches and build/install instructions; inventory its actual Gradle dependencies after T02.",
+      "status": "pending T23"
+    },
+    {
+      "component": "seven original cs3 plugins",
+      "source": "replica-spec/references/plugin-artifact-inventory.json; fixed extension source 25cdd2119be03f62ae6a5a2cf46b16f9484224a2",
+      "required_material": "Record exact URLs, bytes, SHA256, original manifests and package-specific source/license/redistribution terms. Resolve absent or unclear permissions before distribution. Preserve original binaries and their notices.",
+      "status": "pending T23"
+    },
+    {
+      "component": "NanoHTTPD and Android dependencies",
+      "source": "android-engine/dependencies.lock.json; actual T02 Gradle dependency locks",
+      "required_material": "Verify the exact 2.3.1 POM/license and collect BSD copyright/disclaimer plus all actually shipped Android dependency notices.",
+      "status": "pending T23"
+    },
+    {
+      "component": "Android SDK, emulator and system image",
+      "source": "docs/runtime.lock.json#/android; official package metadata",
+      "required_material": "Document official acquisition instructions and user SDK license acceptance. Review emulator/image redistribution terms and ship only explicitly permitted materials, with notices and measured download/disk sizes.",
+      "status": "pending T23"
+    },
+    {
+      "component": "system WebView and media codecs",
+      "source": "https://v2.tauri.app/start/prerequisites/; https://v2.tauri.app/reference/webview-versions/",
+      "required_material": "Document macOS/Xcode/WebKit system prerequisites and actual H264/AAC/HLS results from T01. Review platform codec/license distribution obligations for the chosen packaging. Deferred platforms retain NOT RUN acquisition notes.",
+      "status": "pending T23"
+    }
+  ]
+}
