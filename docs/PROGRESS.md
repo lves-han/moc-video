@@ -216,3 +216,14 @@
 - 验收 A1：NOT RUN for session-2 source；本会话行为测试0次。修复后npm/type/Vite构建、cargo check/build/clippy/test、生产/测试产物排除检查、macOS arm64真实GUI/音频/字幕/seek/全屏/DPI/30分钟MP4与HLS/20次开关及回收、完整verify.py all均NOT RUN。既有prepare成功与两项构建失败仅作为原记录保留。
 - 下一步：当前开发及旧重命令退出并核对源码稳定后，外层先代办`WIP T0.2: fix bootstrap narrowing and supply Tauri window icon`，再按`packaging/t01-commands.json`的build→准确A1→直接verify顺序复验；prepare如需复跑须校验复用首代媒体。仅外层argv首项{python}换为项目解释器，run.py后payload占位符保持字面值。原4096MiB RSS采样/jobs2/测试线程1/共享锁保持；完整verify沿用进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2。
 - Remaining：修复后的真实编译结果及WebKit诊断SPI、autoplay/AudioContext、资源回收和全部原质量门待外层实跑；物理扬声器听感待人工确认。macOS x86_64、Windows x86_64、Ubuntu X11/Wayland仍NOT RUN，复现命令保持packaging与原验收报告生成逻辑。所有原门通过后才由外层记录真实结果、勾卡、done、受验完成提交与独立巡检；本会话未写DONE、BLOCKED、RESOLVED或AUTHORIZED。
+
+## T0.2 修复后构建产物检测误判与单卡预算待决定 2026-10-27T05:15:37.812057+00:00
+
+- 结果：BLOCKED
+- 原第2会话修复TS18048并补齐RGBA图标，WIP b50127e已由外层代办；源码/权限/资源/计数保持，外层未代写实现。
+- 构建复验：FAIL，exit1；收据evidence/runs/20261027T050212121970-t01-build/receipt.json，日志evidence/runs/20261027T050212121970-t01-build/output.log。9条真实子命令全部exit0：类型/Vite、生产与测试feature原生release、两个.app的ad hoc签名验证均成功；最终构建产物检测误报automation frontend mode was not built，build.json尚未生成。
+- 因果链：build()检查b"/control/next"，实际自动化JS含b"control/next"及b"t01_control"，没有前导斜杠。已读实际chunk与源路径拼接确认；详evidence/drive/t01-validation-20261027T035813Z/artifact-check-findings.md，原报告归档second-build-failure.*。
+- 补充行为诊断：按原已声明optional_negatives执行，收据evidence/runs/20261027T050942522562-t01-negatives/receipt.json退出0，15个fixture/证据验证行为用例全过；此诊断不替代准确A1或整体build。初次诊断调用因缺note被原控制器拒绝、payload未启动，补记真实根因后运行成功，未绕过失败记录。
+- 最新两份收据source/after_source/protected/generation及日志摘要已核对，所有原执行器/payload已退出，源码稳定、工作树干净。准确A1、GUI/媒体长测与完整verify仍NOT RUN；未勾卡/done或生成完成收据。
+- 需要用户决定：仅本卡追加一次开发会话（2→3），由原脚本修复产物检查误判并补回归，再由外层复验。既有失败/两次会话保留，权限/资源/单次时长保持，不自行扩额或借用T0.1例外。
+- 分支处理：本卡及依赖由原BLOCKED规则隔离；记录提交后使用原next读取独立可执行卡并继续，保持技术样机门FAIL事实，不推进依赖该门的UI/播放器卡，不擅自暂停独立后端分支。
