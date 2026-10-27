@@ -425,3 +425,13 @@
 - Verified：原task.py check/start T0.2/show/scope均exit0；check为35卡、scope为all changes inside scope。项目解释器ast.parse实际检查t01.py/test_t01.py两文件语法OK，git diff --check exit0。锁定TypeScript DOM类型中VideoFrameRequestCallback及metadata字段已核对。行为测试实际运行数0。
 - 验收 A1：NOT RUN；本版build、新增行为回归、MP4/HLS各1800秒、20完整生命周期和完整verify均NOT RUN。按ADR-010已授权分工交外层，无重任务/进程枚举/锁权限/.git写入重复探测。旧成功与失败仅证明各自原受验源码。
 - 外层下一步：本CLI退出且源码稳定后代办WIP T0.2: preserve exact long-play failure diagnostics；依packaging/t01-commands.json原build → optional_negatives → acceptance数组执行，首项{python}替换为项目解释器，run.py后字面{python}保留。A1原--suite all及T01-all.json/xml、7200秒/4096MiB RSS采样/jobs2/线程1/项目专属锁保持。若失败，读取同次results-0.jsonl的ok=false/diagnostics.long/current/events/native，和末尾samples联合定位，先note并保留完整失败。当前5/5会话保持，不重置/复用预算。成功后原完整verify/done/Git/固定提交独立CLEAR；严格ADR-015禁止提前启动后卡。
+
+
+## T0.2 新增诊断回归装载失败与预算待决定 2026-10-27T09:28:05.085062+00:00
+
+- 结果：BLOCKED
+- 第5会话诊断WIPd422ddd保留；原build20261027T092323112360-t01-build exit0，新增回归原negatives20261027T092359691039-t01-negatives exit1，Python30通过，Node10全部失败。
+- 根因：tests/t01-automation.test.ts将真实automation模块转为CommonJS并在VM提供require替身；automation.ts同作用域断言function require经提升遮蔽模块加载器，导入player_1为undefined，nativeInvoke读取报错。原run静态转译诊断20261027T092712049948-t01-cjs-import-diagnostic exit0直接显示第5行加载调用和第7行同名函数，因果链已缩小到新增回归装载/断言命名冲突。
+- 证据：evidence/drive/t01-fifth-validation-20261027T092323Z/node-loader-findings.md、归档node-loader-failure-T01-negatives.json/xml，原Node完整日志evidence/acceptance/T01-6b67574f789449378775dbff87abf039/command-2.log；失败收据同source/after_source/protected/generation1和原日志SHA核对，所有旧执行器/payload退出，源码稳定。
+- 本版准确A1/真实长测与完整verify尚未运行，真实Playback or UI stalled根因待新诊断代码通过回归后复验。原长测阈值/媒体/全部失败历史保持，未勾卡/done。
+- 最小待决定：T0.2已用5次开发会话、累计失败8；ADR-017唯一第5会话已消费，需要仅本卡追加一次修复会话（5→6）修正新增回归装载冲突并继续长播诊断，或其他明确路线。原脚本实现、外层复验，资源/权限/时长保持。按严格卡序暂停本卡推进与监管，后卡等待。
