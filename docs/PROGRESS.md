@@ -317,3 +317,14 @@
 - 控制验证：原task check/scope通过，原validate exit0，116项中109通过/7平台条件跳过；报告evidence/drive/lock-change-validation.json及完整日志同目录.log。
 - 原runtime新锁路径实测为/Users/eason/jp/application/evidence/drive/heavy.lock；旧共享锁由其他项目占用时新项目锁实际acquire成功，探测证据evidence/drive/lock-change-path-probe.json。同项目原串行与4096MiB RSS采样/jobs2/线程1保持；其他项目不改。
 - 同一监管automation恢复ACTIVE，每5分钟，最新提示词记录ADR-013覆盖旧跨项目锁要求；外层从新基线原build/19回归/准确A1/完整verify接续，原sessions3和失败5保持，未重开开发会话。
+
+
+## T0.2 首次真实WebView验收失败与修复预算待决定 2026-10-27T06:50:39.928644+00:00
+
+- 结果：BLOCKED
+- 独立锁：ADR-013/原rebaseline generation1及独立文档round-11 CLEAR已完成，运行改用本项目专属锁；新基线build20261027T064743697572-t01-build exit0、19行为回归20261027T064815014595-t01-negatives exit0。
+- 准确A1：FAIL，exit1，收据evidence/runs/20261027T064841885921-A1/receipt.json、日志evidence/runs/20261027T064841885921-A1/output.log。真实应用已启动，native物理2400×1600/scale2，WebView viewport1200×768，t01.py:495要求1200×800，报告default window size differs。随后失败汇总写JUnit在t01.py:84访问缺失actual字段抛KeyError，原控制器报告JUnit缺失并保持失败。
+- 因果与证据：尺寸差32px，待核对真实macOS窗口/WebView布局及尺寸断言语义；报告失败链明确为summary行无actual。完整原JSON已归档evidence/drive/t01-independent-lock-validation-20261027T064743Z/first-native-failure.json，诊断evidence/drive/t01-independent-lock-validation-20261027T064743Z/native-findings.md。原before/after_source与当前一致、新protected/generation1匹配，全部失败保留。
+- 清理：真实应用及3个WebKit进程的PID+创建时间均核对退出，失败forced_cleanup记录保留；fixture线程/端口/请求释放门通过。实际MP4/HLS各30分钟、20生命周期及完整verify尚未执行，未勾卡/done。
+- 最小待决定：T0.2目前3会话已用完，ADR-012一次例外已消费；由原开发脚本修复窗口尺寸因果问题和失败JUnit生成，需新增本卡修复会话授权，原权限/资源/时长保持。此前产物校验误判已由原build及19回归通过。
+- 分支：按原BLOCKED只冻结本卡及依赖，原next存在独立可执行卡时继续；同一监管保持ACTIVE，本项目专属锁和默认新卡2会话保持。
