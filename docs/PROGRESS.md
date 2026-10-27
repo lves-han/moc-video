@@ -390,3 +390,13 @@
 - 定位记录：若干源码路径读取缺失/无匹配及task.py --help用法exit2已逐次task.py note保留；最终定位到实际rsproxy registry中的锁定版源码。未执行重任务、进程枚举、锁权限或.git写权限探测。
 - 验收 A1：NOT RUN；本次build、新增回归、真实MP4/HLS各1800秒、20窗口生命周期及完整verify均NOT RUN。Browser plugin/browser skill未列于本会话，当前目标为打包Tauri WKWebView；沿ADR-010由外层执行原生自动验收，浏览器/Playwright未运行。物理扬声器听感沿原说明待人工确认，非本次静态核对结果。
 - 外层下一步：本CLI退出且源码稳定后，先代办`WIP T0.2: fix native viewport geometry and failure reports`，随后按packaging/t01-commands.json原准确argv执行build → optional_negatives → acceptance；首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后字面{python}保留。A1仍为原`--suite all --report evidence/acceptance/T01-all.json --junit evidence/acceptance/T01-all.xml`，7200秒/4096MiB RSS采样/jobs2/线程1及项目专属锁保持。通过后以原manifest进程局部环境直接verify.py all，再原勾卡、真实记录、done、受验完成提交与固定提交独立CLEAR。失败先note并保留全部证据；新源码需新收据，旧成功记录沿其原受验版本保留。
+
+
+## T0.2 真实MP4长播停滞与会话预算待决定 2026-10-27T08:14:31.826306+00:00
+
+- 结果：BLOCKED
+- 第4会话修复WIP56cfb20后原build20261027T080719704187-t01-build exit0及27行为回归20261027T080809906822-t01-negatives exit0；原真实窗口尺寸/实测inset校验已PASS，JUnit失败JSON/XML生成与原始详情保持均有回归通过。
+- 准确A1：FAIL，exit1，收据evidence/runs/20261027T080839687237-A1/receipt.json，日志evidence/runs/20261027T080839687237-A1/output.log；有效JUnit13通过/7失败/4平台跳过，直接失败为real-tauri-lifecycles的Playback or UI stalled，其余失败为需求汇总。实际窗口/安全/MP4解码与控制通过后进入长播，应用会话约128秒失败。复合断言未记录触发时具体字段，根因待定位，完整30分钟及后续HLS/20生命周期/完整verify未完成。
+- 原source/after_source/protected/generation1及报告日志摘要核对，23条原样本与归档JSON/XML保留，诊断evidence/drive/t01-fourth-validation-20261027T080719Z/long-play-findings.md。所有真实应用/WebKit身份已退出，失败forced_cleanup及fixture释放门PASS事实保持。
+- 最小待决定：原T0.2已用4会话、累计失败7，ADR-014唯一第4会话授权已消费。若继续修复，需仅本卡新增一次诊断/修复会话（4→5）或其他明确路线；原脚本实施、外层复验、原权限/资源/时长与全部门保持。
+- 严格顺序：按用户与ADR-015，本卡阻塞时停止推进和定时监管，不启动任何后卡，等待真实决定。
