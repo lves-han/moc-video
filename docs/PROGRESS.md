@@ -443,3 +443,11 @@
 - 决定：用户对仅T0.2追加一次修复会话5→6、修复新增回归装载冲突并继续长播诊断、原脚本实施/外层复验、权限资源保持的问题明确答“批准 T0.2 追加一次”。按ADR-018仅本卡一次第6会话。
 - 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
 - 当前仍sessions5/失败8/generation1，原build通过/Python30通过/Node10失败及require装载冲突证据保持。先由外层通过原执行器调用现有真实NativeSession进行补充诊断以取得失败现场，保留原准确A1门；独立复审后原脚本第6会话一并处理可确认的问题，避免仅增加采集后再次缺少实测。严格顺序及原权限资源保持。
+
+
+## T0.2 第六会话文档CLEAR与真实RAF现场 2026-10-27T09:50:02.199968+00:00
+
+- 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-14.md`，受审HEADe315d0c、source=af4d62919c2b6ddc031e4fda0176cccdc60171e205b5d5c506d0f10406503297、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，关键文件/ADR018摘要逐项匹配。预算例外仍仅本卡一次5→6。
+- 补充诊断：原evidence/runs/20261027T094322135992-t01-native-stall-diagnostic/receipt.json exit1，完整现场evidence/acceptance/T01-6ab00cc141124ff893205b6889d380ae/results-0.jsonl。视频帧3245→3386、媒体时间20.186681→25.205951秒仍前进，RAF6486→6486，paused=false/media_error=null；WebView为hidden/focused=false，visibilitychange=110084ms与last_raf=110081ms对应，原生visible=true/focused=false/minimized=false。复合断言的触发项已定位为RAF不前进，进一步核对可见性和前台条件，不据此将其归为视频停播。
+- 原生GUI前台是packaging既有运行条件，外层此前未充分核实。本次CUA观察真实窗口、Raise及AX刷新未成功确认前台（控制会话未激活/超时），原记录保持。此诊断保留原断言，未改源码/回归或准确A1门。
+- 所有原执行器/payload/应用/WebKit身份已退出，fixture清理按原记录保留；新增真实诊断失败后原累计失败现9条，sessions5/generation1保持。诊断evidence/drive/t01-fifth-validation-20261027T092323Z/runtime-probe/visibility-findings.md。将两项已确认问题及运行前提一并交原第6会话，避免仅采集后再次缺少现场。
