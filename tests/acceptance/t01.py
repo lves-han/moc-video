@@ -422,8 +422,15 @@ class NativeSession:
             except queue.Empty:
                 require(self.process.poll() is None, f"native app exited unexpectedly ({self.process.returncode}); {self.record['log']}")
                 continue
+            # Preserve failed results before raising, including the exact WebView
+            # assertion snapshot; the last successful sample cannot explain it.
+            result_path = self.run.folder / f"results-{self.record['index']}.jsonl"
+            with result_path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(dict(host_received_monotonic=time.monotonic(), result=result)) + "\n")
+            self.record["result_log"] = str(result_path.relative_to(ROOT))
+            self.drain_samples()
             require(result.get("id") == identifier, "native result belongs to an unexpected command/session")
-            require(result.get("ok") is True, str(result.get("error", "native command failed")))
+            require(result.get("ok") is True, f"{result.get('error', 'native command failed')}; result: {self.record['result_log']}")
             return result["value"]
         raise TimeoutError(f"native command {identifier} did not return within {timeout}s; {self.record['log']}")
 
@@ -562,6 +569,7 @@ def native_all(run, fixture, receipt):
 def regressions(run):
     output = run.command([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests/acceptance", "-p", "test_t01.py", "-v"], timeout=180)
     require("Ran 0 tests" not in output and "\nOK" in output, "nonzero regression tests required")
+    run.command(["node", "--experimental-strip-types", "--test", "--test-concurrency=1", "tests/t01-automation.test.ts"], timeout=180)
     return output
 
 

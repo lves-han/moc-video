@@ -67,6 +67,9 @@ pub async fn t01_control(
     let (webkit_pids, top_content_inset) = (serde_json::Value::Null, 0.0);
     Ok(serde_json::json!({
         "label": window.label(), "fullscreen": window.is_fullscreen().map_err(|e|e.to_string())?,
+        "visible": window.is_visible().map_err(|e|e.to_string())?,
+        "focused": window.is_focused().map_err(|e|e.to_string())?,
+        "minimized": window.is_minimized().map_err(|e|e.to_string())?,
         "physical_width": size.width, "physical_height": size.height,
         "scale_factor": window.scale_factor().map_err(|e|e.to_string())?,
         "pid": std::process::id(), "tauri": tauri::VERSION, "webkit_pids": webkit_pids,

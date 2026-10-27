@@ -414,3 +414,14 @@
 
 - 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-13.md`，受审HEADa4bb7b0、source=d7142e7e25a78adb6f4baeb604fd73e78d7bcd6b508aec0562d05e9e25b84277、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1。关键文件与ADR017分段摘要逐项匹配。
 - 当前earliest/current/next均T0.2，原sessions4/失败7/default2保持、旧执行器/payload/GUI均退出；复审确认唯一一次原--once --max-sessions 5可执行。恢复同ID监管并同步原位更新prompt当前状态，保留精简结构和每卡完成重写规则；原严格顺序/项目锁/权限资源/原完整门保持。
+
+
+## T0.2 第五会话长播失败取证交接 2026-10-27T09:18:49.192649+00:00
+
+- 实施状态：WIP；按ADR-010/017完成诊断实现并交外层复验，当前第5/5会话。播放停滞根因保持待验证；原7失败/generation1、首代媒体及23样本原证据保留。未写DONE/BLOCKED/RESOLVED/AUTHORIZED，未勾卡/调用done/rebaseline，未启动后卡。
+- 已确认的问题：tests/fixtures/t01/automation.ts的long循环先断言后post样本，失败区间未写入；tests/acceptance/t01.py的NativeSession.wait先require结果成功，只保存error文字。二者共同造成原真实失败缺少paused/media_error/frames/raf现场。原末样本位于循环回到约0.0065秒，前序样本仅支持继续检查循环/回调/窗口，根因尚未确认。
+- Changed：断言前固定previous/current/elapsed/index及最近64事件，失败result携带精确长播区间和处理时当前快照；采样增加seeking/network/buffered/音量/静音/倍速、文档可见性/焦点/视频矩形及最后frame/timeupdate/RAF信息。新监听按现有shutdown释放。测试feature原生identity追加visible/focused/minimized，已按锁定Tauri2.12.5实际源码核对API。宿主先追加完整result JSONL再抛错，报告保留result_log和原始错误，收到结果后再排空末尾样本。产品播放器及所有既有长播/帧/UI/音频/安全/清理断言保持。
+- Changed：test_t01.py新增3项结果落盘/顺序/错命令拒绝回归；tests/t01-automation.test.ts新增10项诊断行为回归，覆盖paused/MediaError/帧/RAF/分辨率/音频/时钟失败、native诊断报错原错误保持、事件有界、1800秒完整模拟。Node直接执行真实automation模块，使用现有typescript依赖及确定性媒体/DOM替身；准确A1与negatives接入该文件，npm test自动发现。模拟仅用于诊断回归，真实解码仍按原A1。packaging/T01.md追加证据位置/准确复验顺序。
+- Verified：原task.py check/start T0.2/show/scope均exit0；check为35卡、scope为all changes inside scope。项目解释器ast.parse实际检查t01.py/test_t01.py两文件语法OK，git diff --check exit0。锁定TypeScript DOM类型中VideoFrameRequestCallback及metadata字段已核对。行为测试实际运行数0。
+- 验收 A1：NOT RUN；本版build、新增行为回归、MP4/HLS各1800秒、20完整生命周期和完整verify均NOT RUN。按ADR-010已授权分工交外层，无重任务/进程枚举/锁权限/.git写入重复探测。旧成功与失败仅证明各自原受验源码。
+- 外层下一步：本CLI退出且源码稳定后代办WIP T0.2: preserve exact long-play failure diagnostics；依packaging/t01-commands.json原build → optional_negatives → acceptance数组执行，首项{python}替换为项目解释器，run.py后字面{python}保留。A1原--suite all及T01-all.json/xml、7200秒/4096MiB RSS采样/jobs2/线程1/项目专属锁保持。若失败，读取同次results-0.jsonl的ok=false/diagnostics.long/current/events/native，和末尾samples联合定位，先note并保留完整失败。当前5/5会话保持，不重置/复用预算。成功后原完整verify/done/Git/固定提交独立CLEAR；严格ADR-015禁止提前启动后卡。

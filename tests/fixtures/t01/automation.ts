@@ -31,7 +31,12 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   let rafId = 0;
   let maxRafGap = 0;
   let lastRaf = performance.now();
-  const onFrame = () => { frames++; if (running) frameId = video.requestVideoFrameCallback(onFrame); };
+  let lastFrame: { time: number; media_time: number; presented_frames: number } | null = null;
+  const onFrame: VideoFrameRequestCallback = (time, metadata) => {
+    frames++;
+    lastFrame = { time, media_time: metadata.mediaTime, presented_frames: metadata.presentedFrames };
+    if (running) frameId = video.requestVideoFrameCallback(onFrame);
+  };
   require(typeof video.requestVideoFrameCallback === "function", "WebView frame presentation callback required");
   frameId = video.requestVideoFrameCallback(onFrame);
   const pulse = () => { const now = performance.now(); maxRafGap = Math.max(maxRafGap, now - lastRaf); lastRaf = now; raf++; if (running) rafId = requestAnimationFrame(pulse); };
@@ -47,6 +52,21 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   const errors: string[] = [];
   window.addEventListener("error", event => errors.push(event.message));
   window.addEventListener("unhandledrejection", event => errors.push(String(event.reason)));
+  const tracing = new AbortController();
+  const events: Record<string, unknown>[] = [];
+  let lastTimeUpdate = 0;
+  const trace = (event: Event) => {
+    events.push({ type: event.type, time: performance.now(), position: video.currentTime,
+      paused: video.paused, seeking: video.seeking, ready_state: video.readyState,
+      network_state: video.networkState, visibility: document.visibilityState, focused: document.hasFocus() });
+    if (events.length > 64) events.shift();
+  };
+  for (const type of ["play", "playing", "pause", "waiting", "stalled", "seeking", "seeked", "ended", "error", "emptied", "suspend", "abort"])
+    video.addEventListener(type, trace, { signal: tracing.signal });
+  video.addEventListener("timeupdate", () => { lastTimeUpdate = performance.now(); }, { signal: tracing.signal });
+  document.addEventListener("visibilitychange", trace, { signal: tracing.signal });
+  for (const type of ["focus", "blur", "pagehide", "pageshow"])
+    window.addEventListener(type, trace, { signal: tracing.signal });
   const sample = () => {
     analyser.getFloatTimeDomainData(bins);
     const rms = Math.sqrt(bins.reduce((sum, x) => sum + x * x, 0) / bins.length);
@@ -56,6 +76,11 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
     const quality = video.getVideoPlaybackQuality();
     return { time: performance.now(), position: video.currentTime, duration: video.duration,
       paused: video.paused, ended: video.ended, ready_state: video.readyState,
+      seeking: video.seeking, network_state: video.networkState, loop: video.loop,
+      playback_rate: video.playbackRate, volume: video.volume, muted: video.muted,
+      buffered: Array.from({ length: video.buffered.length }, (_, i) => [video.buffered.start(i), video.buffered.end(i)]),
+      visibility: document.visibilityState, focused: document.hasFocus(), video_rect: video.getBoundingClientRect().toJSON(),
+      last_frame: lastFrame, last_raf_ms: lastRaf, last_timeupdate_ms: lastTimeUpdate,
       width: video.videoWidth, height: video.videoHeight, frames, raf, max_raf_gap_ms: maxRafGap,
       total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames,
       audio_rms: rms, audio_peak_hz: peak * audio.sampleRate / analyser.fftSize, audio_state: audio.state, audio_sample_rate: audio.sampleRate,
@@ -98,6 +123,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
     button.click();
     await delay(100);
   };
+  let longObservation: unknown = null;
   async function execute(command: Command): Promise<unknown> {
     switch (command.op) {
       case "identity": return { origin: location.origin, secure_context: isSecureContext,
@@ -204,6 +230,9 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         while (performance.now() - started < seconds * 1000) {
           await delay(5000);
           const current = sample();
+          // Capture before assertions: the failing interval never reaches control/sample.
+          longObservation = { index: samples, elapsed_ms: performance.now() - started,
+            previous, current, events: [...events] };
           require(!current.paused && !current.media_error && current.frames > previous.frames && current.raf > previous.raf, "Playback or UI stalled");
           require(current.width === 1920 && current.height === 1080, "Unexpected decoded resolution");
           require(current.audio_state === "running" && current.audio_rms > 0.001, "Decoded audio output is silent or suspended");
@@ -236,6 +265,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       }
       case "shutdown": {
         player.stop(); running = false;
+        tracing.abort();
         video.cancelVideoFrameCallback(frameId); cancelAnimationFrame(rafId);
         audioSource.disconnect(); analyser.disconnect(); await audio.close();
         return { audio_state: audio.state, errors, diagnostics: player.diagnostics() };
@@ -249,8 +279,15 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
     if (response.status === 204) continue;
     require(response.ok, "Fixture command transport failed");
     const command = await response.json() as Command;
+    longObservation = null;
     try { await post("control/result", { id: command.id, ok: true, value: await execute(command) }); }
-    catch (cause) { await post("control/result", { id: command.id, ok: false, error: String(cause) }); }
+    catch (cause) {
+      const diagnostics = { long: longObservation, current: sample(), events: [...events],
+        native: null as unknown, native_error: null as string | null };
+      try { diagnostics.native = await nativeInvoke("t01_control", { action: "identity" }); }
+      catch (error) { diagnostics.native_error = String(error); }
+      await post("control/result", { id: command.id, ok: false, error: String(cause), diagnostics });
+    }
   }
   await nativeInvoke("t01_control", { action: "quit" });
 }

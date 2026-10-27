@@ -1,7 +1,9 @@
 """Behavioral regressions for the fixture and evidence validator, run under run.py."""
 import copy
 import importlib.util
+import json
 from pathlib import Path
+import queue
 import tempfile
 import unittest
 from unittest import mock
@@ -106,6 +108,51 @@ class FixtureTests(unittest.TestCase):
     def test_request_records_redact_cap(self):
         self.request(Range="bytes=0-1")
         self.assertNotIn(self.fixture.cap, str(self.fixture.summary()))
+
+
+class NativeResultTests(unittest.TestCase):
+    def setUp(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="t01-result-regression-")))
+        self.enterContext(mock.patch.object(t01, "ROOT", root))
+        self.session = t01.NativeSession.__new__(t01.NativeSession)
+        self.session.run = mock.Mock(folder=root)
+        self.session.fixture = mock.Mock(results=queue.Queue())
+        self.session.record = dict(index=0, log="synthetic-native.log")
+        self.session.observe = mock.Mock()
+        self.session.drain_samples = mock.Mock()
+
+    def result_log(self):
+        path = t01.ROOT / self.session.record["result_log"]
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def test_failed_native_snapshot_is_persisted_before_raising(self):
+        result = dict(id=5, ok=False, error="Error: Playback or UI stalled",
+            diagnostics=dict(long=dict(previous=dict(frames=3527, raf=7103, position=0.0065),
+                current=dict(paused=False, media_error=None, frames=3527, raf=7403,
+                             visibility="visible", seeking=True, position=0.0065),
+                events=[dict(type="seeking", time=122249)]),
+                native=dict(visible=True, minimized=False)))
+        self.session.fixture.results.put(result)
+        with self.assertRaisesRegex(ValueError, "Playback or UI stalled; result: results-0.jsonl"):
+            self.session.wait(5, 1)
+        rows = self.result_log()
+        self.assertEqual(rows[0]["result"], result)
+        self.assertGreater(rows[0]["host_received_monotonic"], 0)
+        # The final queued sample must also be drained after receiving a result.
+        self.assertEqual(self.session.drain_samples.call_count, 2)
+
+    def test_successful_native_results_are_retained_in_command_order(self):
+        for identifier in (0, 1):
+            self.session.fixture.results.put(dict(id=identifier, ok=True, value=dict(ready=True)))
+            self.assertEqual(self.session.wait(identifier, 1), dict(ready=True))
+        self.assertEqual([row["result"]["id"] for row in self.result_log()], [0, 1])
+
+    def test_mismatched_result_is_retained_and_still_rejected(self):
+        result = dict(id=99, ok=True, value={})
+        self.session.fixture.results.put(result)
+        with self.assertRaisesRegex(ValueError, "unexpected command/session"):
+            self.session.wait(5, 1)
+        self.assertEqual(self.result_log()[0]["result"], result)
 
 
 class EvidenceTests(unittest.TestCase):
