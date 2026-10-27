@@ -195,3 +195,12 @@
 - 平台：本机macOS14+ arm64为必需；macOS x86_64、Windows x86_64、Ubuntu X11/Wayland均NOT RUN，报告及packaging给出原生build/launch argv、系统依赖和完整媒体验收适配待授权事实。
 - 剩余与风险：实际Rust/TS编译、媒体解码、autoplay/AudioContext、WebKit诊断SPI可用性、20次回收与完整verify待外层；音频PCM输出已设计真实测量，物理扬声器听感尚待人工确认。任何真实渲染/音频/依赖失败应保留最小复现并交原开发工作流，保持原断言与预算。
 - Git交接：按ADR-010由外层代办`WIP T0.2: implement native Tauri video prototype and media gate`，本会话保留范围内工作树；当前CLI退出及源码稳定前外层不并发构建/验收。
+
+## T0.2 外层首轮构建与原生补充诊断 2026-10-27T04:49:06.861177+00:00
+
+- 实施状态：WIP；当前开发会话1/2，失败历史保留，原分工下交剩余第2会话修复。
+- 稳定源码准备已PASS，真实依赖锁WIP ab867b7与首代媒体基准保留；当前source=43d59d8966a0460772bf5de2f7de0746de6196bd67d75ab4b1c3be21ba507cf4。
+- 原build：FAIL，exit1，收据evidence/runs/20261027T043400563138-t01-build/receipt.json；cargo fmt通过，npm run build/vue-tsc exit2，automation.ts:147 TS18048 config可能undefined。原命令日志evidence/acceptance/T01-bd0e59e3c406495597af748cb0245ff2/command-2.log。
+- 原生补充诊断：为在剩余会话前汇总编译错误，通过原run.py执行cargo check --locked --all-targets --features t01-automation，exit101；收据evidence/runs/20261027T044521338957-t01-native-preflight/receipt.json。tauri-codegen在build.rs中打开src-tauri/icons/icon.png失败（默认图标缺失）；应用Rust完整类型检查、实际.app、窗口/长播均NOT RUN。
+- 两份原失败收据source/after_source与当前一致，日志摘要核对，所有原执行器/payload已退出；范围和冻结定义保持，外层未改产品代码。诊断evidence/drive/t01-validation-20261027T035813Z/build-findings.md。
+- 下一步：原开发脚本修复bootstrap闭包类型收窄及所需图标/配置，保持严格校验/生产测试隔离；外层按原执行器复验。当前有剩余额度，按既有授权普通drive --once接续，无额外权限/预算请求。准确A1及完整verify仍NOT RUN，不将静态/诊断结果冒充业务通过。
