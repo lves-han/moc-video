@@ -2166,6 +2166,9 @@ main {
 .palette-shortcut {
   color: var(--accent);
 }
+.appearance-close {
+  margin-top: 20px;
+}
 .system-mode-row {
   flex-wrap: wrap;
   gap: 16px;

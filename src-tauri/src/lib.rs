@@ -1,4 +1,6 @@
-use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+#[cfg(not(mobile))]
+use tauri::WebviewWindow;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub mod commands;
 pub mod contracts;
@@ -8,6 +10,7 @@ pub mod requests;
 pub mod settings;
 pub mod source_dispatch;
 
+#[cfg(not(mobile))]
 fn require_main(window: &WebviewWindow) -> Result<(), String> {
     let url = window.url().map_err(|e| e.to_string())?;
     if contracts::authorized(window.label(), &url) {
@@ -17,6 +20,7 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
     }
 }
 
+#[cfg(not(mobile))]
 #[tauri::command]
 fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     require_main(&window)?;
@@ -25,18 +29,20 @@ fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     Ok(target)
 }
 
-#[cfg(feature = "t01-automation")]
+#[cfg(all(not(mobile), feature = "t01-automation"))]
 mod automation;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
-    #[cfg(feature = "t01-automation")]
+    #[cfg(all(not(mobile), feature = "t01-automation"))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
         tauri::generate_handler![player_fullscreen, automation::t01_control];
-    #[cfg(not(feature = "t01-automation"))]
+    #[cfg(all(not(mobile), not(feature = "t01-automation")))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
         tauri::generate_handler![player_fullscreen];
+    #[cfg(mobile)]
+    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
     let business = commands::handler::<tauri::Wry>();
     let builder = builder.invoke_handler(move |invoke| {
         if contracts::COMMANDS.contains(&invoke.message.command()) {
@@ -53,19 +59,21 @@ pub fn run() {
                 host::Host::open(settings_path)
                     .map_err(|error| std::io::Error::other(error.message))?,
             );
-            let window = WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::App("index.html#/prototype".into()),
-            )
-            .title("映象视频 · 视频技术样机")
-            .inner_size(1200.0, 800.0)
-            .min_inner_size(960.0, 640.0)
-            .on_navigation(|url| {
-                (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
-                    || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
-            });
-            #[cfg(feature = "t01-automation")]
+            #[cfg(all(not(mobile), feature = "t01-automation"))]
+            let entry = "index.html#/prototype";
+            #[cfg(any(mobile, not(feature = "t01-automation")))]
+            let entry = "index.html#/home";
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(entry.into()))
+                .title("Yingxiang Video")
+                .on_navigation(|url| {
+                    (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
+                        || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
+                });
+            #[cfg(not(mobile))]
+            let window = window
+                .inner_size(1200.0, 800.0)
+                .min_inner_size(960.0, 640.0);
+            #[cfg(all(not(mobile), feature = "t01-automation"))]
             let window = window.initialization_script(automation::bootstrap()?);
             window.build()?;
             // Fail at startup if configuration accidentally creates a second player window.

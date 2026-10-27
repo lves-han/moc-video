@@ -29,6 +29,9 @@ export function setLocale(value: AppLocale): boolean {
 }
 
 export const chinese = {
+  Close: "关闭",
+  "Preference could not be saved": "偏好保存失败",
+  "Settings are unavailable": "设置暂不可用",
   "Remove from history": "删除观看记录",
   "Remove": "删除",
   "Remove {title} and its saved progress from this device?": "删除此设备中《{title}》的观看记录和播放进度？",
