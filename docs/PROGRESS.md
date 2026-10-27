@@ -486,3 +486,11 @@
 - 短原生预检20261027T101106696818-t01-native-preflight-owner exit1：初始化command0等待30秒超时，fixture零请求。原应用已清理，无其他本项目活跃执行器或GUI。宿主实际IORegistry标志CGSSessionScreenIsLocked=Yes，确认GUI前提被锁屏阻断，当前无法完成真实窗口/长测；未改弱测试来通过。
 - 当前agent最小修改：t01.py在原native_all启动应用前采集并记录锁屏标志，明确锁屏时直接报告需要解锁；不记录原IORegistry内容，缺失标志记unknown且继续依赖真实native可见/焦点确认。新增4项正负回归，packaging同步运行前提。
 - 自验证：原run t01-gui-guard-tests收据20261027T101845059639 exit0，37Python全通过；原run t01-gui-session-state收据20261027T101932501840 exit0，当前实际screen_locked=True。当前源码48d856b7ecadb9273538fa8988c599ba4bdb66b0d8d9d273fd5f7874223cd777、protected/generation1保持对应，未报告本版A1通过。
+
+
+## T0.2 等待GUI桌面解锁 2026-10-27T10:21:04.163812+00:00
+
+- 结果：BLOCKED
+- 真实阻塞：原t01-gui-session-state实测screen_locked=True。真实macOS WebView测试需要可用桌面与可见/聚焦的窗口，当前初始化握手无法完成。
+- 当前agent已接手持续实施且本卡不设累计额度，不需要新增额度批准；等待用户解锁桌面这一设备条件。原55项回归与新增锁屏检查37项回归通过事实保持；当前源码仍需重build、准确A1、完整verify、原done/Git与固定提交独立CLEAR。
+- 请求用户解锁并回复“已解锁”，收到后再次实测GUI条件，再按原流程解除此运行条件阻塞并继续。原资源/权限/单条超时保持，不关闭或绕过系统锁屏；严格顺序后卡等待。
