@@ -287,3 +287,25 @@
 - 外层准确argv：沿用packaging/t01-commands.json原build → optional_negatives → acceptance → verify；依赖与首代媒体已在原prepare准备，保留Cargo.lock和全部失败证据。将每条外层argv首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后payload的{python}原样交原脚本展开。build为scripts/run.py t01-build -- {python} -B tests/acceptance/t01.py --suite build --report evidence/acceptance/T01-build.json --junit evidence/acceptance/T01-build.xml；negatives为scripts/run.py t01-negatives -- {python} -B tests/acceptance/t01.py --suite negatives --report evidence/acceptance/T01-negatives.json --junit evidence/acceptance/T01-negatives.xml；A1逐字沿task.py show及manifest，完整verify直接scripts/verify.py all。所有上述scripts入口均以项目解释器及-B调用。完整verify沿manifest使用进程局部ROLLDOWN_WORKER_THREADS=2、RAYON_NUM_THREADS=2。
 - 执行分工：按ADR-010，开发CLI静态核对后退出，外层确认本CLI/旧重命令退出与源码稳定后代办WIP T0.2: fix automation artifact validation and regressions，再由原run.py执行重新build、19行为回归、准确A1（MP4/HLS各1800秒及20生命周期），随后直接完整verify；原完成门和固定提交独立CLEAR保持。已知全局锁/进程枚举/.git权限按分工处理，本会话未重复探测或尝试扩大权限。
 - Remaining：本次重新build、新增回归、准确A1/GUI长测与完整verify均NOT RUN；原编译子命令成功与15诊断通过仅沿原记录保留。新源码需要新收据；完成记录、勾卡、done、受验完成提交及独立巡检待外层实际质量门通过后执行。当前三文件范围内未提交修改保留供外层WIP，未写DONE/BLOCKED/RESOLVED/AUTHORIZED。
+
+
+## T0.2 共享锁授权变更冻结修订 2026-10-27T06:39:36.732563+00:00
+
+- 结果：BLOCKED
+- 事实：真实用户授权“授权变更，本项目不受共享锁影响”。现有heavy_lock=null与C1跨项目共享锁定义需要按该决定修订；旧保护摘要bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a。
+- 处理：原排队回归执行器90374身份created:1793082576.374787已确认退出，原task recover保留中断收据exit125；全部开发/重命令已退出。复用原heavy_lock绝对路径配置为项目专属锁，其他项目锁不改；同项目继续串行。原会话3/失败历史/资源/权限/时长保持，须原rebaseline及独立文档复审后重新验收。
+
+
+## T0.2 独立重任务锁真实授权落实 2026-10-27T06:39:36.732563+00:00
+
+- 结果：RESOLVED
+- 决定：当前聊天用户原话“授权变更，本项目不受共享锁影响”；按ADR-013仅将本项目heavy_lock改为/Users/eason/jp/application/evidence/drive/heavy.lock并同步C1，保留本项目内串行/原driver锁/资源/权限/时长/累计会话和失败。其他项目锁保持。
+- 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
+- 下一步：原task rebaseline更新当前T0.2授权基线并保留全部历史，独立文档round-11复审；CLEAR后原build/回归/准确A1/完整verify重新产生同基线收据，再原done/Git/固定提交独立CLEAR。T0.1/T0.3历史完成证据沿其受验提交保留。
+
+
+## T0.2 独立锁基线更新结果与中断记录更正 2026-10-27T06:40:26.714022+00:00
+
+- 原rebaseline：PASS；protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，generation=1，sessions=3与全部失败/区段保持；原脚本确认T0.1/T0.3仍具备历史完成证据。
+- 更正本次上一条BLOCKED中的中断退出码：原排队执行器退出后由原run入口自动收尾为exit143/raw_exit=-15，payload尚未启动；task recover实际退出0且无待恢复条目，未产生exit125。原收据evidence/runs/20261027T062936367482-t01-negatives/receipt.json保留，累计失败现5条；此为按用户变更取消旧排队的真实历史。
+- 下一步：固定新配置/契约/ADR供独立round-11复审；原控制脚本与产品实现保持，CLEAR后使用独立项目锁重新完整验收。

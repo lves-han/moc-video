@@ -30,7 +30,7 @@
   "review_seconds": 1800,
   "memory_mib": 4096,
   "jobs": 2,
-  "heavy_lock": null,
+  "heavy_lock": "/Users/eason/jp/application/evidence/drive/heavy.lock",
   "verify": [
     {
       "id": "verify-workflow",

@@ -14,7 +14,7 @@
 
 唯一根目录`/Users/eason/jp/application`；工作目录、Git、原scripts、`.venv/bin/python`、`evidence/`和`evidence/drive/driver.lock`均绑定该根（已核对scripts/workflow.py的实际锁路径）。初始化宿主Python为`/Users/eason/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3`，3.12.14；此后控制脚本使用`/Users/eason/jp/application/.venv/bin/python`。迁移至另一系统时重新核实根/venv/进程与授权，使用该系统实际venv解释器。
 
-heavy_lock=null保留原全局锁；macOS默认`/Users/eason/Library/Caches/agent-project-workflow/heavy.lock`，其余系统使用原平台固定用户缓存路径。锁路径保持跨项目共享。卡号映射只在TASKS内记录；沿用原task/run/verify/drive状态、收据与完成提交判定。实际锁文件路径由T00读取原runtime核对。首次开发前确认无存活驱动/CLI/重命令/巡检，核对PID＋创建时间。
+按ADR-013及当前聊天用户授权，本项目heavy_lock使用绝对路径`/Users/eason/jp/application/evidence/drive/heavy.lock`，仅串行本项目的重任务，独立于其他项目的共享锁排队。其他项目原共享锁保持。迁移系统或项目路径时重新绑定此绝对路径并按原冻结流程审查。卡号映射只在TASKS内记录；沿用原task/run/verify/drive状态、收据与完成提交判定。实际锁文件路径由T00读取原runtime核对。首次开发前确认无存活驱动/CLI/重命令/巡检，核对PID＋创建时间。
 
 ### C2 需求基线与阶段（SPEC §1/§14/§16；ADR-002）
 

@@ -92,3 +92,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 范围：修正tests/acceptance/t01.py对真实打包JS的control/next路径及自动化标记判断，补接受真实产物/拒绝缺失与生产泄漏的回归；保持生产与测试构建隔离、严格断言、原准确A1和GUI长测。外层从稳定源码重新build、准确A1、完整verify、done/Git与固定提交独立CLEAR。编译子命令和15个诊断用例沿原记录保留，实际GUI长测待执行。
 约束：gpt-6.1-sol、开发workspace-write/巡检read-only、单次10800秒、原命令超时、4096MiB RSS采样、jobs2、测试线程1、原全局heavy锁及既有桌面范围/移动阶段门保持；外层负责验收/Git，产品与验收实现交原开发工作流。
 基线：protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，generation=0，受保护定义保持，沿原计数恢复，未调用rebaseline。第三会话退出后按原质量门复验；后续需要开发时依原流程记录新决定。
+
+
+## ADR-013 2026-10-27T06:39:36.732563+00:00 — 已采纳：本项目独立重任务锁
+
+来源：当前聊天用户原话“授权变更，本项目不受共享锁影响”。该真实指令取代此前本项目必须跨项目共用heavy锁的要求；其余授权与限制继续。
+决定：复用原workflow.json的heavy_lock配置，设为绝对路径/Users/eason/jp/application/evidence/drive/heavy.lock；原run/verify/drive仍使用同一锁完成本项目内重任务串行。其他项目继续使用各自原锁，本项目独立排队。原driver.lock保持；原控制脚本/开发CLI权限不变，无额外转发执行器或第二套状态。
+最小修订：仅修改workflow.json的heavy_lock值及ARCHITECTURE C1对应一句，追加本ADR与当前卡真实BLOCKED/RESOLVED；通过原task.py rebaseline更新T0.2授权基线。此前原共享锁运行/等待及中断收据、历史T0.1/T0.3完成提交与巡检保持。docs/runtime.lock.json中的global_heavy_lock为T0.1当时真实观测记录，保留原历史值；当前路径以原配置及原runtime.lock_path实测为准。新运行明确记录项目独立锁，当前源码/基线下重新build/回归/准确A1/完整verify，不复用旧收据完成。
+资源与权限：memory_mib4096的macOS RSS采样、jobs2、测试线程1、所有原命令/会话时长与计数保持。T0.2第三次一次授权已使用、sessions3/原失败及暂停区段保持；其他新卡默认max_sessions2。项目间重任务可并行，占用可能叠加；本项目仍受原单任务资源监管。
+冻结与审查：旧protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a；批准的新protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481。原脚本rebaseline保留失败/计数、增加generation并使本卡旧验收失效；变更须独立只读文档round-11 CLEAR后恢复原同ID监管，沿ADR-010外层执行验收/Git、原脚本实现产品。未授权移动阶段保持原阶段门。
