@@ -309,3 +309,11 @@
 - 原rebaseline：PASS；protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，generation=1，sessions=3与全部失败/区段保持；原脚本确认T0.1/T0.3仍具备历史完成证据。
 - 更正本次上一条BLOCKED中的中断退出码：原排队执行器退出后由原run入口自动收尾为exit143/raw_exit=-15，payload尚未启动；task recover实际退出0且无待恢复条目，未产生exit125。原收据evidence/runs/20261027T062936367482-t01-negatives/receipt.json保留，累计失败现5条；此为按用户变更取消旧排队的真实历史。
 - 下一步：固定新配置/契约/ADR供独立round-11复审；原控制脚本与产品实现保持，CLEAR后使用独立项目锁重新完整验收。
+
+
+## T0.2 项目独立锁文档复审完成 2026-10-27T06:47:13.185875+00:00
+
+- 独立文档复审：CLEAR；原报告`docs/reviews/doc-review/round-11.md`，受审HEAD609075e、source=58899d110b87588c71310ad6949d39c947b7ee08fb1486a3e8bdec38fef5b711、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1，报告全部关键文件/ADR摘要逐项核对。
+- 控制验证：原task check/scope通过，原validate exit0，116项中109通过/7平台条件跳过；报告evidence/drive/lock-change-validation.json及完整日志同目录.log。
+- 原runtime新锁路径实测为/Users/eason/jp/application/evidence/drive/heavy.lock；旧共享锁由其他项目占用时新项目锁实际acquire成功，探测证据evidence/drive/lock-change-path-probe.json。同项目原串行与4096MiB RSS采样/jobs2/线程1保持；其他项目不改。
+- 同一监管automation恢复ACTIVE，每5分钟，最新提示词记录ADR-013覆盖旧跨项目锁要求；外层从新基线原build/19回归/准确A1/完整verify接续，原sessions3和失败5保持，未重开开发会话。
