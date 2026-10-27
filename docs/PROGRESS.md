@@ -107,3 +107,16 @@
 - 同一项目、解释器、原脚本、共享锁及预算下，外层执行 `run.py t00-resource-probe-outer -- <项目Python> -c ...` 退出0；原payload实际打印T00 outer resource probe。收据evidence/runs/20261027T011517912651-t00-resource-probe-outer/receipt.json。此为执行环境诊断，业务验收A1/完整verify仍NOT RUN；原CLI内EPERM失败收据保留。
 - 执行前提差异已确认：开发CLI内共享锁写入和psutil进程枚举被沙箱拒绝，外层最小受监管命令成功。未改变权限、配置、共享锁、阈值或预算；未自行写RESOLVED、重启开发或消耗第2会话。
 - 当前T0.1保持BLOCKED，sessions=1/2；监管任务automation已通过app工具更新为PAUSED并核对持久化状态。等待用户对执行分工/环境作决定；建议保留CLI workspace-write，由外层通过原run.py代跑构建和验收，再按原流程恢复同卡。
+
+## T0.1 用户决定：开发与巡检验收分工 2026-10-27T01:23:11.172247+00:00
+
+- 结果：RESOLVED
+- 决定：用户当前聊天原话“你作为agent负责巡检验收，最小化授权  script里的脚本负责开发实现”。按ADR-010由原脚本驱动CLI实现代码，外层使用原执行器完成构建/准确验收/完整verify/Git与独立巡检；维持现有沙箱和全部质量门。此决定解除本卡当前执行分工待决定阻塞。
+- 批准摘要：bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a
+- 基线：受保护内容保持，ADR仅追加，未调用rebaseline；sessions=1/2，失败与收据保留。当前所有旧项目工作流进程已退出，工作树干净后记录本次决定；待本次新增ADR独立复审CLEAR后恢复原drive --once和同一监管任务。
+
+## 文档独立复审 round-8 2026-10-27T01:28:29.633769+00:00
+
+- 独立只读原始报告docs/reviews/doc-review/round-8.md，末行DOC-REVIEW-VERDICT: CLEAR；protected保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，ADR001..010按原分段摘要绑定。保存报告后核对主要受审文件摘要一致。
+- 原控制器check_frozen/check/scope及原next_card验证通过；新增分工可沿原generation=0接续。会话/失败记录保持1/2与原1条失败，原业务A1和完整verify仍NOT RUN。
+- 真实用户决定与原handoff已明确：原驱动CLI开发实现，外层经原执行器验收/Git/独立巡检；待源码稳定后取得全部原质量门证据。下一步恢复同一heartbeat及原drive --once进入第2会话。

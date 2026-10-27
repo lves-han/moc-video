@@ -66,3 +66,11 @@
 决定：两条既有Codex exec命令显式加入-m gpt-6.1-sol；开发workspace-write、巡检read-only，沿用PATH已验证的/opt/homebrew/bin/codex。解释器仍/Users/eason/jp/application/.venv/bin/python。
 启动前最小验收修订：scripts/tests/test_workflow.py的setUp在复制真实workflow.json后显式review_command=None；要求巡检的测试继续用enable_review配置本地替身。原4项失败由夹具继承真实巡检命令造成，证据evidence/drive/start-validate.log。此一行只修正自测隔离，按PROMPT-START第3步“只涉及配置、措辞或验收可执行性的问题，由外层最小修订后再复审”执行；用户明确指令是正式开始开发，未将此记录为用户逐字批准补丁。原脚本运行逻辑、预算、门槛、任务、需求及失败历史均保持。当前current=null，尚无业务卡冻结基线。此前PROGRESS中的该修复待授权记录由此启动前修订说明接续。
 验证：开发写读删除/Git权限和巡检只读自检、原validate、完整verify及独立文档复审结果见后续PROGRESS；独立审阅须核对该修订的范围及来源。取得CLEAR及真实heartbeat后仅drive.py --once启动，每卡完成后独立巡检；29张桌面卡结束或遇停止条件暂停，移动阶段保持单独授权。
+
+## ADR-010 2026-10-27T01:23:11.172247+00:00 — 已采纳：最小权限下开发与巡检验收分工
+
+来源：当前聊天用户原话“你作为agent负责巡检验收，最小化授权  script里的脚本负责开发实现”，回复外层此前提出的“CLI保持workspace-write，外层通过原run.py代跑构建和验收”方案。此为真实分工决定，继续既有桌面开发授权。
+决定：原scripts/drive.py --once及其agent_command负责本卡代码、验收脚本和所需输入/依赖清单的开发实现；开发CLI维持gpt-6.1-sol/workspace-write，独立巡检命令维持read-only。外层agent负责核对范围/身份/源码稳定性，通过原run.py执行构建、依赖获取、准确单卡验收，通过原verify.py all执行完整门，并按既有授权Git收尾、记录完成、调用原--review-only取得独立巡检结论及接续。
+协作：已知CLI对全局heavy.lock、macOS进程枚举和.git写入的权限限制由执行分工处理。开发会话完成可验证实现及准确命令清单后，以WIP交接并结束；这些已明确移交外层的操作不再作为重复权限探测或新的用户决定阻塞。外层仅在开发/重命令退出、源码稳定后验收；发现实现问题交回原开发工作流修复，外层不代写产品代码。不得以CLI退出0或WIP替代完成证据。
+质量门与最小授权：保持原单卡准确A1及JUnit cases、完整verify、task.py done、受验完成提交和固定提交独立CLEAR，既有测试断言、资源限制、共享锁及清理规则均保持。原运行控制脚本、PROMPT-CARD、AGENTS、SPEC、ARCHITECTURE、TASKS、workflow.json和全局配置均不修改；通过原handoff传递本条当前用户指示。无跳过审批/沙箱参数、无新控制状态或后台转发系统。
+T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP10fbe00、外层probe成功及已消耗1次会话均保留，仍max_sessions=2。保护摘要保持bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a；未发生受保护定义修订，不调用rebaseline。影响执行定义的新增ADR须经独立只读文档复审后，再恢复同卡剩余会话及原监管任务。
