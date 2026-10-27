@@ -18,6 +18,7 @@ from pathlib import Path
 import platform
 import plistlib
 import queue
+import re
 import signal
 import shutil
 import socket
@@ -526,7 +527,19 @@ def validate_window(value, width=1200, zoom=1):
     return value
 
 
+def native_gui_session():
+    # Capture only the lock flag; the full registry also contains machine IDs.
+    state = subprocess.run(["/usr/sbin/ioreg", "-n", "Root", "-d1"],
+                           capture_output=True, text=True, timeout=10)
+    require(state.returncode == 0, "macOS GUI session state could not be read")
+    flag = re.search(r'"CGSSessionScreenIsLocked"\s*=\s*(Yes|No)', state.stdout)
+    return dict(screen_locked=flag[1] == "Yes" if flag else None)
+
+
 def native_all(run, fixture, receipt):
+    run.observed["gui_session"] = native_gui_session()
+    require(run.observed["gui_session"]["screen_locked"] is not True,
+            "macOS GUI session is locked; unlock the desktop before native acceptance")
     executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
     session = NativeSession(run, fixture, executable, 0)
     failed = False

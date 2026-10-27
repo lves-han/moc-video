@@ -477,3 +477,12 @@
 - 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-15.md`，受审HEAD5c05d17、source=f50dd34310109ea50feb51298b0441e0ab219e8015e8cd017cfdb7cae716cbd5、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481。所有关键文件64位SHA和ADR019分段逐项核对。
 - 当前agent直接在本卡原范围持续实施与实际验证，取消本卡累计次数/工时额度，原CLI历史sessions6/失败9/generation1不改；资源/权限/单条命令超时和全部原质量门保持，后卡等待。现有WIP新build及回归成功，实际33Python+22Node全通过；下一步原生短预检核对前台/布局/DPI/清理，再准确A1完整两格式长测/20生命周期和完整verify/原收尾。
 - 报告附独立审阅者对round14旧handoff摘要转录的更正，原报告保留。此前外层64位正则仅匹配合法长度导致漏检该错字；本轮改为逐表项校验长度/字符及实际摘要，不改任何原运行证据。
+
+
+## T0.2 当前agent实际验证与GUI前置检查修复 2026-10-27T10:21:03.519654+00:00
+
+- 实施状态：WIP；按ADR-019当前agent持续实施，不设本卡累计次数/工时额度，原CLI计数与失败历史保持。
+- 已实跑现有第6WIP：原build20261027T100502286761-t01-build exit0、原negatives20261027T100639820423-t01-negatives exit0，33Python及22Node全部通过。
+- 短原生预检20261027T101106696818-t01-native-preflight-owner exit1：初始化command0等待30秒超时，fixture零请求。原应用已清理，无其他本项目活跃执行器或GUI。宿主实际IORegistry标志CGSSessionScreenIsLocked=Yes，确认GUI前提被锁屏阻断，当前无法完成真实窗口/长测；未改弱测试来通过。
+- 当前agent最小修改：t01.py在原native_all启动应用前采集并记录锁屏标志，明确锁屏时直接报告需要解锁；不记录原IORegistry内容，缺失标志记unknown且继续依赖真实native可见/焦点确认。新增4项正负回归，packaging同步运行前提。
+- 自验证：原run t01-gui-guard-tests收据20261027T101845059639 exit0，37Python全通过；原run t01-gui-session-state收据20261027T101932501840 exit0，当前实际screen_locked=True。当前源码48d856b7ecadb9273538fa8988c599ba4bdb66b0d8d9d273fd5f7874223cd777、protected/generation1保持对应，未报告本版A1通过。

@@ -110,6 +110,32 @@ class FixtureTests(unittest.TestCase):
         self.assertNotIn(self.fixture.cap, str(self.fixture.summary()))
 
 
+class GuiSessionTests(unittest.TestCase):
+    def test_locked_desktop_fails_before_launching_native_app(self):
+        state = mock.Mock(returncode=0, stdout='"CGSSessionScreenIsLocked" = Yes')
+        run = mock.Mock(observed={})
+        with mock.patch.object(t01.subprocess, "run", return_value=state), \
+             mock.patch.object(t01, "NativeSession") as native:
+            with self.assertRaisesRegex(ValueError, "unlock the desktop"):
+                t01.native_all(run, None, {})
+            native.assert_not_called()
+        self.assertEqual(run.observed["gui_session"], dict(screen_locked=True))
+
+    def test_unlocked_desktop_is_recorded(self):
+        state = mock.Mock(returncode=0, stdout='"CGSSessionScreenIsLocked" = No')
+        with mock.patch.object(t01.subprocess, "run", return_value=state):
+            self.assertEqual(t01.native_gui_session(), dict(screen_locked=False))
+
+    def test_missing_lock_flag_remains_unknown(self):
+        with mock.patch.object(t01.subprocess, "run", return_value=mock.Mock(returncode=0, stdout="")):
+            self.assertIsNone(t01.native_gui_session()["screen_locked"])
+
+    def test_state_read_failure_is_explicit(self):
+        with mock.patch.object(t01.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")):
+            with self.assertRaisesRegex(ValueError, "could not be read"):
+                t01.native_gui_session()
+
+
 class NativeResultTests(unittest.TestCase):
     def setUp(self):
         root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="t01-result-regression-")))
