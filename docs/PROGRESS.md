@@ -341,3 +341,12 @@
 - 验收 A1：NOT RUN；构建、行为测试及完整verify均NOT RUN，实际行为测试数0。本卡未勾选，未调用done/rebaseline，未写RESOLVED/AUTHORIZED。
 - 需要用户决定：批准上述仅补入host.rs的范围修订，或另行指定经审查的接线方案。现有AGENTS要求冻结范围变更先记录并取得明确决定；开发会话保持原范围，等待外层按原修订/独立文档复审流程处理。
 - Git与阻塞交接：按ADR-010，已知.git写权限由外层处理，本会话未重复探测。外层在本CLI退出、确认源码稳定后先代办`WIP T0.4: document MacCMS host integration scope gap`，随后追加同卡BLOCKED事实与上述最小选项并提交文档，按原规则只暂停T0.4及依赖卡。该顺序保留先WIP提交再BLOCKED要求；当前记录为WIP交接，未提前伪造BLOCKED完成或用户批准。
+
+
+## T0.4 MacCMS宿主接线范围待决定 2026-10-27T06:59:48.707607+00:00
+
+- 结果：BLOCKED
+- WIP已按原顺序保留，原开发会话1/2、失败0；产品源码与冻结内容保持，原CLI/驱动及重命令已退出。
+- 已核对根因：本卡冻结范围遗漏src-tauri/src/host.rs。现有host.rs:211..239的MacCMS sync_catalog及282..305内容路由固定返回ENGINE_NOT_READY；执行入口持有私有Call.job与Host.committed，commands.rs仅转Host.execute，当前SourceDispatch无内容执行回调。原范围内增加适配器仍缺少真实宿主接线。
+- 最小待决定：仅将src-tauri/src/host.rs补入T0.4范围，保留原需求/准确A1/cases/超时/预算；原脚本在宿主分支接入MacCMS适配，锁外网络、锁内核对取消/世代/修订及发布，复用现有身份/快照/设置锁；具体方案见上一条WIP交接。按原真实RESOLVED/ADR、批准摘要、rebaseline及独立文档CLEAR后恢复剩余第2会话。
+- 验收A1/构建/行为/完整verify仍NOT RUN；原范围冻结规则要求人类明确决定，外层保持验收/Git分工。T0.2旧GUI/JUnit与追加会话待决定保持，单卡BLOCKED及依赖语义沿原next判断，存在独立卡继续。
