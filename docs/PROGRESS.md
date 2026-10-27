@@ -408,3 +408,9 @@
 - 决定：当前聊天用户对仅T0.2追加一次长播诊断修复会话（4→5）、原脚本实施/外层复验、保持权限资源的问题明确答“批准 T0.2 追加一次”；按ADR-017原文来源，仅本卡一次第5会话。
 - 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
 - 保留原4会话/7失败/generation1及有效失败报告/23样本/媒体基准。原严格顺序仍优先T0.2；独立文档round-13 CLEAR后仅原--once --max-sessions 5，其他卡默认2。旧驱动/CLI/重命令均已退出，源码稳定、工作树原本干净，外层保持巡检/Git分工。
+
+
+## T0.2 第五会话独立文档复审 2026-10-27T09:10:26.481220+00:00
+
+- 文档复审：CLEAR；原报告`docs/reviews/doc-review/round-13.md`，受审HEADa4bb7b0、source=d7142e7e25a78adb6f4baeb604fd73e78d7bcd6b508aec0562d05e9e25b84277、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1。关键文件与ADR017分段摘要逐项匹配。
+- 当前earliest/current/next均T0.2，原sessions4/失败7/default2保持、旧执行器/payload/GUI均退出；复审确认唯一一次原--once --max-sessions 5可执行。恢复同ID监管并同步原位更新prompt当前状态，保留精简结构和每卡完成重写规则；原严格顺序/项目锁/权限资源/原完整门保持。
