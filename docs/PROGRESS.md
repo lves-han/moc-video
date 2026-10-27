@@ -251,3 +251,10 @@
 - 批准摘要：bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a
 - 当前安全交接边界：T0.3第1会话已WIP退出，原驱动/CLI身份及两锁均已核对释放，WIP66bd498保留。current/next仍T0.3；原规则优先完成该在途卡，随后按next选择T0.2。
 - 原T0.2 sessions=2、4条失败、暂停区段及generation=0保持。原build FAIL、准确A1/GUI长测/完整verify仍待修复后执行；授权记录尚待独立文档复审，不记录为已启动第三会话。
+
+
+## T0.2 单卡授权独立文档复审 2026-10-27T06:01:11.910932+00:00
+
+- 文档复审：CLEAR；独立原报告`docs/reviews/doc-review/round-10.md`，受审HEAD3e7ab44、source=bf32eb1ab5562ad5db4e4ec990fb2eedc3621cfcb65bba0b905ce23b63a1988f，protected=bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a，报告文件摘要逐项核对。
+- ADR-012真实授权与在途优先/暂停恢复及局部参数均已核对。T0.3 current/next保持，第1会话WIP先由外层准备/构建/准确A1/完整verify/原收尾。原next选择T0.2后通过原handoff更新本次授权，再按唯一一次第三会话条件接续。
+- 原task check exit0；原validate exit0，116项中109通过/7项平台跳过，报告evidence/script-validation.json。业务验收仍待实跑；原计数/失败及workflow默认2保持。
