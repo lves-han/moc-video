@@ -328,3 +328,16 @@
 - 清理：真实应用及3个WebKit进程的PID+创建时间均核对退出，失败forced_cleanup记录保留；fixture线程/端口/请求释放门通过。实际MP4/HLS各30分钟、20生命周期及完整verify尚未执行，未勾卡/done。
 - 最小待决定：T0.2目前3会话已用完，ADR-012一次例外已消费；由原开发脚本修复窗口尺寸因果问题和失败JUnit生成，需新增本卡修复会话授权，原权限/资源/时长保持。此前产物校验误判已由原build及19回归通过。
 - 分支：按原BLOCKED只冻结本卡及依赖，原next存在独立可执行卡时继续；同一监管保持ACTIVE，本项目专属锁和默认新卡2会话保持。
+
+## T0.4 N00 第1会话范围缺口交接 2026-10-27T06:53:48+00:00
+
+- 实施状态：WIP；本会话完成源码与冻结范围核对，范围修订待用户决定。产品源码、任务正文及保护文件保持原样；当前第1/2会话，protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，原会话额度与失败历史保留。
+- 当前问题：docs/TASKS.md:353的T0.4范围包含maccms.rs/source_dispatch.rs/commands.rs和Cargo清单及tests/，遗漏现有统一宿主src-tauri/src/host.rs；本卡要求通过真实MacCMS同步、首页、详情、解析以及配置变更/取消行为。
+- 根因证据：host.rs:211-239的sync_catalog分支在捕获配置后固定返回ENGINE_NOT_READY；host.rs:282-305的route_content对MacCMS固定返回相同错误。host.rs:124-139独占实际执行及结果包络/输出契约验证；host.rs:167-181取得Call.job和Host.committed提交锁，二者均为私有。commands.rs:19-24仅admit后转交Host.execute；source_dispatch.rs的注册表查询/发布接口没有内容执行回调。只在现有范围增加适配器仍缺少统一宿主接线点。
+- 已核对复用：T05的SourceDispatch身份哈希、SourceSnapshot、配置generation/墓碑/sync_sequence、Requests/Job及入站deadline/取消、Settings提交后撤销受影响来源、17个命令和输出契约均可复用。HTTP网络客户端与MacCMS实现尚未存在；T0.2的GUI/JUnit问题保持原记录。
+- 可审查的最小修订方案：仅在本卡范围补入src-tauri/src/host.rs，保留原需求ID、准确A1/cases/超时/预算/权限。Host中的MacCMS分支调用本卡适配器；请求接纳后绑定来源并捕获快照，在提交锁外完成网络请求，返回后在锁内复核取消/世代/修订并发布结果；设置保存沿用原提交锁及cancel_sources。MacCMS实现经source_dispatch.rs声明模块，原lib.rs可保持；Rust行为测试可在Cargo.toml显式指定tests/内测试入口。其余后续卡的匹配/媒体网关职责保持原计划。
+- 验证方案：范围获批且原冻结流程完成后，受控单进程HTTP fixture覆盖准确A1全部JSON/编码/播放分组/身份/探测/SSRF/取消向量；通过真实Host/命令入口核验DTO及错误，逐项生成N00-all.json/xml。按ADR-010由原开发脚本实现，外层对稳定源码通过原run.py执行必要依赖、构建、准确A1，再直接完整verify，按原门完成Git/done/固定提交独立巡检。
+- 真实已执行：读取AGENTS、相关C1..C16、SPEC §12.1/18.2、ADR-010/013、原T05实现与验收、当前卡及交接；task.py check/start T0.4/show/status均exit0，check为35卡。源码阅读中一次nl误用根目录TASKS.md显示缺文件，随后用docs/TASKS.md确认实际冻结范围；未发生构建或行为验收失败，已用原task.py note登记实际范围缺口与下一步。
+- 验收 A1：NOT RUN；构建、行为测试及完整verify均NOT RUN，实际行为测试数0。本卡未勾选，未调用done/rebaseline，未写RESOLVED/AUTHORIZED。
+- 需要用户决定：批准上述仅补入host.rs的范围修订，或另行指定经审查的接线方案。现有AGENTS要求冻结范围变更先记录并取得明确决定；开发会话保持原范围，等待外层按原修订/独立文档复审流程处理。
+- Git与阻塞交接：按ADR-010，已知.git写权限由外层处理，本会话未重复探测。外层在本CLI退出、确认源码稳定后先代办`WIP T0.4: document MacCMS host integration scope gap`，随后追加同卡BLOCKED事实与上述最小选项并提交文档，按原规则只暂停T0.4及依赖卡。该顺序保留先WIP提交再BLOCKED要求；当前记录为WIP交接，未提前伪造BLOCKED完成或用户批准。
