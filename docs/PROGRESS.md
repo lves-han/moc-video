@@ -462,3 +462,11 @@
 - Verified：task.py check/start T0.2/show/scope均exit0，35卡及all changes inside scope；项目解释器ast.parse对t01.py/test_t01.py共2文件解析成功，git diff --check exit0。实际锁定Tauri2.12.5/tao0.37.2/wry0.57.1源码已核对set_focus、makeKeyAndOrderFront、activateIgnoringOtherApps及makeFirstResponder调用。在线docs.rs读取失败，API结论采用本机锁定源码；若干读取路径缺失/未匹配glob均已task.py note保留并改读实际文件。
 - 验收 A1：NOT RUN；本版构建、33项Python/22项Node预期回归、两格式各1800秒真实播放、20窗口生命周期及完整verify均NOT RUN。ADR-010分工保持，无重任务/权限/.git写入重复探测，未启动服务或原生应用。物理扬声器听感仍沿原交接待人工确认。
 - 外层下一步：本CLI退出且源码稳定后代办WIP T0.2: fix automation loading and confirm foreground playback；按packaging/t01-commands.json原build → optional_negatives → acceptance数组执行。外层argv首项{python}替换为/Users/eason/jp/application/.venv/bin/python，run.py后保留字面{python}。macOS会话保持解锁/屏幕唤醒/样机前台可见，激活读回与每段前台门由真实应用执行；原--suite all/T01-all.json/xml/7200秒/4096MiB RSS采样/jobs2/线程1/项目锁保持。A1成功后以原进程局部环境直接verify.py all，再原勾卡/记录/done/受验提交/独立CLEAR。失败先note并读取同次results与samples，保留全部证据及第6/6额度。
+
+
+## T0.2 当前agent接手与不限任务额度授权 2026-10-27T10:02:29.327021+00:00
+
+- 结果：RESOLVED
+- 决定：当前聊天用户“你来负责T0.2任务的完成，不做额度限制”；按ADR-019当前agent接手本卡实施与验证、持续修复至原质量门完成，本卡后续会话次数和累计工时上限取消，其他卡及原资源/权限/单条命令超时保持。
+- 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
+- 第6原CLI已WIP退出、无活跃重命令，本卡原sessions6/失败9/generation1与所有原记录保持。旧实现仅静态核对，当前由agent实际构建/回归/准确A1/完整verify并修复，最后原done/Git/固定提交独立CLEAR；不启动后卡。
