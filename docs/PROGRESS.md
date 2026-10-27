@@ -435,3 +435,11 @@
 - 证据：evidence/drive/t01-fifth-validation-20261027T092323Z/node-loader-findings.md、归档node-loader-failure-T01-negatives.json/xml，原Node完整日志evidence/acceptance/T01-6b67574f789449378775dbff87abf039/command-2.log；失败收据同source/after_source/protected/generation1和原日志SHA核对，所有旧执行器/payload退出，源码稳定。
 - 本版准确A1/真实长测与完整verify尚未运行，真实Playback or UI stalled根因待新诊断代码通过回归后复验。原长测阈值/媒体/全部失败历史保持，未勾卡/done。
 - 最小待决定：T0.2已用5次开发会话、累计失败8；ADR-017唯一第5会话已消费，需要仅本卡追加一次修复会话（5→6）修正新增回归装载冲突并继续长播诊断，或其他明确路线。原脚本实现、外层复验，资源/权限/时长保持。按严格卡序暂停本卡推进与监管，后卡等待。
+
+
+## T0.2 第六会话真实授权与先取现场安排 2026-10-27T09:40:23.396203+00:00
+
+- 结果：RESOLVED
+- 决定：用户对仅T0.2追加一次修复会话5→6、修复新增回归装载冲突并继续长播诊断、原脚本实施/外层复验、权限资源保持的问题明确答“批准 T0.2 追加一次”。按ADR-018仅本卡一次第6会话。
+- 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
+- 当前仍sessions5/失败8/generation1，原build通过/Python30通过/Node10失败及require装载冲突证据保持。先由外层通过原执行器调用现有真实NativeSession进行补充诊断以取得失败现场，保留原准确A1门；独立复审后原脚本第6会话一并处理可确认的问题，避免仅增加采集后再次缺少实测。严格顺序及原权限资源保持。

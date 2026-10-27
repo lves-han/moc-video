@@ -130,3 +130,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 实施：独立只读文档round-13 CLEAR后，紧邻启动确认原earliest/current/next=T0.2、sessions4、旧写入者/重命令退出，唯一一次原scripts/drive.py --once --max-sessions 5。原default max_sessions2/控制代码/权限/资源/单次时长保持，无session-hours或计数重置；原4会话、7失败、generation1、全部原日志/报告/区段保持。此例外仅本卡一次第5会话，其他卡无额度变化。
 原质量门：源码稳定后原run.py重新build、回归、准确A1（真实MP4/HLS各1800秒、20窗口、原安全/布局/资源清理断言），成功后直接完整verify.py all，再原done/Git/固定提交独立CLEAR。继续需要开发时依原流程报告真实决定。
 继承：ADR-015严格顺序，前卡未完整完成或阻塞时不启动后卡；ADR-013项目专属锁、4096MiB RSS采样/jobs2/线程1、原超时与gpt-6.1-sol workspace-write/read-only保持；T0.4已批准范围及原多在途基线路线约束继续等待本卡完成后处理。protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，受保护定义保持，此预算批准不调用rebaseline。
+
+
+## ADR-018 2026-10-27T09:40:23.396203+00:00 — 已采纳：仅T0.2追加一次回归装载修复与长播诊断会话
+
+来源：当前聊天明确询问“T0.2新增Node回归的失败已定位为模块加载器与断言函数同名冲突；ADR-017的第5会话已用完。是否仅为T0.2追加一次修复会话（5→6），修复该冲突并继续长播诊断，仍由原脚本实现、我负责复验，权限和资源限制保持？”；用户针对该问题明确回答“批准 T0.2 追加一次”。
+决定：仅本卡累计开发上限5→6，原开发脚本最小修复CommonJS装载器与require断言函数重名问题，保持新增诊断回归及真实长播全部门，并继续根据真实现场定位播放停滞。外层按ADR-010复验；既有5会话/8失败/generation1、所有原收据及WIP保留。
+执行：本次独立只读文档复审CLEAR后，紧邻启动核对earliest/current/next=T0.2、sessions5、全部旧写入者/重命令退出，唯一一次原scripts/drive.py --once --max-sessions 6。默认workflow2、原控制代码/权限/资源/时长保持，不加session-hours，不重置计数或复用旧例外。protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481保持，不调用rebaseline。
+复验与诊断：原准确A1仍包括真实MP4/HLS各1800秒、20生命周期及帧/UI/音频/安全/布局/清理；成功后完整verify、原done/Git/固定提交独立CLEAR。为减少缺少现场的再次交接，外层可通过原run调用已有NativeSession/Fixture/command执行真实MP4补充诊断，使用当前已构建诊断版、原资源监管和既有断言/清理，保存失败results/samples；此诊断单独记真实结果，准确A1和失败回归仍保持原门。外层不改产品或回归实现。
+继承：ADR-015严格顺序、ADR-013项目锁及4096MiB RSS采样/jobs2/线程1、gpt-6.1-sol workspace-write/read-only均保持。后续卡等待本卡完整完成，新的开发需求依原流程报告真实决定。
