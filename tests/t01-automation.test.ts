@@ -10,14 +10,21 @@ const source = ts.transpileModule(readFileSync(new URL("./fixtures/t01/automatio
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 
-async function scenario(fault: string) {
+async function scenario(fault: string, operation = "long") {
   let now = 1;
+  let stopped = false;
   let focused = fault !== "needs-activation";
   let frame: ((time: number, metadata: object) => void) | undefined;
   let pulse: (() => void) | undefined;
   const rect = { toJSON: () => ({ left: 0, top: 0, width: 960, height: 540 }) };
   const video = Object.assign(new EventTarget(), {
     currentTime: 1, duration: 30, paused: false, ended: false, seeking: false,
+    currentSrc: "http://fixture.invalid/video?cap=synthetic-secret",
+    srcObject: null as object | null,
+    hasAttribute: (name: string) => name === "src" && (!stopped || fault === "stop-src"),
+    querySelectorAll: (selector: string) => stopped &&
+      ((fault === "stop-source" && selector.includes("source")) ||
+       (fault === "stop-track" && selector.includes("track"))) ? [{}] : [],
     readyState: 4, networkState: 1, loop: false, playbackRate: 1, volume: 1, muted: false,
     videoWidth: 1920, videoHeight: 1080, error: null as null | { code: number },
     buffered: { length: 1, start: () => 0, end: () => 30 },
@@ -28,14 +35,25 @@ async function scenario(fault: string) {
   });
   const document = Object.assign(new EventTarget(), {
     visibilityState: focused ? "visible" : "hidden", hasFocus: () => focused,
-    querySelector: () => fault === "ui-missing" ? null : ({
+    querySelector: (selector: string) => selector === '[data-action="stop"]' ? { click: () => {
+      stopped = true;
+      video.paused = fault !== "stop-playing";
+      video.networkState = fault === "stop-network" ? 2 : 0;
+      video.readyState = fault === "stop-ready" ? 4 : 0;
+      video.buffered.length = fault === "stop-buffer" ? 1 : 0;
+      video.videoWidth = fault === "stop-decoder" ? 1920 : 0;
+      video.videoHeight = 0;
+      video.srcObject = fault === "stop-object" ? {} : null;
+    } } : fault === "ui-missing" ? null : ({
       value: String(fault === "ui-stalled" ? 1 : fault === "ui-wrong" ? video.currentTime + 5 : video.currentTime),
     }),
     createElement: () => ({ width: 0, height: 0, toDataURL: () => "synthetic-preview",
       getContext: () => ({ drawImage: () => {}, getImageData: () => ({ data: new Uint8Array([64, now / 5000 % 255, 0, 255]) }) }) }),
   });
   const window = Object.assign(new EventTarget(), { __T01_BOOTSTRAP__: { base: "http://127.0.0.1:1234/", cap: "synthetic-secret" } });
-  const player = { setSpeed: () => {}, setVolume: () => {}, stop: () => {}, diagnostics: () => ({ engine: "native" }) };
+  const player = { setSpeed: () => {}, setVolume: () => {}, stop: () => {}, diagnostics: () => ({
+    engine: "native", listening: fault === "stop-listening", hls_instances: fault === "stop-hls" ? 1 : 0,
+  }) };
   const results: any[] = [];
   const samples: any[] = [];
   const native = { visible: true, focused, minimized: false };
@@ -61,8 +79,11 @@ async function scenario(fault: string) {
     cancelAnimationFrame: () => { pulse = undefined; },
     setTimeout: (callback: () => void, ms: number) => {
       now += ms;
-      video.currentTime = (video.currentTime + ms / 1000) % 30;
-      if (fault !== "frames") frame?.(now, { mediaTime: video.currentTime, presentedFrames: now / 1000 * 30 });
+      if (!stopped || fault === "stop-clock") video.currentTime = (video.currentTime + ms / 1000) % 30;
+      if ((!stopped && fault !== "frames") || fault === "stop-frames") {
+        frame?.(now, { mediaTime: video.currentTime, presentedFrames: now / 1000 * 30 });
+        if (fault === "stop-frames") frame?.(now, { mediaTime: video.currentTime, presentedFrames: now / 1000 * 30 });
+      }
       if (fault !== "raf") pulse?.();
       if (fault === "paused" || fault === "native-error") { video.paused = true; video.dispatchEvent(new Event("pause")); }
       if (fault === "media-error") video.error = { code: 3 };
@@ -100,7 +121,7 @@ async function scenario(fault: string) {
     fetch: async (url: string, options?: { body: string }) => {
       const path = new URL(url).pathname;
       if (path === "/control/next") return { status: 200, ok: true, json: async () => ++next === 1
-        ? { id: 1, op: "long", seconds: 1800 } : { id: 2, op: "shutdown" } };
+        ? { id: 1, op: operation, seconds: 1800 } : { id: 2, op: "shutdown" } };
       const value = JSON.parse(options!.body);
       (path === "/control/sample" ? samples : results).push(value);
       return { ok: true };
@@ -108,6 +129,23 @@ async function scenario(fault: string) {
   });
   await exports.automate(video, player, () => {});
   return { result: results.find(result => result.id === 1), samples, native, actions };
+}
+
+test("T01 stop confirms released media while currentSrc retains the selected URL", async () => {
+  const { result } = await scenario("healthy", "stop");
+  assert.equal(result.ok, true);
+  assert.equal(result.value.source_removed, true);
+  assert.equal(result.value.sample.current_src_present, true);
+  assert.equal(result.value.frames_after_stop, 0);
+  assert.ok(!JSON.stringify(result).includes("synthetic-secret"));
+});
+
+for (const fault of ["playing", "network", "ready", "buffer", "decoder", "object", "src", "source", "track", "listening", "hls", "clock", "frames"]) {
+  test(`T01 stop rejects residual ${fault}`, async () => {
+    const { result } = await scenario(`stop-${fault}`, "stop");
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Video resources remain|Old playback still active/);
+  });
 }
 
 for (const fault of ["paused", "media-error", "frames", "raf", "resolution", "audio", "clock"]) {
@@ -120,6 +158,8 @@ for (const fault of ["paused", "media-error", "frames", "raf", "resolution", "au
     assert.equal(elapsed_ms, 5000);
     assert.equal(previous.position, 1);
     assert.equal(current.time - previous.time, 5000);
+    assert.equal(current.current_src_present, true);
+    assert.equal(current.src_attribute_present, true);
     assert.deepEqual(result.diagnostics.native, { visible: true, focused: true, minimized: false });
     assert.equal(result.diagnostics.native_error, null);
     if (fault === "paused") assert.equal(current.paused, true);

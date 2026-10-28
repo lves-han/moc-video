@@ -515,3 +515,11 @@
 - 实施状态：WIP；解锁后短GUI预检仍无初始化握手。原延后采样堆栈t01-native-startup-late-diagnostic明确停在NSPersistentUIRestorer→NSAlert runModal；CUA观察到“上次异常退出，是否恢复窗口”的系统对话框。原CUA输入控制返回未激活，未假称已点击；原诊断进程均按身份清理，原报告/堆栈保留。
 - 当前agent最小修复：NativeSession仅在macOS为验收样机追加-ApplePersistenceIgnoreState YES，采用Cocoa易失参数域忽略旧窗口恢复，保留持久偏好和保存状态。原argv进入会话报告，其他平台启动参数保持；准确A1/窗口创建/清理与安全门不改。
 - 自验证：原run t01-launch-isolation-tests收据20261028T011142383474 exit0，41Python全部通过，新增macOS参数隔离与其他平台参数保持两项回归；当前无残留样机进程。下一步重新生成同源码构建收据并跑原生预检，确认实际握手/前台/布局/DPI/清理再长测。
+
+
+## T0.2 停止播放资源断言校正 2026-10-28T01:24:57.298529+00:00
+
+- 当前原生短预检已通过初始化、前台、安全、全部5布局和4缩放；停止后断言失败。原补充t01-stop-native-diagnostic收据20261028T011835826805 exit1，真实stop后paused=true/network=0/ready=0/buffer空/解码尺寸0/src及track移除、listeners/HLS实例0，唯currentSrc仍保留旧选择URL。全部原进程按身份清理，历史15条失败保持。
+- 根因依据：https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource 无src/srcObject/source路径在NETWORK_EMPTY返回；https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/HTMLMediaElement.cpp 的selectMediaResource相同。currentSrc描述上次选择URL，旧断言误将其作为资源仍占用的独立证据。
+- 最小修改：仅验收automation以paused/NETWORK_EMPTY/HAVE_NOTHING/空buffer/零解码尺寸/空srcObject/无src/source/track及无listener/HLS、停止时钟和帧联合验证释放，保留currentSrc布尔遥测且隐去URL。产品现有pause/remove src/remove track/load释放流程保持；原资源释放、20生命周期与全部长测门保持。
+- 自验证：原run t01-stop-release-tests收据20261028T012428836393 exit0，36Node通过，含1个currentSrc保留但资源全释放正例和13项资源残留/继续播放反例；原22项长播遥测/前台反例保持。本版准确A1/完整verify待同源码build和真实预检后运行。

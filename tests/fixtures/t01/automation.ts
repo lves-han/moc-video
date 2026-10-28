@@ -80,6 +80,8 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
     const quality = video.getVideoPlaybackQuality();
     return { time: performance.now(), position: video.currentTime, duration: video.duration,
       paused: video.paused, ended: video.ended, ready_state: video.readyState,
+      current_src_present: Boolean(video.currentSrc), src_attribute_present: video.hasAttribute("src"),
+      source_elements: video.querySelectorAll("source").length,
       seeking: video.seeking, network_state: video.networkState, loop: video.loop,
       playback_rate: video.playbackRate, volume: video.volume, muted: video.muted,
       buffered: Array.from({ length: video.buffered.length }, (_, i) => [video.buffered.start(i), video.buffered.end(i)]),
@@ -289,9 +291,15 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await click("stop");
         await delay(500);
         const before = frames;
+        const position = video.currentTime;
         await delay(500);
-        assertCondition(video.paused && !video.currentSrc && !video.hasAttribute("src") && video.querySelectorAll("track").length === 0, "Video resources remain after stop");
-        assertCondition(!player.diagnostics().listening && player.diagnostics().hls_instances === 0 && frames <= before + 1, "Old playback still active");
+        // The no-source selection algorithm returns at NETWORK_EMPTY; currentSrc can retain the old URL.
+        assertCondition(video.paused && video.networkState === 0 && video.readyState === 0 &&
+          video.buffered.length === 0 && video.videoWidth === 0 && video.videoHeight === 0 &&
+          video.srcObject == null && !video.hasAttribute("src") &&
+          video.querySelectorAll("source, track").length === 0, "Video resources remain after stop");
+        assertCondition(!player.diagnostics().listening && player.diagnostics().hls_instances === 0 &&
+          frames <= before + 1 && video.currentTime === position, "Old playback still active");
         return { sample: sample(), source_removed: true, frames_after_stop: frames - before };
       }
       case "shutdown": {
