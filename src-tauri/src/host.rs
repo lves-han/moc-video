@@ -14,12 +14,17 @@ use uuid::Uuid;
 
 #[path = "maccms.rs"]
 pub mod maccms;
+#[path = "stremio.rs"]
+pub mod stremio;
 
 struct Committed {
     settings: Value,
     sources: SourceDispatch,
     gateway: Option<Gateway>,
     maccms: std::collections::HashMap<String, maccms::Catalog>,
+    stremio: std::collections::HashMap<String, stremio::Catalog>,
+    metadata_epoch: u64,
+    metadata_requests: std::collections::HashMap<String, String>,
 }
 
 pub struct Host {
@@ -34,6 +39,7 @@ pub struct Call {
     command: String,
     args: Value,
     job: Option<Job>,
+    metadata_epoch: Option<u64>,
 }
 
 impl Host {
@@ -73,6 +79,9 @@ impl Host {
                 sources,
                 gateway: None,
                 maccms: Default::default(),
+                stremio: Default::default(),
+                metadata_epoch: 0,
+                metadata_requests: Default::default(),
             }),
         }))
     }
@@ -110,11 +119,37 @@ impl Host {
                 .map(Some)
         };
         match prepare() {
-            Ok(job) => Ok(Call {
-                command: command.into(),
-                args,
-                job,
-            }),
+            Ok(job) => {
+                let mut committed = self.committed.lock().expect("Host commit lock");
+                let key = match command {
+                    "get_home" => Some(&args["input"]),
+                    "get_details" => Some(&args["input"]["ref"]),
+                    _ => None,
+                };
+                let metadata_epoch = key
+                    .filter(|key| {
+                        committed
+                            .sources
+                            .source(key["source_id"].as_str().unwrap_or(""), None)
+                            .is_ok_and(|source| source["kind"] == "stremio")
+                    })
+                    .map(|key| {
+                        if let Some(job) = &job {
+                            job.bind_source(key["source_id"].as_str().expect("Source id"));
+                        }
+                        committed.metadata_requests.insert(
+                            args["request_id"].as_str().expect("Request UUID").into(),
+                            key["source_id"].as_str().expect("Source id").into(),
+                        );
+                        committed.metadata_epoch
+                    });
+                Ok(Call {
+                    command: command.into(),
+                    args,
+                    job,
+                    metadata_epoch,
+                })
+            }
             Err(error) => Err(self.error(&args, error)),
         }
     }
@@ -127,13 +162,28 @@ impl Host {
     }
 
     pub fn execute(&self, call: Call) -> Value {
-        let result = self.execute_inner(&call);
+        let mut error_details = None;
+        let mut result = self.execute_inner(&call, &mut error_details);
+        if let Some(epoch) = call.metadata_epoch {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            committed
+                .metadata_requests
+                .remove(call.args["request_id"].as_str().expect("Request UUID"));
+            if epoch != committed.metadata_epoch {
+                result = Err(ApiError::cancelled());
+            } else if let Err(error) = call.job.as_ref().expect("Metadata job").check() {
+                result = Err(error);
+            }
+        }
         let unsafe_target = result
             .as_ref()
             .err()
             .is_some_and(|error| error.message.starts_with("unsafe_target:"));
         let mut response = envelope(&call.args["request_id"], &self.host_epoch, result);
-        if unsafe_target {
+        if let Some(details) = error_details {
+            response["error"]["details"] = details;
+        }
+        if unsafe_target && response["error"]["details"].is_null() {
             response["error"]["details"] =
                 json!({"reason": "unsafe_target", "stage": "public_http"});
         }
@@ -177,7 +227,11 @@ impl Host {
         }
     }
 
-    fn execute_inner(&self, call: &Call) -> Result<Value, ApiError> {
+    fn execute_inner(
+        &self,
+        call: &Call,
+        error_details: &mut Option<Value>,
+    ) -> Result<Value, ApiError> {
         let input = &call.args["input"];
         if call.command == "cancel_request" {
             return self.requests.cancel(
@@ -190,13 +244,22 @@ impl Host {
         // Capture under the commit lock, perform HTTP outside it, then recheck
         // before publication. Settings and cancellation stay responsive to I/O.
         match call.command.as_str() {
-            "sync_catalog" => return self.sync_catalog(input, job),
-            "get_home" => return self.route_content(input, job, "home"),
-            "get_details" => return self.route_content(&input["ref"], job, "details"),
-            "resolve_episode" => return self.route_content(&input["episode_ref"], job, "resolve"),
+            "sync_catalog" => return self.sync_catalog(input, job, error_details),
+            "get_home" => return self.route_content(input, job, "home", call.metadata_epoch),
+            "get_details" => {
+                return self.route_content(&input["ref"], job, "details", call.metadata_epoch);
+            }
+            "resolve_episode" => {
+                return self.route_content(&input["episode_ref"], job, "resolve", None);
+            }
             "match_playback" => {
-                self.route_content(&input["metadata_ref"]["content_ref"], job, "details")?;
-                return self.route_content(&input["playback_source"], job, "resolve");
+                self.route_content(
+                    &input["metadata_ref"]["content_ref"],
+                    job,
+                    "details",
+                    call.metadata_epoch,
+                )?;
+                return self.route_content(&input["playback_source"], job, "resolve", None);
             }
             _ => {}
         }
@@ -230,8 +293,18 @@ impl Host {
                         .as_array()
                         .expect("Validated configs"),
                 );
+                if stremio::locale(input["ui_locale"].as_str().unwrap_or("en"))
+                    != stremio::locale(committed.settings["ui_locale"].as_str().unwrap_or("en"))
+                {
+                    committed.metadata_epoch += 1;
+                    for (request_id, _) in committed.metadata_requests.drain() {
+                        self.requests
+                            .cancel(&Uuid::new_v4().to_string(), &request_id)?;
+                    }
+                }
                 committed.settings = input.clone();
                 committed.maccms.retain(|id, _| !affected.contains(id));
+                committed.stremio.retain(|id, _| !affected.contains(id));
                 self.requests.cancel_sources(&affected);
                 return Ok(committed.settings.clone());
             }
@@ -265,7 +338,12 @@ impl Host {
         )
     }
 
-    fn sync_catalog(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+    fn sync_catalog(
+        &self,
+        input: &Value,
+        job: &Job,
+        error_details: &mut Option<Value>,
+    ) -> Result<Value, ApiError> {
         let kind = SourceKind::parse(&input["kind"])?;
         if kind == SourceKind::Cloudstream {
             return Err(ApiError::new(
@@ -290,10 +368,68 @@ impl Host {
             captured
         };
         if kind == SourceKind::Stremio {
-            return Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "HTTP source adapter has not published a catalog",
-            ));
+            let result = stremio::Catalog::sync(captured.clone(), &maccms::Http::default(), job);
+            let mut committed = self
+                .committed
+                .lock()
+                .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+            let result = match job.check() {
+                Ok(()) => result,
+                Err(error) if error.code == "CANCELLED" => return Err(error),
+                Err(error) => Err(stremio::SyncFailure {
+                    error,
+                    indices: (0..captured.config["manifest_urls"]
+                        .as_array()
+                        .expect("Manifest URLs")
+                        .len())
+                        .collect(),
+                }),
+            };
+            committed
+                .sources
+                .check_snapshot(&captured, &self.host_epoch, None, true)?;
+            let catalog = match result {
+                Ok(catalog) => catalog,
+                Err(failure) => {
+                    let details = json!({"reason": "manifest_sync_failed", "failed_addon_indices": failure.indices});
+                    let mut error = json!(failure.error);
+                    if matches!(
+                        failure.error.code.as_str(),
+                        "UPSTREAM_FAILED" | "UPSTREAM_TIMEOUT"
+                    ) {
+                        error["details"] = details.clone();
+                        *error_details = Some(details);
+                    }
+                    if failure.error.code != "CANCELLED" {
+                        committed.sources.fail_unpublished_sync(
+                            &captured,
+                            &self.host_epoch,
+                            error,
+                        )?;
+                    }
+                    return Err(failure.error);
+                }
+            };
+            let changed = committed
+                .stremio
+                .get(&captured.source_id)
+                .is_none_or(|previous| previous.source != catalog.source);
+            committed
+                .sources
+                .publish_sync(&captured, &self.host_epoch, catalog.source.clone())?;
+            // Identical manifests retain session references, cursors and cache.
+            if changed {
+                for (request_id, source_id) in &committed.metadata_requests {
+                    if *source_id == captured.source_id {
+                        self.requests
+                            .cancel(&Uuid::new_v4().to_string(), request_id)?;
+                    }
+                }
+                committed.stremio.insert(captured.source_id, catalog);
+            }
+            return Ok(
+                json!({"kind": kind, "config_id": captured.config["config_id"], "changed": changed, "sources": committed.sources.sources(), "cloudstream_result": null}),
+            );
         }
         let result = maccms::Catalog::sync(captured.clone(), &maccms::Http::default(), job);
         let mut committed = self
@@ -322,7 +458,13 @@ impl Host {
         )
     }
 
-    fn route_content(&self, key: &Value, job: &Job, capability: &str) -> Result<Value, ApiError> {
+    fn route_content(
+        &self,
+        key: &Value,
+        job: &Job,
+        capability: &str,
+        page_epoch: Option<u64>,
+    ) -> Result<Value, ApiError> {
         let mut committed = self
             .committed
             .lock()
@@ -346,10 +488,47 @@ impl Host {
                 "ENGINE_NOT_READY",
                 "Cloudstream bridge is stopped",
             )),
-            SourceKind::Stremio => Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "HTTP source adapter is not ready",
-            )),
+            SourceKind::Stremio => {
+                if page_epoch.is_some_and(|epoch| epoch != committed.metadata_epoch) {
+                    return Err(ApiError::cancelled());
+                }
+                let epoch = committed.metadata_epoch;
+                let language =
+                    stremio::locale(committed.settings["ui_locale"].as_str().unwrap_or("en"));
+                let captured = committed.sources.snapshot(
+                    source["origin"]["config_id"].as_str().expect("Config UUID"),
+                    &self.host_epoch,
+                    false,
+                )?;
+                let catalog = committed
+                    .stremio
+                    .get(&captured.source_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        ApiError::new("ENGINE_NOT_READY", "Stremio manifests must be synchronized")
+                    })?;
+                drop(committed);
+                let http = maccms::Http::default();
+                let result = if capability == "home" {
+                    catalog.home(&http, key, language, job)
+                } else {
+                    catalog.details(&http, key, language, job)
+                };
+                let committed = self
+                    .committed
+                    .lock()
+                    .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+                job.check()?;
+                if epoch != committed.metadata_epoch {
+                    return Err(ApiError::cancelled());
+                }
+                committed
+                    .sources
+                    .check_snapshot(&captured, &self.host_epoch, None, false)?;
+                let output = result?;
+                catalog.commit(&output)?;
+                Ok(output.value)
+            }
             SourceKind::Maccms => {
                 let captured = committed.sources.snapshot(
                     source["origin"]["config_id"].as_str().expect("Config UUID"),

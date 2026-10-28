@@ -201,6 +201,27 @@ impl SourceDispatch {
         self.entries.get_mut(&id).expect("Checked source").source = source;
         Ok(())
     }
+
+    pub fn fail_unpublished_sync(
+        &mut self,
+        captured: &SourceSnapshot,
+        host_epoch: &str,
+        error: Value,
+    ) -> Result<(), ApiError> {
+        self.check_snapshot(captured, host_epoch, None, true)?;
+        let id = Uuid::parse_str(captured.config["config_id"].as_str().expect("Config UUID"))
+            .expect("Config UUID");
+        let entry = self.entries.get_mut(&id).expect("Checked source");
+        // A failed refresh leaves the complete published snapshot available.
+        if entry.source["source_revision"] == "unpublished" {
+            let mut source = entry.source.clone();
+            source["runtime_status"] = json!("failed");
+            source["error"] = error;
+            Contracts::get().validate("AppSource", &source)?;
+            entry.source = source;
+        }
+        Ok(())
+    }
 }
 
 fn configured_source(config: &Value) -> Value {
