@@ -665,3 +665,13 @@
 - 验收 A1：NOT RUN for session-3 source；本会话原生编译/行为实际执行数0。已知CLI的sysctl/sccache EPERM沿ADR010交由外层代验，未重复权限探测、扩大权限或绕过run.py。原第2会话17测试11通过6失败继续保留；修复后完整verify、done、受验完成提交与固定独立CLEAR均NOT RUN。
 - 外层下一步：确认本CLI退出及旧执行器/重命令PID与创建时间结束、两锁空闲、源码稳定后，沿ADR010先代办WIP Git保存本次3文件及本记录（建议`WIP T0.4: correct catalog sync result and Darwin HTTP fixture`）。随后argv=["{python}","scripts/run.py","n00-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n00.py","--suite","all","--report","evidence/acceptance/N00-all.json","--junit","evidence/acceptance/N00-all.xml"]；A1成功后直接argv=["{python}","scripts/verify.py","all"]。每个{python}均替换本项目/用户给定的虚拟环境解释器，保留原4096MiB RSS采样/jobs2/线程1/共享重锁与超时，按原勾选/真实PROGRESS/done/受验提交/固定独立CLEAR闭环。
 - Remaining：同步changed行为、5项协议成功路径与chunked传输修复尚待当前源码真实原生复验；若出现新失败保留证据并按现有会话额度/用户授权处理，后卡等待。当前产品和测试源码停止编辑，Git收尾沿既定ADR010分工交外层。
+
+
+## T0.4 N00 MacCMS功能开发完成 2026-10-28T05:54:04.969781+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261028T054632016064-A1/output.log`；断言：准确--suite all退出0，17项原生生产Host/MacCMS行为全部通过，104条真实宿主响应由独立Python/schema校验，JUnit29通过/0失败/0skip，覆盖全部9需求ID。原5项同步包络及chunked超限失败均已在当前源码复验通过，原schema/反例/边界保持。
+- 完整verify：PASS；收据：`evidence/verify/20261028T054900313030.json`；6项配置门全部exit0，包含控制器118通过/7平台skip、归档与工作契约、前端行为/类型构建、Rust fmt/check/clippy/test。原completion_evidence/verify_evidence核对同source/after_source=67416fd5cb32050b9501fe81272479ba8f22351aa69d3d5f92c309f5aa32b16f、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation1及全部日志/报告摘要通过。
+- 实现：宿主MacCMS同步/首页/详情真实接线，来源身份/世代/取消/单调预算/提交锁/同步序号保持；匿名JSON协议、查询一次编码、分页/搜索/分组与旧引用/有界探测/图片登记及SSRF DNS/peer/重定向/代理/超限等正负例通过。使用本机单进程合成HTTP/UDP DNS fixture，无Android或真实集群；fixtures由Drop停止/join，所有原执行器/payload及记录成员退出，资源为4096MiB进程树RSS采样/jobs2/线程1。
+- 历史：原sessions3与两条失败、WIP27b6204及c6de08b保留，ADR022唯一第三会话已消费。仅本卡功能开发完成，匹配/ResolutionStore与网关按T0.8/T0.9后续卡实现，真实源产品闭环按既有后续任务；本卡不宣称后续功能完成。
+- 下一步：原task done与受验提交、原drive --review-only固定提交独立CLEAR；完整闭环后先整体重写监管提示词并严格按序下一卡。

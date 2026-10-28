@@ -354,7 +354,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 | Cloudstream制品刷新事务 | T19 |
 
 ### T0.4 N00 MacCMS JSON来源
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.3
 - 需求：U08, R06, R39, R46, R49, R58, R59, R64, REQ-N00 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/host.rs`, `src-tauri/src/maccms.rs`, `src-tauri/src/source_dispatch.rs`, `src-tauri/src/commands.rs`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
