@@ -800,3 +800,9 @@
 - 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
 - 原sessions3/失败4/generation1与原准确A1失败、WIP61cb8b5及真实TMDB3.1.7响应保持。第4许可尚未消费；固定实际文档独立CLEAR后紧邻身份/锁/顺序核对，唯一一次原drive --once --max-sessions 4，计数达到4即本次已使用，其他卡默认2。
 - 仅解除此次预算/脱敏修复阻塞；原A1/verify/done/受验提交/固定独立CLEAR仍待修复后闭环，后卡等待。原source/protected不变，无rebaseline。
+
+
+## T0.5 第四会话授权独立文档CLEAR 2026-10-28T10:11:52.946762+00:00
+
+- 独立只读round24：CLEAR；报告`docs/reviews/doc-review/round-24.md`，固定HEADc734152903f36e42142c80f019d654e1df354f9e/source47922d7c4417d34e0701c7d70a693cb802647f576894c9e41f66269d9486174b/protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d。受审四项SHA与ADR025分段逐项核对匹配。
+- 原sessions3/失败4/gen1保持；第4许可尚未消费，紧邻顺序/身份/锁安全检查后唯一原drive --once --max-sessions 4，原计数达到4即已使用。原准确A1仍FAIL，修复后完整闭环，后卡等待。
