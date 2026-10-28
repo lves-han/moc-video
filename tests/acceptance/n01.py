@@ -26,21 +26,21 @@ RUST_TESTS = {
     "n01_resource_filters_required_extras_order_and_same_titles": ("U08", "R49", "R60", "R61", "REQ-N01"),
     "n01_prefix_query_rejection_and_path_segment_encoding": ("R46", "R49", "R60", "REQ-N01"),
     "n01_skip_raw_count_dedup_empty_and_no_new_items": ("R60", "R61", "REQ-N01"),
-    "n01_meta_owner_fallback_filters_warnings_and_all_failed": ("U08", "R60", "R62", "REQ-N01"),
+    "n01_meta_owner_fallback_filters_warnings_and_all_failed": ("U08", "R60", "R65", "REQ-N01"),
     "n01_catalog_and_meta_separate_addons_and_stream_only": ("U08", "R19", "R60", "REQ-N01"),
     "n01_movie_and_original_video_order_inline_media_ignored": ("R19", "R49", "R60", "R64", "REQ-N01"),
-    "n01_partial_home_failed_placeholders_retry_and_all_failure": ("R60", "R62", "REQ-N01"),
+    "n01_partial_home_failed_placeholders_retry_and_all_failure": ("R60", "REQ-N01"),
     "n01_public_http_headers_cookies_addresses_and_foreign_refs": ("R06", "R46", "R49", "REQ-N01"),
     "n01_aggregate_45s_reserve_partial_and_cancellation": ("R39", "R60", "REQ-N01"),
     "n01_sync_sequence_and_edit_disable_delete_readd_cancel": ("R39", "R58", "R64", "REQ-N01"),
     "n01_manifest_latest_sync_timeout_and_user_cancel": ("R06", "R39", "R60", "R64", "REQ-N01"),
-    "n01_language_field_fallback_identity_cache_and_locale_mapping": ("R65", "REQ-N01"),
-    "n01_language_request_failure_english_failure_and_fallback_cache": ("R65", "REQ-N01"),
-    "n01_localized_video_matching_and_mismatched_ids": ("R64", "R65", "REQ-N01"),
-    "n01_chinese_english_chinese_race_and_queued_calls": ("R39", "R65", "REQ-N01"),
-    "n01_language_storage_failure_preserves_confirmed_locale": ("R39", "R65", "REQ-N01"),
-    "n01_cache_bounds_revision_and_synthetic_vectors": ("R46", "R64", "REQ-N01"),
-    "n01_live_selected_tmdb_en_zh_evidence": ("U08", "R06", "R60", "R65", "REQ-N01"),
+    "n01_language_field_fallback_identity_cache_and_locale_mapping": ("R62", "R65", "REQ-N01"),
+    "n01_language_request_failure_english_failure_and_fallback_cache": ("R62", "REQ-N01"),
+    "n01_localized_video_matching_and_mismatched_ids": ("R62", "R64", "REQ-N01"),
+    "n01_chinese_english_chinese_race_and_queued_calls": ("R39", "R62", "REQ-N01"),
+    "n01_language_storage_failure_preserves_confirmed_locale": ("R39", "R62", "REQ-N01"),
+    "n01_cache_bounds_revision_and_synthetic_vectors": ("R46", "R64", "R65", "REQ-N01"),
+    "n01_live_selected_tmdb_en_zh_evidence": ("U08", "R06", "R60", "R62", "R65", "REQ-N01"),
 }
 
 
@@ -227,7 +227,7 @@ def main():
     ready = run.case("resource-ownership", ["R06", "R39", "REQ-N01"], "original scope, source and local platform", lambda: resources(run))
     native = run.case("native-behaviors", list(IDS), "all named native behaviors and independent DTO validation pass",
                       lambda: rust(run) if ready else require(False, "NOT RUN: resource ownership failed"))
-    run.case("real-language-evidence", ["U08", "R60", "R65", "REQ-N01"], "real selected addon same-ID en/zh requests and responses",
+    run.case("real-language-evidence", ["U08", "R60", "R62", "R65", "REQ-N01"], "real selected addon same-ID en/zh requests and responses",
              lambda: live_evidence(run) if native else require(False, "NOT RUN: native behaviors failed"))
     return run.save()
 

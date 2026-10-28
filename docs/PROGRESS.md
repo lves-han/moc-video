@@ -735,3 +735,13 @@
 - 两条失败同source/after_source=e2e6e13acf1e1a04110a80cfe2930c76d069498ca7258b15834b106e2a29876a、protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1；源码未在运行中改变，旧执行器/负载已退出、两锁空闲。当前原sessions1/失败2，默认2仍有一次可用。
 - 下一步：按原同卡开发工作流普通drive --once进入第2会话最小修复，保持wire字节预算/原协议/反例/强制真实语言门，不自行改产品代码。交接补充现有语言用例R62/R65精确映射核对。原公开上游语言路径源码已读；web工具读取部署JSON未成功，部署可用性不据此推断，仍由原生产边界A1实测。
 - 证据：原收据/完整输出与当前n01验证目录compile-findings.md，WIP268c3be及全部历史保持。此为原预算内修复，未新增额度/范围决定、冻结内容保持，严格顺序后卡等待。
+
+
+## T0.5 N01 第2会话最小类型修复与ADR010代验交接 2026-10-28T07:49:40+00:00
+
+- 实施状态：WIP；原sessions=2/2、generation=1、两条原编译失败及WIP268c3be保留，protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d。本卡保持未勾选，T0.13原paused保持；沿ADR010由外层待开发CLI退出后执行真实构建、验收和Git收尾。
+- Changed / Why：依据两份原E0308编译诊断，将stremio.rs的home成功栏目容器从Vec<Value>改为Value::Array，并相应调整追加与空数组判断，使原wire_size调用接收准确类型。逐栏目及最终响应的8MiB字节检查、RESOURCE_LIMIT传播、全部失败与部分失败语义继续沿原路径，未改Contracts/schema/阈值/公开接口，未引入容器克隆。除此仅修正tests/acceptance/n01.py用例需求关联：语言字段/请求回退、缓存、视频覆盖、乱序、存储失败及真实语言证据归R62；已验证身份/归属回退及合成身份向量归R65，保留相关双重归属。原19项Rust行为、全部断言、13项需求汇总及强制真实en-US/zh-CN门保持。
+- Verified（实际静态检查）：原task.py check/start/show/status/check退出0，35卡；rustfmt --check --edition 2024 --config skip_children=true src-tauri/src/stremio.rs src-tauri/src/host.rs src-tauri/src/source_dispatch.rs tests/fixtures/n01.rs最终退出0；Python AST、Cargo TOML/lock解析、19项Rust定义与验收清单相等、13项需求覆盖及具体语言用例R62关联检查退出0；git diff --check退出0，实际源码差异仅stremio.rs与n01.py。首次rustfmt仅因新增条件换行退出1，已通过原note记录并局部排版后复检通过。
+- 验收 A1：NOT RUN；本会话实际编译/行为通过数0，部署确切版本/同ID中英文原始响应、完整verify、done、受验完成提交及独立CLEAR均待外层实际执行。静态检查未证明E0308已通过编译。按ADR010未重复探测已知macOS进程枚举/sccache/.git权限限制，未扩权或绕过原资源执行器。
+- 外层准确下一步：确认本CLI退出、源码稳定及原锁/进程身份后，argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；通过后argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]；全通过直接argv=["{python}","-B","scripts/verify.py","all"]。继续原勾选/真实记录/task.py done/受验完成提交/固定提交独立CLEAR；本卡默认2会话已使用完，后续失败保留并按原规则处理，不自行增额。
+- Remaining：类型/clippy及19项真实行为、所选扩展实际可用性/语言能力待验证，全部原质量门保持。本轮源码已停止编辑，Git WIP按ADR010交外层，建议WIP T0.5: fix Stremio aggregate JSON type and language traceability；后卡等待本卡完整闭环。

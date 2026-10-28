@@ -749,7 +749,7 @@ impl Catalog {
             ));
         }
         let mut output = Output::default();
-        let mut success = Vec::new();
+        let mut success = Value::Array(Vec::new());
         let mut failed = Vec::new();
         let mut first_error = None;
         for chunk in sections.chunks(if handle.is_some() { 1 } else { 4 }) {
@@ -771,7 +771,10 @@ impl Catalog {
             for (section, result) in chunk.iter().zip(results) {
                 match result {
                     Ok(mut column) => {
-                        success.push(column.value);
+                        success
+                            .as_array_mut()
+                            .expect("Stremio sections array")
+                            .push(column.value);
                         wire_size(&success, LIMIT)?;
                         output.cache.append(&mut column.cache);
                         output.pages.append(&mut column.pages);
@@ -795,7 +798,11 @@ impl Catalog {
             }
         }
         job.check()?;
-        if success.is_empty() {
+        if success
+            .as_array()
+            .expect("Stremio sections array")
+            .is_empty()
+        {
             return Err(
                 first_error.unwrap_or_else(|| upstream("Stremio home has no successful catalogs"))
             );
