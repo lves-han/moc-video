@@ -166,3 +166,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 实施：原task.py rebaseline增加显式--include-paused参数，默认单卡行为保持；全程持有原driver/project-heavy锁，校验完整在途集合、当前/暂停身份、真实RESOLVED及准确摘要/迁移集合、append-only、scope、驱动/CLI及执行器/payload身份和未完成收据。全部校验先于逐文件原子保存；沿原rebaselines事件记录cards/previous/new/approval，各卡generation仅加一次，中断按同批准事件幂等续写。计数/失败/区段/base/resume_base/current/paused保持，旧验收失效。暂停卡scope仅其活动segments与未提交文件，修正误计暂停后其他卡提交的问题。
 候选自验证：现行原run migration-candidate-tests20261028T025600726273 exit0，104测试、103通过/1平台skip；补finished收据仍存活payload守卫与反例后focused20261028T025951500653 exit0，9项迁移行为通过。候选在evidence隔离测试夹具验证后才应用到原文件，未用旁路执行器或手写实际状态。实际迁移后原run复测、固定内容独立文档复审，再T0.2功能实施/实际验收。
 本次批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1。同时应用ADR020分期TASKS/ARCH与已获ADR016的T0.4 host.rs范围；SPEC、AGENTS、workflow配置、资源/权限/单条时限保持。T0.13顺序BLOCKED与隔离WIP保持，T0.4解除已批准范围问题后仍paused按序等待，当前卡继续T0.2。
+
+
+## ADR-022 2026-10-28T05:34:12.866941+00:00 — 已采纳：仅T0.4追加一次功能失败修复会话
+
+来源：当前聊天询问“T0.4已通过编译，17项原生功能测试有11项通过、6项失败，主要涉及返回数据的协议校验和超限错误分类。原两次开发会话已用完。是否仅为T0.4追加一次修复会话（2→3），仍由原脚本修复、我负责复验，权限和资源限制保持？”；用户明确回复“批准 T0.4 追加一次”。
+决定：仅本卡累计开发上限2→3，一次第3开发会话用于定位/修复原A1的6项功能失败并做相关自验证；原gpt-6.1-sol workspace-write CLI实施，外层沿ADR010使用原run/verify验收与Git收尾。现2次会话/2条失败/generation1及WIP27b6204、原准确A1报告与全部日志保留。
+实施：本次独立只读文档复审CLEAR后，紧邻启动确认最早未完成/current/next均T0.4、原sessions2，旧驱动/CLI/执行器及重命令均退出、两锁空闲，仅一次原scripts/drive.py --once --max-sessions 3。该参数仅本卡本次，启动后原计数3即已消费；workflow默认2及其他卡预算保持，不加session-hours、不重置计数、不复用其他卡例外。
+验证：5项Host结果被工作协议拒绝和1项超限分类失败以原Rust日志为依据，具体根因由原开发CLI核实，保留原schema/协议、原反例、17行为及全部9需求门。修改后实际相关构建/行为自验证通过再正常交接；遇既知sandbox无法实跑时沿原分工准确交接未验证项，避免重复权限探测/扩大权限。外层稳定源码重新locked构建、准确A1、直接完整verify、原done/Git及固定提交独立CLEAR，前卡完整闭环后才依序下一卡。
+保持：原4096MiB macOS RSS采样/jobs2/线程1、项目专属重锁、全部单条/会话时限、开发/只读权限及阶段/范围/顺序。protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation1保持，未修改冻结定义/控制器，不调用rebaseline。当前原source=7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446，此为运行前定位，后续每次从原状态核对。

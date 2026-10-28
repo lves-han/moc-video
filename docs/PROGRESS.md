@@ -639,3 +639,11 @@
 - 已确认失败类：n00_host_sync_home_details_and_native_images、n00_query_search_encoding_and_empty_results、n00_partial_home_retry_pagination_and_all_failed、n00_config_edits_disable_delete_and_readd_cancel_io、n00_latest_sync_wins_without_partial_publication的Host结果被现行工作协议拒绝，返回INTERNAL_ERROR；n00_metadata_limits_and_foreign_section_refs预期RESOURCE_LIMIT而返回UPSTREAM_FAILED。具体字段/传输分支需原开发者进一步定位，现阶段不猜测唯一根因。
 - 证据：原Rust完整日志`evidence/acceptance/N00-27b3d2b8c34840fab194588b8bd0ccdc/command-3.log`，当前N00-all.json/xml及evidence/drive/n00-current-validation-dir.txt指向的functional-findings.md；source/after_source=7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation1、原log SHA均核对。原执行器/payload/记录成员身份退出、driver/heavy实际锁空闲；WIP27b6204与原sandbox失败保留，累计2条失败/开发2次保持。
 - 最小待决定：仅为T0.4追加一次修复会话2→3，由原gpt-6.1-sol workspace-write CLI修复这6项功能失败并做相关自验证，外层依原run/verify/Git/固定独立CLEAR复验；原资源/权限/时限/失败历史及默认其他卡2保持。严格卡序后卡等待，暂停同ID监管直到真实决定。
+
+
+## T0.4 一次功能修复会话真实授权 2026-10-28T05:34:12.866941+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对仅本卡追加一次2→3、由原脚本修复6项功能失败并由外层复验、权限资源保持的问题明确答“批准 T0.4 追加一次”；来源当前聊天问题回复，按ADR022仅本卡一次。
+- 批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1
+- 当前sessions2/失败2/generation1仍保留，准确A1原17测试11通过6失败、WIP27b6204及全部日志保持；本次仅追加真实授权/交接，未改受保护内容，不调用rebaseline。独立文档复审CLEAR且安全边界满足后仅原drive --once --max-sessions 3；修复后全部原功能质量门重新执行，后卡等待。
