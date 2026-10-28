@@ -600,3 +600,13 @@
 - MSE候选原build/全回归通过后，准确A120261028T032242573158仍失败functional decoded audio；HLS首播诊断20261028T032409610661中第一种HLS即engine=hls.js/RMS0，后续切MP4出现seek失败。该路线未解决测量限制，已恢复原产品引擎选择（native优先、MSE按原能力回退），原WIP/全部失败保留。
 - 功能验证测量修正：WebKit对HLS的MediaElementAudioSourceNode不提供PCM，短时HLS功能验证改读测试专用WKWebView原生_isPlayingAudio播放状态，并保持真实视频帧/控制/UI/资源检查。官方WebKit WKWebViewPrivate.h声明该属性，WKWebView.mm实现转发page.isPlayingAudio；原链接https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h。仅原automation feature加入运行状态读回，生产构建排除；缺SPI/false状态显式失败。MP4 PCM/RMS/440Hz门保持；功能报告明确HLS测量方式/PCM限制，产品handoff标记需支持的PCM采样且原all长测PCM门保持待测。
 - 自验证：原run t01-native-audio-regressions20261028T033006688884 exit0，48Python/41Node通过（实际子日志保留），新增原生音频false/missing拒绝及日志原因可区分回归、原生/MSE能力/切源清理等真实player模块回归。formatter通过原run输出候选后再应用，无源码运行期改写。当前累计失败23全部保留，hard_sessions=[]；继续按新事实重新构建/准确功能A1，未宣称HLS PCM/产品长期验收通过。
+
+
+## T0.2 T01 功能开发完成 2026-10-28T03:38:20.051586+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261028T033243703354-A1/output.log`；断言：准确--suite functional退出0，JUnit33通过/0失败/4非必需平台skip；macOS arm64真实MP4/HLS控制/字幕/全屏/帧与UI/音频状态、5布局/4缩放、fixture与WebView安全负例/生产排除/正常stop和关闭通过。
+- 完整verify：PASS；收据：`evidence/verify/20261028T033408297674.json`；6项配置门全部exit0，包含控制器118通过/7平台skip、归档/工作契约、前端行为与类型/构建、Rust fmt/check/clippy/test。全部收据source/after_source=3f61aa489b212a8f64b231216cbb5b30bc50ae4ae13a8b28b4ff3659f3548478、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation2匹配；原verify_evidence逐项日志/报告摘要及JUnit核对通过。
+- 相关回归：当前原negatives/A1实跑48Python+41Node共89项通过，含功能/产品分期、视频/音频/UI失败、原生HLS音频false/missing、具体失败原因分组、原native/MSE能力与切源资源回收。首代媒体字节摘要保持。
+- 测量与产品承接：MP4实际PCM RMS约0.062/440Hz；HLS原生audio_playing=true、帧/控制/UI推进，WebKit MediaElementAudioSourceNode的PCM为0，功能报告明确native-state测量和PCM限制。原两格式各1800秒/20窗口及支持的HLS PCM采样由T0.28/A1产品测试承接，T0.25网关30分钟由T0.26/A2承接，均仍NOT RUN且原强度保持。其他桌面平台沿ADR005/006列NOT RUN。
+- 资源：真实应用/全部WebKit/唤醒进程按创建身份退出，正常exit0、lingering=[]，fixture请求/线程/端口全部释放；4096MiB RSS采样/jobs2/线程1保持，原历史失败与CLI sessions6保留。本条记录开发功能阶段完成，接着原task done/受验提交/固定提交独立CLEAR，之后按序T0.4。
