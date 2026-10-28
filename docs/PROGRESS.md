@@ -764,3 +764,10 @@
 - 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
 - 实际DNS复核：原evidence/runs/20261028T093539289489-n01-dns-recheck/receipt.json exit0，系统与resolv.conf A解析为104.26.8.49/104.26.9.49/172.67.74.162，均公网；AAAA无记录。原日志SHA核对通过，公网策略保持，真实HTTPS/版本/中文响应仍待原A1。
 - 当前sessions2/失败3/generation1及全部原日志/失败JSONXML/WIP保持，第三许可尚未消费。独立文档复审CLEAR后一次原drive --once --max-sessions 3，原默认2与其他卡预算不改，修复后完整原质量门复验，后卡等待。
+
+
+## T0.5 第三会话授权独立文档CLEAR 2026-10-28T09:43:30.366831+00:00
+
+- 原独立复审：CLEAR；报告docs/reviews/doc-review/round-23.md，固定HEADbfca5ce2e75116129f9d4d9307018c059e65d7ab/source81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476/protected 01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，4项实际SHA及ADR024分段逐项核对通过。
+- 第三许可尚未消费，原sessions2/失败3/gen1保持；紧邻原current/next/earliest、安全身份与锁核对后，仅一次原drive --once --max-sessions 3，达到原计数3即本次已使用。默认workflow2/其他卡原预算保持。
+- DNS当次复核已为公网A/无AAAA，实际HTTPS/版本/中英文证据仍待修复后原A1，原公共HTTP策略不变。当前业务未完成，后卡等待；源码/冻结定义未改，无rebaseline。
