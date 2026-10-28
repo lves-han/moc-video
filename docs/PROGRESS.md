@@ -530,3 +530,12 @@
 - 同源码build20261028T012457708373、negatives20261028T012516066745均exit0，41Python及36Node通过；短原生20261028T012535049239 exit0：初次stop/再次open、MP4控制、5布局、4缩放、最终stop及正常关闭全部通过、零owned残留。
 - 准确A1 20261028T012635432552 exit1：首个5秒区间document hidden/focused=false，native focused=false，视频帧125→275/媒体5.83→10.83秒/音频RMS0.062仍推进；所有owned进程、fixture线程/端口及请求已清理。同源码/保护摘要/generation1保持，原JUnit13pass7fail4skip及原样本保留。
 - 环境诊断：原t01-focus-transition-diagnostic20261028T012912639671 exit0记录全屏退出后前台由映象视频转Safari；再原20261028T013004776870-t01-focus-recovery-diagnostic exit0记录全屏之前、之后及再次激活后的每段12次OS前台采样均持续映象视频。当前稳定条件已恢复，尚缺稳定复现的产品故障证据。沿现有原前台守卫/全部长播门，同源码重跑准确A1；保留全部旧失败，持续观察真实设备使用情况。
+
+
+## T0.2 真实GUI长测等待用户安排 2026-10-28T01:35:38.345815+00:00
+
+- 结果：BLOCKED
+- 真实设备条件：最新准确A1 20261028T013130178778 exit1，首个5秒区间失焦（document focused=false，native focused=false），视频帧127→277/RAF296→592继续推进。上一准确A1 20261028T012635432552失焦失败和补充OS前台时序全部保留。连续可见/聚焦的长测条件尚待安排，具体外部切换/全屏时序原因仍留现场核对。
+- 用户决定：当前聊天针对“现在能让这台Mac保持样机前台、期间暂停切换其他应用约65分钟”的询问明确答“稍后再安排长测”。依真实回复暂停本卡GUI验收与同ID定时监管，等待用户确认连续桌面可用；后卡按ADR015等待。
+- 已验证成果保持：build/negatives通过、41Python+36Node、完整短原生预检含5布局/4缩放/正常stop及关闭通过。同source=03dfddc8e8936f9b33661ec46fa2a6d58ec7af602da51473f2444f474880b8a6、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1。两次失败原日志SHA/source/after_source均核对；所有原执行器/payload已退出、项目heavy/driver实际acquire均空闲，最新failed-session lingering=[]，fixture端口/线程/请求清理通过。
+- 后续：用户恢复后先读真实状态、锁与GUI前台条件，再同稳定源码运行准确A1两格式各1800秒和20窗口；成功后完整verify/原done/Git/固定提交独立CLEAR，随后按路线接续。ADR019当前agent负责本卡且不限累计额度保持，原CLI sessions6及全部17条失败保留，无新增开发额度请求。
