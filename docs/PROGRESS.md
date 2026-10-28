@@ -745,3 +745,13 @@
 - 验收 A1：NOT RUN；本会话实际编译/行为通过数0，部署确切版本/同ID中英文原始响应、完整verify、done、受验完成提交及独立CLEAR均待外层实际执行。静态检查未证明E0308已通过编译。按ADR010未重复探测已知macOS进程枚举/sccache/.git权限限制，未扩权或绕过原资源执行器。
 - 外层准确下一步：确认本CLI退出、源码稳定及原锁/进程身份后，argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；通过后argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]；全通过直接argv=["{python}","-B","scripts/verify.py","all"]。继续原勾选/真实记录/task.py done/受验完成提交/固定提交独立CLEAR；本卡默认2会话已使用完，后续失败保留并按原规则处理，不自行增额。
 - Remaining：类型/clippy及19项真实行为、所选扩展实际可用性/语言能力待验证，全部原质量门保持。本轮源码已停止编辑，Git WIP按ADR010交外层，建议WIP T0.5: fix Stremio aggregate JSON type and language traceability；后卡等待本卡完整闭环。
+
+
+## T0.5 原生失败、开发额度与真实网络条件待决定 2026-10-28T08:22:45.353099+00:00
+
+- 结果：BLOCKED
+- 真实运行：n01-build20261028T075538502433 exit0，原E0308已通过编译；准确A1收据`evidence/runs/20261028T075541932218-A1/receipt.json` exit1。19项原生实跑10通过/9失败/0skip，JUnit2通过/15失败（含需求汇总）；8项DetailsViewData被协议校验拒绝，原生真实扩展用例尝试首个manifest时BAD_REQUEST，独立语言证据校验NOT RUN，完整verify未执行。
+- 已定位源码缺陷：stremio.rs videos生成groups[].dub_status="unknown"，冻结DubStatus枚举仅dubbed/subbed/unspecified。原受控n01-dto-enum-diagnostic20261028T081438298236确认该值非法、unspecified合法；8个详情用例共有此生成路径，后续分支仍需修复后真实复验。保持原schema与全部19行为/13需求门。
+- 已确认环境条件：原系统解析诊断20261028T080216464718与同resolv.conf的A/AAAA诊断20261028T081136136537均将tmdb.elfhosted.com解析为198.18.0.156及IPv4-mapped形式；legacy候选为.157。IANA将198.18.0.0/15登记为基准测试且非全球可达，当前生产公网地址边界会拒绝该类结果。当前准确A1仅需所选tmdb.elfhosted.com有真实公网解析；未读取到远端HTTP响应，未修改系统/代理设置或放宽安全策略。
+- 证据：原Rust日志`evidence/acceptance/N01-53a3483e7a4c491bbd2c9c01f81a1cf7/command-3.log`；原A1 log/JUnit副本SHA及source/after_source=81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476、protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1匹配。当前n01验证目录failure-evidence保存原失败JSON/XML副本与capture，functional-findings.md记录两类事实。原记录身份退出、两锁空闲，源码WIPf1c591d保持，原sessions2/失败3。
+- 最小开发决定：仅为T0.5追加一次2→3修复会话，由原CLI最小修复合法dub_status映射并相关自验证，外层复验；原权限/资源/时限/其他卡默认2保持。独立验收前置：所选扩展域名恢复真实公网DNS后再核对并完整执行原A1。代码修复与网络就绪分开记录，已获代码授权时可先处理当前卡内部可完成部分；完整真实语言门保留，后卡按严格顺序等待。当前保存现场并暂停监管等待真实回复。
