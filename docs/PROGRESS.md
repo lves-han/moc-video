@@ -585,3 +585,11 @@
 - 独立文档复审：CLEAR，原报告docs/reviews/doc-review/round-18.md及摘要勘误round-19.md，固定HEAD7b5e577/source f16b01eb80b4681de117c1c4dd58f5f1dc70c45e045374f78abf0305c163a599/protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1；全部关键文件/ADR020/021摘要逐项核对。round18误引用PROGRESS旧前缀摘要，由原审阅者round19更正为完整文件526bbe2133af14d06e5040f8ea0fbb0ad29ece4f1019ff19ac25684de279e412；原报告保留。
 - 按获准新基线当前agent继续T0.2功能实施，自验证不限累计额度。功能候选复用现有open/controls/stop及真实状态读回，保留原产品long1800秒/20循环路径，新增阶段编排/视频音频UI失败/8需求报告回归；隔离候选原run20261028T030829160522 focused9项通过。首次隔离副本缺server.py导入失败已note并补原夹具，收据030805535174保留，累计真实失败19。
 - 接下来应用本卡范围内功能验收及当前交接文档，原run重build/全部回归/准确functional A1；成功后直接完整verify及原done/Git/固定提交独立CLEAR。产品长期门由T0.28/T0.26承接，当前不运行长播或20窗口。
+
+
+## T0.2 HLS功能音频现场与最小MSE修复 2026-10-28T03:21:53.420300+00:00
+
+- 功能新基线build 20261028T031517548916-t01-build及negatives均exit0，46Python/36Node通过；准确A120261028T031537719758 exit1，MP4全部功能/PCM及stop通过，HLS视频/控制推进而open/controls的WebAudio RMS均0。全部真实应用/WebKit/fixture清理，原source/protected/generation2与results保留。
+- 根因依据：fixture所有原生HLS清单/分片请求Origin=tauri://localhost、响应CORS正确；本机capabilities native_hls=maybe/mse_hls=true。WebKit原始问题https://bugs.webkit.org/show_bug.cgi?id=306493（及180696）说明原生HLS可正常播放而MediaElementAudioSourceNode输出静音，MP4可正常送PCM，与现场一致。
+- 最小产品修复：沿SPEC按能力选原生或既有hls.js，MSE可用时优先既有hls.js，使媒体元素解码/音频路由一致；MSE不可用时沿原native支持路径，均不可用显式MEDIA_UNSUPPORTED。无新后端/依赖或测试专用判断，原网络/cap与单video生命周期保持。新增4项真实player模块行为回归，原run031914971533修复前2失败/2通过；修复后t01-hls-engine-tests通过4项，原日志保留。
+- 诊断准确性：旧A1仅打印case前缀，原失败签名将不同焦点/音频故障归到同一generic exit。现保存失败报告后另打印首个原始失败actual异常行，原控制器可直接按真实原因分组；旧历史/签名保持。新的player回归加入原negatives/A1运行。下一步重build/全回归/准确功能A1，PCM断言保持原强度，再完整verify/原完成流程。

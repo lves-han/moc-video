@@ -92,6 +92,9 @@ class Acceptance(BaseAcceptance):
         self.junit_path.parent.mkdir(parents=True, exist_ok=True)
         ET.ElementTree(xml).write(self.junit_path, encoding="utf-8", xml_declaration=True)
         print(json.dumps(counts), flush=True)
+        failed = next((case for case in self.cases if case["result"] == "FAIL"), None)
+        if failed:
+            print(failed["actual"], flush=True)
         return int(counts["failed"] > 0 or counts["passed"] == 0 or any(s["result"] == "FAIL" for s in summaries))
 
 
@@ -651,7 +654,7 @@ def native_all(run, fixture, receipt, *, endurance=True):
 def regressions(run):
     output = run.command([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests/acceptance", "-p", "test_t01.py", "-v"], timeout=180)
     require("Ran 0 tests" not in output and "\nOK" in output, "nonzero regression tests required")
-    run.command(["node", "--experimental-strip-types", "--test", "--test-concurrency=1", "tests/t01-automation.test.ts"], timeout=180)
+    run.command(["node", "--experimental-strip-types", "--test", "--test-concurrency=1", "tests/t01-automation.test.ts", "tests/player.test.ts"], timeout=180)
     return output
 
 
