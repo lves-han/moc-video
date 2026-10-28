@@ -727,3 +727,11 @@
 - 验收 A1：NOT RUN；JSON/JUnit及真实部署响应尚待原A1生成。完整verify、done、受验完成提交和独立CLEAR均NOT RUN。本会话依ADR010未重复探测已知sysctl/sccache/.git限制，未启动构建/测试/服务重命令。
 - 外层下一步：核对开发CLI退出与原锁/进程身份、源码稳定后，构建argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]；全部通过后直接argv=["{python}","-B","scripts/verify.py","all"]，沿原勾选/真实记录/task.py done/受验完成提交/固定提交独立CLEAR闭环。发现实现问题交回原同卡开发流程，保留计数及全部证据。
 - Remaining：Rust类型检查/clippy、19项实际行为、真实所选扩展部署版本/中文响应及所有完成门待外层验证，存在编译和上游可用性待验证风险。源码已停止编辑，Git WIP交外层按ADR010收尾，建议WIP T0.5: implement Stremio metadata adapter and acceptance。当前仅使用本卡范围，保持冻结定义与既有后卡暂停基线。
+
+
+## T0.5 首轮外层编译诊断与预算内修复接续 2026-10-28T07:46:18.497605+00:00
+
+- 实际结果：原n01-build20261028T073656305561 exit101，stremio.rs:775将Vec<Value>传给wire_size(&Value)触发E0308；补充不同cfg(test)分支的原n01-test-compile-diagnostic20261028T074202562222同样exit101且仅同一类型诊断。19项行为/真实语言证据及准确A1均未运行，完整verify未运行。
+- 两条失败同source/after_source=e2e6e13acf1e1a04110a80cfe2930c76d069498ca7258b15834b106e2a29876a、protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1；源码未在运行中改变，旧执行器/负载已退出、两锁空闲。当前原sessions1/失败2，默认2仍有一次可用。
+- 下一步：按原同卡开发工作流普通drive --once进入第2会话最小修复，保持wire字节预算/原协议/反例/强制真实语言门，不自行改产品代码。交接补充现有语言用例R62/R65精确映射核对。原公开上游语言路径源码已读；web工具读取部署JSON未成功，部署可用性不据此推断，仍由原生产边界A1实测。
+- 证据：原收据/完整输出与当前n01验证目录compile-findings.md，WIP268c3be及全部历史保持。此为原预算内修复，未新增额度/范围决定、冻结内容保持，严格顺序后卡等待。
