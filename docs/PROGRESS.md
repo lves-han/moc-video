@@ -682,3 +682,11 @@
 - 原独立巡检：CLEAR；ID=20261028T055406781313-T0.4，固定完成提交2b10183a030128c5925c3aab7555762c5ba902e8，read-only gpt-6.1-sol exit0，原报告evidence/reviews/20261028T055406781313-T0.4/output.log。原驱动post-review完成树核对通过、driver/CLI退出、两锁空闲，当前原completed/准确A1/完整verify/受验提交与固定独立CLEAR共同成立。
 - 按原顺序核对T0.1..T0.4各自准确验收、完整verify及受验固定提交独立CLEAR，最早未完成为T0.5。依用户动态提示词要求，先清理本卡已完成开发/修复/额度操作，再接续原卡序。
 - 独立巡检非阻断发现：历史受限n00-compile原收据记录log_hash=7b1f17456a11ef7380cffcc4900f21db90411aa82c2ad851c45aa30203c0e30c，现原日志实际SHA=6b848855831266978de02affc8701410a6690d9c1a7ef9d63ace51a0ceb87c16，发生摘要失配。迟到子进程输出为合理推断，异常清理因果尚未复现；原始收据/日志均保持，观测副本及捕获SHA保存在evidence/drive/n00-third-validation-20261028T054628Z/historical-hash-audit。当前成功A1与六门verify摘要一致，review保持CLEAR。后续控制器维护需沿既有批准/冻结流程，当前仅追加事实。
+
+
+## T0.5 Stremio宿主接线范围预检 2026-10-28T06:08:23.055249+00:00
+
+- 结果：BLOCKED
+- 事实：原next/start已按序承接T0.5，sessions0、无开发CLI/源码实现。现任务范围遗漏host.rs；实际Host.sync_catalog/route_content的Stremio分支固定ENGINE_NOT_READY（约292/349行），私有提交/Job/锁需沿原Host接线。当前允许文件无法局部替换这两处占位路径，另建宿主状态会背离既有共享契约。
+- 最小决定：仅补src-tauri/src/host.rs到本卡范围，保持其余要求/权限/资源/默认2次会话，并在现有原入口联动迁移当前卡与T0.13 paused基线，保留T0.13顺序阻塞/历史/会话/暂停。候选仅一行scope.patch，evidence/drive/n01-scope-proposal/proposal.md说明准确路线，实际冻结文件/控制器/产品代码未改。
+- 当前protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1，source=67416fd5cb32050b9501fe81272479ba8f22351aa69d3d5f92c309f5aa32b16f，新卡未消费开发会话；原已完成卡质量门历史保持。范围提案独立只读复审后交用户明确决定，严格顺序后卡等待，同ID监管按真实范围阻塞暂停。
