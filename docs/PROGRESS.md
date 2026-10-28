@@ -630,3 +630,12 @@
 - 验收 A1：NOT RUN；17个Rust行为测试均NOT RUN，JSON/JUnit尚待真实A1生成；完整verify、done、受验提交与独立CLEAR均NOT RUN。该失败收据的真实后端为process-watchdog/rss-sampled、4096MiB/jobs2/线程1；原命令未成功完成资源采样，未声称硬隔离或资源合格。
 - 外层下一步：确认本开发CLI及原执行器/短暂Cargo成员真实退出、工作树稳定后按ADR010原run代验。先必要依赖argv=["{python}","scripts/run.py","n00-dependencies","--","cargo","fetch","--locked","--manifest-path","src-tauri/Cargo.toml"]；再构建argv=["{python}","scripts/run.py","n00-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；准确A1 argv=["{python}","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n00.py","--suite","all","--report","evidence/acceptance/N00-all.json","--junit","evidence/acceptance/N00-all.xml"]；成功后直接argv=["{python}","scripts/verify.py","all"]，按原勾选/真实PROGRESS/done/受验完成提交/固定提交独立CLEAR闭环。保持全部失败历史，后卡等待。
 - Remaining：Rust编译、clippy和行为尚待外层实际验证，发现问题须在原授权规则下修复复验；当前源码已停止编辑。按ADR010由外层代办WIP Git收尾（建议WIP T0.4: implement MacCMS protocol and host integration）；未提前写BLOCKED/RESOLVED/AUTHORIZED或伪造用户决定。
+
+
+## T0.4 外层真实验收失败与修复会话待决定 2026-10-28T04:33:12.683143+00:00
+
+- 结果：BLOCKED
+- 真实运行：原n00-dependencies/n00-build均exit0，必要依赖及locked/offline类型检查通过；准确A1收据`evidence/runs/20261028T042514879754-A1/receipt.json` exit1、JUnit2通过/10失败（含9需求汇总），底层17项生产Rust行为测试实跑11通过/6失败/0跳过。原完整verify尚未执行，卡保持未勾选/done。
+- 已确认失败类：n00_host_sync_home_details_and_native_images、n00_query_search_encoding_and_empty_results、n00_partial_home_retry_pagination_and_all_failed、n00_config_edits_disable_delete_and_readd_cancel_io、n00_latest_sync_wins_without_partial_publication的Host结果被现行工作协议拒绝，返回INTERNAL_ERROR；n00_metadata_limits_and_foreign_section_refs预期RESOURCE_LIMIT而返回UPSTREAM_FAILED。具体字段/传输分支需原开发者进一步定位，现阶段不猜测唯一根因。
+- 证据：原Rust完整日志`evidence/acceptance/N00-27b3d2b8c34840fab194588b8bd0ccdc/command-3.log`，当前N00-all.json/xml及evidence/drive/n00-current-validation-dir.txt指向的functional-findings.md；source/after_source=7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation1、原log SHA均核对。原执行器/payload/记录成员身份退出、driver/heavy实际锁空闲；WIP27b6204与原sandbox失败保留，累计2条失败/开发2次保持。
+- 最小待决定：仅为T0.4追加一次修复会话2→3，由原gpt-6.1-sol workspace-write CLI修复这6项功能失败并做相关自验证，外层依原run/verify/Git/固定独立CLEAR复验；原资源/权限/时限/失败历史及默认其他卡2保持。严格卡序后卡等待，暂停同ID监管直到真实决定。
