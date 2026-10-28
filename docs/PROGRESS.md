@@ -610,3 +610,10 @@
 - 相关回归：当前原negatives/A1实跑48Python+41Node共89项通过，含功能/产品分期、视频/音频/UI失败、原生HLS音频false/missing、具体失败原因分组、原native/MSE能力与切源资源回收。首代媒体字节摘要保持。
 - 测量与产品承接：MP4实际PCM RMS约0.062/440Hz；HLS原生audio_playing=true、帧/控制/UI推进，WebKit MediaElementAudioSourceNode的PCM为0，功能报告明确native-state测量和PCM限制。原两格式各1800秒/20窗口及支持的HLS PCM采样由T0.28/A1产品测试承接，T0.25网关30分钟由T0.26/A2承接，均仍NOT RUN且原强度保持。其他桌面平台沿ADR005/006列NOT RUN。
 - 资源：真实应用/全部WebKit/唤醒进程按创建身份退出，正常exit0、lingering=[]，fixture请求/线程/端口全部释放；4096MiB RSS采样/jobs2/线程1保持，原历史失败与CLI sessions6保留。本条记录开发功能阶段完成，接着原task done/受验提交/固定提交独立CLEAR，之后按序T0.4。
+
+
+## T0.2 开发功能完整闭环与固定提交独立CLEAR 2026-10-28T03:48:09.773767+00:00
+
+- 原独立巡检：CLEAR；ID=20261028T033821750056-T0.2，固定完成提交26c3115a5776c1212478a7a390c1dfc4b1ffc7ce，原只读gpt-6.1-sol CLI exit0，报告evidence/reviews/20261028T033821750056-T0.2/output.log。原驱动post-review完成树复验通过、driver/CLI退出、两锁空闲。当前原completed及completion_evidence核对准确功能A1/六门verify/受验提交全部成立，工作树干净。
+- 实际开发功能闭环完成；产品阶段长播/20窗口与HLS PCM测量义务仍保留NOT RUN。独立报告确认原媒体/生产排除、19条原始结果、正常零残留、原资源/锁绑定与所有23条失败历史完整。
+- 已按原顺序重读T0.1/T0.2/T0.3完成证据及各自固定提交独立CLEAR，最早未完成为T0.4。先整体重写同ID监管提示词移除本卡已完成的开发/修复/额度操作，再原next/start/handoff和普通drive --once接续T0.4默认2。
