@@ -183,3 +183,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 决定：仅在T0.5 TASKS范围行增加src-tauri/src/host.rs，以将Stremio同步/内容适配接入原Host及其Job/提交锁/配置世代/取消语义。原义务/checks/cases/依赖、默认2次开发预算及权限/资源/单条时限保持。范围预检已完成且原sessions0/失败0，尚无开发CLI或新产品代码。
 基线：应用独立提案round21核对的单行候选；批准新protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，使用已存在原task.py rebaseline T0.5 --protected 新摘要 --include-paused T0.13迁移当前及唯一paused未完成卡。保留原计数/失败/base/resume_base/segments/current/paused与T0.13顺序BLOCKED及隔离WIP；仅分别更新基线事件/generation，不新增控制器变更或恢复后卡开发，旧证据按原规则失效。已完成卡的历史受验提交/质量门保持。
 执行：原入口迁移后核对状态保持/准确摘要/范围/原task check，对固定实际文档与迁移做独立只读复审CLEAR，再恢复同ID监管并普通drive --once/default2启动T0.5第1开发会话。沿ADR010原脚本开发与外层验收/Git、ADR020功能/产品分期及严格卡序。
+
+
+## ADR-024 2026-10-28T09:38:37.977722+00:00 — 已采纳：仅T0.5追加一次枚举修复会话
+
+来源：当前聊天询问“原两次开发会话已用完，是否仅追加一次（2→3），由原脚本修复分组dub_status枚举不符并自验证、外层复验、权限资源保持”，用户明确回复“批准 T0.5 追加一次”。同一回复对真实扩展DNS调整条件明确答“已调整，可重新核对”。两项分别记录为开发授权与环境事实，网络就绪以实际重新核对为准。
+决定：仅T0.5累计开发上限2→3，一次第3会话用于现videos()的dub_status非法值映射修复与相关回归；原gpt-6.1-sol workspace-write CLI实施，外层沿ADR010验收/Git。原19行为、全部协议/schema/字节预算/13需求及强制真实en/zh门保持，保留原两次会话、三条失败与WIPf1c591d，禁止将ContentStatus合法unknown等其他语义一并替换。
+执行：此次独立文档复审CLEAR后，紧邻核对earliest/current/next=T0.5、sessions2、旧进程/重命令退出与原两锁空闲，仅一次原drive.py --once --max-sessions 3；原state达到3即本次许可已使用，其他卡默认workflow max_sessions2保持，不加session-hours、不重置计数或复用其他卡例外。
+网络复核：用户确认调整后，原受控n01-dns-recheck收据evidence/runs/20261028T093539289489-n01-dns-recheck/receipt.json exit0，系统及resolv.conf A均为真实公网104.26.8.49/104.26.9.49/172.67.74.162，AAAA无记录。此仅为解析条件通过；实际生产HTTP的TLS/peer、部署版本及同ID中英文响应仍由修复后原A1证明，原公网安全策略保持，外层未改系统/代理配置。
+约束：原4096MiB RSS采样/jobs2/线程1、项目锁、全部会话/命令时限、开发/独立只读权限、严格卡序及功能/产品阶段保持。当前protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1与源码81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476保持，未改冻结定义，不调用rebaseline。修复后原locked构建/准确A1/直接完整verify/done/Git/固定提交独立CLEAR；后卡等待。

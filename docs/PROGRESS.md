@@ -755,3 +755,12 @@
 - 已确认环境条件：原系统解析诊断20261028T080216464718与同resolv.conf的A/AAAA诊断20261028T081136136537均将tmdb.elfhosted.com解析为198.18.0.156及IPv4-mapped形式；legacy候选为.157。IANA将198.18.0.0/15登记为基准测试且非全球可达，当前生产公网地址边界会拒绝该类结果。当前准确A1仅需所选tmdb.elfhosted.com有真实公网解析；未读取到远端HTTP响应，未修改系统/代理设置或放宽安全策略。
 - 证据：原Rust日志`evidence/acceptance/N01-53a3483e7a4c491bbd2c9c01f81a1cf7/command-3.log`；原A1 log/JUnit副本SHA及source/after_source=81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476、protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1匹配。当前n01验证目录failure-evidence保存原失败JSON/XML副本与capture，functional-findings.md记录两类事实。原记录身份退出、两锁空闲，源码WIPf1c591d保持，原sessions2/失败3。
 - 最小开发决定：仅为T0.5追加一次2→3修复会话，由原CLI最小修复合法dub_status映射并相关自验证，外层复验；原权限/资源/时限/其他卡默认2保持。独立验收前置：所选扩展域名恢复真实公网DNS后再核对并完整执行原A1。代码修复与网络就绪分开记录，已获代码授权时可先处理当前卡内部可完成部分；完整真实语言门保留，后卡按严格顺序等待。当前保存现场并暂停监管等待真实回复。
+
+
+## T0.5 第三修复会话真实批准与DNS条件复核 2026-10-28T09:38:37.977722+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对仅T0.5一次2→3、原脚本修复并自验证/外层复验/原资源权限保持明确答“批准 T0.5 追加一次”；对独立网络条件答“已调整，可重新核对”，来源当前聊天问题回复，按ADR024执行。
+- 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
+- 实际DNS复核：原evidence/runs/20261028T093539289489-n01-dns-recheck/receipt.json exit0，系统与resolv.conf A解析为104.26.8.49/104.26.9.49/172.67.74.162，均公网；AAAA无记录。原日志SHA核对通过，公网策略保持，真实HTTPS/版本/中文响应仍待原A1。
+- 当前sessions2/失败3/generation1及全部原日志/失败JSONXML/WIP保持，第三许可尚未消费。独立文档复审CLEAR后一次原drive --once --max-sessions 3，原默认2与其他卡预算不改，修复后完整原质量门复验，后卡等待。
