@@ -523,3 +523,10 @@
 - 根因依据：https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource 无src/srcObject/source路径在NETWORK_EMPTY返回；https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/HTMLMediaElement.cpp 的selectMediaResource相同。currentSrc描述上次选择URL，旧断言误将其作为资源仍占用的独立证据。
 - 最小修改：仅验收automation以paused/NETWORK_EMPTY/HAVE_NOTHING/空buffer/零解码尺寸/空srcObject/无src/source/track及无listener/HLS、停止时钟和帧联合验证释放，保留currentSrc布尔遥测且隐去URL。产品现有pause/remove src/remove track/load释放流程保持；原资源释放、20生命周期与全部长测门保持。
 - 自验证：原run t01-stop-release-tests收据20261028T012428836393 exit0，36Node通过，含1个currentSrc保留但资源全释放正例和13项资源残留/继续播放反例；原22项长播遥测/前台反例保持。本版准确A1/完整verify待同源码build和真实预检后运行。
+
+
+## T0.2 短原生通过与完整长播环境中断 2026-10-28T01:31:29.866504+00:00
+
+- 同源码build20261028T012457708373、negatives20261028T012516066745均exit0，41Python及36Node通过；短原生20261028T012535049239 exit0：初次stop/再次open、MP4控制、5布局、4缩放、最终stop及正常关闭全部通过、零owned残留。
+- 准确A1 20261028T012635432552 exit1：首个5秒区间document hidden/focused=false，native focused=false，视频帧125→275/媒体5.83→10.83秒/音频RMS0.062仍推进；所有owned进程、fixture线程/端口及请求已清理。同源码/保护摘要/generation1保持，原JUnit13pass7fail4skip及原样本保留。
+- 环境诊断：原t01-focus-transition-diagnostic20261028T012912639671 exit0记录全屏退出后前台由映象视频转Safari；再原20261028T013004776870-t01-focus-recovery-diagnostic exit0记录全屏之前、之后及再次激活后的每段12次OS前台采样均持续映象视频。当前稳定条件已恢复，尚缺稳定复现的产品故障证据。沿现有原前台守卫/全部长播门，同源码重跑准确A1；保留全部旧失败，持续观察真实设备使用情况。
