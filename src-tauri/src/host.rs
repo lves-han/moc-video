@@ -12,10 +12,14 @@ use std::{
 };
 use uuid::Uuid;
 
+#[path = "maccms.rs"]
+pub mod maccms;
+
 struct Committed {
     settings: Value,
     sources: SourceDispatch,
     gateway: Option<Gateway>,
+    maccms: std::collections::HashMap<String, maccms::Catalog>,
 }
 
 pub struct Host {
@@ -68,6 +72,7 @@ impl Host {
                 settings,
                 sources,
                 gateway: None,
+                maccms: Default::default(),
             }),
         }))
     }
@@ -123,7 +128,15 @@ impl Host {
 
     pub fn execute(&self, call: Call) -> Value {
         let result = self.execute_inner(&call);
-        let response = envelope(&call.args["request_id"], &self.host_epoch, result);
+        let unsafe_target = result
+            .as_ref()
+            .err()
+            .is_some_and(|error| error.message.starts_with("unsafe_target:"));
+        let mut response = envelope(&call.args["request_id"], &self.host_epoch, result);
+        if unsafe_target {
+            response["error"]["details"] =
+                json!({"reason": "unsafe_target", "stage": "public_http"});
+        }
         if let Err(error) = wire_size(&response, 8 * 1024 * 1024) {
             return self.error(&call.args, error);
         }
@@ -174,6 +187,19 @@ impl Host {
         }
         let job = call.job.as_ref().expect("Ordinary call job");
         job.check()?;
+        // Capture under the commit lock, perform HTTP outside it, then recheck
+        // before publication. Settings and cancellation stay responsive to I/O.
+        match call.command.as_str() {
+            "sync_catalog" => return self.sync_catalog(input, job),
+            "get_home" => return self.route_content(input, job, "home"),
+            "get_details" => return self.route_content(&input["ref"], job, "details"),
+            "resolve_episode" => return self.route_content(&input["episode_ref"], job, "resolve"),
+            "match_playback" => {
+                self.route_content(&input["metadata_ref"]["content_ref"], job, "details")?;
+                return self.route_content(&input["playback_source"], job, "resolve");
+            }
+            _ => {}
+        }
         let mut committed = self
             .committed
             .lock()
@@ -205,46 +231,9 @@ impl Host {
                         .expect("Validated configs"),
                 );
                 committed.settings = input.clone();
+                committed.maccms.retain(|id, _| !affected.contains(id));
                 self.requests.cancel_sources(&affected);
                 return Ok(committed.settings.clone());
-            }
-            "sync_catalog" => {
-                let kind = SourceKind::parse(&input["kind"])?;
-                match kind {
-                    SourceKind::Cloudstream => Err(ApiError::new(
-                        "ENGINE_NOT_READY",
-                        "Cloudstream bridge is stopped",
-                    )),
-                    SourceKind::Maccms | SourceKind::Stremio => {
-                        let captured = committed.sources.snapshot(
-                            input["config_id"].as_str().expect("Config UUID"),
-                            &self.host_epoch,
-                            true,
-                        )?;
-                        if captured.config["kind"] != input["kind"] {
-                            return Err(ApiError::bad("Source kind does not match configuration"));
-                        }
-                        job.bind_source(&captured.source_id);
-                        Err(ApiError::new(
-                            "ENGINE_NOT_READY",
-                            "HTTP source adapter has not published a catalog",
-                        ))
-                    }
-                }
-            }
-            "get_home" => self.route_content(&committed, input, job, "home"),
-            "get_details" => self.route_content(&committed, &input["ref"], job, "details"),
-            "resolve_episode" => {
-                self.route_content(&committed, &input["episode_ref"], job, "resolve")
-            }
-            "match_playback" => {
-                self.route_content(
-                    &committed,
-                    &input["metadata_ref"]["content_ref"],
-                    job,
-                    "details",
-                )?;
-                self.route_content(&committed, &input["playback_source"], job, "resolve")
             }
             "start_interaction" | "finish_interaction" => Err(ApiError::new(
                 "ENGINE_NOT_READY",
@@ -276,19 +265,70 @@ impl Host {
         )
     }
 
-    fn route_content(
-        &self,
-        committed: &Committed,
-        key: &Value,
-        job: &Job,
-        capability: &str,
-    ) -> Result<Value, ApiError> {
-        let source = committed.sources.source(
-            key["source_id"]
-                .as_str()
-                .ok_or_else(|| ApiError::bad("Missing source_id"))?,
-            key["source_revision"].as_str(),
-        )?;
+    fn sync_catalog(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let kind = SourceKind::parse(&input["kind"])?;
+        if kind == SourceKind::Cloudstream {
+            return Err(ApiError::new(
+                "ENGINE_NOT_READY",
+                "Cloudstream bridge is stopped",
+            ));
+        }
+        let captured = {
+            let mut committed = self
+                .committed
+                .lock()
+                .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+            let captured = committed.sources.snapshot(
+                input["config_id"].as_str().expect("Config UUID"),
+                &self.host_epoch,
+                true,
+            )?;
+            if captured.config["kind"] != input["kind"] {
+                return Err(ApiError::bad("Source kind does not match configuration"));
+            }
+            job.bind_source(&captured.source_id);
+            captured
+        };
+        if kind == SourceKind::Stremio {
+            return Err(ApiError::new(
+                "ENGINE_NOT_READY",
+                "HTTP source adapter has not published a catalog",
+            ));
+        }
+        let result = maccms::Catalog::sync(captured.clone(), &maccms::Http::default(), job);
+        let mut committed = self
+            .committed
+            .lock()
+            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+        job.check()?;
+        committed
+            .sources
+            .check_snapshot(&captured, &self.host_epoch, None, true)?;
+        let mut catalog = result?;
+        committed
+            .sources
+            .publish_sync(&captured, &self.host_epoch, catalog.source.clone())?;
+        if let Some(previous) = committed.maccms.get(&captured.source_id) {
+            catalog.images = previous.images.clone();
+        }
+        committed.maccms.insert(captured.source_id, catalog);
+        Ok(committed.sources.sources())
+    }
+
+    fn route_content(&self, key: &Value, job: &Job, capability: &str) -> Result<Value, ApiError> {
+        let mut committed = self
+            .committed
+            .lock()
+            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+        let source = committed
+            .sources
+            .source(
+                key["source_id"]
+                    .as_str()
+                    .ok_or_else(|| ApiError::bad("Missing source_id"))?,
+                key["source_revision"].as_str(),
+            )?
+            .clone();
         job.bind_source(source["id"].as_str().expect("Source id"));
         match SourceKind::parse(&source["kind"])? {
             SourceKind::Stremio if capability == "resolve" => Err(ApiError::new(
@@ -299,10 +339,60 @@ impl Host {
                 "ENGINE_NOT_READY",
                 "Cloudstream bridge is stopped",
             )),
-            SourceKind::Maccms | SourceKind::Stremio => Err(ApiError::new(
+            SourceKind::Stremio => Err(ApiError::new(
                 "ENGINE_NOT_READY",
                 "HTTP source adapter is not ready",
             )),
+            SourceKind::Maccms => {
+                let captured = committed.sources.snapshot(
+                    source["origin"]["config_id"].as_str().expect("Config UUID"),
+                    &self.host_epoch,
+                    false,
+                )?;
+                let catalog = committed
+                    .maccms
+                    .get(&captured.source_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        ApiError::new("ENGINE_NOT_READY", "MacCMS catalog must be synchronized")
+                    })?;
+                // Match registration and ResolutionStore are connected in T08.
+                if capability == "resolve" {
+                    return Err(ApiError::bad("Playback match is not registered"));
+                }
+                drop(committed);
+                let http = maccms::Http::default();
+                let result = if capability == "home" {
+                    catalog.home(&http, key, job).map(|home| {
+                        (
+                            home.mapped,
+                            key["section_ref"].is_null().then_some(home.sections),
+                        )
+                    })
+                } else {
+                    catalog
+                        .details(&http, key, job)
+                        .map(|mapped| (mapped, None))
+                };
+                let mut committed = self
+                    .committed
+                    .lock()
+                    .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+                job.check()?;
+                committed
+                    .sources
+                    .check_snapshot(&captured, &self.host_epoch, None, false)?;
+                let (mapped, sections) = result?;
+                let current = committed
+                    .maccms
+                    .get_mut(&captured.source_id)
+                    .ok_or_else(ApiError::cancelled)?;
+                current.register_images(mapped.images)?;
+                if let Some(sections) = sections {
+                    current.sections = sections;
+                }
+                Ok(mapped.value)
+            }
         }
     }
 

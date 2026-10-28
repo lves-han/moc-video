@@ -617,3 +617,16 @@
 - 原独立巡检：CLEAR；ID=20261028T033821750056-T0.2，固定完成提交26c3115a5776c1212478a7a390c1dfc4b1ffc7ce，原只读gpt-6.1-sol CLI exit0，报告evidence/reviews/20261028T033821750056-T0.2/output.log。原驱动post-review完成树复验通过、driver/CLI退出、两锁空闲。当前原completed及completion_evidence核对准确功能A1/六门verify/受验提交全部成立，工作树干净。
 - 实际开发功能闭环完成；产品阶段长播/20窗口与HLS PCM测量义务仍保留NOT RUN。独立报告确认原媒体/生产排除、19条原始结果、正常零残留、原资源/锁绑定与所有23条失败历史完整。
 - 已按原顺序重读T0.1/T0.2/T0.3完成证据及各自固定提交独立CLEAR，最早未完成为T0.4。先整体重写同ID监管提示词移除本卡已完成的开发/修复/额度操作，再原next/start/handoff和普通drive --once接续T0.4默认2。
+
+## T0.4 N00 第2会话实现与代验交接 2026-10-28T04:18:00+00:00
+
+- 实施状态：WIP；当前sessions=2/2、generation=1、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1保持。沿ADR010移交外层验收/Git；本卡保持未勾选，未调用done或修改冻结定义/原状态。
+- 问题与最小方案：原宿主HTTP占位分支缺少MacCMS协议与真实接线。复用SourceDispatch身份/世代/墓碑/同步序号、Job预算/取消、Settings提交锁；只在批准的host.rs及本卡适配器/测试/Cargo范围实现。网络执行在锁外，成功及失败返回前均在锁内核对取消、世代、修订与适用同步序号，配置变更撤销本来源登记。
+- Changed：新增src-tauri/src/maccms.rs，实现匿名JSON分类、首页/单栏分页/搜索、详情/纯文本/元数据、多线路及首个$与#条目语义、规范内容/集引用与指纹复核、有界类型探测、原生图片登记；接入Host.sync_catalog/get_home/get_details。媒体链接留在原生适配器中，未登记match_id在宿主明确拒绝，T08匹配/ResolutionStore与T09网关继续原卡。未启动Android。
+- Why：使用现有reqwest/Tokio依赖版本执行逐跳地址绑定和实际peer核验、禁用代理、跨Origin清除敏感头、拒绝HTTPS降级及超过5跳；4个公共元数据槽、单调预算/收尾预留、8MiB响应与64KiB探测边界。HTML提取复用既有dom_query；base64/time沿用锁中版本。新增hickory-resolver用于可取消的完整A/AAAA解析，避免系统阻塞DNS令运行时退出超出deadline；未增加工作流配置或放宽权限。
+- 回归实现：tests/fixtures/n00.rs提供17个生产Host/适配器测试定义，固定测试构建域名允许列表、真实单进程HTTP和UDP DNS fixture，覆盖协议/旧引用/空结果/错误/超限/分页/部分失败/取消/配置修改删除重加/同步乱序/混合DNS/重绑定/peer/代理/重定向与4槽上限；fixtures按自身stop和join清理。tests/acceptance/n00.py按原A1生成JSON/JUnit及全部9个需求汇总，记录真实版本/命令/原资源收据/测试数，并独立校验脱敏后的宿主DTO。图片capability在观察日志脱敏。
+- Verified（真实静态结果）：task.py check/start/show/status及最终check均exit0，roadmap 35卡；cargo update --offline --workspace --manifest-path src-tauri/Cargo.toml退出0，仅解析本卡依赖并更新锁；rustfmt --edition 2024 src-tauri/src/host.rs退出0，解析/格式化本卡Rust模块及测试；Python AST、Cargo TOML/lock解析、17个Rust测试定义与A1清单一致性断言exit0；git diff --check退出0。这些结果仅为静态检查，实际行为通过数0。
+- 构建尝试：原命令argv=["{python}","scripts/run.py","n00-compile","--","cargo","check","--offline","--manifest-path","src-tauri/Cargo.toml"]，原收据exit2；日志：`evidence/runs/20261028T035553697115-n00-compile/output.log`。macOS sysctl进程枚举EPERM；日志随后显示Cargo曾短暂启动生成初始锁，但依赖编译又遭sccache EPERM，产品编译/类型检查未完成。已note真实原因及下一步，未绕过原资源执行器、重复权限探测或修改控制脚本。
+- 验收 A1：NOT RUN；17个Rust行为测试均NOT RUN，JSON/JUnit尚待真实A1生成；完整verify、done、受验提交与独立CLEAR均NOT RUN。该失败收据的真实后端为process-watchdog/rss-sampled、4096MiB/jobs2/线程1；原命令未成功完成资源采样，未声称硬隔离或资源合格。
+- 外层下一步：确认本开发CLI及原执行器/短暂Cargo成员真实退出、工作树稳定后按ADR010原run代验。先必要依赖argv=["{python}","scripts/run.py","n00-dependencies","--","cargo","fetch","--locked","--manifest-path","src-tauri/Cargo.toml"]；再构建argv=["{python}","scripts/run.py","n00-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；准确A1 argv=["{python}","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n00.py","--suite","all","--report","evidence/acceptance/N00-all.json","--junit","evidence/acceptance/N00-all.xml"]；成功后直接argv=["{python}","scripts/verify.py","all"]，按原勾选/真实PROGRESS/done/受验完成提交/固定提交独立CLEAR闭环。保持全部失败历史，后卡等待。
+- Remaining：Rust编译、clippy和行为尚待外层实际验证，发现问题须在原授权规则下修复复验；当前源码已停止编辑。按ADR010由外层代办WIP Git收尾（建议WIP T0.4: implement MacCMS protocol and host integration）；未提前写BLOCKED/RESOLVED/AUTHORIZED或伪造用户决定。
