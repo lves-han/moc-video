@@ -791,3 +791,12 @@
 - 已确认根因：tests/fixtures/n01.rs redact()将ImageRef.capability替为REDACTED，违反冻结43字符pattern，Python独立schema拒绝3/162条观测。call()先校验真实生产响应再脱敏。原受控n01-schema-diagnostic及n01-redaction-live-diagnostic只读定位，后者在内存诊断副本使用合法形状非秘密占位后162条全部符合schema、原live_evidence四份hash/版本/中文校验通过；准确A1仍FAIL，未改源码/协议/原报告。
 - 需要最小决定：ADR024唯一第三会话已消费，当前sessions3/失败4/generation1及全部历史保持；请求仅T0.5追加一次3→4，修复测试观测脱敏与独立校验兼容，保留真实能力值在脱敏前的校验、原schema和19行为/真实语言/安全边界，由原脚本实施并自验证、外层复验，其他预算与权限资源保持。
 - 下一步：若获准，原ADR/真实RESOLVED/独立文档复审后原流程接续。当前停止开发与推进、暂停监管，后卡按序等待；完整verify/done/固定独立CLEAR尚未执行，原WIP61cb8b5及失败证据保留于`evidence/drive/n01-third-validation-20261028T095355Z`。
+
+
+## T0.5 第四修复会话真实批准 2026-10-28T10:07:20.734522+00:00
+
+- 结果：RESOLVED
+- 决定：当前聊天用户针对仅T0.5一次3→4、原脚本安全脱敏修复并自验证/外层完整复验/权限资源保持的问题明确回复“批准 T0.5 追加一次”，按ADR025执行。
+- 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
+- 原sessions3/失败4/generation1与原准确A1失败、WIP61cb8b5及真实TMDB3.1.7响应保持。第4许可尚未消费；固定实际文档独立CLEAR后紧邻身份/锁/顺序核对，唯一一次原drive --once --max-sessions 4，计数达到4即本次已使用，其他卡默认2。
+- 仅解除此次预算/脱敏修复阻塞；原A1/verify/done/受验提交/固定独立CLEAR仍待修复后闭环，后卡等待。原source/protected不变，无rebaseline。

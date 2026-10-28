@@ -192,3 +192,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 执行：此次独立文档复审CLEAR后，紧邻核对earliest/current/next=T0.5、sessions2、旧进程/重命令退出与原两锁空闲，仅一次原drive.py --once --max-sessions 3；原state达到3即本次许可已使用，其他卡默认workflow max_sessions2保持，不加session-hours、不重置计数或复用其他卡例外。
 网络复核：用户确认调整后，原受控n01-dns-recheck收据evidence/runs/20261028T093539289489-n01-dns-recheck/receipt.json exit0，系统及resolv.conf A均为真实公网104.26.8.49/104.26.9.49/172.67.74.162，AAAA无记录。此仅为解析条件通过；实际生产HTTP的TLS/peer、部署版本及同ID中英文响应仍由修复后原A1证明，原公网安全策略保持，外层未改系统/代理配置。
 约束：原4096MiB RSS采样/jobs2/线程1、项目锁、全部会话/命令时限、开发/独立只读权限、严格卡序及功能/产品阶段保持。当前protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、generation1与源码81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476保持，未改冻结定义，不调用rebaseline。修复后原locked构建/准确A1/直接完整verify/done/Git/固定提交独立CLEAR；后卡等待。
+
+
+## ADR-025 2026-10-28T10:07:20.734522+00:00 — 已采纳：仅T0.5追加一次安全脱敏修复会话
+
+来源：当前聊天询问“T0.5的19项原生测试和真实中英文响应已通过；准确A1剩余失败已定位为测试日志把图片凭据脱敏成REDACTED，导致43字符格式校验失败。ADR024的第3会话已用完，是否仅追加一次（3→4），由原脚本修复安全脱敏并自验证、外层负责完整复验，权限和资源限制保持？”；用户针对该问题明确回复“批准 T0.5 追加一次”。
+决定：仅T0.5累计开发上限3→4，唯一一次第4会话最小修复测试观测安全脱敏与独立schema校验的兼容，并执行相关自验证。原gpt-6.1-sol workspace-write CLI实施，外层按ADR010原run/verify复验及Git收尾。原19项行为、协议/schema、字节预算、真实en/zh门、安全校验与全部13需求保持；保留原3会话/4失败/generation1/WIP61cb8b5与全部原日志/报告，禁止输出真实图片凭据或通过合法占位掩盖非法生产值。
+执行：本次独立只读文档复审CLEAR后，紧邻核对earliest/current/next=T0.5、sessions3、旧驱动/CLI/执行器/payload退出与原两锁空闲，仅一次原scripts/drive.py --once --max-sessions 4。原state到4即许可已消费；其他卡与workflow默认2保持，不加session-hours、不重置计数或复用旧例外。
+已确认事实：原locked构建20261028T095356724301 exit0；原准确A1 20261028T095411721445 exit1，19原生通过，独立校验3/162观测的脱敏capability不合43字符pattern。call()先按原Contracts检查真实响应再脱敏；原两项受控只读诊断确认问题并保留原准确A1失败。真实TMDB3.1.7四份en/zh响应hash及tmdb:27205的Inception/盗梦空间已诊断核对，修复后仍完整执行真实门。
+质量与保持：修复后实际执行相关构建/行为正负例/脱敏报告路径验证，通过后正常交接；已知sandbox限制按既有代验路径准确交接，原执行器及最小权限保持。源码稳定后外层原locked构建、准确A1、直接完整verify、原done/Git及固定提交独立CLEAR；后卡严格等待。4096MiB RSS采样/jobs2/线程1、项目锁、全部单条及会话时限、权限/范围/阶段保持。当前protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、source=47922d7c4417d34e0701c7d70a693cb802647f576894c9e41f66269d9486174b保持，无冻结定义或控制器修改，不调用rebaseline。
