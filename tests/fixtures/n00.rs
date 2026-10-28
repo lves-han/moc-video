@@ -232,6 +232,9 @@ fn serve(
     observed: &Mutex<Vec<Request>>,
     handler: &dyn Fn(&Request, u16) -> Reply,
 ) {
+    // Darwin inherits the listener's nonblocking mode. Large write_all calls
+    // need blocking I/O with the bounded timeouts below to avoid truncation.
+    stream.set_nonblocking(false).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_millis(100)))
         .unwrap();
@@ -404,12 +407,17 @@ fn setup(url: String) -> (TempDir, Arc<Host>) {
 }
 
 fn sync(host: &Host) -> Value {
-    ok(
+    let result = ok(
         host,
         "sync_catalog",
         json!({"kind": "maccms", "config_id": CONFIG}),
-    )["providers"][0]
-        .clone()
+    );
+    assert_eq!(result["kind"], "maccms");
+    assert_eq!(result["config_id"], CONFIG);
+    assert!(result["changed"].is_boolean());
+    assert!(result["cloudstream_result"].is_null());
+    assert_eq!(result["sources"], ok(host, "get_sources", json!({})));
+    result["sources"]["providers"][0].clone()
 }
 
 fn job(host: &Host, operation: &str) -> Job {
@@ -435,7 +443,13 @@ fn home_input(source: &Value) -> Value {
 fn n00_host_sync_home_details_and_native_images() {
     let fixture = Fixture::new(standard);
     let (_temp, host) = setup(fixture.url("/api?token=a%2Fb&keep=%2523"));
-    let source = sync(&host);
+    let initial = ok(
+        &host,
+        "sync_catalog",
+        json!({"kind": "maccms", "config_id": CONFIG}),
+    );
+    assert_eq!(initial["changed"], true);
+    let source = initial["sources"]["providers"][0].clone();
     assert_eq!(source["runtime_status"], "ready");
     assert_eq!(source["capabilities"]["resolve"], true);
     let home = ok(&host, "get_home", home_input(&source));
@@ -491,7 +505,13 @@ fn n00_host_sync_home_details_and_native_images() {
         "stopped"
     );
     assert!(host.gateway_address().is_none());
-    sync(&host);
+    let refreshed = ok(
+        &host,
+        "sync_catalog",
+        json!({"kind": "maccms", "config_id": CONFIG}),
+    );
+    assert_eq!(refreshed["changed"], false);
+    assert_eq!(refreshed["sources"]["providers"][0], source);
     let after_sync = ok(&host, "get_details", json!({"ref": card["ref"]}));
     assert!(
         details["poster"]["capability"] == after_sync["details"]["poster"]["capability"],

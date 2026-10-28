@@ -654,3 +654,14 @@
 - 独立复审：CLEAR；原报告docs/reviews/doc-review/round-20.md，固定HEAD8ed9f5174226c40c36107af3d961673dc5310b47/source7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446/protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1。全部关键文件及ADR022分段SHA逐项匹配。
 - 当前仍sessions2/失败2/generation1，第3次尚未消费。紧邻原状态/真实身份/锁与earliest核对后一次原drive --once --max-sessions 3，后续以原计数3认定已消费，默认workflow2/其他卡保持。
 - 当前已有6项真实功能失败，业务未完成；原脚本定位修复，外层按原权限/资源/时限及准确A1/完整verify/受验提交/独立CLEAR复验。当前只追加文档，原保护基线/源码及全部失败不改。
+
+
+## T0.4 N00 第3会话最小修复与ADR010代验交接 2026-10-28T05:43:16.779980+00:00
+
+- 实施状态：WIP；当前sessions=3/3、generation=1、protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1保持。依ADR022仅使用本次追加会话；本卡未勾选，done与完成提交均待真实验收。未新增BLOCKED/RESOLVED/AUTHORIZED或修改冻结文件。
+- 问题与根因：原准确A1的5项INTERNAL_ERROR均在sync_catalog成功路径。host.rs直接返回AppSourceList，但冻结Result_sync_catalog要求SourceSyncResult的kind/config_id/changed/sources/cloudstream_result五字段；原测试helper也误从顶层providers取来源。第6项在chunked超限分支返回UPSTREAM_FAILED，原Content-Length超限分支已正确返回RESOURCE_LIMIT。夹具listener设置nonblocking=true，serve未重设连接模式；本机accept(2)说明新socket继承原socket属性，大响应write_all遇WouldBlock即提前关闭连接，符合原传输失败现象。真实传输因果回归仍待外层A1确认，未将推断记为行为通过。
+- Changed：host.rs只补充正确SourceSyncResult包络，复用已发布catalog比较来源/分类计算changed，首次发布true、相同快照false，并保持原图片登记。maccms.rs仅为Section派生PartialEq/Eq用于该比较。tests/fixtures/n00.rs显式将已接受连接设为blocking，保留原100ms读写超时、取消/清理、8MiB预算、Content-Length及chunked超限反例；同步helper按sources.providers读取并核对config/kind/来源列表一致性，在原host测试增加首次changed=true及未改变同步changed=false断言。原17行为与9需求清单、协议/schema及全部原失败证据保持。
+- Verified（真实静态结果）：rustfmt格式化及--check、git diff --check、task.py check/scope均exit0；Python AST、Cargo.toml/Cargo.lock和原protocol JSON解析完成，原17个Rust行为定义与A1清单一致。记录：`evidence/task-state/T0.4/session-3/static-review.log`与`static-review.json`，本机accept文档：`evidence/task-state/T0.4/session-3/darwin-accept.txt`。当前源码摘要：67416fd5cb32050b9501fe81272479ba8f22351aa69d3d5f92c309f5aa32b16f。
+- 验收 A1：NOT RUN for session-3 source；本会话原生编译/行为实际执行数0。已知CLI的sysctl/sccache EPERM沿ADR010交由外层代验，未重复权限探测、扩大权限或绕过run.py。原第2会话17测试11通过6失败继续保留；修复后完整verify、done、受验完成提交与固定独立CLEAR均NOT RUN。
+- 外层下一步：确认本CLI退出及旧执行器/重命令PID与创建时间结束、两锁空闲、源码稳定后，沿ADR010先代办WIP Git保存本次3文件及本记录（建议`WIP T0.4: correct catalog sync result and Darwin HTTP fixture`）。随后argv=["{python}","scripts/run.py","n00-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n00.py","--suite","all","--report","evidence/acceptance/N00-all.json","--junit","evidence/acceptance/N00-all.xml"]；A1成功后直接argv=["{python}","scripts/verify.py","all"]。每个{python}均替换本项目/用户给定的虚拟环境解释器，保留原4096MiB RSS采样/jobs2/线程1/共享重锁与超时，按原勾选/真实PROGRESS/done/受验提交/固定独立CLEAR闭环。
+- Remaining：同步changed行为、5项协议成功路径与chunked传输修复尚待当前源码真实原生复验；若出现新失败保留证据并按现有会话额度/用户授权处理，后卡等待。当前产品和测试源码停止编辑，Git收尾沿既定ADR010分工交外层。

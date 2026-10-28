@@ -305,14 +305,21 @@ impl Host {
             .sources
             .check_snapshot(&captured, &self.host_epoch, None, true)?;
         let mut catalog = result?;
+        let previous = committed.maccms.get(&captured.source_id);
+        let changed = previous.is_none_or(|previous| {
+            previous.source != catalog.source || previous.sections != catalog.sections
+        });
+        if let Some(previous) = previous {
+            catalog.images = previous.images.clone();
+        }
         committed
             .sources
             .publish_sync(&captured, &self.host_epoch, catalog.source.clone())?;
-        if let Some(previous) = committed.maccms.get(&captured.source_id) {
-            catalog.images = previous.images.clone();
-        }
         committed.maccms.insert(captured.source_id, catalog);
-        Ok(committed.sources.sources())
+        Ok(
+            json!({"kind": kind, "config_id": captured.config["config_id"],
+            "changed": changed, "sources": committed.sources.sources(), "cloudstream_result": null}),
+        )
     }
 
     fn route_content(&self, key: &Value, job: &Job, capability: &str) -> Result<Value, ApiError> {

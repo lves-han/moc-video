@@ -440,7 +440,7 @@ fn decode(response: &Response) -> Result<Value, ApiError> {
     Ok(value)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Section {
     pub type_id: String,
     pub title: String,
