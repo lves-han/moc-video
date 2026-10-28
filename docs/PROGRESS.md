@@ -675,3 +675,10 @@
 - 实现：宿主MacCMS同步/首页/详情真实接线，来源身份/世代/取消/单调预算/提交锁/同步序号保持；匿名JSON协议、查询一次编码、分页/搜索/分组与旧引用/有界探测/图片登记及SSRF DNS/peer/重定向/代理/超限等正负例通过。使用本机单进程合成HTTP/UDP DNS fixture，无Android或真实集群；fixtures由Drop停止/join，所有原执行器/payload及记录成员退出，资源为4096MiB进程树RSS采样/jobs2/线程1。
 - 历史：原sessions3与两条失败、WIP27b6204及c6de08b保留，ADR022唯一第三会话已消费。仅本卡功能开发完成，匹配/ResolutionStore与网关按T0.8/T0.9后续卡实现，真实源产品闭环按既有后续任务；本卡不宣称后续功能完成。
 - 下一步：原task done与受验提交、原drive --review-only固定提交独立CLEAR；完整闭环后先整体重写监管提示词并严格按序下一卡。
+
+
+## T0.4 固定提交独立CLEAR与完整闭环 2026-10-28T06:06:33.006164+00:00
+
+- 原独立巡检：CLEAR；ID=20261028T055406781313-T0.4，固定完成提交2b10183a030128c5925c3aab7555762c5ba902e8，read-only gpt-6.1-sol exit0，原报告evidence/reviews/20261028T055406781313-T0.4/output.log。原驱动post-review完成树核对通过、driver/CLI退出、两锁空闲，当前原completed/准确A1/完整verify/受验提交与固定独立CLEAR共同成立。
+- 按原顺序核对T0.1..T0.4各自准确验收、完整verify及受验固定提交独立CLEAR，最早未完成为T0.5。依用户动态提示词要求，先清理本卡已完成开发/修复/额度操作，再接续原卡序。
+- 独立巡检非阻断发现：历史受限n00-compile原收据记录log_hash=7b1f17456a11ef7380cffcc4900f21db90411aa82c2ad851c45aa30203c0e30c，现原日志实际SHA=6b848855831266978de02affc8701410a6690d9c1a7ef9d63ace51a0ceb87c16，发生摘要失配。迟到子进程输出为合理推断，异常清理因果尚未复现；原始收据/日志均保持，观测副本及捕获SHA保存在evidence/drive/n00-third-validation-20261028T054628Z/historical-hash-audit。当前成功A1与六门verify摘要一致，review保持CLEAR。后续控制器维护需沿既有批准/冻结流程，当前仅追加事实。
