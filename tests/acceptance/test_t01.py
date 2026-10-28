@@ -141,7 +141,7 @@ class FunctionalStageTests(unittest.TestCase):
         first = dict(frames=10, raf=20, width=1920, height=1080)
         current = dict(width=1920, height=1080, paused=False, media_error=None, frames=50, raf=90,
             audio_state="running", audio_rms=0.06, audio_peak_hz=440, ui_position=5.5, position=5.7, duration=30)
-        return dict(sample=first), dict(sample=current)
+        return dict(sample=first), dict(sample=current, restored=dict(audio_playing=True))
 
     def test_functional_observation_uses_real_control_results_without_fixed_duration(self):
         opened, controlled = self.observations()
@@ -158,6 +158,16 @@ class FunctionalStageTests(unittest.TestCase):
                 controlled["sample"].update(changes)
                 with self.assertRaises(ValueError):
                     t01.validate_functional(opened, controlled)
+
+    def test_hls_functional_audio_uses_native_state_and_reports_pcm_limit(self):
+        opened, controlled = self.observations()
+        controlled["sample"]["audio_rms"] = 0
+        result = t01.validate_functional(opened, controlled, "hls")
+        self.assertIn("HLS PCM measurement deferred", result["audio_measurement"])
+        for state in (False, None):
+            controlled["restored"]["audio_playing"] = state
+            with self.subTest(state=state), self.assertRaisesRegex(ValueError, "native HLS audio"):
+                t01.validate_functional(opened, controlled, "hls")
 
     def exercise_native(self, endurance):
         run = mock.Mock(observed={"native_sessions": []})
@@ -497,6 +507,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual({s["id"] for s in report["summaries"]}, set(t01.IDS))
         for identifier in t01.IDS:
             self.assertIsNone(nodes[identifier].find("failure"))
+
+    def test_failure_log_distinguishes_real_causes_for_the_original_workflow(self):
+        signatures = set()
+        for reason in ("foreground lost", "HLS audio unavailable"):
+            self.run.cases.clear()
+            self.run.case("native", list(t01.IDS), "native behavior",
+                          lambda: t01.require(False, reason))
+            with mock.patch("builtins.print") as printed:
+                self.output()
+            log = "\n".join(str(call.args[0]) for call in printed.call_args_list)
+            self.assertIn("ValueError: " + reason, log)
+            signatures.add(t01.workflow.failure_signature(log, 1, ""))
+        self.assertEqual(len(signatures), 2)
 
 
 class AutomationArtifactTests(unittest.TestCase):

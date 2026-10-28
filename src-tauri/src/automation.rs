@@ -73,9 +73,9 @@ pub async fn t01_control(
     }
     let size = window.inner_size().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    let (webkit_pids, top_content_inset) = webkit_diagnostics(&window)?;
+    let (webkit_pids, top_content_inset, audio_playing) = webkit_diagnostics(&window)?;
     #[cfg(not(target_os = "macos"))]
-    let (webkit_pids, top_content_inset) = (serde_json::Value::Null, 0.0);
+    let (webkit_pids, top_content_inset, audio_playing) = (serde_json::Value::Null, 0.0, false);
     Ok(serde_json::json!({
         "label": window.label(), "fullscreen": window.is_fullscreen().map_err(|e|e.to_string())?,
         "visible": window.is_visible().map_err(|e|e.to_string())?,
@@ -84,12 +84,12 @@ pub async fn t01_control(
         "physical_width": size.width, "physical_height": size.height,
         "scale_factor": window.scale_factor().map_err(|e|e.to_string())?,
         "pid": std::process::id(), "tauri": tauri::VERSION, "webkit_pids": webkit_pids,
-        "top_content_inset": top_content_inset
+        "top_content_inset": top_content_inset, "audio_playing": audio_playing
     }))
 }
 
 #[cfg(target_os = "macos")]
-fn webkit_diagnostics(window: &WebviewWindow) -> Result<(serde_json::Value, f64), String> {
+fn webkit_diagnostics(window: &WebviewWindow) -> Result<(serde_json::Value, f64, bool), String> {
     use std::ffi::{c_char, c_void};
     #[link(name = "objc")]
     unsafe extern "C" {
@@ -109,6 +109,8 @@ fn webkit_diagnostics(window: &WebviewWindow) -> Result<(serde_json::Value, f64)
                 let scalar: unsafe extern "C" fn(*mut c_void, *mut c_void) -> f64 =
                     std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
                 let responds: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> bool =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let boolean: unsafe extern "C" fn(*mut c_void, *mut c_void) -> bool =
                     std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
                 let view = webview.inner().cast::<c_void>();
                 let config = get(view, sel_registerName(c"configuration".as_ptr()));
@@ -147,8 +149,19 @@ fn webkit_diagnostics(window: &WebviewWindow) -> Result<(serde_json::Value, f64)
                         Err("WebKit top content inset diagnostic unavailable".into())
                     } else {
                         let inset = scalar(view, selector);
-                        if inset.is_finite() && inset >= 0.0 {
-                            Ok((serde_json::Value::Object(values), inset))
+                        let audio_selector = sel_registerName(c"_isPlayingAudio".as_ptr());
+                        if !responds(
+                            view,
+                            sel_registerName(c"respondsToSelector:".as_ptr()),
+                            audio_selector,
+                        ) {
+                            Err("WebKit audio playback diagnostic unavailable".into())
+                        } else if inset.is_finite() && inset >= 0.0 {
+                            Ok((
+                                serde_json::Value::Object(values),
+                                inset,
+                                boolean(view, audio_selector),
+                            ))
                         } else {
                             Err("WebKit top content inset is invalid".into())
                         }

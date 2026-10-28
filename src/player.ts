@@ -85,9 +85,11 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       track.default = true;
       video.append(track);
     }
-    // WebKit native HLS bypasses MediaElementAudioSourceNode (WebKit bug 306493).
-    // Prefer the supported MSE path to keep media-element audio routing consistent.
-    if (source.kind === "hls" && Hls.isSupported()) {
+    if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
+      if (!Hls.isSupported()) {
+        notify("failed", "MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
+        throw new Error("MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
+      }
       engine = "hls.js";
       hls = new Hls({ enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -96,10 +98,6 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       hls.attachMedia(video);
       hls.loadSource(source.url);
     } else {
-      if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
-        notify("failed", "MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
-        throw new Error("MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
-      }
       engine = "native";
       video.src = source.url;
       video.load();

@@ -35,8 +35,8 @@ function playerFixture(mse: boolean, nativeHls: string) {
   return { player, video, streams, events };
 }
 
-test("HLS uses the supported MSE transport even when native HLS is advertised", () => {
-  const { player, streams } = playerFixture(true, "maybe");
+test("HLS uses the supported MSE transport when native HLS is unavailable", () => {
+  const { player, streams } = playerFixture(true, "");
   assert.equal(player.open({ kind: "hls", url: "https://fixture.invalid/index.m3u8" }).engine, "hls.js");
   assert.equal(streams[0].source, "https://fixture.invalid/index.m3u8");
 });
@@ -55,7 +55,7 @@ test("unavailable HLS transports fail explicitly", () => {
 });
 
 test("switching HLS to MP4 destroys the old transport and rejects late errors", () => {
-  const { player, video, streams, events } = playerFixture(true, "maybe");
+  const { player, video, streams, events } = playerFixture(true, "");
   player.open({ kind: "hls", url: "https://fixture.invalid/index.m3u8" });
   player.open({ kind: "mp4", url: "https://fixture.invalid/clip.mp4" });
   assert.equal(streams[0].destroyed, true);
@@ -67,4 +67,11 @@ test("switching HLS to MP4 destroys the old transport and rejects late errors", 
   assert.equal(video.src, "");
   assert.equal(player.diagnostics().hls_instances, 0);
   assert.equal(player.diagnostics().listening, false);
+});
+
+test("HLS keeps the native path when native and MSE are both available", () => {
+  const { player, video, streams } = playerFixture(true, "maybe");
+  assert.equal(player.open({ kind: "hls", url: "https://fixture.invalid/index.m3u8" }).engine, "native");
+  assert.equal(video.src, "https://fixture.invalid/index.m3u8");
+  assert.equal(streams.length, 0);
 });

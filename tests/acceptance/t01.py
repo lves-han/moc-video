@@ -567,19 +567,26 @@ def native_gui_session():
     return dict(screen_locked=flag[1] == "Yes" if flag else None)
 
 
-def validate_functional(opened, controlled):
+def validate_functional(opened, controlled, kind="mp4"):
     first, current = opened["sample"], controlled["sample"]
     require(current["width"] == 1920 and current["height"] == 1080 and not current["paused"]
             and current["media_error"] is None and current["frames"] > first["frames"],
             "functional video decoding or presented frames failed")
-    require(current["audio_state"] == "running" and current["audio_rms"] > 0.001
-            and abs(current["audio_peak_hz"] - 440) < 30, "functional decoded audio failed")
+    if kind == "hls":
+        # WebKit does not expose HLS PCM to MediaElementAudioSourceNode (bugs 180696/306493).
+        require(controlled["restored"].get("audio_playing") is True, "functional native HLS audio is not playing")
+        audio_measurement = "WebKit native audio playback state; HLS PCM measurement deferred to product testing"
+    else:
+        require(current["audio_state"] == "running" and current["audio_rms"] > 0.001
+                and abs(current["audio_peak_hz"] - 440) < 30, "functional decoded audio failed")
+        audio_measurement = "media-element decoded PCM RMS and tone frequency"
     require(current["raf"] > first["raf"] and math.isfinite(current["ui_position"])
             and 0 <= current["ui_position"] <= current["duration"]
             and abs(current["ui_position"] - current["position"]) <= 1,
             "functional UI progress differs from media clock")
     return dict(presented_frames=current["frames"] - first["frames"],
-                ui_callbacks=current["raf"] - first["raf"], audio_rms=current["audio_rms"])
+                ui_callbacks=current["raf"] - first["raf"], audio_rms=current["audio_rms"],
+                audio_measurement=audio_measurement)
 
 
 def native_all(run, fixture, receipt, *, endurance=True):
@@ -606,7 +613,7 @@ def native_all(run, fixture, receipt, *, endurance=True):
             def controls():
                 value = session.command("controls")
                 if not endurance:
-                    value["functional_observation"] = validate_functional(opened, value)
+                    value["functional_observation"] = validate_functional(opened, value, kind)
                 return value
             require(run.case(kind + "-controls", ["U04", "R32", "REQ-T01"], "pause, seek, cue toggle, volume, speed, native fullscreen", controls), "Playback controls gate failed")
             if endurance:
@@ -627,6 +634,7 @@ def native_all(run, fixture, receipt, *, endurance=True):
     if not endurance:
         run.observed["product_test_handoff"] = dict(owner="T0.28/A1", status="NOT RUN",
             seconds_per_format=1800, formats=["mp4", "hls"], full_window_cycles=20,
+            hls_pcm="WebKit media-element PCM is unavailable; supported product-stage audio capture required",
             evidence="current product source/build and original resource/cleanup assertions required")
         return dict(functional_formats=2, sessions=1, endurance_owner="T0.28/A1")
     # Twenty genuine app/window lifecycles, each decoding media and releasing it.

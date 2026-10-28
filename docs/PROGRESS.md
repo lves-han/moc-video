@@ -593,3 +593,10 @@
 - 根因依据：fixture所有原生HLS清单/分片请求Origin=tauri://localhost、响应CORS正确；本机capabilities native_hls=maybe/mse_hls=true。WebKit原始问题https://bugs.webkit.org/show_bug.cgi?id=306493（及180696）说明原生HLS可正常播放而MediaElementAudioSourceNode输出静音，MP4可正常送PCM，与现场一致。
 - 最小产品修复：沿SPEC按能力选原生或既有hls.js，MSE可用时优先既有hls.js，使媒体元素解码/音频路由一致；MSE不可用时沿原native支持路径，均不可用显式MEDIA_UNSUPPORTED。无新后端/依赖或测试专用判断，原网络/cap与单video生命周期保持。新增4项真实player模块行为回归，原run031914971533修复前2失败/2通过；修复后t01-hls-engine-tests通过4项，原日志保留。
 - 诊断准确性：旧A1仅打印case前缀，原失败签名将不同焦点/音频故障归到同一generic exit。现保存失败报告后另打印首个原始失败actual异常行，原控制器可直接按真实原因分组；旧历史/签名保持。新的player回归加入原negatives/A1运行。下一步重build/全回归/准确功能A1，PCM断言保持原强度，再完整verify/原完成流程。
+
+
+## T0.2 HLS音频采样因果补充与功能测量修正 2026-10-28T03:32:09.226090+00:00
+
+- MSE候选原build/全回归通过后，准确A120261028T032242573158仍失败functional decoded audio；HLS首播诊断20261028T032409610661中第一种HLS即engine=hls.js/RMS0，后续切MP4出现seek失败。该路线未解决测量限制，已恢复原产品引擎选择（native优先、MSE按原能力回退），原WIP/全部失败保留。
+- 功能验证测量修正：WebKit对HLS的MediaElementAudioSourceNode不提供PCM，短时HLS功能验证改读测试专用WKWebView原生_isPlayingAudio播放状态，并保持真实视频帧/控制/UI/资源检查。官方WebKit WKWebViewPrivate.h声明该属性，WKWebView.mm实现转发page.isPlayingAudio；原链接https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h。仅原automation feature加入运行状态读回，生产构建排除；缺SPI/false状态显式失败。MP4 PCM/RMS/440Hz门保持；功能报告明确HLS测量方式/PCM限制，产品handoff标记需支持的PCM采样且原all长测PCM门保持待测。
+- 自验证：原run t01-native-audio-regressions20261028T033006688884 exit0，48Python/41Node通过（实际子日志保留），新增原生音频false/missing拒绝及日志原因可区分回归、原生/MSE能力/切源清理等真实player模块回归。formatter通过原run输出候选后再应用，无源码运行期改写。当前累计失败23全部保留，hard_sessions=[]；继续按新事实重新构建/准确功能A1，未宣称HLS PCM/产品长期验收通过。
