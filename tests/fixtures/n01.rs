@@ -232,7 +232,7 @@ fn redact(value: &mut Value) {
         Value::Object(object) => {
             for (key, value) in object {
                 if key == "capability" {
-                    *value = json!("REDACTED");
+                    *value = json!("r".repeat(43));
                 } else {
                     redact(value);
                 }
@@ -246,15 +246,18 @@ fn redact(value: &mut Value) {
         _ => {}
     }
 }
-fn call(host: &Host, command: &str, input: Value) -> Value {
-    let args = json!({"request_id":Uuid::new_v4().to_string(), "input":input});
-    let response = host.invoke(command, args.clone(), true);
-    Contracts::get()
-        .validate(&format!("Result_{command}"), &response)
-        .unwrap();
+fn observation(command: &str, args: &Value, response: &Value) -> Result<Value, ApiError> {
+    // Validate original values before a schema-shaped placeholder can hide them.
+    Contracts::get().validate(&format!("Result_{command}"), response)?;
     let mut observation =
         json!({"command":command, "args":args, "response":response, "capabilities_redacted":true});
     redact(&mut observation);
+    Ok(observation)
+}
+fn call(host: &Host, command: &str, input: Value) -> Value {
+    let args = json!({"request_id":Uuid::new_v4().to_string(), "input":input});
+    let response = host.invoke(command, args.clone(), true);
+    let observation = observation(command, &args, &response).unwrap();
     println!("N01_OBSERVATION:{observation}");
     response
 }
@@ -1341,6 +1344,39 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
     assert!(include_str!("../../protocol/examples/contract-cases.json").contains("fixture"));
     let source = sync(&host);
     let card = first_card(&host, &source);
+    let args = json!({"request_id":Uuid::new_v4().to_string(), "input":home_input(&source)});
+    let mut response = host.invoke("get_home", args.clone(), true);
+    let poster = "/data/page/sections/0/items/0/poster";
+    *response.pointer_mut(poster).unwrap() = json!({
+        "resource_id":"synthetic-image", "path":"/images/synthetic-image",
+        "capability":"s".repeat(43), "expires_at":"2026-10-28T11:00:00Z"
+    });
+    let observed = observation("get_home", &args, &response).unwrap();
+    Contracts::get()
+        .validate("Result_get_home", &observed["response"])
+        .unwrap();
+    let capability = format!("{poster}/capability");
+    let mut expected = response.clone();
+    *expected.pointer_mut(&capability).unwrap() = json!("r".repeat(43));
+    assert_eq!(observed["response"], expected);
+    assert_eq!(observed["args"], args);
+    assert_eq!(observed["capabilities_redacted"], true);
+    assert_eq!(
+        response.pointer(&capability).unwrap(),
+        &json!("s".repeat(43))
+    );
+    for invalid in [
+        json!("REDACTED"),
+        json!("s".repeat(42)),
+        json!("s".repeat(44)),
+        json!("/".repeat(43)),
+        Value::Null,
+        json!(7),
+    ] {
+        let mut response = response.clone();
+        *response.pointer_mut(&capability).unwrap() = invalid;
+        assert!(observation("get_home", &args, &response).is_err());
+    }
     configure(&host, vec![fixture.url("/other/manifest.json")]);
     let newer = sync(&host);
     assert_ne!(source["source_revision"], newer["source_revision"]);

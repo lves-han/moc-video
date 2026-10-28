@@ -806,3 +806,13 @@
 
 - 独立只读round24：CLEAR；报告`docs/reviews/doc-review/round-24.md`，固定HEADc734152903f36e42142c80f019d654e1df354f9e/source47922d7c4417d34e0701c7d70a693cb802647f576894c9e41f66269d9486174b/protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d。受审四项SHA与ADR025分段逐项核对匹配。
 - 原sessions3/失败4/gen1保持；第4许可尚未消费，紧邻顺序/身份/锁安全检查后唯一原drive --once --max-sessions 4，原计数达到4即已使用。原准确A1仍FAIL，修复后完整闭环，后卡等待。
+
+## T0.5 N01 第4会话安全脱敏最小修复与ADR010代验交接 2026-10-28T10:14:37+00:00
+
+- 实施状态：WIP；当前T0.5、sessions=4/4、failures=4、generation=1、protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，ADR025唯一第4许可已使用。保留原失败/真实语言证据；本卡未勾选，T0.13原暂停保持。
+- Changed / Why：仅修改tests/fixtures/n01.rs。redact沿用N00既有43字符固定非秘密占位值，修复独立schema拒绝REDACTED的问题。将原call的校验和脱敏步骤原序提取到observation，使同一路径可直接验证非法原值在生成日志前失败；call继续返回原生产响应，打印经过校验及脱敏的副本。产品源码、协议、原19项清单、真实语言门与字节预算保持。
+- 回归实现：在现有n01_cache_bounds_revision_and_synthetic_vectors内，用真实Host首页包络注入明确合成的ImageRef，断言脱敏副本通过Result_get_home契约、仅capability变化、args及原响应保留；REDACTED、42/44字符、非法字符、null、数字六类原值均在脱敏前被拒绝。回归行为尚待外层实际执行，原19项测试清单保持相等。
+- Verified（实际静态自验证）：task.py check/start/show/status退出0，check核对35卡；rustfmt --check --edition 2024 --config skip_children=true tests/fixtures/n01.rs最终退出0；git diff --check退出0；Python AST、协议/配置JSON与Cargo TOML/lock解析、19项Rust定义与A1清单相等检查退出0。静态报告：`evidence/task-state/T0.5/session-4/static-validation.json`，fixture SHA256=23ee81cfc9bb3d7dfd68260005b61cc9753b463ded476d6cdf5ea15fed0ba465。首次rustfmt的两处排版差异已先note再局部修正；只读检索失败亦已note。
+- 验收 A1：NOT RUN；本轮修复源编译与行为实际通过数为0。按ADR010交外层原run代验，未重复探测既知进程枚举/Git权限限制；当前静态检查未执行资源后端，实际macOS RSS采样收据须由外层原run生成。完整verify、done、受验完成提交与固定独立CLEAR均NOT RUN。
+- 外层下一步：确认本CLI退出、源码稳定及原身份/两锁后，构建argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；可先用原run执行focused回归argv=["{python}","-B","scripts/run.py","n01-redaction-regression","--","cargo","test","--locked","--offline","--manifest-path","src-tauri/Cargo.toml","--lib","n01_cache_bounds_revision_and_synthetic_vectors","--","--test-threads=1","--nocapture"]。准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]，包含全部19项、独立观测schema与本次真实en/zh请求响应证据；全部通过后直接argv=["{python}","-B","scripts/verify.py","all"]，再原勾选/真实记录/task.py done/受验提交/固定独立CLEAR。
+- Remaining：本轮源码停止编辑，Git WIP按ADR010交外层，建议WIP T0.5: preserve schema and validation during capability redaction。原A1失败及历史诊断继续保留；本次真实请求和回归结果需重新生成，全部质量门保持，后卡等待本卡闭环。
