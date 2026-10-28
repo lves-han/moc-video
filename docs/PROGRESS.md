@@ -539,3 +539,19 @@
 - 用户决定：当前聊天针对“现在能让这台Mac保持样机前台、期间暂停切换其他应用约65分钟”的询问明确答“稍后再安排长测”。依真实回复暂停本卡GUI验收与同ID定时监管，等待用户确认连续桌面可用；后卡按ADR015等待。
 - 已验证成果保持：build/negatives通过、41Python+36Node、完整短原生预检含5布局/4缩放/正常stop及关闭通过。同source=03dfddc8e8936f9b33661ec46fa2a6d58ec7af602da51473f2444f474880b8a6、protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481、generation1。两次失败原日志SHA/source/after_source均核对；所有原执行器/payload已退出、项目heavy/driver实际acquire均空闲，最新failed-session lingering=[]，fixture端口/线程/请求清理通过。
 - 后续：用户恢复后先读真实状态、锁与GUI前台条件，再同稳定源码运行准确A1两格式各1800秒和20窗口；成功后完整verify/原done/Git/固定提交独立CLEAR，随后按路线接续。ADR019当前agent负责本卡且不限累计额度保持，原CLI sessions6及全部17条失败保留，无新增开发额度请求。
+
+
+## T0.2 开发长期验收分期的真实决定 2026-10-28T02:07:57.957015+00:00
+
+- 结果：RESOLVED
+- 决定：用户当前原话“长时间的验收放到产品测试阶段，开发阶段只专注于功能实现”；按ADR020将原GUI长测后移产品测试，开发阶段继续功能实施及真实相关自验证。原等待65分钟桌面作为本卡开发完成前提由新分期替代；长期项目原强度保留到T0.28/T0.26。
+- 批准摘要：5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481
+- 此处解除旧开发长测设备等待，只记录当前真实分期授权，冻结文档与原基线尚未修改，未宣称T0.2完成。
+
+## T0.2 分期冻结基线迁移待控制器决定 2026-10-28T02:07:57.957015+00:00
+
+- 结果：BLOCKED
+- 原因：原scripts/workflow.py rebaseline拒绝其他已开始未完成卡；现T0.4/T0.13 paused，原单卡入口缺少合法多卡迁移路径。按当前AGENTS保护规则，最小扩展原入口及三卡迁移需真实控制器修订决定，分期本身已批准。原TASKS/ARCH/控制脚本/状态未改。
+- 已准备：evidence/drive/acceptance-stage-change/proposal.md与documents.patch；独立只读round16/round17对最终提案CLEAR，latest TASKS SHA96a43c3dfefa602d22822ec4375a0962a45886a6843790b85e1837b7a0265269、ARCH SHA603685f99ba650e7488f05a26dc5fe81c434b63f1e126de923e0d999a2fcf625。
+- 实际验证：原run stage-proposal-structure最新20261028T020614570288 exit0，35卡、suite/host.rs/REQ-T01承接与声明预算通过；独立审查补充核对113条追溯/cases及git apply --check。早期临时结构检查固定argv索引错误已note修复，原失败收据保留。当前业务source仍03dfddc8e8936f9b33661ec46fa2a6d58ec7af602da51473f2444f474880b8a6，T0.2 sessions6/实际失败18/generation1，其他暂停卡原计数不改。
+- 下一步：取得原入口最小批次迁移决定后，在隔离候选副本通过原run测试控制器，应用候选并按准确批准摘要经原入口迁移，实际文档独立复审；随后T0.2新基线重build/回归/功能A1/完整verify/原完成提交/固定提交独立CLEAR。严格卡序后卡等待，同ID监管按待迁移原因PAUSED。
