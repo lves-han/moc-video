@@ -771,3 +771,13 @@
 - 原独立复审：CLEAR；报告docs/reviews/doc-review/round-23.md，固定HEADbfca5ce2e75116129f9d4d9307018c059e65d7ab/source81c9bab9d5fa26bd0824f34774688b6afa54ebdc5cb8cbcddab749278aa69476/protected 01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，4项实际SHA及ADR024分段逐项核对通过。
 - 第三许可尚未消费，原sessions2/失败3/gen1保持；紧邻原current/next/earliest、安全身份与锁核对后，仅一次原drive --once --max-sessions 3，达到原计数3即本次已使用。默认workflow2/其他卡原预算保持。
 - DNS当次复核已为公网A/无AAAA，实际HTTPS/版本/中英文证据仍待修复后原A1，原公共HTTP策略不变。当前业务未完成，后卡等待；源码/冻结定义未改，无rebaseline。
+
+
+## T0.5 N01 第3会话枚举最小修复与ADR010代验交接 2026-10-28T09:46:29+00:00
+
+- 实施状态：WIP；原sessions=3/3、failures=3、generation=1，protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；第三许可已使用，原失败收据及WIP保留。本卡未勾选，T0.13原blocked/paused保持。
+- Changed / Why：依据原A1日志及冻结DubStatus（dubbed/subbed/unspecified），仅将stremio.rs videos()生成的groups[].dub_status从unknown改为unspecified。沿既有n01_movie_and_original_video_order_inline_media_ignored补电影无videos与剧集视频分组的准确枚举断言，同时断言Details.status仍为合法unknown。产品修改一行，测试新增六行；协议、身份、公开接口、原19项行为、字节预算、语言与公网边界保持。
+- Verified（实际静态自验证）：原task.py check/start/show/status及最后check退出0，35卡；确认当前T0.5/sessions3/原失败3/generation1。rustfmt --check --edition 2024 --config skip_children=true src-tauri/src/stremio.rs tests/fixtures/n01.rs最终退出0；git diff --check退出0；Python AST、Cargo TOML/lock解析与19项Rust定义和A1清单相等检查退出0。首次rustfmt因新增断言需要标准换行退出1，已先note再局部排版并复检通过。静态检查覆盖格式/解析/清单，当前修复源实际编译与行为通过数为0。
+- 验收 A1：NOT RUN；原8条DetailsViewData失败路径与实际en-US/zh-CN HTTP/peer/部署版本/中文响应均待外层准确A1复验。未覆盖的后续分支仍有待验证风险。完整verify、done、受验完成提交和固定提交独立CLEAR均NOT RUN。沿ADR010不重复探测既知进程枚举/sccache/.git限制，不新增执行器、权限或后台任务。
+- 外层下一步：确认本开发CLI退出、源码稳定及原锁/进程身份后，构建argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；通过后准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]，该入口包含全部19用例及原8失败路径，保留原语言/schema/需求门；全部通过再直接argv=["{python}","-B","scripts/verify.py","all"]，随后原勾选/真实记录/task.py done/受验完成提交/固定独立CLEAR。使用真实macOS资源收据，按原4096MiB RSS采样、jobs2、test_threads1串行执行。
+- Remaining：源码已停止编辑；当前修复未经真实行为验证，DNS先前公网复核仅为环境前提，实际生产HTTPS证据仍需本次A1。Git WIP由外层依ADR010收尾，建议WIP T0.5: fix Stremio video group dub status；未请求新增开发会话，后卡等待原质量门闭环。

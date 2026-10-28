@@ -1225,7 +1225,7 @@ impl Catalog {
             return Ok(json!([]));
         }
         Ok(
-            json!([{"id": group_id, "title": "Videos", "kind": "other", "dub_status": "unknown", "season_number": null, "language": null, "episodes": episodes}]),
+            json!([{"id": group_id, "title": "Videos", "kind": "other", "dub_status": "unspecified", "season_number": null, "language": null, "episodes": episodes}]),
         )
     }
 }

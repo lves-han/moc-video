@@ -684,6 +684,11 @@ fn n01_movie_and_original_video_order_inline_media_ignored() {
     let source = sync(&host);
     let card = first_card(&host, &source);
     let response = ok(&host, "get_details", json!({"ref":card["ref"]}));
+    assert_eq!(
+        response["details"]["groups"][0]["dub_status"],
+        "unspecified"
+    );
+    assert_eq!(response["details"]["status"], "unknown");
     let episode = &response["details"]["groups"][0]["episodes"][0];
     let fields: Vec<String> =
         serde_json::from_str(episode["ref"]["data"].as_str().unwrap()).unwrap();
@@ -707,6 +712,7 @@ fn n01_movie_and_original_video_order_inline_media_ignored() {
         {"id":"raw:0:0.5","title":"Special","season":0,"episode":0.5}, {"id":"raw:1:1","title":"One","season":1,"episode":1}]);
     let mut output = Output::default();
     let groups = cat.videos(0, 0, &value, "content", &mut output).unwrap();
+    assert_eq!(groups[0]["dub_status"], "unspecified");
     let episodes = groups[0]["episodes"].as_array().unwrap();
     assert_eq!(
         episodes
