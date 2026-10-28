@@ -816,3 +816,12 @@
 - 验收 A1：NOT RUN；本轮修复源编译与行为实际通过数为0。按ADR010交外层原run代验，未重复探测既知进程枚举/Git权限限制；当前静态检查未执行资源后端，实际macOS RSS采样收据须由外层原run生成。完整verify、done、受验完成提交与固定独立CLEAR均NOT RUN。
 - 外层下一步：确认本CLI退出、源码稳定及原身份/两锁后，构建argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；可先用原run执行focused回归argv=["{python}","-B","scripts/run.py","n01-redaction-regression","--","cargo","test","--locked","--offline","--manifest-path","src-tauri/Cargo.toml","--lib","n01_cache_bounds_revision_and_synthetic_vectors","--","--test-threads=1","--nocapture"]。准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]，包含全部19项、独立观测schema与本次真实en/zh请求响应证据；全部通过后直接argv=["{python}","-B","scripts/verify.py","all"]，再原勾选/真实记录/task.py done/受验提交/固定独立CLEAR。
 - Remaining：本轮源码停止编辑，Git WIP按ADR010交外层，建议WIP T0.5: preserve schema and validation during capability redaction。原A1失败及历史诊断继续保留；本次真实请求和回归结果需重新生成，全部质量门保持，后卡等待本卡闭环。
+
+
+## T0.5 N01 准确功能通过与完整verify静态检查阻塞 2026-10-28T10:22:03.903889+00:00
+
+- 结果：BLOCKED
+- 准确验收 A1：PASS；日志：`evidence/runs/20261028T101847528569-A1/output.log`；exit0，23必需case/36JUnit通过0失败0跳过；19原生行为、162真实Host观测独立schema、4真实TMDB3.1.7 en/zh同ID中文响应均通过。脱敏focused正例/6非法值拒绝回归exit0，原脱敏失败已修复。
+- 最新完整verify：FAIL；`evidence/verify/20261028T101915217237.json`，前5门通过（workflow118通过7平台skip、archived contracts、working contracts、frontend57测试、frontend build）；第6门fmt/check通过后Clippy以-D warnings拒绝stremio.rs:1056 cmp_owned，日志`evidence/runs/20261028T102104803705-verify-project/output.log`；原生全量test未到达。全部当前日志摘要与准确A1报告摘要已核对，source=fce64ea699d9b01c623c052f455dfd93ca468d86fbf14f69fbe244db597b86c8/protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d/generation1一致，原最新完整失败保留。
+- 根因及最小路线：content ref规范性校验将json序列化临时String直接用于比较，触发cmp_owned。原文本精确相等语义必须保持；仅比较Value会掩盖空白或转义等非规范ref，禁止通过抑制告警或弱化检查完成。下一开发在原范围最小调整比较表达式/必要局部变量并回归合法与非规范拒绝。
+- 最小决定：ADR025唯一第4会话已消费，现原sessions4/失败5/generation1及全部原证据/WIP9c6f6ac保留。需仅T0.5追加一次4→5，由原脚本修复并自验证、外层重新准确A1/完整verify/done/Git/固定独立CLEAR，原权限资源/其余预算保持。尚未获得新许可，暂停同ID监管及推进，后卡等待。
