@@ -781,3 +781,13 @@
 - 验收 A1：NOT RUN；原8条DetailsViewData失败路径与实际en-US/zh-CN HTTP/peer/部署版本/中文响应均待外层准确A1复验。未覆盖的后续分支仍有待验证风险。完整verify、done、受验完成提交和固定提交独立CLEAR均NOT RUN。沿ADR010不重复探测既知进程枚举/sccache/.git限制，不新增执行器、权限或后台任务。
 - 外层下一步：确认本开发CLI退出、源码稳定及原锁/进程身份后，构建argv=["{python}","-B","scripts/run.py","n01-build","--","cargo","check","--locked","--offline","--manifest-path","src-tauri/Cargo.toml"]；通过后准确A1 argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/n01.py","--suite","all","--report","evidence/acceptance/N01-all.json","--junit","evidence/acceptance/N01-all.xml"]，该入口包含全部19用例及原8失败路径，保留原语言/schema/需求门；全部通过再直接argv=["{python}","-B","scripts/verify.py","all"]，随后原勾选/真实记录/task.py done/受验完成提交/固定独立CLEAR。使用真实macOS资源收据，按原4096MiB RSS采样、jobs2、test_threads1串行执行。
 - Remaining：源码已停止编辑；当前修复未经真实行为验证，DNS先前公网复核仅为环境前提，实际生产HTTPS证据仍需本次A1。Git WIP由外层依ADR010收尾，建议WIP T0.5: fix Stremio video group dub status；未请求新增开发会话，后卡等待原质量门闭环。
+
+
+## T0.5 N01 真实语言通过与测试观测脱敏阻塞 2026-10-28T09:56:42.336251+00:00
+
+- 结果：BLOCKED
+- 原locked构建：PASS；日志：`evidence/runs/20261028T095356724301-n01-build/output.log`；exit0，当前source=47922d7c4417d34e0701c7d70a693cb802647f576894c9e41f66269d9486174b，protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，generation1。
+- 准确验收 A1：FAIL；日志：`evidence/runs/20261028T095411721445-A1/output.log`；exit1，19原生全通过/0失败/0跳过，JUnit21通过15失败（含需求汇总）。真实TMDB3.1.7四份原响应已保存，英文Inception/中文盗梦空间同ID tmdb:27205。
+- 已确认根因：tests/fixtures/n01.rs redact()将ImageRef.capability替为REDACTED，违反冻结43字符pattern，Python独立schema拒绝3/162条观测。call()先校验真实生产响应再脱敏。原受控n01-schema-diagnostic及n01-redaction-live-diagnostic只读定位，后者在内存诊断副本使用合法形状非秘密占位后162条全部符合schema、原live_evidence四份hash/版本/中文校验通过；准确A1仍FAIL，未改源码/协议/原报告。
+- 需要最小决定：ADR024唯一第三会话已消费，当前sessions3/失败4/generation1及全部历史保持；请求仅T0.5追加一次3→4，修复测试观测脱敏与独立校验兼容，保留真实能力值在脱敏前的校验、原schema和19行为/真实语言/安全边界，由原脚本实施并自验证、外层复验，其他预算与权限资源保持。
+- 下一步：若获准，原ADR/真实RESOLVED/独立文档复审后原流程接续。当前停止开发与推进、暂停监管，后卡按序等待；完整verify/done/固定独立CLEAR尚未执行，原WIP61cb8b5及失败证据保留于`evidence/drive/n01-third-validation-20261028T095355Z`。
