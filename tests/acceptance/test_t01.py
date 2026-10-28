@@ -136,6 +136,80 @@ class GuiSessionTests(unittest.TestCase):
                 t01.native_gui_session()
 
 
+class FunctionalStageTests(unittest.TestCase):
+    def observations(self):
+        first = dict(frames=10, raf=20, width=1920, height=1080)
+        current = dict(width=1920, height=1080, paused=False, media_error=None, frames=50, raf=90,
+            audio_state="running", audio_rms=0.06, audio_peak_hz=440, ui_position=5.5, position=5.7, duration=30)
+        return dict(sample=first), dict(sample=current)
+
+    def test_functional_observation_uses_real_control_results_without_fixed_duration(self):
+        opened, controlled = self.observations()
+        observed = t01.validate_functional(opened, controlled)
+        self.assertEqual(observed["presented_frames"], 40)
+        self.assertEqual(observed["ui_callbacks"], 70)
+
+    def test_functional_observation_rejects_broken_video_audio_and_ui(self):
+        for changes in (dict(frames=10), dict(width=1280), dict(paused=True), dict(media_error=3),
+                        dict(audio_rms=0), dict(audio_state="suspended"), dict(audio_peak_hz=100),
+                        dict(raf=20), dict(ui_position=1), dict(ui_position=float("nan"))):
+            with self.subTest(changes=changes):
+                opened, controlled = self.observations()
+                controlled["sample"].update(changes)
+                with self.assertRaises(ValueError):
+                    t01.validate_functional(opened, controlled)
+
+    def exercise_native(self, endurance):
+        run = mock.Mock(observed={"native_sessions": []})
+        run.case.side_effect = lambda _name, _ids, _expected, check: check() or True
+        sessions = []
+        opened, controlled = self.observations()
+        opened["sample"]["audio_rms"] = 0.06
+        def native(*_args):
+            session = mock.Mock(samples=[])
+            session.process.pid = 1234
+            session.record = dict(exit=0, lingering=[])
+            run.observed["native_sessions"].append(session.record)
+            def command(op, **_kwargs):
+                if op == "identity":
+                    return dict(native=dict(pid=1234, label="main", tauri="2.12.5"), origin="tauri://localhost")
+                if op == "open": return copy.deepcopy(opened)
+                if op == "controls": return copy.deepcopy(controlled)
+                return {}
+            session.command.side_effect = command
+            sessions.append(session)
+            return session
+        with mock.patch.object(t01, "native_gui_session", return_value=dict(screen_locked=False)), \
+             mock.patch.object(t01, "NativeSession", side_effect=native), \
+             mock.patch.object(t01, "validate_window"), mock.patch.object(t01, "validate_long"):
+            value = t01.native_all(run, mock.Mock(), dict(automation=dict(path="fixture.app")), endurance=endurance)
+        return run, sessions, value
+
+    def test_development_stage_uses_one_window_and_defers_endurance_explicitly(self):
+        run, sessions, value = self.exercise_native(False)
+        self.assertEqual(len(sessions), 1)
+        ops = [call.args[0] for call in sessions[0].command.call_args_list]
+        self.assertNotIn("long", ops)
+        self.assertEqual(ops.count("open"), 2)
+        self.assertEqual(ops.count("controls"), 2)
+        self.assertEqual(ops.count("stop"), 2)
+        self.assertEqual(ops.count("layout"), 5)
+        self.assertEqual(ops.count("zoom"), 4)
+        sessions[0].close.assert_called_once_with(graceful=True)
+        pending = run.observed["product_test_handoff"]
+        self.assertEqual((pending["owner"], pending["status"], pending["seconds_per_format"], pending["full_window_cycles"]),
+                         ("T0.28/A1", "NOT RUN", 1800, 20))
+        self.assertEqual(value["functional_formats"], 2)
+
+    def test_product_endurance_keeps_both_1800_second_runs_and_twenty_cycles(self):
+        run, sessions, value = self.exercise_native(True)
+        self.assertEqual(len(sessions), 21)
+        longs = [call for call in sessions[0].command.call_args_list if call.args == ("long",)]
+        self.assertEqual(len(longs), 2)
+        self.assertTrue(all(call.kwargs == dict(timeout=1900, seconds=1800) for call in longs))
+        self.assertEqual(value, dict(long_formats=2, full_window_cycles=20, sessions=21))
+        self.assertNotIn("product_test_handoff", run.observed)
+
 class NativeLaunchTests(unittest.TestCase):
     def test_macos_launch_uses_process_scoped_restoration_override(self):
         with mock.patch.object(t01.sys, "platform", "darwin"):
@@ -411,6 +485,16 @@ class ReportTests(unittest.TestCase):
         t01.platform_matrix(self.run)
         status, report, nodes = self.output()
         self.assertEqual((status, report["counts"]["failed"], report["counts"]["skipped"]), (0, 0, 4))
+        for identifier in t01.IDS:
+            self.assertIsNone(nodes[identifier].find("failure"))
+
+    def test_functional_suite_keeps_all_requirement_summaries(self):
+        self.run.suite = "functional"
+        self.run.case("covered", list(t01.IDS), "functional behavior", lambda: True)
+        status, report, nodes = self.output()
+        self.assertEqual(status, 0)
+        self.assertEqual(report["suite"], "functional")
+        self.assertEqual({s["id"] for s in report["summaries"]}, set(t01.IDS))
         for identifier in t01.IDS:
             self.assertIsNone(nodes[identifier].find("failure"))
 

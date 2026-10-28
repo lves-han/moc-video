@@ -1,10 +1,10 @@
 {
   "card": "T0.2",
-  "status": "WIP; runtime verification NOT RUN",
+  "status": "functional implementation; current acceptance pending",
   "order": ["prepare", "build", "acceptance", "verify"],
   "prepare": ["{python}", "-B", "scripts/run.py", "t01-prepare", "--", "{python}", "-B", "tests/acceptance/t01.py", "--suite", "prepare", "--report", "evidence/acceptance/T01-prepare.json", "--junit", "evidence/acceptance/T01-prepare.xml"],
   "build": ["{python}", "-B", "scripts/run.py", "t01-build", "--", "{python}", "-B", "tests/acceptance/t01.py", "--suite", "build", "--report", "evidence/acceptance/T01-build.json", "--junit", "evidence/acceptance/T01-build.xml"],
-  "acceptance": ["{python}", "-B", "scripts/run.py", "A1", "--", "{python}", "-B", "tests/acceptance/t01.py", "--suite", "all", "--report", "evidence/acceptance/T01-all.json", "--junit", "evidence/acceptance/T01-all.xml"],
+  "acceptance": ["{python}", "-B", "scripts/run.py", "A1", "--", "{python}", "-B", "tests/acceptance/t01.py", "--suite", "functional", "--report", "evidence/acceptance/T01-functional.json", "--junit", "evidence/acceptance/T01-functional.xml"],
   "verify": ["{python}", "-B", "scripts/verify.py", "all"],
   "verify_environment": {"ROLLDOWN_WORKER_THREADS": "2", "RAYON_NUM_THREADS": "2"},
   "optional_negatives": ["{python}", "-B", "scripts/run.py", "t01-negatives", "--", "{python}", "-B", "tests/acceptance/t01.py", "--suite", "negatives", "--report", "evidence/acceptance/T01-negatives.json", "--junit", "evidence/acceptance/T01-negatives.xml"],

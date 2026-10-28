@@ -4,6 +4,7 @@ prepare installs the pinned inputs and generates our own media once; build creat
 separate production and automation .app bundles. all never builds or downloads:
 it validates their source binding, then runs the real packaged WKWebView for
 1800 seconds per format and twenty complete process/window lifecycles.
+functional reuses real open/controls/stop checks; endurance belongs to T0.28.
 """
 import argparse
 import contextlib
@@ -61,7 +62,7 @@ class Acceptance(BaseAcceptance):
             self.case("source-stability", ["REQ-T01"], "stable tested source",
                       lambda: require(current == self.source, "source changed during execution"))
         summaries = []
-        if self.suite == "all":
+        if self.suite in ("all", "functional"):
             for identifier in IDS:
                 children = [c for c in self.cases if identifier in c["requirements"]]
                 passed = bool(children) and all(c["result"] == "PASS" or
@@ -563,7 +564,22 @@ def native_gui_session():
     return dict(screen_locked=flag[1] == "Yes" if flag else None)
 
 
-def native_all(run, fixture, receipt):
+def validate_functional(opened, controlled):
+    first, current = opened["sample"], controlled["sample"]
+    require(current["width"] == 1920 and current["height"] == 1080 and not current["paused"]
+            and current["media_error"] is None and current["frames"] > first["frames"],
+            "functional video decoding or presented frames failed")
+    require(current["audio_state"] == "running" and current["audio_rms"] > 0.001
+            and abs(current["audio_peak_hz"] - 440) < 30, "functional decoded audio failed")
+    require(current["raf"] > first["raf"] and math.isfinite(current["ui_position"])
+            and 0 <= current["ui_position"] <= current["duration"]
+            and abs(current["ui_position"] - current["position"]) <= 1,
+            "functional UI progress differs from media clock")
+    return dict(presented_frames=current["frames"] - first["frames"],
+                ui_callbacks=current["raf"] - first["raf"], audio_rms=current["audio_rms"])
+
+
+def native_all(run, fixture, receipt, *, endurance=True):
     run.observed["gui_session"] = native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True,
             "macOS GUI session is locked; unlock the desktop before native acceptance")
@@ -584,11 +600,17 @@ def native_all(run, fixture, receipt):
         for kind in ("mp4", "hls"):
             opened = session.command("open", kind=kind)
             run.case(kind + "-embedded-decode", ["U04", "R30", "REQ-T01"], "1080p H264/AAC embedded playback", lambda opened=opened: require(opened["sample"]["width"] == 1920 and opened["sample"]["height"] == 1080, "decoded dimensions differ"))
-            require(run.case(kind + "-controls", ["U04", "R32", "REQ-T01"], "pause, seek, cue toggle, volume, speed, native fullscreen", lambda: session.command("controls")), "Playback controls gate failed")
-            before = len(session.samples)
-            value = session.command("long", timeout=1900, seconds=1800)
-            session.drain_samples()
-            require(run.case(kind + "-30-minutes", ["U01", "U04", "R30", "R50", "REQ-T01"], "1800s real WebView wall time, frames/audio/UI samples", lambda: validate_long(value, session.samples[before:])), "Long playback gate failed")
+            def controls():
+                value = session.command("controls")
+                if not endurance:
+                    value["functional_observation"] = validate_functional(opened, value)
+                return value
+            require(run.case(kind + "-controls", ["U04", "R32", "REQ-T01"], "pause, seek, cue toggle, volume, speed, native fullscreen", controls), "Playback controls gate failed")
+            if endurance:
+                before = len(session.samples)
+                value = session.command("long", timeout=1900, seconds=1800)
+                session.drain_samples()
+                require(run.case(kind + "-30-minutes", ["U01", "U04", "R30", "R50", "REQ-T01"], "1800s real WebView wall time, frames/audio/UI samples", lambda: validate_long(value, session.samples[before:])), "Long playback gate failed")
             run.case(kind + "-release", ["R50", "REQ-T01"], "stop removes source/tracks/HLS/listeners and old frames", lambda: session.command("stop"))
         for width in (360, 390, 768, 960, 1200):
             run.case(f"layout-{width}", ["R32", "REQ-T01"], "real window resize and visible controls", lambda width=width: validate_window(session.command("layout", value=width), width=width))
@@ -599,6 +621,11 @@ def native_all(run, fixture, receipt):
         raise
     finally:
         session.close(graceful=not failed)
+    if not endurance:
+        run.observed["product_test_handoff"] = dict(owner="T0.28/A1", status="NOT RUN",
+            seconds_per_format=1800, formats=["mp4", "hls"], full_window_cycles=20,
+            evidence="current product source/build and original resource/cleanup assertions required")
+        return dict(functional_formats=2, sessions=1, endurance_owner="T0.28/A1")
     # Twenty genuine app/window lifecycles, each decoding media and releasing it.
     for index in range(1, 21):
         def lifecycle(index=index):
@@ -640,7 +667,12 @@ def all_cases(run):
     try:
         with fixture:
             require(run.case("loopback-security", ["R48", "REQ-T01"], "Origin/cap/Host/OPTIONS/Range/If-Range and HLS child auth", lambda: security(fixture)), "fixture security gate failed")
-            run.case("real-tauri-lifecycles", ["U01", "U04", "R30", "R32", "R50", "REQ-T01"], "two real 30-minute formats plus 20 complete window cycles", lambda: native_all(run, fixture, receipt))
+            endurance = run.suite == "all"
+            run.case("real-tauri-lifecycles" if endurance else "real-tauri-functional",
+                ["U01", "U04", "R30", "R32", "R50", "REQ-T01"],
+                "two real 30-minute formats plus 20 complete window cycles" if endurance else
+                "real MP4/HLS controls, decoded frames/audio/UI, layouts and normal cleanup",
+                lambda: native_all(run, fixture, receipt, endurance=endurance))
             deadline = time.monotonic() + 10
             while fixture.active and time.monotonic() < deadline:
                 time.sleep(0.1)
@@ -671,12 +703,12 @@ def platform_matrix(run):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("prepare", "build", "negatives", "all"), required=True)
+    parser.add_argument("--suite", choices=("prepare", "build", "negatives", "functional", "all"), required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
     run = Acceptance(args.suite, args.report, args.junit)
-    if args.suite == "all":
+    if args.suite in ("all", "functional"):
         platform_matrix(run)
     def cancelled(signum, _frame):
         raise RuntimeError(f"T01 cancelled by signal {signum}; owned-resource cleanup required")

@@ -578,3 +578,10 @@
 - 字段审计：T0.2 generation1→2/sessions6/失败18/paused=false；T0.4 generation0→1/sessions1/失败0/paused=true；T0.13 generation0→1/sessions1/失败0/paused=true。各卡base/resume_base/segments/last_note/计数/全部失败与迁移前逐字段相同；T0.13顺序BLOCKED保持，T0.4已批准host.rs范围落实且paused。原证据evidence/drive/acceptance-stage-change/migration-before.json与migration-after.json。
 - 实际原控制器回归：migration-applied-tests20261028T030251568378 exit0，125项、118通过/7平台skip。包含默认单卡拒绝、准确集合/批准/摘要、锁及活跃身份、append-only/scope、部分写入幂等续写、计数/区段/current/paused保持和新generation；迁移前候选104项及focused9项记录保持。
 - TASKS/ARCH分期内容与round17候选摘要相同，实际原入口与获准候选一致；当前固定内容交独立round18复审。functional业务实现尚待接续，准确功能A1与新基线build/完整verify待运行，未勾卡/done。
+
+
+## T0.2 实际迁移独立复审CLEAR与功能实施接续 2026-10-28T03:15:16.887837+00:00
+
+- 独立文档复审：CLEAR，原报告docs/reviews/doc-review/round-18.md及摘要勘误round-19.md，固定HEAD7b5e577/source f16b01eb80b4681de117c1c4dd58f5f1dc70c45e045374f78abf0305c163a599/protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1；全部关键文件/ADR020/021摘要逐项核对。round18误引用PROGRESS旧前缀摘要，由原审阅者round19更正为完整文件526bbe2133af14d06e5040f8ea0fbb0ad29ece4f1019ff19ac25684de279e412；原报告保留。
+- 按获准新基线当前agent继续T0.2功能实施，自验证不限累计额度。功能候选复用现有open/controls/stop及真实状态读回，保留原产品long1800秒/20循环路径，新增阶段编排/视频音频UI失败/8需求报告回归；隔离候选原run20261028T030829160522 focused9项通过。首次隔离副本缺server.py导入失败已note并补原夹具，收据030805535174保留，累计真实失败19。
+- 接下来应用本卡范围内功能验收及当前交接文档，原run重build/全部回归/准确functional A1；成功后直接完整verify及原done/Git/固定提交独立CLEAR。产品长期门由T0.28/T0.26承接，当前不运行长播或20窗口。
