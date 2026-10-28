@@ -697,3 +697,12 @@
 - 独立提案复审：CLEAR；原报告docs/reviews/doc-review/round-21.md，固定HEAD8fbd05ddc63a80a0a0b7f980a70f3e778afa3007/source67416fd5cb32050b9501fe81272479ba8f22351aa69d3d5f92c309f5aa32b16f/protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1，现行与候选5个文件SHA逐项匹配。
 - 候选仅补T0.5 host.rs一行，原checks/cases/依赖/预算保持；现有原入口可迁移当前T0.5+paused T0.13并保留历史/计数/暂停/顺序阻塞。无新控制器实现要求。
 - 此CLEAR仅确认提案可审批，实际冻结文件/保护基线/业务代码尚未变，T0.5 sessions0/gen0/失败0保持。当前仅请求本卡最小文件范围及相应原基线联动迁移真实决定，默认2会话保留，后卡等待。
+
+
+## T0.5 最小范围与暂停基线迁移真实批准 2026-10-28T06:44:25.818813+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对仅本卡补host.rs、通过现有原入口同步迁移T0.13暂停基线并保留历史/暂停/本卡原2次开发预算的问题明确答“批准 T0.5 补入 host.rs”；来源当前聊天问题回复，详ADR023。
+- 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
+- 迁移暂停卡：T0.13
+- 已应用round21核对的单行范围候选，原义务/checks/cases/依赖/预算保持，当前sessions0/失败0。接着原入口实际迁移并独立复审，之后才启动第1次开发CLI；T0.13只迁移基线且保持顺序BLOCKED/paused，不开发或恢复WIP。

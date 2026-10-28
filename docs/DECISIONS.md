@@ -175,3 +175,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 实施：本次独立只读文档复审CLEAR后，紧邻启动确认最早未完成/current/next均T0.4、原sessions2，旧驱动/CLI/执行器及重命令均退出、两锁空闲，仅一次原scripts/drive.py --once --max-sessions 3。该参数仅本卡本次，启动后原计数3即已消费；workflow默认2及其他卡预算保持，不加session-hours、不重置计数、不复用其他卡例外。
 验证：5项Host结果被工作协议拒绝和1项超限分类失败以原Rust日志为依据，具体根因由原开发CLI核实，保留原schema/协议、原反例、17行为及全部9需求门。修改后实际相关构建/行为自验证通过再正常交接；遇既知sandbox无法实跑时沿原分工准确交接未验证项，避免重复权限探测/扩大权限。外层稳定源码重新locked构建、准确A1、直接完整verify、原done/Git及固定提交独立CLEAR，前卡完整闭环后才依序下一卡。
 保持：原4096MiB macOS RSS采样/jobs2/线程1、项目专属重锁、全部单条/会话时限、开发/只读权限及阶段/范围/顺序。protected=a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1、generation1保持，未修改冻结定义/控制器，不调用rebaseline。当前原source=7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446，此为运行前定位，后续每次从原状态核对。
+
+
+## ADR-023 2026-10-28T06:44:25.818813+00:00 — 已采纳：T0.5仅补host.rs范围并联动暂停基线
+
+来源：当前聊天询问“是否仅将host.rs补入T0.5，并通过现有原入口同步迁移T0.13的暂停基线，保留全部历史、暂停状态及T0.5原两次开发预算；本卡尚未消耗开发会话”，用户明确回复“批准 T0.5 补入 host.rs”。
+决定：仅在T0.5 TASKS范围行增加src-tauri/src/host.rs，以将Stremio同步/内容适配接入原Host及其Job/提交锁/配置世代/取消语义。原义务/checks/cases/依赖、默认2次开发预算及权限/资源/单条时限保持。范围预检已完成且原sessions0/失败0，尚无开发CLI或新产品代码。
+基线：应用独立提案round21核对的单行候选；批准新protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，使用已存在原task.py rebaseline T0.5 --protected 新摘要 --include-paused T0.13迁移当前及唯一paused未完成卡。保留原计数/失败/base/resume_base/segments/current/paused与T0.13顺序BLOCKED及隔离WIP；仅分别更新基线事件/generation，不新增控制器变更或恢复后卡开发，旧证据按原规则失效。已完成卡的历史受验提交/质量门保持。
+执行：原入口迁移后核对状态保持/准确摘要/范围/原task check，对固定实际文档与迁移做独立只读复审CLEAR，再恢复同ID监管并普通drive --once/default2启动T0.5第1开发会话。沿ADR010原脚本开发与外层验收/Git、ADR020功能/产品分期及严格卡序。
