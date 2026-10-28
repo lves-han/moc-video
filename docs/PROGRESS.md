@@ -647,3 +647,10 @@
 - 决定：用户针对仅本卡追加一次2→3、由原脚本修复6项功能失败并由外层复验、权限资源保持的问题明确答“批准 T0.4 追加一次”；来源当前聊天问题回复，按ADR022仅本卡一次。
 - 批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1
 - 当前sessions2/失败2/generation1仍保留，准确A1原17测试11通过6失败、WIP27b6204及全部日志保持；本次仅追加真实授权/交接，未改受保护内容，不调用rebaseline。独立文档复审CLEAR且安全边界满足后仅原drive --once --max-sessions 3；修复后全部原功能质量门重新执行，后卡等待。
+
+
+## T0.4 第三会话授权独立文档CLEAR 2026-10-28T05:38:12.361097+00:00
+
+- 独立复审：CLEAR；原报告docs/reviews/doc-review/round-20.md，固定HEAD8ed9f5174226c40c36107af3d961673dc5310b47/source7a4517bffdd377357236fa36d34bff1ce27b7c46005144b8b7fbe89d2476c446/protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1。全部关键文件及ADR022分段SHA逐项匹配。
+- 当前仍sessions2/失败2/generation1，第3次尚未消费。紧邻原状态/真实身份/锁与earliest核对后一次原drive --once --max-sessions 3，后续以原计数3认定已消费，默认workflow2/其他卡保持。
+- 当前已有6项真实功能失败，业务未完成；原脚本定位修复，外层按原权限/资源/时限及准确A1/完整verify/受验提交/独立CLEAR复验。当前只追加文档，原保护基线/源码及全部失败不改。
