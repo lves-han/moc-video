@@ -706,3 +706,10 @@
 - 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
 - 迁移暂停卡：T0.13
 - 已应用round21核对的单行范围候选，原义务/checks/cases/依赖/预算保持，当前sessions0/失败0。接着原入口实际迁移并独立复审，之后才启动第1次开发CLI；T0.13只迁移基线且保持顺序BLOCKED/paused，不开发或恢复WIP。
+
+
+## T0.5 实际范围迁移独立CLEAR与启动准备 2026-10-28T06:49:10.979504+00:00
+
+- 实际文档独立复审：CLEAR；原报告docs/reviews/doc-review/round-22.md，固定HEADa94ea8e42e51929e7f51f6a7f158ac1586f8a0fc/source67416fd5cb32050b9501fe81272479ba8f22351aa69d3d5f92c309f5aa32b16f/protected 01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d。全部5项关键SHA及ADR023分段逐项匹配。
+- 仅T0.5范围增加host.rs；现有原入口实际迁移T0.5 gen0→1、sessions0/失败0及T0.13 gen1→2、sessions1/失败0/paused，原base/resume_base/segments/last_note/计数/失败/暂停/current保持，T0.13顺序BLOCKED/WIP保留。实际源及控制器未改。
+- 已通过原task check/scope及字段审计；当前Stremio业务/A1仍NOT RUN。紧邻安全前提与严格顺序核对后，恢复同ID监管，以普通drive --once/default2开启本卡第1次真实开发CLI；当前用户最新版Occam原则通过原handoff传递，资源/权限/原完成门保持。
