@@ -440,6 +440,149 @@ class WorkflowTests(unittest.TestCase):
             self.w.next_card()
         self.assertEqual(caught.exception.code, 10)
 
+    def prepare_paused_migration(self):
+        tasks = self.repo / "docs/TASKS.md"
+        tasks.write_text(card_text() + card_text("T0.2").replace("`src/`", "`src/extra.txt`") +
+                         card_text("T0.3").replace("`src/`", "`src/extra.txt`"), encoding="utf-8")
+        self.commit("three card fixture")
+        self.w.start("T0.1")
+        original = self.w.state("T0.1")
+        original.update(sessions=2, failures=[dict(signature="retained", exit=1)], last_note=123)
+        self.w.write_json(self.w.card_dir("T0.1") / "state.json", original)
+        for cid in ("T0.2", "T0.3"):
+            node = json.loads(json.dumps(original))
+            node.update(paused=True, sessions=1, failures=[], segments=[dict(base=node["base"], end=node["base"])])
+            self.w.write_json(self.w.card_dir(cid) / "state.json", node)
+        frozen = self.approve_revision()
+        with (self.repo / "docs/PROGRESS.md").open("a", encoding="utf-8") as f:
+            f.write("- 迁移暂停卡：T0.2,T0.3\n\n## T0.2 ordering\n- 结果：BLOCKED\n")
+        return frozen, {cid: self.w.state(cid) for cid in ("T0.1", "T0.2", "T0.3")}
+
+    def migrate_paused(self, frozen):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.w.task(["rebaseline", "T0.1", "--protected", frozen, "--include-paused", "T0.2,T0.3"])
+
+    def test_paused_migration_preserves_history_and_holds_both_locks(self):
+        frozen, before = self.prepare_paused_migration()
+        save = self.w.write_json
+        def guarded_save(path, value):
+            for lock_path in (self.repo / "evidence/drive/driver.lock", self.w.heavy_path()):
+                with self.w.runtime.FileLock(lock_path) as lock:
+                    self.assertFalse(lock.acquire())
+            save(path, value)
+        with patch.object(self.w, "write_json", side_effect=guarded_save):
+            self.migrate_paused(frozen)
+        for cid, old in before.items():
+            node = self.w.state(cid)
+            self.assertEqual(node["protected"], frozen)
+            self.assertEqual(node["generation"], old.get("generation", 0) + 1)
+            for field in ("base", "sessions", "failures", "last_note", "segments", "paused", "resume_base"):
+                self.assertEqual(node.get(field), old.get(field))
+        self.assertEqual(self.w.current(), "T0.1")
+        self.assertIn("T0.2", self.w.blocked())
+        after = {cid: self.w.state(cid) for cid in before}
+        self.migrate_paused(frozen)
+        self.assertEqual(after, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_recovers_partial_save_once(self):
+        frozen, before = self.prepare_paused_migration()
+        save = self.w.write_json
+        def interrupted_save(path, value):
+            if path == self.w.card_dir("T0.2") / "state.json":
+                raise OSError("simulated interrupted save")
+            save(path, value)
+        with patch.object(self.w, "write_json", side_effect=interrupted_save):
+            with self.assertRaisesRegex(OSError, "interrupted"):
+                self.migrate_paused(frozen)
+        self.assertEqual(self.w.state("T0.1")["protected"], frozen)
+        self.assertEqual(self.w.state("T0.2")["protected"], before["T0.2"]["protected"])
+        self.migrate_paused(frozen)
+        for cid, old in before.items():
+            node = self.w.state(cid)
+            self.assertEqual(node["generation"], old.get("generation", 0) + 1)
+            self.assertEqual(len(node["rebaselines"]), 1)
+
+    def test_default_rebaseline_still_refuses_other_unfinished_cards(self):
+        frozen, before = self.prepare_paused_migration()
+        with self.assertRaisesRegex(self.w.WorkflowError, "其他已开始"):
+            self.w.rebaseline("T0.1", frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_rejects_invalid_set_or_approval_before_writing(self):
+        frozen, before = self.prepare_paused_migration()
+        for included, digest in ((["T0.2"], frozen), (["T0.2", "T0.2"], frozen),
+                                 (["T0.1", "T0.2", "T0.3"], frozen),
+                                 (["T0.2", "T0.3"], "0" * 64)):
+            with self.subTest(included=included, digest=digest), self.assertRaises(self.w.WorkflowError):
+                self.w.rebaseline("T0.1", digest, included)
+            self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+        path = self.repo / "docs/PROGRESS.md"
+        path.write_text(path.read_text().replace("- 迁移暂停卡：T0.2,T0.3", "- 迁移暂停卡：T0.2"))
+        with self.assertRaisesRegex(self.w.WorkflowError, "集合"):
+            self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_rejects_active_card_and_modified_prefix(self):
+        frozen, before = self.prepare_paused_migration()
+        node = self.w.state("T0.2");node["paused"] = False
+        self.w.write_json(self.w.card_dir("T0.2") / "state.json", node)
+        with self.assertRaisesRegex(self.w.WorkflowError, "暂停"):
+            self.migrate_paused(frozen)
+        self.w.write_json(self.w.card_dir("T0.2") / "state.json", before["T0.2"])
+        path = self.repo / "docs/PROGRESS.md"
+        path.write_text(path.read_text().replace("# PROGRESS", "# altered", 1))
+        with self.assertRaisesRegex(self.w.WorkflowError, "只追加"):
+            self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_rejects_driver_agent_unfinished_run_and_locks(self):
+        frozen, before = self.prepare_paused_migration()
+        for state in (dict(pid=os.getpid(), identity=self.w.identity(os.getpid())),
+                      dict(agent_pid=os.getpid(), agent_identity=self.w.identity(os.getpid()))):
+            self.w.write_json(self.repo / "evidence/drive/state.json", state)
+            with self.assertRaisesRegex(self.w.WorkflowError, "进程"):
+                self.migrate_paused(frozen)
+        self.w.write_json(self.repo / "evidence/drive/state.json", {})
+        receipt = self.repo / "evidence/runs/pending/receipt.json"
+        self.w.write_json(receipt, dict(card="T0.1", status="queued", created=1, log="unused"))
+        with self.assertRaisesRegex(self.w.WorkflowError, "重命令"):
+            self.migrate_paused(frozen)
+        receipt.unlink()
+        for path in (self.repo / "evidence/drive/driver.lock", self.w.heavy_path()):
+            with self.w.runtime.FileLock(path) as lock:
+                self.assertTrue(lock.acquire())
+                with self.assertRaisesRegex(self.w.WorkflowError, "锁"):
+                    self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_scope_excludes_other_cards_commits_but_checks_uncommitted_changes(self):
+        frozen, before = self.prepare_paused_migration()
+        (self.repo / "src/value.txt").write_text("other card work")
+        self.commit("T0.1: later work")
+        self.assertFalse(self.w.scope_problems("T0.2"))
+        (self.repo / "src/value.txt").write_text("uncommitted outside paused scope")
+        with self.assertRaisesRegex(self.w.WorkflowError, "范围外"):
+            self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_rejects_mixed_original_baselines(self):
+        frozen, before = self.prepare_paused_migration()
+        node = self.w.state("T0.2");node["protected"] = "0" * 64
+        self.w.write_json(self.w.card_dir("T0.2") / "state.json", node)
+        before["T0.2"] = node
+        with self.assertRaisesRegex(self.w.WorkflowError, "原冻结基线"):
+            self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
+    def test_paused_migration_rejects_live_payload_from_finished_receipt(self):
+        frozen, before = self.prepare_paused_migration()
+        receipt = self.repo / "evidence/runs/finished/receipt.json"
+        self.w.write_json(receipt, dict(card="T0.1", status="finished", created=1, log="unused",
+            payload_refs=[dict(pid=os.getpid(), identity=self.w.identity(os.getpid()))]))
+        with self.assertRaisesRegex(self.w.WorkflowError, "重命令"):
+            self.migrate_paused(frozen)
+        self.assertEqual(before, {cid: self.w.state(cid) for cid in before})
+
     def test_rebaseline_requires_matching_approval_and_stopped_driver(self):
         self.w.start("T0.1")
         frozen = self.approve_revision()

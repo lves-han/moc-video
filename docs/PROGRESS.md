@@ -555,3 +555,26 @@
 - 已准备：evidence/drive/acceptance-stage-change/proposal.md与documents.patch；独立只读round16/round17对最终提案CLEAR，latest TASKS SHA96a43c3dfefa602d22822ec4375a0962a45886a6843790b85e1837b7a0265269、ARCH SHA603685f99ba650e7488f05a26dc5fe81c434b63f1e126de923e0d999a2fcf625。
 - 实际验证：原run stage-proposal-structure最新20261028T020614570288 exit0，35卡、suite/host.rs/REQ-T01承接与声明预算通过；独立审查补充核对113条追溯/cases及git apply --check。早期临时结构检查固定argv索引错误已note修复，原失败收据保留。当前业务source仍03dfddc8e8936f9b33661ec46fa2a6d58ec7af602da51473f2444f474880b8a6，T0.2 sessions6/实际失败18/generation1，其他暂停卡原计数不改。
 - 下一步：取得原入口最小批次迁移决定后，在隔离候选副本通过原run测试控制器，应用候选并按准确批准摘要经原入口迁移，实际文档独立复审；随后T0.2新基线重build/回归/功能A1/完整verify/原完成提交/固定提交独立CLEAR。严格卡序后卡等待，同ID监管按待迁移原因PAUSED。
+
+
+## T0.2 最小三卡基线迁移真实批准 2026-10-28T03:02:50.375835+00:00
+
+- 结果：RESOLVED
+- 决定：用户对原rebaseline最小扩展、T0.2/T0.4/T0.13迁移并保留历史/计数/卡序/暂停状态、继续T0.2明确答“批准最小迁移并继续”；来源当前聊天本次问题回复，详ADR021。
+- 批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1
+- 迁移暂停卡：T0.13,T0.4
+- 候选原控制器回归104项（1平台skip）与focused9项通过；现已应用获准的原入口及分期文档，接着由原入口实际迁移，再固定实际内容独立复审。原CLI计数/失败及原证据保持。
+
+## T0.4 已批准host.rs范围落实 2026-10-28T03:02:50.375835+00:00
+
+- 结果：RESOLVED
+- 决定：用户先前明确“批准补入 host.rs”，本次最小迁移同步落实ADR016已获范围批准，TASKS仅补该文件；原要求及剩余1次开发会话保持。当前仍paused等待T0.2完整功能质量门，T0.13顺序阻塞保持。
+- 批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1
+
+
+## T0.2 三卡基线迁移实际完成 2026-10-28T03:05:44.407143+00:00
+
+- 原入口：task.py rebaseline T0.2 --protected a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1 --include-paused T0.4,T0.13，更新3卡成功，current/next保持T0.2。
+- 字段审计：T0.2 generation1→2/sessions6/失败18/paused=false；T0.4 generation0→1/sessions1/失败0/paused=true；T0.13 generation0→1/sessions1/失败0/paused=true。各卡base/resume_base/segments/last_note/计数/全部失败与迁移前逐字段相同；T0.13顺序BLOCKED保持，T0.4已批准host.rs范围落实且paused。原证据evidence/drive/acceptance-stage-change/migration-before.json与migration-after.json。
+- 实际原控制器回归：migration-applied-tests20261028T030251568378 exit0，125项、118通过/7平台skip。包含默认单卡拒绝、准确集合/批准/摘要、锁及活跃身份、append-only/scope、部分写入幂等续写、计数/区段/current/paused保持和新generation；迁移前候选104项及focused9项记录保持。
+- TASKS/ARCH分期内容与round17候选摘要相同，实际原入口与获准候选一致；当前固定内容交独立round18复审。functional业务实现尚待接续，准确功能A1与新基线build/完整verify待运行，未勾卡/done。

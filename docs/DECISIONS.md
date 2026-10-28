@@ -158,3 +158,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 合法迁移路线：原workflow.rebaseline仅支持当前单卡且拒绝其他已开始未完成卡。现T0.2/T0.4/T0.13共有旧protected=5d991a18504cf367995c35733d2d3ed0dc16a94068affb3dedeb15b3f8921481，其中后两卡paused；新分期需要更新冻结TASKS/ARCH并使旧证据失效。已准备最小原入口批次迁移提案，当前用户本次已批准分期，控制器扩展及三卡迁移尚待单独明确决定；本ADR记录待批准路线，未将其写成用户已批准控制器。原冻结文件、原状态/current/失败/计数保持。早已批准ADR016的host.rs范围拟同次落实，文件范围无需再次确认。
 审查：独立只读formal_start_doc_review对候选方案给出round16提案CLEAR；候选随后移除自拟开发30秒固定等待，以原功能状态读回复用，最新round17补充提案CLEAR。报告docs/reviews/doc-review/round-16.md与round-17.md原样保存，round17 SHA对应最终候选。两者仅确认提案可审批，实际新控制器/基线/functional与产品测试均待实施验证；实施后须固定实际内容独立复审。
 候选位置：evidence/drive/acceptance-stage-change/proposal.md及documents.patch，最终文件摘要见sha256.json。控制器拟仅显式批准集合的原入口迁移，持续持有driver/heavy锁、完整先验校验、保留原计数/失败/区段/current/paused、按同批准事件幂等续写并分别增加一次generation；保持后卡功能阻塞及暂停。候选隔离副本先经现行原run验证，获准应用后原入口迁移再原run复测；禁止手写状态或伪造后卡完成。
+
+
+## ADR-021 2026-10-28T03:02:50.375835+00:00 — 已采纳：原入口最小三卡基线迁移
+
+来源：当前聊天明确询问“是否批准仅扩展原rebaseline入口完成这次迁移，保留全部历史、计数、卡序与暂停状态，再继续T0.2功能开发”，用户明确答“批准最小迁移并继续”。本次批准覆盖round17分期提案及原rebaseline最小批次扩展，迁移集合仅当前T0.2与paused T0.4/T0.13。
+实施：原task.py rebaseline增加显式--include-paused参数，默认单卡行为保持；全程持有原driver/project-heavy锁，校验完整在途集合、当前/暂停身份、真实RESOLVED及准确摘要/迁移集合、append-only、scope、驱动/CLI及执行器/payload身份和未完成收据。全部校验先于逐文件原子保存；沿原rebaselines事件记录cards/previous/new/approval，各卡generation仅加一次，中断按同批准事件幂等续写。计数/失败/区段/base/resume_base/current/paused保持，旧验收失效。暂停卡scope仅其活动segments与未提交文件，修正误计暂停后其他卡提交的问题。
+候选自验证：现行原run migration-candidate-tests20261028T025600726273 exit0，104测试、103通过/1平台skip；补finished收据仍存活payload守卫与反例后focused20261028T025951500653 exit0，9项迁移行为通过。候选在evidence隔离测试夹具验证后才应用到原文件，未用旁路执行器或手写实际状态。实际迁移后原run复测、固定内容独立文档复审，再T0.2功能实施/实际验收。
+本次批准摘要：a13052cd3dfcc96cb36c056b2f41fcf31b88dcb3b4ce0b5347ffb4e804781db1。同时应用ADR020分期TASKS/ARCH与已获ADR016的T0.4 host.rs范围；SPEC、AGENTS、workflow配置、资源/权限/单条时限保持。T0.13顺序BLOCKED与隔离WIP保持，T0.4解除已批准范围问题后仍paused按序等待，当前卡继续T0.2。

@@ -475,7 +475,9 @@ def check_append_only(node):
             raise WorkflowError(f"只追加文档被改写：{name}")
 
 
-def rebaseline(cid, frozen):
+def rebaseline(cid, frozen, include_paused=None):
+    if include_paused is not None:
+        return rebaseline_paused(cid, frozen, include_paused)
     node = state(cid)
     if current() != cid or not node:
         raise WorkflowError("只可为已开始的当前卡更新授权基线")
@@ -520,13 +522,90 @@ def rebaseline(cid, frozen):
     print(f"{cid} 授权基线已更新；保留额度及失败历史，旧验收证据失效，须重新完整验收")
 
 
+def rebaseline_paused(cid, frozen, include_paused):
+    # One explicit approval covers this set; interrupted per-file saves can resume
+    # from the existing rebaseline events without a separate transaction state.
+    if not include_paused or len(set(include_paused)) != len(include_paused) or cid in include_paused:
+        raise WorkflowError("迁移暂停卡集合必须非空、无重复且不含当前卡")
+    cfg = config()
+    with runtime.FileLock(REPO / "evidence/drive/driver.lock") as driver_lock, \
+            runtime.FileLock(runtime.lock_path(cfg)) as heavy_lock:
+        if not driver_lock.acquire() or not heavy_lock.acquire():
+            raise WorkflowError("驱动器或重任务锁仍被占用，不能迁移基线")
+        items = cards()
+        targets = [cid, *sorted(include_paused)]
+        unfinished = {item["id"] for item in items if state(item["id"]) and not completed(item)}
+        if set(targets) != unfinished or current() != cid:
+            raise WorkflowError("批准迁移集合须准确覆盖当前及全部暂停未完成卡")
+        nodes = {key: state(key) for key in targets}
+        if nodes[cid].get("paused") or any(not nodes[key].get("paused") for key in include_paused):
+            raise WorkflowError("迁移要求当前卡活跃、其余卡保持暂停")
+        if frozen != protected_hash():
+            raise WorkflowError("批准摘要与当前修订不一致")
+        pending = blocked()
+        if cid in pending or global_blocks(pending, items):
+            raise WorkflowError("当前卡仍有未解除的 BLOCKED", 11)
+        decisions = [entry for entry in progress_entries() if cid in re.findall(r"T\d+\.\d+", entry.splitlines()[0])
+                     and re.search(r"^- 结果：(BLOCKED|RESOLVED)\s*$", entry, re.M)]
+        if len(decisions) < 2 or not re.search(r"^- 结果：BLOCKED\s*$", decisions[-2], re.M):
+            raise WorkflowError("需要当前卡 BLOCKED 后的用户 RESOLVED 决定")
+        approval = decisions[-1]
+        included = re.search(r"^- 迁移暂停卡：([^\n]+)$", approval, re.M)
+        if not re.search(r"^- 结果：RESOLVED\s*$", approval, re.M) or not re.search(r"^- 决定：\S[^\n]*$", approval, re.M) \
+                or not re.search(r"^- 批准摘要：" + re.escape(frozen) + r"\s*$", approval, re.M) \
+                or not included or included[1] != ",".join(sorted(include_paused)):
+            raise WorkflowError("RESOLVED 必须包含真实决定、批准摘要与准确迁移暂停卡集合")
+        approval_hash = digest(approval)
+        driver = read_json(REPO / "evidence/drive/state.json")
+        if any(runtime.alive(dict(pid=driver.get(pid), identity=driver.get(token))) for pid, token in
+               (("pid", "identity"), ("agent_pid", "agent_identity"))):
+            raise WorkflowError("先停止驱动器及开发进程，再迁移基线")
+        runs = receipts()
+        if any(run["status"] != "finished" or
+               any(runtime.alive(ref) for ref in [
+                   dict(pid=run.get("pid"), identity=run.get("identity")),
+                   dict(pid=run.get("payload_pid"), identity=run.get("payload_identity")),
+                   *run.get("payload_refs", [])]) for run in runs):
+            raise WorkflowError("先等待或恢复未完成重命令，再迁移基线")
+        previous, updates = set(), {}
+        for key, node in nodes.items():
+            check_append_only(node)
+            outside = scope_problems(key)
+            if any(not is_protected(name) for name in outside):
+                raise WorkflowError(f"{key} 存在非冻结文件的范围外修改")
+            used = [event for event in node.get("rebaselines", []) if event["approval"] == approval_hash]
+            if used:
+                if len(used) != 1 or node["protected"] != frozen or used[0]["protected"] != frozen \
+                        or used[0].get("cards") != targets or used[0]["previous"] == frozen:
+                    raise WorkflowError("已使用批准事件与本次迁移不一致")
+                previous.add(used[0]["previous"])
+                continue
+            if node["protected"] == frozen:
+                raise WorkflowError("冻结内容没有变化，且无本次已迁移事件")
+            previous.add(node["protected"])
+            node.setdefault("rebaselines", []).append(dict(time=utc(), previous=node["protected"],
+                protected=frozen, approval=approval_hash, cards=targets))
+            node.update(protected=frozen, generation=node.get("generation", 0) + 1,
+                        rebaseline_scope=sorted(set(node.get("rebaseline_scope", [])) | set(outside)))
+            for name in APPEND_ONLY:
+                value = (REPO / name).read_bytes()
+                node["append_only"][name] = dict(size=len(value), hash=digest(value))
+            updates[key] = node
+        if len(previous) != 1:
+            raise WorkflowError("迁移集合的原冻结基线不一致")
+        for key, node in updates.items():
+            write_json(card_dir(key) / "state.json", node)
+        print(f"{','.join(targets)} 基线迁移完成；本次更新 {len(updates)} 卡，历史与暂停状态保持")
+
+
 def scope_problems(cid):
     item, node = get_card(cid), state(cid)
     # A paused card owns only the commits made while it was active, not other cards' work in between.
     paths = set()
     for segment in node.get("segments", []):
         paths |= set(git("diff", "--no-renames", "--name-only", "-z", segment["base"], segment["end"], binary=True).split(b"\0"))
-    paths |= set(git("diff", "--no-renames", "--name-only", "-z", node.get("resume_base", node["base"]), binary=True).split(b"\0"))
+    working_base = "HEAD" if node.get("paused") else node.get("resume_base", node["base"])
+    paths |= set(git("diff", "--no-renames", "--name-only", "-z", working_base, binary=True).split(b"\0"))
     paths |= set(git("ls-files", "--others", "--exclude-standard", "-z", binary=True).split(b"\0"))
     allowed = [*item["scope"], *DYNAMIC, *node.get("rebaseline_scope", [])]
     return sorted(p.decode("utf-8", errors="surrogateescape") for p in paths if p and not any(
@@ -679,6 +758,8 @@ def task(args):
         print(f"started: {args[1]}")
     elif command == "rebaseline" and len(args) == 4 and args[2] == "--protected":
         rebaseline(args[1], args[3])
+    elif command == "rebaseline" and len(args) == 6 and args[2] == "--protected" and args[4] == "--include-paused":
+        rebaseline(args[1], args[3], args[5].split(","))
     elif command in ("note", "handoff") and len(args) > 1:
         cid = current()
         if not cid:
@@ -705,7 +786,7 @@ def task(args):
         print(json.dumps(dict(current=cid, state=state(cid) if cid else {},
                               protected=protected_hash(), adr=adr_digests(), blocked=list(blocked()), runs=receipts(cid) if cid else []), ensure_ascii=False, indent=2))
     else:
-        raise WorkflowError("task.py: check|next|show [ID]|start ID|rebaseline ID --protected SHA256|note TEXT|handoff TEXT|scope|done ID|status|recover")
+        raise WorkflowError("task.py: check|next|show [ID]|start ID|rebaseline ID --protected SHA256 [--include-paused ID,...]|note TEXT|handoff TEXT|scope|done ID|status|recover")
     return 0
 
 
