@@ -508,3 +508,10 @@
 - 实施状态：WIP；当前agent在本卡范围添加NativeSession的caffeinate -d -i -w样机PID临时唤醒资源，阻止空闲显示/系统睡眠，不改用户电源/锁屏设置。精确PID/创建身份加入原owned集合，纳入RSS与退出清理；应用退出自动释放，原close另回收进程，启动失败显式失败并清理已启动样机。
 - 自验证：原run t01-wake-guard-tests收据20261027T104153430125 exit0，39Python全部通过，包含绑定/计入owned与启动失败反例。原Node回归无修改；新完整build/回归/原生短预检及准确A1随后执行。
 - 原资源/权限/单条命令超时、两种1800秒/20窗口/安全/布局/DPI/清理与固定提交独立巡检保持，原CLI历史计数不改。
+
+
+## T0.2 原生恢复窗口模态阻塞修复 2026-10-28T01:12:59.163577+00:00
+
+- 实施状态：WIP；解锁后短GUI预检仍无初始化握手。原延后采样堆栈t01-native-startup-late-diagnostic明确停在NSPersistentUIRestorer→NSAlert runModal；CUA观察到“上次异常退出，是否恢复窗口”的系统对话框。原CUA输入控制返回未激活，未假称已点击；原诊断进程均按身份清理，原报告/堆栈保留。
+- 当前agent最小修复：NativeSession仅在macOS为验收样机追加-ApplePersistenceIgnoreState YES，采用Cocoa易失参数域忽略旧窗口恢复，保留持久偏好和保存状态。原argv进入会话报告，其他平台启动参数保持；准确A1/窗口创建/清理与安全门不改。
+- 自验证：原run t01-launch-isolation-tests收据20261028T011142383474 exit0，41Python全部通过，新增macOS参数隔离与其他平台参数保持两项回归；当前无残留样机进程。下一步重新生成同源码构建收据并跑原生预检，确认实际握手/前台/布局/DPI/清理再长测。

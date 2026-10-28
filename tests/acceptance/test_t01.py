@@ -136,6 +136,17 @@ class GuiSessionTests(unittest.TestCase):
                 t01.native_gui_session()
 
 
+class NativeLaunchTests(unittest.TestCase):
+    def test_macos_launch_uses_process_scoped_restoration_override(self):
+        with mock.patch.object(t01.sys, "platform", "darwin"):
+            self.assertEqual(t01.NativeSession.launch_argv(Path("/fixture/test app/native")),
+                             ["/fixture/test app/native", "-ApplePersistenceIgnoreState", "YES"])
+
+    def test_other_platform_launch_keeps_original_arguments(self):
+        with mock.patch.object(t01.sys, "platform", "linux"):
+            self.assertEqual(t01.NativeSession.launch_argv(Path("/fixture/native")), ["/fixture/native"])
+
+
 class NativeResultTests(unittest.TestCase):
     def setUp(self):
         root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="t01-result-regression-")))

@@ -332,6 +332,14 @@ def security(fixture):
 
 
 class NativeSession:
+    @staticmethod
+    def launch_argv(executable):
+        argv = [str(executable)]
+        if sys.platform == "darwin":
+            # Use Cocoa's volatile argument domain; retain the user's saved state.
+            argv.extend(["-ApplePersistenceIgnoreState", "YES"])
+        return argv
+
     def __init__(self, run, fixture, executable, index):
         self.run, self.fixture = run, fixture
         self.sequence = 0
@@ -342,7 +350,8 @@ class NativeSession:
         self.stream = self.path.open("w", encoding="utf-8")
         env = dict(os.environ, T01_FIXTURE_BASE=fixture.base, T01_FIXTURE_CAP=fixture.cap)
         # Keep the native app and WebKit helpers inside the original runner session.
-        self.process = subprocess.Popen([str(executable)], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+        argv = self.launch_argv(executable)
+        self.process = subprocess.Popen(argv, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         def output():
             for line in self.process.stdout:
@@ -353,7 +362,7 @@ class NativeSession:
         self.identity = workflow.runtime.identity(self.process.pid)
         self.owned[self.process.pid] = self.identity
         self.started = time.monotonic()
-        self.record = dict(pid=self.process.pid, identity=self.identity, executable_sha256=file_hash(executable),
+        self.record = dict(pid=self.process.pid, identity=self.identity, argv=argv, executable_sha256=file_hash(executable),
             log=str(self.path.relative_to(ROOT)), index=index, started_utc=dt.datetime.now(dt.timezone.utc).isoformat())
         run.observed.setdefault("native_sessions", []).append(self.record)
         self.wake_process = None
