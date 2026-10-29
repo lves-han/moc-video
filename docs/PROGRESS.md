@@ -1100,3 +1100,10 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 原sessions2/失败4/generation0、source=305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615及全部原失败/收据/日志/WIP保持；第三许可尚未消费。仅解除此次预算阻塞，准确A1仍FAIL、完整verify/done/固定独立CLEAR尚NOT RUN，后卡严格等待。
 - 下一步：固定实际文档独立round27 CLEAR后，紧邻顺序/原身份/两锁核对，唯一一次原drive --once --max-sessions 3；实际计数3即已消费。其他卡默认2，T13暂停/历史保持；原权限/资源/时限/安全/全部原门不变，无冻结修订/rebaseline。监管同ID更新实际授权后恢复。
+
+
+## T0.9 第三会话授权独立文档CLEAR 2026-10-29T06:13:42.900193+00:00
+
+- 独立只读round27：CLEAR；原报告docs/reviews/doc-review/round-27.md，固定HEADc956f9cf7f749cf0b1f7eed5a9f34fccfccc2854/source305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。实际文件SHA/ADR028分段逐项匹配；原26份快照副本全部SHA一致，当前handoff正常动态更新，旧副本沿copy字段读取。
+- 原sessions2/失败4/gen0保持，唯一第三许可尚未消费；紧邻最早/current/next/身份/两锁检查后一次原drive --once --max-sessions 3，实际原计数3即已消费。默认2/其他卡预算和T13paused/session1/gen3保持。
+- 原准确A1仍FAIL，原16原生15pass1fail；外层JUnit为2pass14fail，统计层级分别记录。独立8观测/28反例/RSS诊断及旧N00/N01/T06/T08通过事实保持，完整verify/done/固定独立CLEAR须修复后准确闭环。另原A1 native_credential_lines=24，现有43字符统一检测也命中旧fixture合法非秘密占位，修复测试脱敏时保留真实泄露检查并实际区分占位；不删除安全门。
