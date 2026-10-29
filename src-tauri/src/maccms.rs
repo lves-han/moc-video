@@ -94,10 +94,10 @@ pub fn public_ip(ip: IpAddr) -> bool {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Http {
     #[cfg(test)]
-    pub(super) nameserver: Option<SocketAddr>,
+    pub(crate) nameserver: Option<SocketAddr>,
 }
 
 pub struct Response {
@@ -121,7 +121,7 @@ impl Http {
         public_ip(ip)
     }
 
-    fn check_addresses(
+    pub(crate) fn check_addresses(
         &self,
         url: &Url,
         addresses: &[SocketAddr],
@@ -133,7 +133,7 @@ impl Http {
         Ok(())
     }
 
-    fn check_peer(
+    pub(crate) fn check_peer(
         &self,
         url: &Url,
         addresses: &[SocketAddr],
@@ -221,12 +221,12 @@ impl Http {
 
     async fn fetch(
         &self,
-        mut url: Url,
+        url: Url,
         mut headers: HeaderMap,
         job: &Job,
         maximum: usize,
         probe: bool,
-        mut config: bool,
+        config: bool,
     ) -> Result<Response, ApiError> {
         static SLOTS: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
         let _slot = SLOTS
@@ -234,8 +234,59 @@ impl Http {
             .acquire()
             .await
             .map_err(|_| ApiError::internal("Public metadata slots closed"))?;
-        for hop in 0..=5 {
+        if probe {
+            headers.insert("range", "bytes=0-65535".parse().expect("Static range"));
+        }
+        let mut response = self
+            .open(url, headers, Method::GET, job.connect_timeout_ms()?, config)
+            .await?;
+        if !response.status().is_success() {
+            return Err(upstream(
+                "Public HTTP server returned an unsuccessful status",
+            ));
+        }
+        if !probe
+            && response
+                .content_length()
+                .is_some_and(|n| n > maximum as u64)
+        {
+            return Err(limit());
+        }
+        let url = response.url().clone();
+        let response_headers = response.headers().clone();
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(http_error)? {
             job.check()?;
+            if probe {
+                body.extend_from_slice(&chunk[..chunk.len().min(maximum - body.len())]);
+                if body.len() == maximum {
+                    break;
+                }
+            } else {
+                if body.len() + chunk.len() > maximum {
+                    return Err(limit());
+                }
+                body.extend_from_slice(&chunk);
+            }
+        }
+        Ok(Response {
+            url,
+            headers: response_headers,
+            body,
+        })
+    }
+
+    /// Shared connection boundary for metadata and streaming resources. The
+    /// caller owns cancellation/deadlines and consumes the body without buffering.
+    pub(crate) async fn open(
+        &self,
+        mut url: Url,
+        mut headers: HeaderMap,
+        method: Method,
+        connect_ms: u64,
+        mut config: bool,
+    ) -> Result<reqwest::Response, ApiError> {
+        for hop in 0..=5 {
             http_url(url.as_str(), config)?;
             if url.as_str().len()
                 + headers
@@ -257,17 +308,14 @@ impl Http {
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .pool_max_idle_per_host(0)
-                .connect_timeout(Duration::from_millis(job.connect_timeout_ms()?))
+                .connect_timeout(Duration::from_millis(connect_ms.min(10_000)))
                 .resolve_to_addrs(url.host_str().expect("Checked host"), &addresses)
                 .build()
                 .map_err(|_| upstream("Public HTTP client initialization failed"))?;
-            let mut request = client
-                .request(Method::GET, url.clone())
+            let request = client
+                .request(method.clone(), url.clone())
                 .headers(headers.clone());
-            if probe {
-                request = request.header("Range", "bytes=0-65535");
-            }
-            let mut response = request.send().await.map_err(http_error)?;
+            let response = request.send().await.map_err(http_error)?;
             self.check_peer(&url, &addresses, response.remote_addr())?;
             if response.status().is_redirection() {
                 if hop == 5 {
@@ -284,39 +332,7 @@ impl Http {
                 config = false;
                 continue;
             }
-            if !response.status().is_success() {
-                return Err(upstream(
-                    "Public HTTP server returned an unsuccessful status",
-                ));
-            }
-            if !probe
-                && response
-                    .content_length()
-                    .is_some_and(|n| n > maximum as u64)
-            {
-                return Err(limit());
-            }
-            let response_headers = response.headers().clone();
-            let mut body = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(http_error)? {
-                job.check()?;
-                if probe {
-                    body.extend_from_slice(&chunk[..chunk.len().min(maximum - body.len())]);
-                    if body.len() == maximum {
-                        break;
-                    }
-                } else {
-                    if body.len() + chunk.len() > maximum {
-                        return Err(limit());
-                    }
-                    body.extend_from_slice(&chunk);
-                }
-            }
-            return Ok(Response {
-                url,
-                headers: response_headers,
-                body,
-            });
+            return Ok(response);
         }
         unreachable!("bounded redirect loop")
     }
@@ -332,7 +348,15 @@ fn redirect_headers(from: &Url, to: &Url, headers: &mut HeaderMap) -> Result<(),
         let public: HeaderMap = headers
             .iter()
             .filter(|(name, _)| {
-                matches!(name.as_str(), "accept" | "accept-language" | "user-agent")
+                matches!(
+                    name.as_str(),
+                    "accept"
+                        | "accept-language"
+                        | "user-agent"
+                        | "range"
+                        | "if-range"
+                        | "accept-encoding"
+                )
             })
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect();
@@ -1055,15 +1079,24 @@ impl Catalog {
         let new_ids: HashSet<_> = images
             .iter()
             .map(|image| image.reference["resource_id"].as_str().expect("Image id"))
-            .filter(|id| !self.images.contains_key(*id))
             .collect();
-        if self.images.len() + new_ids.len() > 4096 {
+        if new_ids.len() > 4096 {
             return Err(ApiError::new(
                 "RESOURCE_LIMIT",
                 "Native image registration limit reached",
             ));
         }
         for image in images {
+            let id = image.reference["resource_id"].as_str().expect("Image id");
+            if !self.images.contains_key(id) && self.images.len() >= 4096 {
+                let oldest = self
+                    .images
+                    .iter()
+                    .min_by_key(|(_, image)| image.reference["expires_at"].as_str().unwrap_or(""))
+                    .map(|(id, _)| id.clone())
+                    .expect("Full image table");
+                self.images.remove(&oldest);
+            }
             self.images.insert(
                 image.reference["resource_id"]
                     .as_str()

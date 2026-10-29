@@ -510,7 +510,11 @@ fn n00_host_sync_home_details_and_native_images() {
         ok(&host, "runtime_status", json!({}))["cloudstream"]["phase"],
         "stopped"
     );
-    assert!(host.gateway_address().is_none());
+    assert!(
+        host.gateway_address()
+            .is_some_and(|address| address.ip().is_loopback())
+    );
+    assert_eq!(first["images"].as_object().unwrap().len(), 1);
     let refreshed = ok(
         &host,
         "sync_catalog",

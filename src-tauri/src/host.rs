@@ -29,6 +29,8 @@ struct Committed {
     metadata_requests: std::collections::HashMap<String, String>,
     matches: MatchStore,
     resolutions: ResolutionStore,
+    current_resolution: Option<String>,
+    resolve_sequence: u64,
 }
 
 pub struct Host {
@@ -45,6 +47,7 @@ pub struct Call {
     job: Option<Job>,
     metadata_epoch: Option<u64>,
     match_sequence: Option<u64>,
+    resolve_sequence: Option<u64>,
 }
 
 impl Host {
@@ -89,6 +92,8 @@ impl Host {
                 metadata_requests: Default::default(),
                 matches: MatchStore::default(),
                 resolutions: ResolutionStore::default(),
+                current_resolution: None,
+                resolve_sequence: 0,
             }),
         }))
     }
@@ -152,12 +157,18 @@ impl Host {
                     });
                 let match_sequence =
                     (command == "match_playback").then(|| committed.matches.begin(&args["input"]));
+                if matches!(command, "match_playback" | "resolve_episode") {
+                    committed.resolve_sequence += 1;
+                }
+                let resolve_sequence =
+                    (command == "resolve_episode").then_some(committed.resolve_sequence);
                 Ok(Call {
                     command: command.into(),
                     args,
                     job,
                     metadata_epoch,
                     match_sequence,
+                    resolve_sequence,
                 })
             }
             Err(error) => Err(self.error(&args, error)),
@@ -174,7 +185,10 @@ impl Host {
     pub fn execute(&self, call: Call) -> Value {
         let mut error_details = None;
         let mut result = self.execute_inner(&call, &mut error_details);
-        if matches!(call.command.as_str(), "match_playback" | "resolve_episode") {
+        if matches!(
+            call.command.as_str(),
+            "match_playback" | "resolve_episode" | "open_playback"
+        ) {
             let valid = call
                 .job
                 .as_ref()
@@ -188,14 +202,31 @@ impl Host {
                             .matches
                             .check(sequence)?;
                     }
+                    if call.resolve_sequence.is_some_and(|sequence| {
+                        sequence
+                            != self
+                                .committed
+                                .lock()
+                                .expect("Host commit lock")
+                                .resolve_sequence
+                    }) {
+                        return Err(ApiError::cancelled());
+                    }
                     Ok(())
                 });
             if let Err(error) = valid {
                 if let Ok(value) = &result {
                     let mut committed = self.committed.lock().expect("Host commit lock");
-                    if call.command == "resolve_episode" {
+                    if call.command == "open_playback" {
+                        if let Some(gateway) = &committed.gateway {
+                            gateway.close(value["session_id"].as_str().expect("Session ID"));
+                        }
+                    } else if call.command == "resolve_episode" {
                         if let Some(id) = value["id"].as_str() {
                             committed.resolutions.release(id);
+                            if committed.current_resolution.as_deref() == Some(id) {
+                                committed.current_resolution = None;
+                            }
                         }
                     } else if let Some(id) = value["context"]["match_id"].as_str() {
                         committed.matches.release(id);
@@ -291,7 +322,7 @@ impl Host {
                 return self.route_content(&input["ref"], job, "details", call.metadata_epoch);
             }
             "resolve_episode" => {
-                return self.resolve(input, job);
+                return self.resolve(input, job, call.resolve_sequence.expect("Resolve sequence"));
             }
             "match_playback" => {
                 return self.match_playback(
@@ -318,7 +349,7 @@ impl Host {
                     ));
                 }
                 if committed.gateway.is_none() {
-                    committed.gateway = Some(Gateway::start()?);
+                    committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
                 }
                 self.runtime(&committed)
             }
@@ -354,6 +385,9 @@ impl Host {
                 committed.stremio.retain(|id, _| !affected.contains(id));
                 committed.matches.revoke(&affected);
                 committed.resolutions.revoke(&affected);
+                if let Some(gateway) = &committed.gateway {
+                    gateway.revoke(&affected);
+                }
                 self.requests.cancel_sources(&affected);
                 return Ok(committed.settings.clone());
             }
@@ -362,15 +396,51 @@ impl Host {
                 "Cloudstream bridge is stopped",
             )),
             "release_resolution" => {
+                if committed.current_resolution.as_deref() == input["resolution_id"].as_str() {
+                    committed.current_resolution = None;
+                }
                 committed
                     .resolutions
                     .release(input["resolution_id"].as_str().expect("Resolution ID"));
                 Ok(json!({"ok":true}))
             }
-            "open_playback" | "close_playback" | "get_resource_status" => Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "Resource service is not connected",
-            )),
+            "open_playback" => {
+                let selected = committed.resolutions.selected(
+                    input["resolution_id"].as_str().expect("Resolution ID"),
+                    input["stream_id"].as_str().expect("Stream ID"),
+                    self.clock.now_ms(),
+                )?;
+                committed
+                    .sources
+                    .source(&selected.link.provider, Some(&selected.source_revision))?;
+                if committed.gateway.is_none() {
+                    committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
+                }
+                let gateway = committed.gateway.as_ref().expect("Gateway ready");
+                let view = gateway.open(selected)?;
+                if let Err(error) = job.check() {
+                    gateway.close(view["session_id"].as_str().expect("Session ID"));
+                    return Err(error);
+                }
+                Ok(view)
+            }
+            "close_playback" => {
+                if let Some(gateway) = &committed.gateway {
+                    gateway.close(input["session_id"].as_str().expect("Session ID"));
+                }
+                Ok(json!({"ok":true}))
+            }
+            "get_resource_status" => {
+                let kind = input["kind"].as_str().expect("Resource kind");
+                let id = input["target_id"].as_str().expect("Resource ID");
+                if let Some(gateway) = &committed.gateway {
+                    gateway.status(kind, id)
+                } else {
+                    Ok(
+                        json!({"kind":kind,"target_id":id,"state":"expired","error":ApiError::new("SESSION_EXPIRED","Resource is not registered")}),
+                    )
+                }
+            }
             _ => Err(ApiError::bad("Unknown command")),
         };
         // No callback or delayed result may publish after cancellation/deadline.
@@ -478,6 +548,9 @@ impl Host {
                 committed
                     .resolutions
                     .revoke(std::slice::from_ref(&captured.source_id));
+                if let Some(gateway) = &committed.gateway {
+                    gateway.revoke(std::slice::from_ref(&captured.source_id));
+                }
                 for (request_id, source_id) in &committed.metadata_requests {
                     if *source_id == captured.source_id {
                         self.requests
@@ -573,7 +646,7 @@ impl Host {
                 } else {
                     catalog.details(&http, key, language, job)
                 };
-                let committed = self
+                let mut committed = self
                     .committed
                     .lock()
                     .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
@@ -584,8 +657,14 @@ impl Host {
                 committed
                     .sources
                     .check_snapshot(&captured, &self.host_epoch, None, false)?;
-                let output = result?;
+                let mut output = result?;
                 catalog.commit(&output)?;
+                self.image_access(
+                    &mut committed,
+                    &captured.source_id,
+                    &mut output.value,
+                    |id| catalog.image_record(id),
+                )?;
                 Ok(output.value)
             }
             SourceKind::Maccms => {
@@ -626,7 +705,7 @@ impl Host {
                 committed
                     .sources
                     .check_snapshot(&captured, &self.host_epoch, None, false)?;
-                let (mapped, sections) = result?;
+                let (mut mapped, sections) = result?;
                 let current = committed
                     .maccms
                     .get_mut(&captured.source_id)
@@ -640,6 +719,13 @@ impl Host {
                         .matches
                         .register_details(mapped.value["details"].clone(), self.clock.now_ms());
                 }
+                let images = committed.maccms[&captured.source_id].images.clone();
+                self.image_access(
+                    &mut committed,
+                    &captured.source_id,
+                    &mut mapped.value,
+                    |id| images.get(id).cloned(),
+                )?;
                 Ok(mapped.value)
             }
         }
@@ -847,9 +933,69 @@ impl Host {
         )
     }
 
-    fn resolve(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+    fn image_access(
+        &self,
+        committed: &mut Committed,
+        source: &str,
+        value: &mut Value,
+        mut lookup: impl FnMut(&str) -> Option<maccms::Image>,
+    ) -> Result<(), ApiError> {
+        let mut references = std::collections::HashMap::new();
+        crate::details::images(value, &mut |reference| {
+            let id = reference["resource_id"].as_str().expect("Image ID");
+            references.insert(
+                id.to_owned(),
+                lookup(id).ok_or_else(|| ApiError::internal("DTO image has no native record"))?,
+            );
+            Ok(())
+        })?;
+        if !references.is_empty() && committed.gateway.is_none() {
+            committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
+        }
+        let mut access = serde_json::Map::new();
+        for (id, image) in references {
+            access.insert(
+                id,
+                committed
+                    .gateway
+                    .as_ref()
+                    .expect("Image gateway")
+                    .image(source, image)?,
+            );
+        }
+        fn capabilities(value: &mut Value, access: &serde_json::Map<String, Value>) {
+            match value {
+                Value::Object(fields)
+                    if fields.contains_key("resource_id") && fields.contains_key("capability") =>
+                {
+                    let id = fields["resource_id"].as_str().expect("Image ID");
+                    let url = access[id]["url"].as_str().expect("Image URL");
+                    fields.insert(
+                        "capability".into(),
+                        json!(url.split_once("?cap=").expect("Image cap URL").1),
+                    );
+                }
+                Value::Object(fields) => {
+                    for child in fields.values_mut() {
+                        capabilities(child, access);
+                    }
+                }
+                Value::Array(items) => {
+                    for child in items {
+                        capabilities(child, access);
+                    }
+                }
+                _ => {}
+            }
+        }
+        capabilities(value, &access);
+        value["images"] = Value::Object(access);
+        Ok(())
+    }
+
+    fn resolve(&self, input: &Value, job: &Job, sequence: u64) -> Result<Value, ApiError> {
         let reference = &input["episode_ref"];
-        let (record, catalog) = {
+        let (record, catalog, previous_resolution) = {
             let mut committed = self.committed.lock().expect("Host commit lock");
             let source = committed.sources.source(
                 reference["source_id"].as_str().expect("Episode source"),
@@ -877,13 +1023,16 @@ impl Host {
                 .get(&record.provider.source_id)
                 .cloned()
                 .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Provider is unavailable"))?;
-            (record, catalog)
+            (record, catalog, committed.current_resolution.clone())
         };
         job.bind_source(&record.provider.source_id);
         job.bind_source(&record.metadata.source_id);
         let media = catalog.resolve(&maccms::Http::default(), reference, job)?;
         let mut committed = self.committed.lock().expect("Host commit lock");
         job.check()?;
+        if sequence != committed.resolve_sequence {
+            return Err(ApiError::cancelled());
+        }
         committed
             .sources
             .check_snapshot(&record.metadata, &self.host_epoch, None, false)?;
@@ -912,9 +1061,15 @@ impl Host {
             playable: media.playable,
             reason: media.reason.map(str::to_owned),
         };
-        committed
-            .resolutions
-            .register(reference, vec![link], vec![], self.clock.now_ms())
+        let value =
+            committed
+                .resolutions
+                .register(reference, vec![link], vec![], self.clock.now_ms())?;
+        if let Some(old) = previous_resolution {
+            committed.resolutions.release(&old);
+        }
+        committed.current_resolution = value["id"].as_str().map(str::to_owned);
+        Ok(value)
     }
 
     pub fn capture_source(&self, config_id: &str, sync: bool) -> Result<SourceSnapshot, ApiError> {

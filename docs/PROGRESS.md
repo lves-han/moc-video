@@ -1045,3 +1045,17 @@
 - 原独立巡检：CLEAR；`evidence/reviews/20261029T043409131594-T0.8/review.json`，真实read-only CLI结束exit0/ended，固定完成提交dc25f99af63043f98460741cbae76b32311ca0f8。报告`evidence/reviews/20261029T043409131594-T0.8/output.log`核对实际Host匹配/签发/消费、匹配上限/租约、Resolution所有权、13原生/5向量16反例/27JUnit及六门verify；未确认新增高严重度问题。
 - 外层再次核对原done/当前及固定source/protected/gen0、完整证据、完成树/干净树、旧身份退出和两锁实际空闲，全部成立。T0.1..T0.8均具原completed及最新固定独立CLEAR；下一原next/严格顺序最早未完成T0.9。原s2/失败3及所有原错误/恢复前副本/WIP、T13paused/s1/gen3保持。
 - 原巡检注明非阻塞验证缺口：T08专属HTTP测试覆盖排队取消及配置后拒绝，在途HTTP取消/改配置竞态缺直接证据；如实保留并交下一网关/Session验收重点，不宣称此直接场景已执行。真实CS七包/DELETE仍N02，实际Session归T09。先整体改写提示移除T08操作，再T09范围预检/原start/handoff/default2接续。
+
+
+## T0.9 T09 通用媒体与图片网关首会话交接 2026-10-29T05:28:59.910094+00:00
+
+- 实施状态：WIP；当前T0.9、sessions=1/2、failures=0、generation0。冻结规格/协议/架构/控制器/配置保持，TASKS未勾选；未done/rebaseline，未写DONE/BLOCKED/RESOLVED/AUTHORIZED。T0.13原暂停保持。按ADR-010移交外层重任务与Git，未重复探测已知sysctl/sccache/.git限制。
+- Changed：扩展原loopback Gateway为并发受限的异步资源网关，登记Session与单资源图片；Session强持有原LinkRecord、字幕和原HTTP Cookie/interceptor实例，绑定resolution/stream/source_revision/episode_ref/kind。活动请求钉住、空闲5分钟回收，关闭/来源撤销取消在途I/O，候选释放保持Session；每资源请求序号归并诊断，get_resource_status纯本地只读。原控制Bearer、媒体cap和图片cap均为独立256位随机值；只消费登记路径的GET/HEAD，固定Origin CORS与OPTIONS，浏览器鉴权头在本地终止。
+- HTTP / 图片：复用原Http的全A/AAAA、公网策略、实际peer绑定、禁用代理、逐跳/跨Origin/HTTPS降级检查，抽取流式连接入口；媒体64KiB写缓冲与背压，Range/If-Range的200/206/416、HEAD表示长度、gzip解压头修正、HTML与截断错误、空闲超时/下游断开均有实现。长度在读prefix前捕获，防止reqwest的剩余body提示被误当表示长度。图片采用image 0.25.9的PNG/JPEG/GIF/WebP真实解码，8MiB输入、8192单边和16777216像素预检；128MiB解码分配限制按库语义为best effort。图片ETag按实际字节计算，原生来源缓存和网关4096项有界，网关按实际使用LRU及30分钟滑动租约；DTO递归图片访问映射与cap复用接通。
+- Host / 兼容：open_playback/close_playback/get_resource_status由占位接入原命令契约；成功resolve按捕获旧ID释放旧候选，并用resolve序号拒绝晚到发布。配置变化撤销所属会话/图片而保留其他来源。复用现有CSP，未改范围外tauri配置。旧N00的“尚无网关”断言更新为真实loopback网关及图片映射断言；原内容/鉴权/身份断言保留。
+- 验收实现：tests/acceptance/t09.py定义16项原生行为、8份脱敏观测和13项需求，准确生成JSON/JUnit；生产Rust经真实TCP/UDP fixtures覆盖媒体/图片的受控Cookie/Referer/Header、原生interceptor、cap/Bearer/CORS隔离、Range/If-Range/HEAD/gzip/重定向/私网跳转/HTML/慢响应/断开/取消/并发上界、256MiB负载和RSS采样、图片四解码器/字节/像素限制、可控时钟活动超5分钟/候选释放后原Cookie实例继续读取、双线路与旧close/release、图片滑动/LRU/世代、诊断晚到序号/跨资源失败隔离。复用原MacCMS/Stremio fixture新增Host invoke到资源路径及在途resolve取消/配置撤销用例。独立Python oracle校验绑定/Range字节/大流SHA/生命周期/上限及篡改拒绝；成功原生日志出现凭据也判失败，落盘前脱敏。SSRF实际连接使用仅测试构建的固定loopback别名，公网策略与不匹配peer/混合DNS/重绑定另有反例；未声称连接真实互联网媒体。
+- Why：沿原Host/Job/Resolution/Http和DTO局部扩展，没有修改公开协议；新增依赖只为gzip流与跨平台图像解码。cargo generate-lockfile --offline退出0，锁仅新增必要包，原所有包版本及checksum静态核对保持。
+- Verified（实际静态检查）：task.py check/start/show/status/scope退出0；9个相关Rust文件rustfmt --check与git diff --check退出0；Python AST/compile、16项函数清单和13需求覆盖核对通过；Cargo TOML/lock解析、locked/offline/no-deps cargo metadata退出0，manifest绑定当前根。证据：evidence/task-state/T0.9/session-1/static-validation.json。以上检查覆盖语法/清单/范围/冻结及依赖描述。
+- 验收 A1：NOT RUN；本轮实际行为测试数0。Rust类型检查/构建、Clippy、16项原生行为、独立oracle、RSS测量、完整verify及固定提交独立CLEAR均NOT RUN；尚未据实现或静态检查宣称功能通过。
+- 稳定源码：d5deab69c143822eac9dfcb3e55b74650bef61f2d1a21adbab0aaf5ef14c3e58；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；Git WIP按ADR-010交外层代办，建议WIP T0.9: implement native media and image resource gateway。未产生本会话重任务收据，无新增recover要求。
+- Remaining：外层确认本开发CLI/旧payload真实身份结束、两锁空闲及源码稳定后，按evidence/task-state/T0.9/session-1/outer-validation-argv.json通过原run取必要依赖、locked构建/Clippy和准确A1；A1同源通过后直接verify.py all，再真实记录/勾卡/task done/受验Git/固定独立CLEAR。保持4096MiB macOS RSS采样、jobs2、线程1、原时限与原权限。编译/行为问题交回原剩余第2会话。真实Cloudstream原运行时/7包/interceptor/DELETE留N02，HLS重写T10、字幕转换T11、长产品耐久按ADR-020后卡；本卡保有原上下文及已登记字幕资源。

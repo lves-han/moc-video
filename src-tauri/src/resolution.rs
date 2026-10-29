@@ -14,6 +14,10 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use uuid::Uuid;
 
 pub type Context = Arc<dyn Any + Send + Sync>;
+/// HTTP-native contexts retain the original source instance. Android provider
+/// interceptors remain owned/executed by the Cloudstream bridge (N02).
+pub type HttpHeaders = dyn Fn(&url::Url, &mut HeaderMap) -> Result<(), ApiError> + Send + Sync;
+pub struct HttpContext(pub Box<HttpHeaders>);
 #[derive(Clone)]
 pub struct Link {
     pub original: Value,
@@ -274,6 +278,19 @@ impl ResolutionStore {
             return Err(expired());
         }
         record.streams.get(stream_id).cloned().ok_or_else(expired)
+    }
+    pub fn selected(
+        &mut self,
+        resolution_id: &str,
+        stream_id: &str,
+        now: u64,
+    ) -> Result<Arc<LinkRecord>, ApiError> {
+        self.expire(now);
+        self.records
+            .get(resolution_id)
+            .and_then(|r| r.streams.get(stream_id))
+            .cloned()
+            .ok_or_else(expired)
     }
     pub fn release(&mut self, id: &str) {
         self.records.remove(id);

@@ -260,6 +260,14 @@ pub struct Output {
 }
 
 impl Catalog {
+    pub(crate) fn image_record(&self, id: &str) -> Option<Image> {
+        self.state
+            .lock()
+            .expect("Stremio state")
+            .images
+            .get(id)
+            .cloned()
+    }
     /// Only already-fetched localized names for this exact addon/content are
     /// eligible aliases. Matching itself always loads the English base.
     pub fn match_aliases(&self, reference: &Value) -> Vec<String> {
@@ -519,6 +527,16 @@ impl Catalog {
             next.cache_bytes += size;
         }
         for image in &output.images {
+            let id = image.reference["resource_id"].as_str().expect("Image id");
+            if !next.images.contains_key(id) && next.images.len() >= 4096 {
+                let oldest = next
+                    .images
+                    .iter()
+                    .min_by_key(|(_, image)| image.reference["expires_at"].as_str().unwrap_or(""))
+                    .map(|(id, _)| id.clone())
+                    .expect("Full image table");
+                next.images.remove(&oldest);
+            }
             next.images.insert(
                 image.reference["resource_id"]
                     .as_str()
@@ -1040,8 +1058,21 @@ impl Catalog {
         {
             return Ok(image.reference.clone());
         }
-        if let Some(image) = self.state.lock().expect("Stremio state").images.get(&id) {
-            return Ok(image.reference.clone());
+        if let Some(mut image) = self
+            .state
+            .lock()
+            .expect("Stremio state")
+            .images
+            .get(&id)
+            .cloned()
+        {
+            image.reference["expires_at"] = json!(
+                (OffsetDateTime::now_utc() + time::Duration::minutes(30))
+                    .format(&Rfc3339)
+                    .map_err(|_| ApiError::internal("Image expiry formatting failed"))?
+            );
+            output.images.push(image.clone());
+            return Ok(image.reference);
         }
         let mut bytes = [0; 32];
         getrandom::fill(&mut bytes)

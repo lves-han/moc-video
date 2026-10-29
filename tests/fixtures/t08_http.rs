@@ -1,5 +1,7 @@
 //! Owned HTTP fixture drives the production invoke/dispatch/adapters/stores.
 use super::*;
+#[path = "t09_host.rs"]
+mod t09;
 
 const METADATA_CONFIG: &str = "22222222-2222-4222-8222-222222222222";
 fn meta() -> Value {
