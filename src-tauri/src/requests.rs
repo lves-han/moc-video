@@ -48,7 +48,7 @@ struct Cancellation {
     cancelled: AtomicBool,
     stop_children: AtomicBool,
     parent: Option<Arc<Cancellation>>,
-    source: Mutex<Option<String>>,
+    source: Mutex<Vec<String>>,
 }
 impl Cancellation {
     fn is_cancelled(&self) -> bool {
@@ -122,7 +122,7 @@ impl Requests {
             cancelled: AtomicBool::new(false),
             stop_children: AtomicBool::new(false),
             parent,
-            source: Mutex::new(None),
+            source: Mutex::new(Vec::new()),
         });
         active.insert(id, token.clone());
         Ok(Job {
@@ -168,8 +168,8 @@ impl Requests {
                 .source
                 .lock()
                 .expect("Source binding")
-                .as_ref()
-                .is_some_and(|id| sources.contains(id))
+                .iter()
+                .any(|id| sources.contains(id))
             {
                 token.cancelled.store(true, Ordering::SeqCst);
             }
@@ -179,7 +179,10 @@ impl Requests {
 
 impl Job {
     pub fn bind_source(&self, source_id: &str) {
-        *self.token.source.lock().expect("Source binding") = Some(source_id.into());
+        let mut sources = self.token.source.lock().expect("Source binding");
+        if !sources.iter().any(|id| id == source_id) {
+            sources.push(source_id.into());
+        }
     }
     pub fn check(&self) -> Result<(), ApiError> {
         if self.token.is_cancelled() {
@@ -213,12 +216,32 @@ impl Job {
         Ok(remaining)
     }
     pub fn child(&self, id: &str, operation: &str) -> Result<Job, ApiError> {
+        self.register_child(id, operation, self.deadline)
+    }
+    /// Reserve the aggregate's final second for cancellation and serialization.
+    pub fn aggregate_child(&self, id: &str, operation: &str) -> Result<Job, ApiError> {
+        let deadline = self.deadline.saturating_sub(1_000);
+        if self.clock.now_ms() >= deadline {
+            return Err(ApiError::new(
+                "UPSTREAM_TIMEOUT",
+                "Aggregate finalization deadline exhausted",
+            ));
+        }
+        self.register_child(id, operation, deadline)
+    }
+    fn register_child(
+        &self,
+        id: &str,
+        operation: &str,
+        parent_deadline: u64,
+    ) -> Result<Job, ApiError> {
         self.check()?;
         if self.token.stop_children.load(Ordering::SeqCst) {
             return Err(ApiError::cancelled());
         }
         let deadline = self
             .deadline
+            .min(parent_deadline)
             .min(self.clock.now_ms().saturating_add(self.budget.child_ms));
         self.requests.register(
             id,

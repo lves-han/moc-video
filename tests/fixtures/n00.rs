@@ -4,6 +4,8 @@
 mod t06;
 #[path = "t07_maccms.rs"]
 mod t07;
+#[path = "t08_http.rs"]
+mod t08;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{

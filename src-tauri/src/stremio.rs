@@ -260,6 +260,42 @@ pub struct Output {
 }
 
 impl Catalog {
+    /// Only already-fetched localized names for this exact addon/content are
+    /// eligible aliases. Matching itself always loads the English base.
+    pub fn match_aliases(&self, reference: &Value) -> Vec<String> {
+        let Ok(fields) =
+            serde_json::from_str::<Vec<String>>(reference["data"].as_str().unwrap_or(""))
+        else {
+            return vec![];
+        };
+        if fields.len() != 4 {
+            return vec![];
+        }
+        let Some(owner) = self.addons.iter().position(|a| a.key == fields[1]) else {
+            return vec![];
+        };
+        let key = identity(
+            "stremio_display",
+            &[
+                &self.captured.source_id,
+                &self.captured.source_revision,
+                &owner.to_string(),
+                "meta",
+                &fields[2],
+                &fields[3],
+                "zh-CN",
+                "",
+            ],
+        );
+        let state = self.state.lock().expect("Stremio state");
+        state
+            .cache
+            .get(&key)
+            .and_then(|value| value["payload"]["meta"]["name"].as_str())
+            .map(|title| vec![title.to_owned()])
+            .unwrap_or_default()
+    }
+
     pub fn sync(mut captured: SourceSnapshot, http: &Http, job: &Job) -> Result<Self, SyncFailure> {
         let urls = captured.config["manifest_urls"]
             .as_array()

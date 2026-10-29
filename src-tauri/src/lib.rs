@@ -6,7 +6,9 @@ pub mod details;
 pub mod gateway;
 pub mod home;
 pub mod host;
+pub mod matching;
 pub mod requests;
+pub mod resolution;
 pub mod settings;
 pub mod source_dispatch;
 

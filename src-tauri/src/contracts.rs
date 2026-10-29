@@ -32,6 +32,8 @@ pub struct ApiError {
     pub code: String,
     pub message: String,
     pub retryable: bool,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub details: Option<Value>,
 }
 
 impl ApiError {
@@ -40,7 +42,12 @@ impl ApiError {
             code: code.into(),
             message: message.into(),
             retryable: false,
+            details: None,
         }
+    }
+    pub fn with_details(mut self, details: Value) -> Self {
+        self.details = Some(details);
+        self
     }
     pub fn bad(message: &str) -> Self {
         Self::new("BAD_REQUEST", message)

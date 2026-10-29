@@ -681,7 +681,24 @@ impl Catalog {
         self.cards(&response, page)
     }
 
+    pub fn match_search(&self, http: &Http, keyword: &str, job: &Job) -> Result<Mapped, ApiError> {
+        if keyword.is_empty() {
+            return Err(ApiError::bad("Search requires a keyword"));
+        }
+        let response = self.request(
+            http,
+            &[("ac", "detail"), ("wd", keyword), ("pg", "1")],
+            job,
+            false,
+        )?;
+        self.cards_limit(&response, 1, 10)
+    }
+
     fn cards(&self, response: &Value, page: u64) -> Result<Mapped, ApiError> {
+        self.cards_limit(response, page, usize::MAX)
+    }
+
+    fn cards_limit(&self, response: &Value, page: u64, maximum: usize) -> Result<Mapped, ApiError> {
         if number(&response["page"], 1)? != page {
             return Err(upstream("MacCMS returned a different page"));
         }
@@ -691,6 +708,7 @@ impl Catalog {
             .as_array()
             .expect("Validated list")
             .iter()
+            .take(maximum)
             .map(|item| self.card(item, &mut images))
             .collect();
         let value = json!(items?);

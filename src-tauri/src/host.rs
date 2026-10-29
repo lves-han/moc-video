@@ -1,7 +1,9 @@
 use crate::{
     contracts::{ApiError, COMMANDS, Contracts, envelope, wire_size},
     gateway::Gateway,
+    matching::{self, MatchStore},
     requests::{Clock, Job, MonotonicClock, Requests},
+    resolution::{self, ResolutionStore},
     settings::SettingsFile,
     source_dispatch::{SourceDispatch, SourceKind, SourceSnapshot},
 };
@@ -25,6 +27,8 @@ struct Committed {
     stremio: std::collections::HashMap<String, stremio::Catalog>,
     metadata_epoch: u64,
     metadata_requests: std::collections::HashMap<String, String>,
+    matches: MatchStore,
+    resolutions: ResolutionStore,
 }
 
 pub struct Host {
@@ -40,6 +44,7 @@ pub struct Call {
     args: Value,
     job: Option<Job>,
     metadata_epoch: Option<u64>,
+    match_sequence: Option<u64>,
 }
 
 impl Host {
@@ -82,6 +87,8 @@ impl Host {
                 stremio: Default::default(),
                 metadata_epoch: 0,
                 metadata_requests: Default::default(),
+                matches: MatchStore::default(),
+                resolutions: ResolutionStore::default(),
             }),
         }))
     }
@@ -143,11 +150,14 @@ impl Host {
                         );
                         committed.metadata_epoch
                     });
+                let match_sequence =
+                    (command == "match_playback").then(|| committed.matches.begin(&args["input"]));
                 Ok(Call {
                     command: command.into(),
                     args,
                     job,
                     metadata_epoch,
+                    match_sequence,
                 })
             }
             Err(error) => Err(self.error(&args, error)),
@@ -164,6 +174,37 @@ impl Host {
     pub fn execute(&self, call: Call) -> Value {
         let mut error_details = None;
         let mut result = self.execute_inner(&call, &mut error_details);
+        if matches!(call.command.as_str(), "match_playback" | "resolve_episode") {
+            let valid = call
+                .job
+                .as_ref()
+                .expect("Playback job")
+                .check()
+                .and_then(|_| {
+                    if let Some(sequence) = call.match_sequence {
+                        self.committed
+                            .lock()
+                            .expect("Host commit lock")
+                            .matches
+                            .check(sequence)?;
+                    }
+                    Ok(())
+                });
+            if let Err(error) = valid {
+                if let Ok(value) = &result {
+                    let mut committed = self.committed.lock().expect("Host commit lock");
+                    if call.command == "resolve_episode" {
+                        if let Some(id) = value["id"].as_str() {
+                            committed.resolutions.release(id);
+                        }
+                    } else if let Some(id) = value["context"]["match_id"].as_str() {
+                        committed.matches.release(id);
+                    }
+                }
+                error_details = None;
+                result = Err(error);
+            }
+        }
         if let Some(epoch) = call.metadata_epoch {
             let mut committed = self.committed.lock().expect("Host commit lock");
             committed
@@ -250,16 +291,15 @@ impl Host {
                 return self.route_content(&input["ref"], job, "details", call.metadata_epoch);
             }
             "resolve_episode" => {
-                return self.route_content(&input["episode_ref"], job, "resolve", None);
+                return self.resolve(input, job);
             }
             "match_playback" => {
-                self.route_content(
-                    &input["metadata_ref"]["content_ref"],
+                return self.match_playback(
+                    input,
                     job,
-                    "details",
-                    call.metadata_epoch,
-                )?;
-                return self.route_content(&input["playback_source"], job, "resolve", None);
+                    call.match_sequence.expect("Match sequence"),
+                    error_details,
+                );
             }
             _ => {}
         }
@@ -288,6 +328,13 @@ impl Host {
                 job.check()?;
                 // After replacement starts, finish publication even if cancellation arrives.
                 self.store.save_checked(input, || job.check())?;
+                if input["last_playback_source_key"]
+                    != committed.settings["last_playback_source_key"]
+                    || input["last_metadata_config_id"]
+                        != committed.settings["last_metadata_config_id"]
+                {
+                    committed.matches.invalidate();
+                }
                 let affected = committed.sources.replace_configs(
                     input["source_configs"]
                         .as_array()
@@ -305,6 +352,8 @@ impl Host {
                 committed.settings = input.clone();
                 committed.maccms.retain(|id, _| !affected.contains(id));
                 committed.stremio.retain(|id, _| !affected.contains(id));
+                committed.matches.revoke(&affected);
+                committed.resolutions.revoke(&affected);
                 self.requests.cancel_sources(&affected);
                 return Ok(committed.settings.clone());
             }
@@ -312,12 +361,16 @@ impl Host {
                 "ENGINE_NOT_READY",
                 "Cloudstream bridge is stopped",
             )),
-            "open_playback" | "close_playback" | "release_resolution" | "get_resource_status" => {
-                Err(ApiError::new(
-                    "ENGINE_NOT_READY",
-                    "Resource service is not connected",
-                ))
+            "release_resolution" => {
+                committed
+                    .resolutions
+                    .release(input["resolution_id"].as_str().expect("Resolution ID"));
+                Ok(json!({"ok":true}))
             }
+            "open_playback" | "close_playback" | "get_resource_status" => Err(ApiError::new(
+                "ENGINE_NOT_READY",
+                "Resource service is not connected",
+            )),
             _ => Err(ApiError::bad("Unknown command")),
         };
         // No callback or delayed result may publish after cancellation/deadline.
@@ -419,6 +472,12 @@ impl Host {
                 .publish_sync(&captured, &self.host_epoch, catalog.source.clone())?;
             // Identical manifests retain session references, cursors and cache.
             if changed {
+                committed
+                    .matches
+                    .revoke(std::slice::from_ref(&captured.source_id));
+                committed
+                    .resolutions
+                    .revoke(std::slice::from_ref(&captured.source_id));
                 for (request_id, source_id) in &committed.metadata_requests {
                     if *source_id == captured.source_id {
                         self.requests
@@ -542,7 +601,6 @@ impl Host {
                     .ok_or_else(|| {
                         ApiError::new("ENGINE_NOT_READY", "MacCMS catalog must be synchronized")
                     })?;
-                // Match registration and ResolutionStore are connected in T08.
                 if capability == "resolve" {
                     return Err(ApiError::bad("Playback match is not registered"));
                 }
@@ -577,9 +635,286 @@ impl Host {
                 if let Some(sections) = sections {
                     current.sections = sections;
                 }
+                if capability == "details" {
+                    committed
+                        .matches
+                        .register_details(mapped.value["details"].clone(), self.clock.now_ms());
+                }
                 Ok(mapped.value)
             }
         }
+    }
+
+    fn match_playback(
+        &self,
+        input: &Value,
+        job: &Job,
+        sequence: u64,
+        error_details: &mut Option<Value>,
+    ) -> Result<Value, ApiError> {
+        let (metadata_snapshot, metadata_catalog, provider_snapshot, provider, catalog, previous) = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            committed.matches.check(sequence)?;
+            let metadata_source = committed
+                .sources
+                .source(
+                    input["metadata_ref"]["content_ref"]["source_id"]
+                        .as_str()
+                        .expect("Metadata source"),
+                    input["metadata_ref"]["content_ref"]["source_revision"].as_str(),
+                )?
+                .clone();
+            if metadata_source["kind"] != "stremio" {
+                return Err(ApiError::bad("Matching requires Stremio metadata"));
+            }
+            let provider = committed
+                .sources
+                .source(
+                    input["playback_source"]["source_id"]
+                        .as_str()
+                        .expect("Provider source"),
+                    input["playback_source"]["source_revision"].as_str(),
+                )?
+                .clone();
+            if provider["kind"] == "stremio" {
+                return Err(ApiError::new(
+                    "CAPABILITY_UNAVAILABLE",
+                    "Stremio provides metadata only",
+                ));
+            }
+            if provider["kind"] == "cloudstream" {
+                return Err(ApiError::new(
+                    "ENGINE_NOT_READY",
+                    "Cloudstream bridge is stopped",
+                ));
+            }
+            let metadata_snapshot = committed.sources.snapshot(
+                metadata_source["origin"]["config_id"]
+                    .as_str()
+                    .expect("Metadata config"),
+                &self.host_epoch,
+                false,
+            )?;
+            let provider_snapshot = committed.sources.snapshot(
+                provider["origin"]["config_id"]
+                    .as_str()
+                    .expect("Provider config"),
+                &self.host_epoch,
+                false,
+            )?;
+            let metadata_catalog = committed
+                .stremio
+                .get(&metadata_snapshot.source_id)
+                .cloned()
+                .ok_or_else(|| {
+                    ApiError::new("ENGINE_NOT_READY", "Synchronize Stremio metadata first")
+                })?;
+            let catalog = committed
+                .maccms
+                .get(&provider_snapshot.source_id)
+                .cloned()
+                .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Synchronize MacCMS first"))?;
+            let previous = if input["selection"].is_null() {
+                None
+            } else {
+                let selection = &input["selection"];
+                if selection["content_ref"]["source_id"] != provider_snapshot.source_id
+                    || selection["content_ref"]["source_revision"]
+                        != provider_snapshot.source_revision
+                {
+                    return Err(ApiError::bad(
+                        "Selection belongs to another provider revision",
+                    ));
+                }
+                Some(
+                    committed
+                        .matches
+                        .registered(selection, self.clock.now_ms())?,
+                )
+            };
+            (
+                metadata_snapshot,
+                metadata_catalog,
+                provider_snapshot,
+                provider,
+                catalog,
+                previous,
+            )
+        };
+        job.bind_source(&provider_snapshot.source_id);
+        job.bind_source(&metadata_snapshot.source_id);
+        matching::budget(job)?;
+        let http = maccms::Http::default();
+        let child = job.aggregate_child(&Uuid::new_v4().to_string(), "default_metadata")?;
+        let metadata =
+            metadata_catalog.details(&http, &input["metadata_ref"]["content_ref"], "en", &child)?;
+        if metadata.value["metadata_ref"] != input["metadata_ref"] {
+            return Err(ApiError::bad(
+                "Metadata identity does not belong to this reference",
+            ));
+        }
+        let requested_video = matching::video(
+            &metadata.value,
+            input["video_id"].as_str().expect("Video ID"),
+        )?;
+        let aliases = metadata_catalog.match_aliases(&input["metadata_ref"]["content_ref"]);
+        let (proposal, confirmation, mapped) = if let Some(previous) = previous {
+            matching::budget(job)?;
+            let child = job.aggregate_child(&Uuid::new_v4().to_string(), "default_metadata")?;
+            let current = catalog.details(&http, &input["selection"]["content_ref"], &child)?;
+            let old_episode = matching::selection(&previous, &input["selection"])?;
+            let episode = matching::selection(&current.value["details"], &input["selection"])?;
+            if old_episode != episode {
+                return Err(ApiError::new(
+                    "REVISION_MISMATCH",
+                    "Selected episode changed; inspect details again",
+                ));
+            }
+            (
+                matching::Proposal {
+                    candidates: vec![matching::candidate(&current.value["details"])],
+                    selected: Some((current.value["details"].clone(), input["selection"].clone())),
+                },
+                "manual",
+                Some(current),
+            )
+        } else {
+            if provider["capabilities"]["search"] != true {
+                *error_details = Some(
+                    json!({"reason":"search_unavailable", "source_id":provider["id"], "source_revision":provider["source_revision"], "home":provider["capabilities"]["home"], "details":provider["capabilities"]["details"]}),
+                );
+                return Err(ApiError::new(
+                    "CAPABILITY_UNAVAILABLE",
+                    "Browse this provider home/details to select a title, or choose another provider",
+                ));
+            }
+            let proposal = matching::search(
+                &metadata.value,
+                &requested_video,
+                &aliases,
+                job,
+                |title, child| {
+                    let mapped = catalog.match_search(&http, title, child)?;
+                    Ok(mapped
+                        .value
+                        .as_array()
+                        .expect("Mapped search cards")
+                        .iter()
+                        .take(10)
+                        .map(|details| matching::Candidate {
+                            details: details.clone(),
+                            external_identity: None,
+                            external_videos: Default::default(),
+                        })
+                        .collect())
+                },
+            )?;
+            (proposal, "external_id", None)
+        };
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        matching::budget(job)?;
+        committed.matches.check(sequence)?;
+        committed
+            .sources
+            .check_snapshot(&metadata_snapshot, &self.host_epoch, None, false)?;
+        committed
+            .sources
+            .check_snapshot(&provider_snapshot, &self.host_epoch, None, false)?;
+        metadata_catalog.commit(&metadata)?;
+        if let Some(mapped) = mapped {
+            committed
+                .maccms
+                .get_mut(&provider_snapshot.source_id)
+                .ok_or_else(ApiError::cancelled)?
+                .register_images(mapped.images)?;
+        }
+        let mut candidates = proposal.candidates;
+        let context = if let Some((details, selected)) = proposal.selected {
+            candidates = vec![matching::candidate(&details)];
+            Some(committed.matches.issue(
+                input,
+                &details,
+                &selected,
+                (metadata_snapshot, provider_snapshot),
+                confirmation,
+                self.clock.now_ms(),
+            )?)
+        } else {
+            None
+        };
+        Ok(
+            json!({"status":if context.is_some() {"matched"} else if candidates.is_empty() {"not_found"} else {"needs_confirmation"}, "metadata_ref":input["metadata_ref"], "video_id":input["video_id"], "candidates":candidates, "context":context}),
+        )
+    }
+
+    fn resolve(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let reference = &input["episode_ref"];
+        let (record, catalog) = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            let source = committed.sources.source(
+                reference["source_id"].as_str().expect("Episode source"),
+                reference["source_revision"].as_str(),
+            )?;
+            if source["kind"] == "stremio" {
+                return Err(ApiError::new(
+                    "CAPABILITY_UNAVAILABLE",
+                    "Stremio provides metadata only",
+                ));
+            }
+            let record = committed.matches.get(
+                input["match_id"].as_str().expect("Match ID"),
+                reference,
+                self.clock.now_ms(),
+            )?;
+            committed
+                .sources
+                .check_snapshot(&record.metadata, &self.host_epoch, None, false)?;
+            committed
+                .sources
+                .check_snapshot(&record.provider, &self.host_epoch, None, false)?;
+            let catalog = committed
+                .maccms
+                .get(&record.provider.source_id)
+                .cloned()
+                .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Provider is unavailable"))?;
+            (record, catalog)
+        };
+        job.bind_source(&record.provider.source_id);
+        job.bind_source(&record.metadata.source_id);
+        let media = catalog.resolve(&maccms::Http::default(), reference, job)?;
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        job.check()?;
+        committed
+            .sources
+            .check_snapshot(&record.metadata, &self.host_epoch, None, false)?;
+        committed
+            .sources
+            .check_snapshot(&record.provider, &self.host_epoch, None, false)?;
+        committed.matches.get(
+            input["match_id"].as_str().expect("Match ID"),
+            reference,
+            self.clock.now_ms(),
+        )?;
+        let link = resolution::Link {
+            original: json!({"url":media.url}),
+            provider: record.provider.source_id,
+            url: media.url,
+            headers: media.headers,
+            referer: String::new(),
+            extractor_data: None,
+            interceptor: None,
+            cookies: None,
+            label: record.label,
+            quality: None,
+            quality_label: None,
+            kind: media.kind.into(),
+            mime_type: media.mime_type,
+            playable: media.playable,
+            reason: media.reason.map(str::to_owned),
+        };
+        committed
+            .resolutions
+            .register(reference, vec![link], vec![], self.clock.now_ms())
     }
 
     pub fn capture_source(&self, config_id: &str, sync: bool) -> Result<SourceSnapshot, ApiError> {
