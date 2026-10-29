@@ -1078,3 +1078,16 @@
 - 验收 A1：NOT RUN；本会话实际行为测试数0。修复后Rust构建、Clippy、16项真实行为、8份独立观测与RSS测量、准确A1及完整verify均交外层执行，当前无新增重任务收据、无recover要求。静态核对仅证明变更范围、语法清单及格式。
 - 稳定源码：305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；Git WIP按ADR-010交外层代办，建议WIP T0.9: reuse validated host call in session expiry fixtures。保留WIPe760cc9、原失败和全部证据。
 - Remaining：本CLI退出后，外层核对旧payload身份结束、两锁空闲和源码稳定，按evidence/task-state/T0.9/session-2/outer-validation-argv.json执行原run.py locked/offline构建、all-targets Clippy及准确A1；A1同源通过后直接verify.py all，再真实记录、勾卡、task.py done、受验完成提交及固定独立CLEAR。保持4096MiB macOS RSS采样/jobs2/线程1、原时限、权限及2会话额度。真实Cloudstream原7包/interceptor/DELETE、HLS重写、字幕转换及长产品耐久分别沿原N02/T10/T11/ADR-020后续卡。
+
+
+## T0.9 T09 准确验收失败与最小追加会话待决定 2026-10-29T06:08:08.958688+00:00
+
+- 结果：BLOCKED
+- 当前事实：原第2开发会话已稳定WIP退出，保存提交7709c5d；原sessions2/2、失败4、generation0，source=305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。当前全部原run身份结束、两锁实际空闲、源码冻结/scope/HEAD一致；未勾卡/未done，严格顺序后卡等待，原暂停卡及全部历史保持。
+- 原locked产品构建：PASS；日志`evidence/runs/20261029T055117282985-verify-t09-build/output.log`。all-targets Clippy：FAIL；`evidence/runs/20261029T055119273515-verify-t09-clippy/output.log`，exit101，仅Range fixture的空end与suffix分支同返4095触发if_same_then_else；最小合并条件，保留200/206/416/HEAD及原Range断言，不抑制lint。
+- 准确验收 A1：FAIL；日志`evidence/runs/20261029T055259502820-A1/output.log`，原16项原生实跑15通过1失败0skip；失败gzip正例在chunked读取处遭截断。原受控t09-gzip-fixture-diagnostic确认64字节硬编码gzip夹具CRC校验失败；最小使用有效gzip正例，并明确保留损坏/截断响应拒绝与失败诊断，产品流式边界尚不据此判错。JSON/XML及完整verify均保留准确状态：完整verify NOT RUN。
+- 独立诊断：原t09-oracle-diagnostic通过现有8份原始观测与28项篡改拒绝；256MiB实际流负载RSS基线102596608、峰值104693760、增长2097152字节，717样本，功能增长门67108864字节。此为失败A1后的独立诊断，未覆盖原A1失败结论。
+- 旧原生回归：N00 17/17、N01 19/19、T06 14/14、T08 13/13通过；T07 9/10通过，原日志`evidence/runs/20261029T055931305988-t09-regression-t07/output.log`。tests/fixtures/t07_stremio.rs重复详情全值相等断言遇图片expires_at续期；SPEC明确图片被新DTO引用即续期30分钟。最小分别断言全部稳定详情/图片身份、cap/path不变及有效到期时间续期，不直接删除比较或弱化schema/原200集分组顺序。
+- 已确认测试日志缺口：旧N00/N01 fixture递归redact仅覆盖capability键，T09新增images.url查询cap在本次旧组诊断中出现；T07失败Debug同样可打印临时fixture cap。原T09 A1落盘前已有redact，新增T08回归也复用该过滤且0处查询cap；原已封存日志及SHA保留，测试进程均结束。下一原CLI最小修测试观测查询cap及失败输出脱敏，保持原始生产响应校验与占位合法schema；不改生产鉴权或原收据。
+- 证据：`evidence/drive/t09-second-validation-20261029T055116Z/decision-evidence/manifest.json`保存当前原状态/收据/日志/JSON/XML副本与SHA，源/冻结/计数一致。原WIPe760cc9、7709c5d及4次失败全部保留。
+- 最小决定：仅为T0.9追加一次开发会话2→3，原gpt-6.1-sol/workspace-write CLI修上述测试夹具/续期断言/日志脱敏并相关自验证；原16行为8观测13需求及所有协议、安全、负载、阈值、资源、时限保持。外层随后原locked构建/Clippy/准确A1、成功后直接完整verify、done/Git/固定独立CLEAR。其他卡默认2和原历史不变，当前无授权追加记录，不执行额外drive。按moc-init预算耗尽规则暂停推进与监管，等待真实回复。
