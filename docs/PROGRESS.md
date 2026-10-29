@@ -1168,3 +1168,10 @@
 - 直接完整verify：PASS；最近六门完整尝试全部通过，workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/90单元+16集成全过。原completion_evidence已核当前source/protected/gen与全部最新日志/报告SHA及非零case。另6项Python、共享Rust1、旧N00 17/N01 19/T06 14/T07 10/T08 13均过；日志见当前validation目录outer-sequence.json。
 - 基线/历史：source=3d87e230b8c25eaccc8ebde2b3739a7033e9de2bc153ba7018db52b0529f141d，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，原sessions4/失败10保持，ADR029第四许可已消费，无第五许可。全部旧WIP/失败/受限125恢复前副本/误判事实及历史收据保持；当前成功证据副本`evidence/drive/t09-fourth-validation-20261029T080043Z/completion-evidence/manifest.json`。核对源码稳定/冻结scope/两锁实际空闲、旧写入者与重任务结束后完成记录，源码不再修改。
 - Remaining：原task done/受验提交/固定独立CLEAR及干净树须闭环后才完整完成，T10严格等待。真实Cloudstream七包/Android原网关/interceptor/DELETE仍N02，HLS重写T10/字幕T11及长产品耐久按原后卡；本轮普通宿主自有TCP/UDP fixtures与合成callback上下文准确标注，未替代真实后卡。T13原paused/s1/gen3保持，其他平台原未运行边界不变。
+
+
+## T0.9 固定完成提交独立巡检CLEAR 2026-10-29T08:18:27.245074+00:00
+
+- 原独立巡检：CLEAR；报告evidence/reviews/20261029T080606981755-T0.9/output.log及review.json，真实read-only CLI结束exit0/ended，固定提交da14d4d78e0383674a6db1e26925609a56ed2f86。外层复核同source/protected/gen/原done/完整最近证据、check_completion_tree与clean全部成立，原身份退出/两锁实际空闲。T0.9完整质量闭环成立，原s4/f10/g0及所有失败/WIP/额外许可消费历史保持。
+- 巡检确认原接线/功能门/资源证据，未确认高严重度缺陷；两项P2协议偏差（HTML应UPSTREAM_FAILED、If-None-Match遗漏）及gzip强ETag待验证疑点如实保留到BACKLOG。T10本身涉及网关清单变换与响应头，交其相关范围补短时真实HTTP正负例，不把疑点写成已复现，也不改写本轮原报告。
+- 严格顺序下一T0.10范围预检：src-tauri/src/与tests/Cargo已含现有gateway/Host/Session/HTTP上下文、派生资源及fixture入口；SPEC9.2/9.3及C8完整义务已重读，现无清单重写实现，ffmpeg/ffprobe/openssl工具存在，可复用T01自产媒体生成流程构造短组合播放。原HTTP所属来源处理在重写前、重定向最终基址/签名/cap/租约/8MiB及安全边界均需真实验收；真实CS/Yjys仍N02，未证明基线DASH出现则按原条件准确记录。原定义/范围/预算权限不变。整体重写监管提示移除已完成T09操作后，才原next/start/handoff/普通drive --once/default2接续。
