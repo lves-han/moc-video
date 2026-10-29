@@ -879,3 +879,14 @@
 - 验收 A1：执行器FAIL，行为NOT RUN；准确原argv经run.py发起后在macOS sysctl进程枚举阶段收到EPERM，exit2、raw_exit=null、tests=null，未创建payload，编译与行为通过数0。日志：`evidence/runs/20261029T015844789474-A1/output.log`；收据：`evidence/runs/20261029T015844789474-A1/receipt.json`。已task.py note说明原因与下一步，保留失败历史。收据标明process-watchdog/RSS采样4096MiB/jobs2/线程1；资源范围启动前失败，未宣称完成内存监管实测。未重复权限探测、扩权或绕过原run。
 - Remaining：Rust类型检查/构建、14项真实原生测试及独立Python观测断言、Clippy与完整verify均NOT RUN；当前实现只经过上述静态检查。按ADR010交外层代办WIP Git与原run验收，不新增用户决定或BLOCKED。准确报告尚未生成；禁止据静态检查勾卡/done/宣称DONE。
 - 外层下一步：确认本开发CLI与旧执行器真实身份结束、两锁空闲和源码稳定后，按`evidence/task-state/T0.6/session-1/outer-validation-argv.json`先原run locked/offline构建，再准确A1：argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/t06.py","--suite","all","--report","evidence/acceptance/T06-all.json","--junit","evidence/acceptance/T06-all.xml"]。全部通过后直接argv=["{python}","-B","scripts/verify.py","all"]，保持原资源/锁/时限；再真实记录/勾选/task.py done/受验完成提交/固定独立CLEAR。若暴露代码或测试问题，通过原开发会话修复并保留本次失败。建议WIP提交：`WIP T0.6: adapt scoped home data and preserve section deadlines`。
+
+
+## T0.6 T06 推荐首页数据适配 功能验收完成 2026-10-29T02:10:32.389019+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261029T020605724676-A1/output.log`；断言：exit0，17必需case/25JUnit通过0失败0跳过，14原生行为、73真实Host观测独立schema与原home_response oracle、三类6份明确合成共用DTO及1原section身份向量通过。覆盖动态/多/重复标题栏目、原index和epoch/revision引用、单栏continuation、页2/空页、A成功B失败C成功index完整、全量failed_sections与单栏重试/错误范围、串行队列取消和预算预留清理。Cloudstream仅共用DTO/guest边界合成，真实7包及桥接仍由原N02后卡验证。
+- 构建：原locked cargo check exit0，首开发WIP源稳定后由外层按ADR010执行；原sysctl受限失败exit2和NOT RUN业务事实保留。真实当前构建/准确A1及其独立报告均为本受验源新证据。
+- 完整verify：PASS；`evidence/verify/20261029T020615675776.json`（原完整尝试创建02:06:15；准确路径以原latest_verify/证据目录核对），六门全部exit0：workflow118通过7平台skip、归档契约、working contracts、frontend57测试/类型及生产构建、native fmt/check/Clippy及全量测试。所有原日志/报告SHA及同source/protected/generation由原completion_evidence验证通过。
+- 受验source：4b44b7be0512795bb364a360ded9eb8f56e4788441efba245f40550af21972bb；protected：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；generation0，原sessions1/失败1及全部WIP/失败保持。执行器/payload身份均退出，两锁实际空闲，冻结/范围检查通过，工作树在完成记录前干净。原4096MiB RSS采样/jobs2/线程1保持，普通进程内HTTP fixture按自身生命周期停止/join，无真实集群。
+- 原完成收尾：task done及受验Git完成提交后原drive --review-only固定独立巡检，真实CLEAR且干净树后才整体更新监管提示并按序T0.7。产品阶段长耐久NOT RUN按ADR020保持，当前短功能门均已执行。
+- 完整verify路径更正：上行微秒文件名为外层录入误写，实际原收据为`evidence/verify/20261029T020615675594.json`；以该原文件及其六门运行收据为准。native实际50单元+16宿主集成通过、0失败/忽略，原completion_evidence逐项核对通过。
