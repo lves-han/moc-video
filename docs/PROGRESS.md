@@ -1059,3 +1059,11 @@
 - 验收 A1：NOT RUN；本轮实际行为测试数0。Rust类型检查/构建、Clippy、16项原生行为、独立oracle、RSS测量、完整verify及固定提交独立CLEAR均NOT RUN；尚未据实现或静态检查宣称功能通过。
 - 稳定源码：d5deab69c143822eac9dfcb3e55b74650bef61f2d1a21adbab0aaf5ef14c3e58；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；Git WIP按ADR-010交外层代办，建议WIP T0.9: implement native media and image resource gateway。未产生本会话重任务收据，无新增recover要求。
 - Remaining：外层确认本开发CLI/旧payload真实身份结束、两锁空闲及源码稳定后，按evidence/task-state/T0.9/session-1/outer-validation-argv.json通过原run取必要依赖、locked构建/Clippy和准确A1；A1同源通过后直接verify.py all，再真实记录/勾卡/task done/受验Git/固定独立CLEAR。保持4096MiB macOS RSS采样、jobs2、线程1、原时限与原权限。编译/行为问题交回原剩余第2会话。真实Cloudstream原运行时/7包/interceptor/DELETE留N02，HLS重写T10、字幕转换T11、长产品耐久按ADR-020后卡；本卡保有原上下文及已登记字幕资源。
+
+
+## T0.9 首次外层构建与测试编译返修 2026-10-29T05:40:12.979469+00:00
+
+- 实施状态：WIP；原sessions1/2、失败1、generation0，source=d5deab69c143822eac9dfcb3e55b74650bef61f2d1a21adbab0aaf5ef14c3e58/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b不变，无冻结/范围修订。
+- 原verify-t09-fetch：PASS；`evidence/runs/20261029T053737482256-verify-t09-fetch/output.log`，locked依赖已获取，image0.25.9及声明features齐备，原锁定检查与资源约束保持。原verify-t09-build：PASS；当前产品Rust check通过。
+- all-targets Clippy：FAIL（测试目标编译）；日志`evidence/runs/20261029T053752836428-verify-t09-clippy/output.log`，exit101，4处E0425未定义invoke均在t09_host.rs。现有父fixture call入口已封装真实Host.invoke/schema校验/脱敏/request_id，需最小复用，不应新增裸invoke旁路。原16行为/8观测/准确A1/完整verify均NOT RUN，无业务通过数。
+- 后续：保留原失败日志/收据/WIPe760cc9，在原剩余第2会话内由原脚本修复4调用、自验证并稳定交接；现所有记录身份结束、两锁空闲、clean/frozen/scope通过，普通drive --once/default2，无扩额/权限提升/复用前卡例外。保留Session过期/旧close release/所有安全与原16行为8向量13需求，外层重新Clippy/准确A1/fullverify/done/Git/固定独立CLEAR后才按序后卡。
