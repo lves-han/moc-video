@@ -1219,3 +1219,13 @@
 - 直接完整verify：PASS；最近六门全部通过，workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/98单元+16集成全过；另旧T09 16/16回归通过。原completion_evidence核对当前source/protected/gen/最近原日志报告SHA、非零汇总与完整verify。
 - 原source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，sessions2/失败2保持，原default2已用尽，无第三许可。WIP2ed3743/a7bdcc2、首准确A1失败与125收据及恢复前副本/全部历史保留；当前成功证据`evidence/drive/t10-second-validation-20261029T091723Z/completion-evidence/manifest.json`。旧全部身份结束/两锁实际空闲，源码稳定及scope/冻结核对通过；源码不再修改。
 - Remaining：原done/受验Git提交/固定独立CLEAR及干净树闭环后才完整完成，T11等待。真实Cloudstream/Yjys原interceptor仍N02，当前原生响应callback明确合成；本fixture未输出DASH，原真实基线后卡继续检查。字幕转换T11、长产品耐久按ADR020，原权限资源/时限/T13paused/s1/gen3及其他平台未运行边界保持。
+
+
+## T0.10 隐式IV真实验收缺口与最小会话待决定 2026-10-29T09:35:45.170306+00:00
+
+- 结果：BLOCKED
+- 原独立巡检实际ended/exit0/CLEAR，报告evidence/reviews/20261029T092248313986-T0.10/output.log及review.json保持原样。外层完成树/干净树/同source/protected/gen/旧身份结束/原两锁实际空闲核对通过；但报告明确P2证据偏差影响原IV/序列义务，严格准确功能验收须补齐，不能仅凭CLEAR推进。T11未start/未消耗会话。
+- 已核事实：原A1 native日志T10_SOURCE的aes-implicit清单包含显式IV=0x00000000000000000000000000000000、MEDIA-SEQUENCE:0及segment000/001。按官方RFC8216§5.2（https://www.rfc-editor.org/rfc/rfc8216.html#section-5.2），仅IV属性缺省才以当前分片序列号的大端128位值作IV。现有该模式24帧/95音频通过为显式IV0素材证据，真实隐式IV仍NOT RUN；保留AES显式和fMP4真实成功及其他原用例通过，纠正此前外层“三模式含隐式已验证”的笼统表述。
+- 最小修复计划：仅tests内真实隐式IV素材构造（按每片非零序列号独立加密，清单无IV属性）及前置/独立oracle断言和反例；可用已有ffmpeg/openssl，不改生产DTO/鉴权/原要求。实际原HLS本地和原网关两路全部24帧逐帧等于原源且非零音频、所有分片/key/同cap/源上下文/序列仍完整验证，不能只删IV属性而保留原固定IV密文，不能把显式素材重新命名当隐式。保留原8行为/17观测/3需求与所有安全/负载/资源门。
+- 当前撤回T10完成勾选，原done.json及原成功A1/verify/受验提交a4dc860/独立CLEAR均保留历史并在`evidence/drive/t10-second-validation-20261029T091723Z/implicit-iv-gap/manifest.json`保存副本SHA；不手写状态或覆盖收据，不accept-review。source84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持。
+- 需要最小决定：原sessions2/失败2/gen0和全部历史保持，default2已用尽，请求仅T0.10追加一次2→3，由原CLI落实上述测试素材/前置与oracle最小修复并相关自验证，再外层原构建/Clippy/准确A1/直接完整verify/原done/Git/新固定独立CLEAR及干净树。其他卡default2、原权限/资源/时限/阈值及T13paused不变，当前未批准，不启动开发或后卡；按预算耗尽规则暂停监管等待真实回复。

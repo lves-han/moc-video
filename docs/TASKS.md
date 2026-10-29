@@ -654,7 +654,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 验证：Header/Cookie要求、Range/If-Range、gzip、重定向、断开、慢响应、HTML错误、超限图片；session410与取消、同集换线路保留候选、旧close/release晚到保持新会话/新解析、无Session离页显式释放候选、使用可控时钟验证活动流超过5分钟及候选表回收后的独立请求上下文读取、get_resource_status的ready/expired/failed与世代转换、实际连接公网校验/私网重定向/DNS重绑定。
 
 ### T0.10 T10 HLS 代理保真
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.9
 - 需求：R26, R28, REQ-T10 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
