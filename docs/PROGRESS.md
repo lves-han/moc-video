@@ -929,3 +929,9 @@
 
 - 原validate.py：PASS；经原run受监管，日志`evidence/runs/20261029T024002173220-runtime-document-check/output.log`，exit0；128项121通过7平台skip与task check/drive status/run无参数/verify无效参数四入口退出码均符合原契约，报告`evidence/script-validation.json`。
 - 新protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、source=0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc稳定，原执行器/payload身份全部退出。实际新控制器与原双卡迁移将以固定Git版本进行独立只读文档/修订复审，当前尚未把原P1 BLOCKING当CLEAR或推进T07。
+
+
+## T0.6 原P1控制修订及迁移固定独立文档CLEAR 2026-10-29T02:45:01.567563+00:00
+
+- 独立round26：CLEAR；报告`docs/reviews/doc-review/round-26.md`，固定HEAD4a98563cf872ac349122a1fed352cdbcaf937b51/source0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。实际7文件SHA与ADR027分段逐项匹配，原P1异常路径、fault回归及原双卡迁移审查通过。
+- 当前T06原sessions1/失败2/gen1、T13paused/s1/gen3保持。恢复同ID监管，接续新基线准确A1/完整verify/done/Git/固定原独立复巡，原业务通过事实及旧BLOCKING/坏hash保留历史；本次文档CLEAR不作为当前功能完成结论。
