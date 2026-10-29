@@ -1067,3 +1067,14 @@
 - 原verify-t09-fetch：PASS；`evidence/runs/20261029T053737482256-verify-t09-fetch/output.log`，locked依赖已获取，image0.25.9及声明features齐备，原锁定检查与资源约束保持。原verify-t09-build：PASS；当前产品Rust check通过。
 - all-targets Clippy：FAIL（测试目标编译）；日志`evidence/runs/20261029T053752836428-verify-t09-clippy/output.log`，exit101，4处E0425未定义invoke均在t09_host.rs。现有父fixture call入口已封装真实Host.invoke/schema校验/脱敏/request_id，需最小复用，不应新增裸invoke旁路。原16行为/8观测/准确A1/完整verify均NOT RUN，无业务通过数。
 - 后续：保留原失败日志/收据/WIPe760cc9，在原剩余第2会话内由原脚本修复4调用、自验证并稳定交接；现所有记录身份结束、两锁空闲、clean/frozen/scope通过，普通drive --once/default2，无扩额/权限提升/复用前卡例外。保留Session过期/旧close release/所有安全与原16行为8向量13需求，外层重新Clippy/准确A1/fullverify/done/Git/固定独立CLEAR后才按序后卡。
+
+## T0.9 T09 第2会话四处测试入口修复交接 2026-10-29T05:42:50+00:00
+
+- 实施状态：WIP；原第2/2会话，累计原Clippy失败1、generation0，T0.13原暂停保持。按ADR-010交外层重任务与Git收尾，卡保持待验。
+- Changed：仅将tests/fixtures/t09_host.rs内4处未定义invoke调用替换为父级既有call；该入口实际执行Host.invoke并校验Result schema、生成request_id及脱敏观测。产品源码、协议和原验收定义保持。
+- Why：原all-targets Clippy收据20261029T053752836428-verify-t09-clippy记录4处E0425；嵌套模块use super::*已可访问父级call，复用现有入口即可消除这4处未定义符号。旧Resolution释放后拒绝、跨Resolution stream拒绝、候选替换及显式释放后拒绝的4项SESSION_EXPIRED断言完整保留。
+- Verified：task.py check/start/show/status/scope实际退出0；check为35卡，scope通过。git diff --check退出0；rustfmt --check --edition 2024 --config skip_children=true tests/fixtures/t09_host.rs退出0。Python静态核对确认该文件相对本会话HEAD恰好4次invoke→call替换，其他字节相同；AST解析、16项原生测试函数与验收清单一致、13项需求覆盖通过；原8份观测要求保持。证据：evidence/task-state/T0.9/session-2/static-validation.json。
+- 检查纠正：首次直接rustfmt误用edition2021退出1，发现已有assert格式差异；读取Cargo.toml确认edition2024后按真实版本重查退出0，文件格式保持。该静态检查过程已写task.py note及上述证据，原重任务失败历史保留。
+- 验收 A1：NOT RUN；本会话实际行为测试数0。修复后Rust构建、Clippy、16项真实行为、8份独立观测与RSS测量、准确A1及完整verify均交外层执行，当前无新增重任务收据、无recover要求。静态核对仅证明变更范围、语法清单及格式。
+- 稳定源码：305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；Git WIP按ADR-010交外层代办，建议WIP T0.9: reuse validated host call in session expiry fixtures。保留WIPe760cc9、原失败和全部证据。
+- Remaining：本CLI退出后，外层核对旧payload身份结束、两锁空闲和源码稳定，按evidence/task-state/T0.9/session-2/outer-validation-argv.json执行原run.py locked/offline构建、all-targets Clippy及准确A1；A1同源通过后直接verify.py all，再真实记录、勾卡、task.py done、受验完成提交及固定独立CLEAR。保持4096MiB macOS RSS采样/jobs2/线程1、原时限、权限及2会话额度。真实Cloudstream原7包/interceptor/DELETE、HLS重写、字幕转换及长产品耐久分别沿原N02/T10/T11/ADR-020后续卡。

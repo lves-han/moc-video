@@ -124,7 +124,7 @@ fn t09_host_session_bindings_switch_release_and_old_cleanup() {
         json!({"resolution_id":first["id"]}),
     );
     assert_eq!(
-        invoke(&host, "open_playback", open_input(&first))["error"]["code"],
+        call(&host, "open_playback", open_input(&first))["error"]["code"],
         "SESSION_EXPIRED"
     );
     assert_eq!(resource(switched["media_url"].as_str().unwrap()).0, 200);
@@ -145,7 +145,7 @@ fn t09_host_session_bindings_switch_release_and_old_cleanup() {
     assert_eq!(diagnostic(&host, &current)["state"], "ready");
     assert_eq!(resource(current["media_url"].as_str().unwrap()).0, 200);
     assert_eq!(
-        invoke(
+        call(
             &host,
             "open_playback",
             json!({"resolution_id":second["id"],"stream_id":first["streams"][0]["id"]})
@@ -154,7 +154,7 @@ fn t09_host_session_bindings_switch_release_and_old_cleanup() {
     );
     let no_session = ok(&host, "resolve_episode", resolve_input(&context));
     assert_eq!(
-        invoke(&host, "open_playback", open_input(&second))["error"]["code"],
+        call(&host, "open_playback", open_input(&second))["error"]["code"],
         "SESSION_EXPIRED"
     );
     ok(
@@ -163,7 +163,7 @@ fn t09_host_session_bindings_switch_release_and_old_cleanup() {
         json!({"resolution_id":no_session["id"]}),
     );
     assert_eq!(
-        invoke(&host, "open_playback", open_input(&no_session))["error"]["code"],
+        call(&host, "open_playback", open_input(&no_session))["error"]["code"],
         "SESSION_EXPIRED"
     );
     assert_eq!(resource(current["media_url"].as_str().unwrap()).0, 200);
