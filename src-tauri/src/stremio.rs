@@ -1120,6 +1120,24 @@ impl Catalog {
             output.value = json!({"details": details, "images": {}, "metadata_ref": {"identity": self.metadata_identity(owner, meta), "content_ref": reference}});
             wire_size(&output.value, LIMIT)?;
             Contracts::get().validate("DetailsViewData", &output.value)?;
+            crate::details::validate(reference, &output.value["details"])?;
+            let state = self.state.lock().expect("Stremio state");
+            crate::details::images(&output.value["details"], &mut |reference| {
+                if output
+                    .images
+                    .iter()
+                    .any(|image| image.reference == *reference)
+                    || state
+                        .images
+                        .values()
+                        .any(|image| image.reference == *reference)
+                {
+                    Ok(())
+                } else {
+                    Err(upstream("Stremio detail image is not registered"))
+                }
+            })?;
+            drop(state);
             job.check()?;
             return Ok(output);
         }
@@ -1147,8 +1165,23 @@ impl Catalog {
             .unwrap_or(Value::Null);
         details["backdrop"] = self.image(served, text(&meta["background"]), output)?;
         details["tags"] = json!(strings(&meta["genres"]));
-        details["actors"] = people(&meta["cast"]);
+        details["actors"] = self.actors(served, meta, output)?;
         details["directors"] = people(&meta["director"]);
+        details["regions"] = json!(csv(&meta["country"]));
+        details["languages"] = json!(csv(&meta["language"]));
+        details["duration_ms"] = json!(duration_ms(&meta["runtime"]));
+        // releaseInfo explicitly distinguishes running and completed series.
+        // Other display strings carry no reliable completion information.
+        if matches!(meta["type"].as_str(), Some("series" | "anime"))
+            && let Some((start, end)) = text(&meta["releaseInfo"]).and_then(|s| s.split_once('-'))
+            && valid_year(start)
+        {
+            if end.is_empty() {
+                details["status"] = json!("ongoing");
+            } else if valid_year(end) && end >= start {
+                details["status"] = json!("completed");
+            }
+        }
         details["groups"] = self.videos(
             owner,
             served,
@@ -1156,16 +1189,32 @@ impl Catalog {
             details["id"].as_str().expect("Content id"),
             output,
         )?;
-        details["episode_count"] = json!(
-            details["groups"]
-                .as_array()
-                .expect("Groups")
-                .iter()
-                .map(|g| g["episodes"].as_array().expect("Episodes").len())
-                .sum::<usize>()
-        );
+        // Downloaded videos may be a partial list; they do not declare a total.
+        details["episode_count"] = Value::Null;
         details["related"] = json!([]);
         Ok(details)
+    }
+
+    fn actors(&self, addon: usize, meta: &Value, output: &mut Output) -> Result<Value, ApiError> {
+        let mut credits = Vec::new();
+        for name in strings(&meta["cast"]) {
+            // app_extras.cast is verified in the selected addon response
+            // captured by N01. Match names rather than unrelated array indices.
+            let matches: Vec<_> = meta["app_extras"]["cast"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter(|item| text(&item["name"]).map(plain).as_ref() == Some(&name))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let person = (matches.len() == 1).then(|| matches[0]);
+            let role = person.and_then(|p| text(&p["character"])).map(plain);
+            let image = self.image(addon, person.and_then(|p| text(&p["photo"])), output)?;
+            credits.push(json!({"name": name, "role": role, "image": image}));
+        }
+        Ok(json!(credits))
     }
 
     fn videos(
@@ -1187,10 +1236,9 @@ impl Catalog {
         if videos.len() > 4096 {
             return Err(limited("Stremio video count limit reached"));
         }
-        let group_id = identity("group", &[content_id, "0", "videos"]);
         let mut seen = HashSet::new();
-        let mut episodes = Vec::new();
-        for (index, video) in videos.iter().enumerate() {
+        let mut groups: Vec<Value> = Vec::new();
+        for video in &videos {
             let id = text(&video["id"])
                 .filter(|s| s.len() <= 512)
                 .ok_or_else(|| upstream("Stremio video ID is invalid"))?;
@@ -1221,16 +1269,41 @@ impl Catalog {
                 id
             ])
             .to_string();
-            episodes.push(json!({"id": identity("episode", &[content_id, &group_id, id]), "label": text(&video["title"]).or_else(|| text(&video["name"])).map(plain).unwrap_or_else(|| id.into()),
+            // Use contiguous season runs to retain the complete video order,
+            // including specials and a season revisited later in the response.
+            if groups
+                .last()
+                .is_none_or(|group| group["season_number"] != json!(season))
+            {
+                let ordinal = groups.len().to_string();
+                let title = season
+                    .map(|n| format!("Season {n}"))
+                    .unwrap_or_else(|| "Videos".into());
+                let kind = if season.is_some() { "season" } else { "other" };
+                let group_id = identity(
+                    "group",
+                    &[
+                        content_id,
+                        &self.captured.source_revision,
+                        &ordinal,
+                        &title,
+                        kind,
+                        &season.map(|n| n.to_string()).unwrap_or_default(),
+                        "unspecified",
+                    ],
+                );
+                groups.push(json!({"id": group_id, "title": title, "kind": kind, "dub_status": "unspecified", "season_number": season, "language": null, "episodes": []}));
+            }
+            let group = groups.last_mut().expect("Created group");
+            let group_id = group["id"].as_str().expect("Group ID").to_owned();
+            let episodes = group["episodes"].as_array_mut().expect("Episodes");
+            let index = episodes.len();
+            episodes.push(json!({"id": identity("episode", &[content_id, &self.captured.source_revision, &group_id, &index.to_string(), &data]), "label": text(&video["title"]).or_else(|| text(&video["name"])).map(plain).unwrap_or_else(|| id.into()),
                 "title": text(&video["title"]).or_else(|| text(&video["name"])).map(plain), "plot": text(&video["overview"]).or_else(|| text(&video["description"])).map(plain),
-                "index": index, "season": season, "number": number, "ref": self.media_ref(data), "poster": self.image(image_addon, text(&video["thumbnail"]), output)?}));
+                "index": index, "season": season, "number": number, "ref": self.media_ref(data), "poster": self.image(image_addon, text(&video["thumbnail"]), output)?,
+                "duration_ms": duration_ms(&video["runtime"]), "released_at": released_at(&video["released"])}));
         }
-        if episodes.is_empty() {
-            return Ok(json!([]));
-        }
-        Ok(
-            json!([{"id": group_id, "title": "Videos", "kind": "other", "dub_status": "unspecified", "season_number": null, "language": null, "episodes": episodes}]),
-        )
+        Ok(json!(groups))
     }
 }
 
@@ -1281,6 +1354,68 @@ fn people(value: &Value) -> Value {
     )
 }
 
+fn csv(value: &Value) -> Vec<String> {
+    text(value)
+        .map(|value| {
+            value
+                .split([',', '，'])
+                .map(plain)
+                .filter(|v| !v.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn valid_year(value: &str) -> bool {
+    value.len() == 4
+        && value
+            .parse::<u64>()
+            .is_ok_and(|year| (1000..=9999).contains(&year))
+}
+
+// The protocol uses human readable durations. Only explicit, verified units
+// are converted (SDK's 120m/45 min and the selected addon's 2h28min).
+fn duration_ms(value: &Value) -> Option<u64> {
+    let mut rest = text(value)?.trim();
+    let mut total = 0u64;
+    let mut previous_unit = u64::MAX;
+    while !rest.is_empty() {
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return None;
+        }
+        let amount = rest[..digits].parse::<u64>().ok()?;
+        rest = rest[digits..].trim_start();
+        let (unit, tail) = if let Some(tail) = rest.strip_prefix("min") {
+            (60_000, tail)
+        } else if let Some(tail) = rest.strip_prefix('m') {
+            (60_000, tail)
+        } else if let Some(tail) = rest.strip_prefix('h') {
+            (3_600_000, tail)
+        } else {
+            return None;
+        };
+        if unit >= previous_unit {
+            return None;
+        }
+        previous_unit = unit;
+        total = total.checked_add(amount.checked_mul(unit)?)?;
+        if total > 9_007_199_254_740_991 {
+            return None;
+        }
+        rest = tail.trim_start();
+    }
+    Some(total)
+}
+
+fn released_at(value: &Value) -> Option<String> {
+    OffsetDateTime::parse(text(value)?, &Rfc3339)
+        .ok()?
+        .to_offset(time::UtcOffset::UTC)
+        .format(&Rfc3339)
+        .ok()
+}
+
 fn overlay(base: &mut Value, local: &Value, addon: usize, operation: &str, output: &mut Output) {
     for field in [
         "name",
@@ -1313,6 +1448,9 @@ fn overlay(base: &mut Value, local: &Value, addon: usize, operation: &str, outpu
                 "en",
             );
         }
+    }
+    if local["app_extras"]["cast"].is_array() {
+        base["app_extras"] = local["app_extras"].clone();
     }
     if let Some(videos) = base["videos"].as_array_mut() {
         for video in videos {

@@ -2,6 +2,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub mod commands;
 pub mod contracts;
+pub mod details;
 pub mod gateway;
 pub mod home;
 pub mod host;

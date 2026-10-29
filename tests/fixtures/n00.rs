@@ -2,6 +2,8 @@
 //! hostnames are unavailable in ordinary application builds.
 #[path = "t06_maccms.rs"]
 mod t06;
+#[path = "t07_maccms.rs"]
+mod t07;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{

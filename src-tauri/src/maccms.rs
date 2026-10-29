@@ -844,6 +844,14 @@ impl Catalog {
         details["directors"] = json!(people(item["vod_director"].as_str()));
         details["regions"] = json!(words(item["vod_area"].as_str()));
         details["languages"] = json!(words(item["vod_lang"].as_str()));
+        crate::details::validate(reference, &details)?;
+        crate::details::images(&details, &mut |reference| {
+            if images.iter().any(|image| image.reference == *reference) {
+                Ok(())
+            } else {
+                Err(upstream("MacCMS detail image is not registered"))
+            }
+        })?;
         let value = json!({"details": details, "images": {}, "metadata_ref": null});
         wire_size(&value, RESPONSE_LIMIT)?;
         Contracts::get().validate("DetailsViewData", &value)?;

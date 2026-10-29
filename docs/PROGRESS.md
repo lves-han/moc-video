@@ -952,3 +952,13 @@
 - 原固定独立复巡：CLEAR；`evidence/reviews/20261029T024917898675-T0.6/review.json`，真实read-only CLI结束exit0；固定完成提交f21cd25b0539447d29b4cad536aeed5aa0c89762。报告`evidence/reviews/20261029T024917898675-T0.6/output.log`确认原P1当前实现已修复、新基线准确A1/六门verify与日志/报告完整、8项需求追溯通过。
 - 外层再次核对原done/source/protected/gen1、完成树/干净树、真实ended/CLEAR/exit0及旧身份退出/两锁实际空闲，全部成立。T0.1..T0.6均具原completed和固定独立CLEAR，下一卡原next/严格文件顺序最早未完成=T0.7。原T06s1/失败2含红测、T13paused/s1/gen3及全部失败/旧done/旧P1报告/坏hash观测保留。
 - 当前控制修订与功能质量闭环完整完成。旧未登记payload历史退出/RSS仍如实未验证；产品长耐久及其它平台按原阶段决定保持待验。先整体重写同ID监管提示，移除已完成T06及其修复操作，再T07实质范围预检和原start/handoff/default2接续。
+
+## T0.7 T07 详情与集数规范化首会话交接 2026-10-29T03:19:05+00:00
+
+- 实施状态：WIP；当前T0.7、sessions=1/2、failures=0、generation=0，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。TASKS保持未勾选，冻结规格/协议/架构/控制器/配置保持；T0.13继续原暂停状态。按ADR010移交外层原run验收与Git，未新增用户决定或写入DONE/BLOCKED/RESOLVED/AUTHORIZED。
+- Changed：新增共用details关系校验、递归图片登记遍历和合成load边界，检查内容原引用、来源/修订、组/集唯一性及组内index；复用SourceSnapshot/Job处理load前后世代/取消/超时。MacCMS保留原线路、opaque集数指纹和未知类型规则，增加共用详情/图片关系检查。Stremio按连续季段保持全部原video顺序，组/集身份纳入revision与组内源序号；补地区/语言、明确单位时长、UTC单集日期和已实证app_extras.cast演员角色/照片，未知单值保留空值，episode_count保持源明确总数语义。
+- Why：现有Stremio将多季条目放入单组且用已取得条目数充当总集数，缺少上述可用元数据；按连续季段避免重排跨季/特别篇原始video顺序。字段依据为SPEC/数据字典、Stremio官方meta文档（https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/meta.md）和N01已留存的同源响应；只启用现有time依赖的parsing feature，没有新增依赖。原N01乱序视频断言改为跨组展开，保留原10/特别篇/1的顺序与原引用断言，并补季组检查。
+- 验收实现：tests/acceptance/t07.py定义10项原生测试和19个完整详情观测向量，覆盖8项需求；HTTP fixture通过真实Host/MacCMS/Stremio路径，Cloudstream明确标记合成load/DTO边界。覆盖Movie/Series/Anime、200集、10/2、季0/无季、两条同名线路、配音、URL/含空白和转义JSON opaque原串、有效零分/未知评分、毫秒/日期、中文、无可播条目、全部详情/相关卡/演员/导演/单集图片。独立Python投影按原HTTP输入计算身份/顺序/字段/图片对应关系，并拒绝丢组、改写引用、伪造年份/评分、错误index/归属及漏图片登记。
+- Verified（实际静态检查）：task.py check/start/show/status/scope退出0，35卡且all changes inside scope；rustfmt --check --edition 2024 --config skip_children=true针对9个相关Rust文件退出0；git diff --check退出0。Python AST、10项Rust函数与A1清单一致/8项需求覆盖、Cargo TOML/lock及协议/配置JSON解析退出0。静态记录：`evidence/task-state/T0.7/session-1/static-validation.json`；稳定source=22e0b93da9075163f195e2faaf24a84c462e1348fea5a14c19d967555039a93e。
+- 验收 A1：NOT RUN；Rust类型检查/构建、10项原生行为、独立Python投影、Clippy、完整verify、done与固定提交独立CLEAR均NOT RUN，本轮真实行为执行数0。已知sandbox进程枚举/sccache/.git限制沿ADR010处理，未重复探测或扩权。正常A1报告及JUnit尚未生成；原失败历史保持。
+- Remaining：源码停止编辑，外层确认本开发CLI/旧重命令真实身份已结束、两锁空闲及源码稳定后，按`evidence/task-state/T0.7/session-1/outer-validation-argv.json`执行原run locked/offline构建和准确A1；A1通过后直接verify.py all，再按原规则真实记录、勾卡、task.py done、受验完成提交及固定独立CLEAR。Git WIP按ADR010交外层代办，建议`WIP T0.7: normalize detail metadata and preserve episode groups`。真实Cloudstream原7包、Ddys/SuperVod继续N02；资源URL网关/图像访问映射继续T09，当前验证目标为详情实际引用的内存登记与递归覆盖。

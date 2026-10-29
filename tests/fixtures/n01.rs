@@ -2,6 +2,8 @@
 //! and evidence directory; none of these values are presented as real metadata.
 #[path = "t06_stremio.rs"]
 mod t06;
+#[path = "t07_stremio.rs"]
+mod t07;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
@@ -718,7 +720,16 @@ fn n01_movie_and_original_video_order_inline_media_ignored() {
     let mut output = Output::default();
     let groups = cat.videos(0, 0, &value, "content", &mut output).unwrap();
     assert_eq!(groups[0]["dub_status"], "unspecified");
-    let episodes = groups[0]["episodes"].as_array().unwrap();
+    let episodes: Vec<_> = groups
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|group| group["episodes"].as_array().unwrap())
+        .collect();
+    assert_eq!(groups.as_array().unwrap().len(), 3);
+    assert_eq!(groups[0]["season_number"], 2);
+    assert_eq!(groups[1]["season_number"], 0);
+    assert_eq!(groups[2]["season_number"], 1);
     assert_eq!(
         episodes
             .iter()
