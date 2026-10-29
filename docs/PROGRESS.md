@@ -935,3 +935,13 @@
 
 - 独立round26：CLEAR；报告`docs/reviews/doc-review/round-26.md`，固定HEAD4a98563cf872ac349122a1fed352cdbcaf937b51/source0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。实际7文件SHA与ADR027分段逐项匹配，原P1异常路径、fault回归及原双卡迁移审查通过。
 - 当前T06原sessions1/失败2/gen1、T13paused/s1/gen3保持。恢复同ID监管，接续新基线准确A1/完整verify/done/Git/固定原独立复巡，原业务通过事实及旧BLOCKING/坏hash保留历史；本次文档CLEAR不作为当前功能完成结论。
+
+
+## T0.6 T06 执行器修复新基线功能验收完成 2026-10-29T02:49:15.604911+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261029T024557206572-A1/output.log`；断言：新generation1下exit0，14原生行为、73真实Host观测独立schema及原home_response oracle、三类6份明确合成共用DTO/1原section身份向量、17必需case/25JUnit全部通过0失败0跳过。全部原栏目顺序/identity、部分失败占位、单栏重试、分页/空页、串行与取消/预算预留门保持并重验；真实Cloudstream7包仍留原N02后卡。
+- 控制器修复：ADR027批准的4文件、原T06/T13迁移和实际128回归/4CLI烟测已固定round26独立CLEAR；原P1及旧坏hash日志/旧成功/旧done副本仍保留，未回写历史、未accept-review。
+- 完整verify：PASS；原收据`evidence/verify/20261029T024601709058.json`，新source/protected/generation全部匹配、六门exit0：workflow128项121通过7平台skip；归档及working contracts；frontend57测试/类型/生产构建；native fmt/check/Clippy及50单元+16集成通过。原completion_evidence逐项检查本次最新A1/六门、日志/报告SHA、非零测试等成功，最新完整尝试保留。
+- 受验source：0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b；generation1。原sessions1/失败2（含原实现红测）、T13paused/s1/gen3、全部原历史与既定权限/4096MiB RSS采样/jobs2/线程1/时限保持；已记录身份全退出、两锁空闲、范围/冻结/干净树通过。产品长期耐久仍按ADR020移交，其他桌面平台按既有授权未实机执行。
+- 原完成收尾：task done/新受验Git提交后必须原drive --review-only对新固定提交独立复巡，真实CLEAR且干净树后才按序T07，当前不据文档CLEAR提前宣称本卡完整完成。
