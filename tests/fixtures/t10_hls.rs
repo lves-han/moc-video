@@ -865,7 +865,7 @@ fn ffmpeg(folder: &Path, args: &[&str], secret: Option<&str>) -> Vec<u8> {
             "-nostdin",
             "-hide_banner",
             "-loglevel",
-            "error",
+            if secret.is_some() { "info" } else { "error" },
             "-y",
             "-threads",
             "1",
@@ -881,6 +881,7 @@ fn ffmpeg(folder: &Path, args: &[&str], secret: Option<&str>) -> Vec<u8> {
     let mut diagnostic = String::from_utf8_lossy(&output.stderr).into_owned();
     if let Some(secret) = secret {
         diagnostic = diagnostic.replace(secret, "<redacted-cap>");
+        eprintln!("T10_FFMPEG:{diagnostic}");
     }
     assert!(output.status.success(), "ffmpeg failed: {diagnostic}");
     output.stdout
@@ -1018,6 +1019,46 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         }
         args.push("index.m3u8");
         ffmpeg(&target, &args, None);
+        eprintln!(
+            "T10_SOURCE:{}",
+            json!({"mode":mode,"playlist":fs::read_to_string(target.join("index.m3u8")).unwrap()})
+        );
+        let original = ffmpeg(
+            &target,
+            &[
+                "-protocol_whitelist",
+                "file,crypto",
+                "-f",
+                "hls",
+                "-allowed_extensions",
+                "ALL",
+                "-allowed_segment_extensions",
+                "ALL",
+                "-extension_picky",
+                "0",
+                "-i",
+                "index.m3u8",
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0",
+                "-threads",
+                "1",
+                "-f",
+                "framemd5",
+                "-",
+            ],
+            None,
+        );
+        assert_eq!(
+            frame_hashes(&original, 0),
+            expected,
+            "{mode}: original HLS video differs from the complete source"
+        );
+        assert!(
+            !frame_hashes(&original, 1).is_empty(),
+            "{mode}: original HLS audio missing"
+        );
         fs::write(target.join("master.m3u8"),"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=500000,CODECS=\"avc1.42c00a,mp4a.40.2\"\nindex.m3u8\n").unwrap();
     }
     let assets = folder.path().to_owned();
@@ -1051,6 +1092,10 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
                 "application/octet-stream"
             }
         };
+        eprintln!(
+            "T10_REQUEST:{}",
+            json!({"target":r.target,"range":r.headers.get("range")})
+        );
         let total = bytes.len();
         if let Some(range) = r.headers.get("range") {
             let (a, b) = range
@@ -1113,6 +1158,13 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
                 "0",
                 "-http_persistent",
                 "0",
+                // FFmpeg 9.0.2's HLS reuse seeks an absolute file offset even
+                // though open_input documents different HTTP AVIO bookkeeping.
+                // Disable that reuse for fMP4; explicit HLS offset/end_offset
+                // still send Range with seekable=0 (n9.0.2 hls.c/open_input and
+                // http.c/http_connect). Keep every byte/frame assertion below.
+                "-http_seekable",
+                if mode == "fmp4" { "0" } else { "-1" },
                 "-i",
                 media(&view),
                 "-map",
@@ -1129,9 +1181,13 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         );
         let video = frame_hashes(&output, 0);
         let audio = frame_hashes(&output, 1);
+        eprintln!(
+            "T10_REQUESTS:{}",
+            json!({"mode":mode,"video_frames":video.len(),"audio_frames":audio.len(),"requests":fixture.state.requests.lock().unwrap()[start..].iter().map(|r|json!({"target":r.target,"range":r.headers.get("range")})).collect::<Vec<_>>()})
+        );
         assert_eq!(
             video, expected,
-            "decoded video frame hashes changed through HLS gateway"
+            "{mode}: decoded video frame hashes changed through HLS gateway"
         );
         assert!(!audio.is_empty(), "audio decode missing");
         let requests = fixture.state.requests.lock().unwrap();

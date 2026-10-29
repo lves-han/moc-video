@@ -18,7 +18,7 @@ import uuid
 import xml.etree.ElementTree as ET
 
 from t00 import Acceptance as BaseAcceptance, read_json, require, workflow, write_json
-from t09 import redact
+from t09 import redact as redact_credentials
 
 ROOT = Path(__file__).resolve().parents[2]
 IDS = ("R26", "R28", "REQ-T10")
@@ -33,6 +33,23 @@ RUST_TESTS = {
     "t10_real_aes128_explicit_implicit_iv_and_fmp4_decode": IDS,
 }
 URI_COUNTS = [1, 1, 1, 1, 1, 1, 1, 2, 3, 2, 1]
+
+
+def redact(output):
+    # Only Cargo's fixed runner positions may contain a nonsecret test name
+    # that happens to have the same shape as a capability. Sanitize the rest
+    # of each line, including any JSON/URL/Debug output after the runner prefix.
+    names = "(?:" + "|".join(map(re.escape, RUST_TESTS)) + ")"
+    qualified = r"gateway::tests::t10::" + names
+    runner = re.compile(r"^(?:test " + qualified + r" \.\.\.(?=\s|$)|    "
+                        + qualified + r"(?=\r?$)|thread '" + qualified
+                        + r"' \(\d+\) panicked at )")
+    safe = []
+    for line in output.splitlines(keepends=True):
+        match = runner.match(line)
+        end = match.end() if match else 0
+        safe.append(line[:end] + redact_credentials(line[end:]))
+    return "".join(safe)
 
 
 class Acceptance(BaseAcceptance):
@@ -92,7 +109,8 @@ class Acceptance(BaseAcceptance):
                 ran=0, passed=0, failed=0, skipped=0, status="NOT RUN")),
             media=dict(provenance="CC0-1.0; project-generated testsrc2 and sine tone", duration_seconds=2,
                 modes=["AES-128 TS explicit IV", "AES-128 TS implicit sequence IV", "fMP4 single-file init/byterange"],
-                verification="24 decoded video frame hashes equal source; nonzero decoded AAC frames in each mode"),
+                verification="original HLS and gateway each equal all 24 source video frame hashes; nonzero decoded AAC frames in each mode",
+                fmp4_client="http_seekable=0 avoids FFmpeg 9.0.2 AVIO offset reuse; explicit HLS Range requests remain asserted"),
             deployment="ordinary native process and owned loopback socket fixtures; no cluster",
             cleanup="fixture/gateway Drop joins owned workers; temporary media deleted after fixture shutdown; original run.py owns descendants",
             cloudstream=dict(synthetic=True, original_yjys="NOT RUN: real Cloudstream source/interceptor order remains N02"),
