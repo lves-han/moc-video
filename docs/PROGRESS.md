@@ -979,3 +979,13 @@
 - 验收 A1：NOT RUN for modified source；本轮实际行为测试数0，Clippy、构建与完整verify均NOT RUN。原source22e0b93d的A1通过与最新verify失败保留各自日志，历史通过未当作修复源通过。
 - 稳定源码：b0be348d1b93eb10dda8ec2228b8086bfd5e57635457fef40adc2e31657be37c；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；按ADR-010已知sandbox分工移交外层，未重复探测sysctl/sccache/.git权限。WIP提交交外层代办，建议`WIP T0.7: use question mark for hour duration parsing`。
 - Remaining：外层确认开发CLI/旧payload真实身份退出、两锁空闲与源码稳定后，按`evidence/task-state/T0.7/session-2/outer-validation-argv.json`通过原run执行相关Clippy、locked构建和准确A1（含合法/未知/溢出/单位顺序负例）；A1后直接完整verify.py all，再原勾卡/真实记录/done/受验Git提交/固定独立CLEAR。保持4096MiB macOS RSS采样、jobs2、线程1及原时限；后卡与T13原暂停保持，无新增开发额度请求。
+
+
+## T0.7 T07 详情与集数规范化 功能验收完成 2026-10-29T03:36:51.916279+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261029T033205203780-A1/output.log`；断言：exit0，13必需case/21JUnit通过0失败0跳过，10原生行为、19独立详情投影及119篡改反例拒绝通过。Movie/Series/Anime详情、JSON opaque原串与源/revision/世代边界、缺失字段/评分/单位/中文、200集和10/2原始顺序、连续季段/分组kind/season/dub/episode.index、递归详情/related/人员/单集图片登记及晚到拒绝均已执行；Cloudstream合成load/DTO明确标记，真实Ddys/SuperVod/7包仍留原N02，资源网关访问映射T09。
+- 修复与构建：原第2会话仅将小时单位None传播改为?，不改解析语义、schema或原断言；当前修复源原all-targets Clippy -D warnings及locked构建退出0，源码稳定后重新准确A1和直接完整verify，首轮Clippy失败保留历史。
+- 完整verify：PASS；原收据`evidence/verify/20261029T033214175295.json`，六门全部exit0；workflow128项121通过7平台skip、归档及working contracts、frontend57测试/类型及生产构建、native fmt/check/Clippy和全量Rust测试通过。最新A1/全部六门同source/protected/generation、日志/报告SHA与非零测试由原completion_evidence核对通过。
+- 受验source：b0be348d1b93eb10dda8ec2228b8086bfd5e57635457fef40adc2e31657be37c；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b；generation0。原sessions2/失败1及全部历史保留，原T13paused/s1/gen3保持；所有旧记录身份退出、两锁实际空闲、当前scope/frozen及记录前clean检查通过。原4096MiB RSS采样/jobs2/线程1/时限和权限保持，无真实集群，短功能HTTP fixture按原所有权清理。
+- 原收尾：task done/受验Git完成提交后原drive --review-only固定独立巡检，真实CLEAR及完成树/干净树成立后才完整完成并整体改写监管提示按序T08。产品长耐久及其它平台按原分期决定待验。

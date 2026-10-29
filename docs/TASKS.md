@@ -503,7 +503,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 验证：单栏、多栏、重复标题、动态栏目、page2、空页、部分栏目失败、全部栏目失败、顺序源；section_id使用identity_example向量；三类共用DTO的合成映射与聚合超时、A成功/B失败/C成功的混合顺序、单栏首屏重试保留其他栏目；真实7包provider测试在N02执行。
 
 ### T0.7 T07 详情与集数规范化
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.3, T0.4, T0.5
 - 需求：R05, R17, R18, R22, R31, R59, R60, REQ-T07 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `src/models.ts`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
