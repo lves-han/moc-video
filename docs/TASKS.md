@@ -696,7 +696,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 验证：每项独立fixture+组合播放；HTTP清单变换与重写顺序fixture；真实Yjys特殊拦截器在N02回归；请求日志证明key/segment也走代理；可控时钟跨5分钟与释放Resolution后继续刷新HLS/读取Key/分片。
 
 ### T0.11 T11 字幕与基线 DASH
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.9
 - 需求：R26, R29, REQ-T11 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `src/player.ts`, `package.json`, `package-lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`

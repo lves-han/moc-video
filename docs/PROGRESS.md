@@ -1316,3 +1316,15 @@
 - 实际非GUI检查：原run oracle/fixture回归、带t01-automation的alltargets类型检查/Clippy均通过；独立原run t11-native-functional-diagnostic实跑8原生全过0skip，13实际观测及13篡改反例拒绝通过，错误cap401/关闭410/字幕转换/原HTTP鉴权/资源回收等断言保持。此诊断未替代原准确A1，报告`evidence/drive/t11-second-validation-20261029T112048Z/native-functional-diagnostic.json`。
 - 真实环境：通过既有t01.native_gui_session仅保存过滤后的ioreg锁屏标志，当前screen_locked=true；已读第二CLI同样观察为true。历史第一次identity超时当时无此标志，原因仍不据当前状态追认。当前原WK验收需要可用GUI，因此尚不启动当前源准确A1/包构建/真实WK，也不运行其后完整verify；两集六轨/cue/时间轴/切换/清理与30s门保持NOT RUN。
 - 下一步：已请求用户解锁Mac，监管保持ACTIVE仅复核GUI就绪；锁定期间不重复A1/WK、不启动开发、不弱化断言、不改系统锁屏配置。实际解锁后复核同source/clean/原身份/两锁，按原准确A1（冻结{python}字面payload）及直接完整verify/Git/固定独立CLEAR闭环。若解锁后仍失败，保留实际stage/transport诊断再按原额度规则处理。后卡/T13paused及所有权限资源/时限/历史保持，原首A1/诊断超时仍原样保留。
+
+
+## T0.11 T11 字幕与条件DASH受验完成 2026-10-29T11:48:06.828773+00:00
+
+- 结果：DONE
+- Changed/Why：原Host/Session字幕登记输出同cap受鉴权多轨URL，VTT/SRT/ASS结构化转换保留时间轴/基础文本/换行；原来源HTTP上下文/SSRF/取消/诊断/大小边界保持，Resolution释放后由Session持有字幕。player.ts多轨开关切换/旧轨清理实际接通，旧subtitle调用兼容。错误cap断言/观测/oracle统一原UNAUTHORIZED401，生产鉴权未改；自动化专用阶段诊断和GUI前提保留原30s门。
+- 验收 A1：PASS；日志：`evidence/runs/20261029T114138367542-A1/output.log`；7必需case全过，JUnit10pass/0fail/1条件skip，8原生/13独立观测13反例全过。真实打包WK来源tauri://localhost，Host两集各3轨共六轨加载/开关/切换/seek/cue起止/旧轨移除、两Session关闭和Resolution回收后加载全部断言通过；1920x1080真实帧增长且无MediaError，native退出0/无lingering。同源两bundle/source/protected/依赖锁/生产隔离/codesign证据齐备。
+- 条件DASH按原卡单列NOT RUN/1条件skip；已查现有原制品/媒体输出未观察到DASH，原七包SHA保持，包获取不等于媒体输出证据。真实provider输出留T0.22/N02补查，发现DASH须完整BaseURL/List/Base/SIDX/受约束模板/seek/query/非法变量与播放门；未用合成无DASH宣称全基线无DASH。ASS限UTF8定时基础文本/换行，排版/定位/卡拉OK/绘图特效按原边界不宣称实现。
+- 直接完整verify：PASS；最近六门全部通过，workflow128项121pass7平台skip、契约两门、前端59测试/生产构建、native fmt/check/all-targetsClippy/106单元+16集成全过。另oracle/fixture及带t01-automation检查/Clippy和独立native诊断均过，当前准确A1已实际覆盖真实链路。原completion_evidence核同source/protected/gen/最近日志报告SHA/非零逐需求汇总及完整门齐备。
+- 基线source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、gen0、sessions2/失败3及首失败/125恢复前副本/旧WK超时/WIP与全部历史保持；default2已用尽，无第三开发许可。用户真实确认解锁，原Yes锁屏标志消失（None未伪称False）后准确验收成功，不追认历史超时根因。当前成功副本`evidence/drive/t11-second-validation-20261029T112048Z/completion-evidence/manifest.json`；源码/冻结scope稳定，原身份结束/两锁空闲已核，源码不再修改。
+- 归档事实：通用NativeSession报告登记samples-1.jsonl路径，但本次短时字幕命令未生成该周期采样文件；原始report保持，manifest明确列missing_optional_references，未补造空文件或宣称周期采样。实际两集逐步cue/帧/媒体错误/诊断样本在原JSON及results-1.jsonl均存在，功能门已据该实际结果验证，长耐久仍后卡。
+- Remaining：原done/受验提交/固定独立CLEAR及clean全闭环后才完整完成，T12等待。真实CS/N02、原DASH条件补查、产品耐久及其他平台未验证边界保持，T13paused/s1/gen3和原权限资源时限不变。
