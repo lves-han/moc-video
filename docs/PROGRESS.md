@@ -1133,3 +1133,11 @@
 - 受限自验恢复：第三CLI原verify-t09-output-filter125收据在CLI结束后已确认原边界退出，持原driver/heavy两锁经原task recover安全归档；未封存前JSON/log副本保留。当前6项Python真实受控复验通过。
 - 证据：`evidence/drive/t09-third-validation-20261029T062730Z/decision-evidence/manifest.json`保存当前成功A1、失败完整verify/旧回归、原收据/日志/报告副本与SHA；原旧轮失败及快照继续保留。后续源码改变后须新同源准确A1/完整verify，不复用本轮成功完成。
 - 需要最小决定：仅为T0.9追加一次3→4，允许原CLI完成上述共用测试模块单次登记接线（含host.rs仅cfg(test)模块声明）与N01 ImageAccessMap夹具修复及相关自验证；原16行为8观测13需求、全部安全/资源/负载/阈值、权限/时限/其他卡默认2/全部历史保持。独立文档复审后唯一原drive --once --max-sessions 4，修复后原构建/Clippy/相关新旧回归/准确A1、直接完整verify/done/Git/固定独立CLEAR及干净树。当前无第四许可，不启动开发，按预算耗尽规则暂停监管与推进，等待真实回复。
+
+
+## T0.9 第四会话真实批准 2026-10-29T07:49:17.390263+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对仅T0.9一次3→4、host.rs仅cfg(test)单次测试模块接线与N01 ImageAccessMap夹具修复后完整复验明确答“批准 T0.9 再追加一次”，并指示继续，按ADR029执行。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 原sessions3/失败10/generation0、source=ad2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e和全部历史保持；第四许可尚未消费。固定文档round28独立CLEAR后唯一原drive --once --max-sessions 4，实际计数4即已消费。其他卡默认2/T13paused/原权限资源时限及全部质量门保持。当前旧源A1通过、完整verify失败，未done/完整完成；新源须重新准确A1/fullverify/Git/固定独立CLEAR，T10等待。无冻结修订/rebaseline。

@@ -226,3 +226,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 决定：仅T0.9累计开发会话上限2→3，唯一第三会话由原gpt-6.1-sol/workspace-write CLI修测试夹具和观测，保持所有产品/协议边界。有效gzip正例保持原解压字节，并补或保留损坏CRC/截断负例与失败诊断；Range相同分支作条件合并，保留200/206/416/If-Range/HEAD。重复详情在完整稳定内容/图片身份/path/cap相等之外，按SPEC明确验证新DTO引用时有效30分钟租约续期，不删除旧200集/分组/顺序/schema断言。现有测试观测对新增images.url查询cap及失败Debug安全脱敏，保留真实响应先验schema、合法非秘密占位和原始响应不变。不得抑制lint或改弱16原生行为/8观测/13需求、安全与资源门。
 实施：独立只读文档round27对固定实际版本CLEAR后，紧邻核对current/严格最早/next=T0.9、原sessions2、4失败/gen0与旧身份退出/两锁空闲，唯一一次原scripts/drive.py --once --max-sessions 3。计数到3即本许可已使用；原workflow默认2/其他卡额度保持，不重置计数、追加时长、提升权限或改控制器。原WIPe760cc9/7709c5d、准确失败A1/Clippy/T07回归和全部收据/历史保持。
 复验：原开发CLI实际相关自验证并读回结果；已知sysctl/sccache/Git限制沿ADR010稳定边界外层代验，不重复探测或绕过原执行器。源码稳定后外层原run locked构建/all-targets Clippy、相关新旧回归及准确T09 A1；A1成功直接完整verify.py all、原done/Git、固定提交独立CLEAR及干净树齐备才完成。T10严格等待，T13paused/session1/gen3保持。4096MiB RSS采样/jobs2/测试线程1、全部时限/指标/负载/原清理保持。protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、source=305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615；本次仅预算与范围内测试修复授权，冻结定义保持，不调用rebaseline。
+
+
+## ADR-029 2026-10-29T07:49:17.390263+00:00 — 已采纳：仅T0.9追加一次测试模块接线与映射夹具修复会话
+
+来源：当前聊天询问仅本卡追加一次3→4，原CLI修共用测试模块接线（host.rs仅cfg(test)声明）和N01 images映射误用数组夹具，再完整复验；其余权限、资源、安全门、预算和历史保持。用户明确回复“批准 T0.9 再追加一次”，随后指示“继续”。
+决定：仅T0.9累计上限3→4，唯一第四会话完成共用observation_redaction测试模块在host.rs的cfg(test)入口一次声明及两fixture引用；按原ImageAccessMap以resource_id构造/遍历N01脱敏夹具，保留真实响应先schema、原响应不变、全部稳定字段及URL正负例。保持helper行为/原16原生8观测13需求/负载阈值与安全门，不抑制lint、复制实现或修改生产DTO/鉴权；host.rs原已在本卡范围，仅测试编译接线改变。
+实施：固定实际文档独立round28 CLEAR后，紧邻current/next/严格最早=T0.9、原s3/f10/g0、旧全部身份退出/两锁空闲/clean/source/protected核对，唯一一次原drive --once --max-sessions 4。实际计数4即消费许可，其他卡default2及原权限/资源/全部时限保持，不重置历史、不延长时长。T13paused/s1/gen3保持，T10等待。
+复验：沿ADR010原CLI实施与真实相关自验证；已知sandbox sysctl/sccache/Git限制已由原125确认，不重复探测或绕过执行器，准确受限WIP在稳定退出边界交外层原run构建/Clippy/共享脱敏和N01等相关回归/准确A1；A1成功后直接完整verify、原done/Git/固定独立CLEAR及干净树全部成立才完成。旧A1通过、失败完整verify/旧回归及WIP、10失败（含两外层误判）均保持历史，新源重新验收。当前source=ad2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结定义保持，此单卡预算批准不调用rebaseline。
