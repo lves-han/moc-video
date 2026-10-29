@@ -793,6 +793,25 @@ fn n01_public_http_headers_cookies_addresses_and_foreign_refs() {
     let source = sync(&host);
     let card = first_card(&host, &source);
     ok(&host, "get_details", json!({"ref":card["ref"]}));
+    let canonical = card["ref"]["data"].as_str().unwrap();
+    for data in [
+        format!(" {canonical}"),
+        canonical.replacen("\"stremio\"", r#""\u0073tremio""#, 1),
+    ] {
+        assert_ne!(data, canonical);
+        assert_eq!(
+            serde_json::from_str::<Value>(&data).unwrap(),
+            serde_json::from_str::<Value>(canonical).unwrap()
+        );
+        let mut reference = card["ref"].clone();
+        reference["data"] = json!(data);
+        let response = call(&host, "get_details", json!({"ref":reference}));
+        error(&response, "BAD_REQUEST");
+        assert_eq!(
+            response["error"]["message"],
+            "Stremio content reference is not canonical"
+        );
+    }
     for request in fixture.requests.lock().unwrap().iter() {
         for name in ["cookie", "authorization", "proxy-authorization"] {
             assert!(!request.headers.contains_key(name));

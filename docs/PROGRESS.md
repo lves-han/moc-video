@@ -840,3 +840,13 @@
 
 - 独立只读round25：CLEAR；报告`docs/reviews/doc-review/round-25.md`，固定HEAD8324bf5106e57f78e5acad11630ab9d0de677f60/sourcefce64ea699d9b01c623c052f455dfd93ca468d86fbf14f69fbe244db597b86c8/protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，受审四项SHA与ADR026分段逐项核对一致。
 - 原sessions4/失败5/gen1保持，第5许可尚未消费；紧邻安全核对后唯一原drive --once --max-sessions 5，达到原计数5即使用。原Clippy失败保持，修复后重跑全部质量门，后卡等待。
+
+
+## T0.5 N01 第5会话规范引用最小修复与ADR010代验交接 2026-10-29T01:33:02+00:00
+
+- 实施状态：WIP；按ADR026使用第5/5会话，原5条失败、generation=1与protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d保持。本卡保持未勾选，后卡等待；未调用done/rebaseline，未写DONE/BLOCKED/RESOLVED/AUTHORIZED。
+- Changed / Why：stremio.rs仅将同一规范JSON序列化结果绑定为canonical_data，通过as_str()与原引用文本比较，保持逐字节文本相等要求，消除直接to_string比较表达式。现有n01_public_http_headers_cookies_addresses_and_foreign_refs保留合法引用成功路径，新增前导空白和Unicode转义两个等值JSON负例，逐一确认解析值相等、文本不同及BAD_REQUEST的准确规范性错误。原19项测试清单、协议、安全脱敏、真实语言门与13项需求保持。
+- Verified（实际静态自验证）：task.py check/start/show/status/scope退出0，35卡且all changes inside scope；rustfmt --check --edition 2024 --config skip_children=true src-tauri/src/stremio.rs tests/fixtures/n01.rs最终退出0；git diff --check退出0。Python AST、Cargo TOML/lock、协议及配置JSON解析、原19项Rust定义与A1清单相等及13项需求覆盖断言退出0。首次rustfmt仅报告比较条件大括号同行排版，已先note再局部修正并复检通过。静态报告：`evidence/task-state/T0.5/session-5/static-validation.json`。
+- 验收 A1：NOT RUN for session-5 source；当前修复源的编译、合法引用与两项非规范反例行为、Clippy、完整verify均NOT RUN，实际运行行为通过数0。沿ADR010/026已知sandbox分工移交外层，未重复探测进程枚举/sccache/.git权限，未扩权或绕过原run执行器。前会话A1通过及最新verify失败保留各自原证据。
+- 外层下一步：确认本开发CLI及旧执行器/payload真实身份结束、两锁空闲、源码稳定后，按`evidence/task-state/T0.5/session-5/outer-validation-argv.json`逐项执行原run的locked/offline构建、focused规范引用正负例及all-targets Clippy -D warnings；继而准确A1原argv（含19项行为/独立schema/本次真实en/zh证据），全过后直接verify.py all。每个{python}替换用户给定项目venv解释器。保持4096MiB RSS采样/jobs2/测试线程1/原共享锁与超时，按原真实记录/勾卡/done/受验完成提交/固定独立CLEAR闭环。
+- Remaining：当前产品与测试源码停止编辑，source=0c467c4c440e691932fd2ae635074114b78ccb112da86e32c27b2a4045f5da1f；格式检查已通过，编译/Clippy与真实行为须外层复验。Git WIP按ADR010交外层代办，建议`WIP T0.5: preserve canonical reference checks without owned comparison`。既有5会话与失败证据保留，本次许可已消费。

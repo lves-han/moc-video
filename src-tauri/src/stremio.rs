@@ -1053,9 +1053,8 @@ impl Catalog {
             .iter()
             .position(|a| a.key == fields[1])
             .ok_or_else(|| ApiError::bad("Stremio addon is not registered"))?;
-        if json!(["stremio", fields[1], fields[2], fields[3]]).to_string()
-            != reference["data"].as_str().expect("Reference data")
-        {
+        let canonical_data = json!(["stremio", fields[1], fields[2], fields[3]]).to_string();
+        if canonical_data.as_str() != reference["data"].as_str().expect("Reference data") {
             return Err(ApiError::bad("Stremio content reference is not canonical"));
         }
         let (_, _, kind, id) = (&fields[0], &fields[1], &fields[2], &fields[3]);
