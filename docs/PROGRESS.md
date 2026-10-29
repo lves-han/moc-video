@@ -1297,3 +1297,14 @@
 - 原oracle8/前端测试/原生all-target类型检查/Clippy及T09/T10旧回归通过。准确A1 FAIL，日志evidence/runs/20261029T110057624936-A1/output.log：8原生7pass1fail，错误字幕cap实际401而fixture327预期403；原UNAUTHORIZED映射为401，需保留拒绝及更新lifetime观测/oracle一致。报告必需5pass2fail/条件DASH1skip，WK前置native失败未运行，完整verify NOT RUN。
 - 补充独立原run t11-webview-diagnostic exit1（仅诊断，不替代A1）：同源生产/自动化bundle构建及codesign/生产隔离通过，真实WK启动返回ready0，原identity命令30s超时，未到字幕交互。原Host桥接已建立两集各3轨DTO并释放Resolution；仍需定位IPC/前台/命令链原因，不能以已启动或DTO存在推定六轨实际播放。诊断报告evidence/drive/t11-first-validation-20261029T110015Z/webview-diagnostic.json，native及live-host日志见其commands/observed；原始cap落盘脱敏保持，进程finally身份定向清理无lingering。
 - 原始A1/JSON/XML/收据/本次独立诊断全部副本及SHA：evidence/drive/t11-first-validation-20261029T110015Z/first-failure/manifest.json。原两锁/身份/冻结scope及clean核查后，原剩余第二会话普通drive once/default2最小修复，保持全部8原生/13观测/oracle/实际WK两集六轨/字幕开关切换时间轴/清理/安全门和原30s时限，不改生产错误码迎合错误fixture、不跳过真实WK；后卡等待，T13paused保持，未请求额外预算或权限。
+
+## T0.11 第二会话401断言修正及WK前提诊断 2026-10-29T11:15:00+00:00
+
+- 实施状态：WIP；sessions2/2、原失败3/generation0保持。按ADR-010将原run真实重任务、Git与完成门交外层，已知sysctl/sccache/Git限制未重复探测，未扩大权限或会话。原失败副本、准确A1失败与独立WK诊断完整保留。
+- Changed/Why：原生字幕wrong capability断言及lifetime观测/独立oracle统一为现有UNAUTHORIZED的401；保留实际错误cap请求和所有关闭/撤销/active_requests断言，生产错误码保持。新增oracle拒绝成功响应、错误状态与残留请求的回归。T11原先直接使用NativeSession，遗漏T01的native_gui_session检查；现复用既有锁屏前提检查，在构建/启动前明确失败，并增加对应回归。
+- Changed/诊断：T11在失败路径仍保存webview_transport；原受控fixture只记录命令出队ID，包含cap的命令参数保持瞬态。自动化feature专用原生日志增加固定T01_IPC阶段，覆盖dispatch、进入/授权、恢复/显示/焦点、几何及WebKit诊断/返回；日志无参数或凭据。新增fixture回归要求真实认证命令出队响应、可审查记录且日志保持脱敏。原30秒、两集六轨真实cue/新帧/开关/切换/seek/清理与8原生13观测保持。
+- 只读运行事实：当前通过原ioreg命令在内存中过滤锁屏标志，退出0，screen_locked=true；完整系统注册信息未输出或落盘。当前桌面锁定是原生前台验收缺少的真实前提；上一轮未记录其当时GUI状态，历史identity超时根因仍待确认，未将当前锁屏倒推为既有失败的已证原因。
+- Verified：task.py check/start/scope退出0；scope确认全部源码改动位于本卡范围。git diff --check退出0；4个修改的Python文件AST解析成功；独立AST确认T11声明10项oracle测试、T01声明49项测试（只统计声明，实际执行数0）。读回外层计划，准确A1完整argv与冻结值一致，payload保留{python}字面量。
+- 验收 A1：NOT RUN（本轮修改后的源码）；单元行为、Rust构建/Clippy、真实WK字幕与完整verify均NOT RUN，原先通过收据仅作历史。当前真实桌面锁定；重任务与Git按ADR010既定分工处理，未直接执行绕过原run的测试或构建，未尝试Git写入。
+- 稳定源码：2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。外层计划及过滤后的GUI证据：evidence/acceptance/T11-session-2-outer-argv.json。源码停止编辑，建议外层按既定授权提交WIP T0.11: align unauthorized subtitle assertion and retain native IPC diagnostics。
+- Remaining：本CLI结束后，外层核对原driver/CLI/旧payload身份、两锁、scope与稳定source，代办WIP；桌面解锁后按计划运行10项oracle、T01 fixture回归、包含t01-automation feature的all-target check/Clippy及准确A1，读回新源日志/报告与清理。A1通过后直接完整verify，再真实记录、勾卡、task.py done、受验完成提交和固定独立CLEAR。若仍超时，依据webview_transport的DEQUEUE及native阶段定位真实卡点；原失败保留，不以诊断代替成功，不增加开发会话。DASH沿原条件NOT RUN/N02补查，T13暂停及所有资源/权限/时限保持。未写DONE/RESOLVED/AUTHORIZED，未修改冻结定义或执行rebaseline。

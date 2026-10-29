@@ -109,6 +109,17 @@ class FixtureTests(unittest.TestCase):
         self.request(Range="bytes=0-1")
         self.assertNotIn(self.fixture.cap, str(self.fixture.summary()))
 
+    def test_command_dequeue_is_recorded_without_arguments_or_capabilities(self):
+        command = dict(id=1, op="t11-subtitles", view=dict(media_url="http://fixture.invalid/?cap=private"))
+        self.fixture.commands.put(command)
+        status, _, body = self.request(path="/control/next?cap=" + self.fixture.cap)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), command)
+        summary = self.fixture.summary()
+        self.assertIn(dict(path="/control/next", method="DEQUEUE", command_id=1), summary["records"])
+        self.assertNotIn("private", str(summary))
+        self.assertNotIn(self.fixture.cap, str(summary))
+
 
 class GuiSessionTests(unittest.TestCase):
     def test_locked_desktop_fails_before_launching_native_app(self):

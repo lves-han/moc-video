@@ -37,6 +37,25 @@ class VttOracleTests(unittest.TestCase):
             with self.subTest(vector=vector), self.assertRaises((ValueError, KeyError)):
                 t11.check_vector(vector)
 
+    def test_lifetime_requires_unauthorized_cap_and_all_cleanup_observations(self):
+        vector = dict(kind="lifetime", at_ms=300001, resolution_expired=True, authenticated_after_expiry=True,
+                      continued_status=200, old_status=410, wrong_cap=401, revoked_status=410, active_requests=0)
+        t11.check_vector(vector)
+        for key, value in [("wrong_cap", 200), ("wrong_cap", 403), ("old_status", 200),
+                           ("revoked_status", 200), ("active_requests", 1), ("authenticated_after_expiry", False)]:
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                t11.check_vector(dict(vector, **{key: value}))
+
+    def test_locked_desktop_fails_before_build_and_native_launch(self):
+        run = SimpleNamespace(observed={})
+        with patch.object(t11.t01, "native_gui_session", return_value=dict(screen_locked=True)), \
+             patch.object(t11.t01, "build") as build, patch.object(t11.t01, "NativeSession") as native:
+            with self.assertRaisesRegex(ValueError, "unlock the desktop"):
+                t11.webview(run)
+            build.assert_not_called()
+            native.assert_not_called()
+        self.assertEqual(run.observed["gui_session"], dict(screen_locked=True))
+
     def test_webview_oracle_rejects_wrong_time_text_missing_tracks_and_no_frames(self):
         vector = dict(episode="first", disabled=True, cue_ended=True, actual_gateway=True, new_frames=3, old_tracks_removed=0,
             observations=[dict(format=f, start=1.25, end=3.75, text=f"first {f.upper()}\n第二行", mode="showing", cues=1)

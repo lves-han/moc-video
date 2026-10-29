@@ -30,7 +30,10 @@ pub async fn t01_control(
     action: String,
     value: Option<f64>,
 ) -> Result<serde_json::Value, String> {
+    // Fixed markers locate a stalled GUI/IPC call without logging its arguments.
+    eprintln!("T01_IPC:entered");
     super::require_main(&window)?;
+    eprintln!("T01_IPC:authorized");
     match action.as_str() {
         "identity" => {}
         "foreground" => {
@@ -38,11 +41,16 @@ pub async fn t01_control(
             // its app/window before measuring foreground WebView rendering.
             #[cfg(target_os = "macos")]
             window.app_handle().show().map_err(|e| e.to_string())?;
+            eprintln!("T01_IPC:application-shown");
             window.unminimize().map_err(|e| e.to_string())?;
+            eprintln!("T01_IPC:restored");
             window.show().map_err(|e| e.to_string())?;
+            eprintln!("T01_IPC:window-shown");
             window.set_focus().map_err(|e| e.to_string())?;
+            eprintln!("T01_IPC:window-focused");
             let webview: &tauri::Webview = window.as_ref();
             webview.set_focus().map_err(|e| e.to_string())?;
+            eprintln!("T01_IPC:webview-focused");
         }
         "width" => {
             let width = value.ok_or("width required")?;
@@ -72,11 +80,13 @@ pub async fn t01_control(
         return Ok(serde_json::json!({"closing": true}));
     }
     let size = window.inner_size().map_err(|e| e.to_string())?;
+    eprintln!("T01_IPC:geometry-read");
     #[cfg(target_os = "macos")]
     let (webkit_pids, top_content_inset, audio_playing) = webkit_diagnostics(&window)?;
     #[cfg(not(target_os = "macos"))]
     let (webkit_pids, top_content_inset, audio_playing) = (serde_json::Value::Null, 0.0, false);
-    Ok(serde_json::json!({
+    eprintln!("T01_IPC:webkit-read");
+    let result = serde_json::json!({
         "label": window.label(), "fullscreen": window.is_fullscreen().map_err(|e|e.to_string())?,
         "visible": window.is_visible().map_err(|e|e.to_string())?,
         "focused": window.is_focused().map_err(|e|e.to_string())?,
@@ -85,7 +95,9 @@ pub async fn t01_control(
         "scale_factor": window.scale_factor().map_err(|e|e.to_string())?,
         "pid": std::process::id(), "tauri": tauri::VERSION, "webkit_pids": webkit_pids,
         "top_content_inset": top_content_inset, "audio_playing": audio_playing
-    }))
+    });
+    eprintln!("T01_IPC:completed");
+    Ok(result)
 }
 
 #[cfg(target_os = "macos")]

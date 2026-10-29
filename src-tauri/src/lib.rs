@@ -46,6 +46,10 @@ pub fn run() {
         if contracts::COMMANDS.contains(&invoke.message.command()) {
             business(invoke)
         } else {
+            #[cfg(feature = "t01-automation")]
+            if invoke.message.command() == "t01_control" {
+                eprintln!("T01_IPC:dispatch");
+            }
             prototype(invoke)
         }
     });

@@ -144,6 +144,8 @@ class Fixture:
                     except queue.Empty:
                         self.response(204)
                     else:
+                        with fixture.lock:
+                            fixture.records.append({"path": path, "method": "DEQUEUE", "command_id": command["id"]})
                         self.response(200, json.dumps(command).encode(), {"Content-Type": "application/json"})
                     return
                 if path == "/probe/cors-denied":

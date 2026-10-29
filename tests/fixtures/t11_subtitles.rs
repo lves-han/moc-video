@@ -324,13 +324,13 @@ fn t11_release_expiry_switch_and_cap_revocation() {
     assert_eq!(fetch(track(&old, 0), "GET", &[]).status, 410);
     assert_eq!(fetch(track(&current, 0), "GET", &[]).status, 200);
     let wrong = track(&current, 0).replace(&cap(track(&current, 0)), &cap(track(&old, 0)));
-    assert_eq!(fetch(&wrong, "GET", &[]).status, 403);
+    assert_eq!(fetch(&wrong, "GET", &[]).status, 401);
     gateway.revoke(&["native-fixture".into()]);
     assert_eq!(fetch(track(&current, 0), "GET", &[]).status, 410);
     fixture.quiet();
     println!(
         "T11_VECTOR:{}",
-        json!({"kind":"lifetime","at_ms":300001,"resolution_expired":true,"authenticated_after_expiry":true,"continued_status":200,"old_status":410,"wrong_cap":403,"revoked_status":410,"active_requests":fixture.state.active.load(Ordering::SeqCst)})
+        json!({"kind":"lifetime","at_ms":300001,"resolution_expired":true,"authenticated_after_expiry":true,"continued_status":200,"old_status":410,"wrong_cap":401,"revoked_status":410,"active_requests":fixture.state.active.load(Ordering::SeqCst)})
     );
 }
 

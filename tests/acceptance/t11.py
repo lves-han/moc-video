@@ -113,7 +113,7 @@ def check_vector(v):
         require(v["malformed"] >= 17 and v["input_limit"] is True and v["output_limit"] is True, "negative/limit coverage missing")
     elif kind == "lifetime":
         require(v == dict(kind="lifetime", at_ms=300001, resolution_expired=True, authenticated_after_expiry=True, continued_status=200,
-                          old_status=410, wrong_cap=403, revoked_status=410, active_requests=0), "lifetime observation differs")
+                          old_status=410, wrong_cap=401, revoked_status=410, active_requests=0), "lifetime observation differs")
     elif kind == "isolation":
         require(v == dict(kind="isolation", cross_origin_stripped=True, direct_origin_stripped=True,
                           private_target_contacted=False), "subtitle credentials/SSRF isolation differs")
@@ -314,6 +314,9 @@ def validate_webview(value, episode):
 
 
 def webview(run):
+    run.observed["gui_session"] = t01.native_gui_session()
+    require(run.observed["gui_session"]["screen_locked"] is not True,
+            "macOS GUI session is locked; unlock the desktop before native acceptance")
     t01.check_media()
     t01.build(run)
     # The existing build function validates production/automation separation and
@@ -344,6 +347,8 @@ def webview(run):
             known.update({r["pid"]: r for r in workflow.runtime.family(process.pid, token)})
             views = read_json(directory / "ready.json")
             with t01.Fixture(t01.MEDIA) as fixture:
+                # Keep transport evidence on failures as well as successful cues.
+                run.observed["webview_transport"] = fixture.records
                 session = t01.NativeSession(run, fixture, executable, 1)
                 session.wait(0, 30)
                 identity = session.command("identity")
