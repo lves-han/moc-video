@@ -1008,3 +1008,13 @@
 - 失败现场：一次辅助格式命令经原run产生`evidence/runs/20261029T035837924260-verify-t08-fmt/receipt.json`，exit125/status=cleanup_failed，sysctl进程边界EPERM；原执行器82385/created:1793246317.931477、payload82390/created:1793246318.088087。保留原失败及未确认边界，已task note，不重复重运行或绕过收据；之后只完成轻量源码格式编辑/静态核对。首次A1命令不匹配被入口拒绝、未产生验收运行，已note并保持准确A1 argv。
 - 验收 A1：NOT RUN；本轮实际行为测试数0，Rust类型检查/构建、13项原生行为、独立Python oracle、Clippy、完整verify、done和独立CLEAR均NOT RUN；T08-all.json/xml尚未生成。静态通过未当作功能通过。
 - Remaining：源码停止编辑。外层按ADR010确认本开发CLI与上述旧执行器/payload真实身份结束、两锁空闲，使用原task.py recover封存未完成收据后，依`evidence/task-state/T0.8/session-1/outer-validation-argv.json`执行locked/offline构建、all-targets Clippy及准确A1；A1同源通过后直接verify.py all，再原真实记录/勾卡/done/受验提交/固定独立CLEAR。原4096MiB macOS RSS采样/jobs2/线程1/时限/权限保持。WIP Git按ADR010交外层代办，建议`WIP T0.8: connect playback matching and native resolution candidates`；编译或行为问题由原剩余第2会话修复。
+
+
+## T0.8 首次外层功能复验与原预算接续 2026-10-29T04:20:57.299766+00:00
+
+- 实施状态：WIP；原sessions1/2、失败3、generation0；source=3c2522e7ab7d0ed0fc3c622449f1ef4b3c9c3fb660bac83a0d8237c206846081/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b不变。
+- 原恢复：受限格式运行按真实身份/session结束、两锁空闲后由原task recover归档失败exit125，原始未封存JSON/log已副本保留，原失败计数未重置、业务未执行事实保持。
+- 外层原locked构建/Clippy：PASS；准确A1：FAIL，`evidence/runs/20261029T041402288373-A1/output.log`，13原生12通过1失败0skip；JUnit2通过12失败含需求汇总，独立A1 oracle尚未执行，fullverify NOT RUN。
+- 已定位fixture与完整响应schema边界：英文/别名2query上限用例在第11..15条故意缺vod_id，原decode在cards_limit之前对完整MacCmsResponse合法拒绝。应保持原schema/旧N00反例及真实坏JSON错误，通过合法超额结果验证2×10=20候选门，不能全局弱化响应校验或删失败断言。
+- 追加原N00诊断：16/17通过，`evidence/runs/20261029T041909642955-t08-old-n00-diagnostic/output.log`；旧unregistered match断言BAD_REQUEST，现匹配登记按契约返回SESSION_EXPIRED，应保留错误拒绝并核对当前明确错误码。现有真实原始输出的5向量/16篡改反例在受控只读oracle诊断20261029T041737962231通过，仅诊断，原准确A1仍失败。
+- 后续：保留全部原日志/报告/失败及WIPc8db972，原剩余第2会话由原脚本最小核对修复、自验证后稳定交接，外层重新准确A1/完整verify/done/Git/固定独立CLEAR。当前所有原身份已结束/两锁空闲/clean/frozen/scope通过，按普通drive --once/default2接续，不扩额/不复用前卡许可，后卡等待。
