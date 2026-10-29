@@ -1289,3 +1289,11 @@
 - 验收 A1：NOT RUN；Rust/TS类型、locked构建、all-targets Clippy、真实HTTP/Host/WKWebView、准确A1与完整verify均NOT RUN。唯一原run尝试t11-player-regression退出125，tests=null，status=cleanup_failed；日志/收据：evidence/runs/20261029T102839400792-t11-player-regression/。原因为sysctl Operation not permitted且payload边界清理未确认；controller PID94175/created:1793269719.407169，payload PID94180/created:1793269719.559956。保留失败历史，未重复启动重任务、未绕过原run/资源约束、未再探测Git/sccache权限。
 - 稳定源码：81931541671b1715917ebb2f8d4e8f29e2c069f70e2335db1609c4a7c47917a5；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。产品源码停止编辑；Git WIP按ADR010交外层，建议WIP T0.11: implement authenticated session subtitle tracks。
 - Remaining/外层顺序：本CLI退出后，先核对上述失败身份、原driver/CLI/两锁及稳定scope/source，通过原工作流核清保留的未完成边界；再代办WIP及evidence/acceptance/T11-session-1-outer-argv.json中的真实自测试/前端/check/Clippy/T09/T10回归/准确A1（payload保留冻结的{python}字面量），通过后直接verify.py all。发现实现问题交原开发流程修复；所有门通过后保持源码稳定，真实记录、勾卡、task.py done、受验提交及固定独立CLEAR。原4096MiB RSS采样/jobs2/线程1、所有时限/权限与失败历史保持，Git收尾/真实验收沿ADR010既定分工；本次无新增用户决定，RESOLVED/AUTHORIZED/BLOCKED均未写入。
+
+
+## T0.11 首准确A1与独立WK诊断返修 2026-10-29T11:08:17.350618+00:00
+
+- 实施状态：WIP；原sessions1/2、失败3/gen0及全部历史保持。受限125在旧CLI退出后核原身份/持两锁/原task recover安全归档，未封存前副本保持；WIP64be41b源码稳定81931541671b1715917ebb2f8d4e8f29e2c069f70e2335db1609c4a7c47917a5。
+- 原oracle8/前端测试/原生all-target类型检查/Clippy及T09/T10旧回归通过。准确A1 FAIL，日志evidence/runs/20261029T110057624936-A1/output.log：8原生7pass1fail，错误字幕cap实际401而fixture327预期403；原UNAUTHORIZED映射为401，需保留拒绝及更新lifetime观测/oracle一致。报告必需5pass2fail/条件DASH1skip，WK前置native失败未运行，完整verify NOT RUN。
+- 补充独立原run t11-webview-diagnostic exit1（仅诊断，不替代A1）：同源生产/自动化bundle构建及codesign/生产隔离通过，真实WK启动返回ready0，原identity命令30s超时，未到字幕交互。原Host桥接已建立两集各3轨DTO并释放Resolution；仍需定位IPC/前台/命令链原因，不能以已启动或DTO存在推定六轨实际播放。诊断报告evidence/drive/t11-first-validation-20261029T110015Z/webview-diagnostic.json，native及live-host日志见其commands/observed；原始cap落盘脱敏保持，进程finally身份定向清理无lingering。
+- 原始A1/JSON/XML/收据/本次独立诊断全部副本及SHA：evidence/drive/t11-first-validation-20261029T110015Z/first-failure/manifest.json。原两锁/身份/冻结scope及clean核查后，原剩余第二会话普通drive once/default2最小修复，保持全部8原生/13观测/oracle/实际WK两集六轨/字幕开关切换时间轴/清理/安全门和原30s时限，不改生产错误码迎合错误fixture、不跳过真实WK；后卡等待，T13paused保持，未请求额外预算或权限。
