@@ -1255,3 +1255,13 @@
 - 验收 A1：NOT RUN；本轮Rust类型检查/locked构建/all-targets Clippy、Python行为回归、原生加密/解码/HTTP、准确A1和完整verify均NOT RUN。沿ADR010/030及既有真实125证据，本轮未重复探测sysctl/sccache/Git限制、未启动受限重命令、未绕过run.py，未新增重任务收据；资源后端待外层本轮真实收据记录。
 - 稳定源码：3c54e651d64e88b80dac58b69638e7dacb4cc7c92c3de50d334e8c58da9ee123；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑，当前交接argv已生成并逐项读回：evidence/acceptance/T10-session-3-outer-argv.json；只替换外层首个{python}为实际venv解释器，保留A1 payload的冻结字面量{python}。
 - Remaining/外层顺序：本CLI退出后核对原PID+创建时间、两锁、scope和稳定source，沿ADR010代办WIP Git（建议WIP T0.10: verify actual implicit HLS sequence IVs）；按清单依次原run locked/offline构建、all-targets Clippy -D warnings、T10 Python8项/T09 Python6项/T09原生16项相关回归、准确A1。8原生/18观测/68反例/3需求及全部原资源安全门通过后直接完整verify.py all，保持源码，再勾卡/追加真实收据/task.py done/受验提交/新固定独立CLEAR/干净树。原成功A1/verify/完成提交/旧CLEAR及implicit-iv-gap摘要副本和所有失败保持历史。第三许可已用完，无第四许可。
+
+
+## T0.10 真实隐式IV准确复验受验完成 2026-10-29T10:13:12.800025+00:00
+
+- 结果：DONE
+- Changed/Why：按ADR030仅tests修正真实隐式IV素材及oracle。先生成非加密TS，再同key以分片序列37/38大端128位IV逐片AES128CBC加密，原清单MEDIA-SEQUENCE37且KEY无IV属性；不复用原显式IV0密文。原生逐片完整解密字节等于原明文，Python从实际原始密文再次独立解密重算SHA，零IV及错误序列均完整字节不等。新增原始密文/清单/序列/字节数/hash证据及篡改反证，生产代码不变。
+- 验收 A1：PASS；日志：`evidence/runs/20261029T100955243815-A1/output.log`；8原生/11必需case/14JUnit全过0skip，保留原17观测并加真实隐式IV观测共18，68篡改反例拒绝。原始KEY无IV且MEDIA-SEQUENCE37，两个分片序列37/38各完整23124/23312明文字节独立核对；本地原HLS与网关的显式/真实隐式/fMP4三模式各24帧逐帧hash等于源、各95音频帧，分片/key实际同cap/上下文/释放候选后持续读取及全部原安全/资源门保持。前次显式IV0伪隐式证据缺口本次以真实原始数据闭合，原报告保持历史。
+- 直接完整verify：PASS；最近六门完整尝试全部通过：workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/98单元+16集成全过；另新8旧6Python回归、T09原16回归均过。原completion_evidence核当前source/protected/gen及全部最近日志/报告SHA、非零case与完整门成功齐备。
+- 基线：source=3c54e651d64e88b80dac58b69638e7dacb4cc7c92c3de50d334e8c58da9ee123，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，原sessions3/失败2及所有WIP/首失败/125恢复前副本/旧done/A1/verify/完成提交/CLEAR和implicit-iv-gap SHA副本保持。ADR030唯一第三许可已消费，无第四授权；新成功证据副本`evidence/drive/t10-third-validation-20261029T100923Z/completion-evidence/manifest.json`。原身份结束、两锁实际空闲、稳定scope/冻结核对通过，源码不再修改。
+- Remaining：原task done/新受验提交/新固定独立CLEAR及干净树全部齐备才完整完成，T11仍等待。真实CS/Yjys在N02、基线DASH原条件、字幕T11/长耐久产品阶段及原平台未验证边界保持；原权限资源时限及T13paused/s1/gen3不变。
