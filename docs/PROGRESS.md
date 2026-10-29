@@ -1265,3 +1265,10 @@
 - 直接完整verify：PASS；最近六门完整尝试全部通过：workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/98单元+16集成全过；另新8旧6Python回归、T09原16回归均过。原completion_evidence核当前source/protected/gen及全部最近日志/报告SHA、非零case与完整门成功齐备。
 - 基线：source=3c54e651d64e88b80dac58b69638e7dacb4cc7c92c3de50d334e8c58da9ee123，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，原sessions3/失败2及所有WIP/首失败/125恢复前副本/旧done/A1/verify/完成提交/CLEAR和implicit-iv-gap SHA副本保持。ADR030唯一第三许可已消费，无第四授权；新成功证据副本`evidence/drive/t10-third-validation-20261029T100923Z/completion-evidence/manifest.json`。原身份结束、两锁实际空闲、稳定scope/冻结核对通过，源码不再修改。
 - Remaining：原task done/新受验提交/新固定独立CLEAR及干净树全部齐备才完整完成，T11仍等待。真实CS/Yjys在N02、基线DASH原条件、字幕T11/长耐久产品阶段及原平台未验证边界保持；原权限资源时限及T13paused/s1/gen3不变。
+
+
+## T0.10 新固定提交独立CLEAR与T11预检 2026-10-29T10:20:33.383006+00:00
+
+- 原独立复巡：CLEAR；evidence/reviews/20261029T101321848836-T0.10/output.log及review.json，真实ended/exit0，新固定提交f53ccc70eb447dc581b379ec37a63df09cf5ccda。报告明确旧P2隐式IV素材证据缺口已闭合，无新增已确认缺陷：原清单无IV/序列37/38，完整23124/23312字节独立解密及反例，与三模式本地/网关24帧95音频、18观测68反例齐备。外层复核同source/protected/gen/完成树/干净树、原身份退出及两锁实际空闲，原准确A1/最新六门verify/done/受验提交/新固定独立CLEAR全闭环；T0.10完整完成，原s3/f2/g0及全部旧成功/失败/旧CLEAR/缺口历史保持。
+- 下一T0.11实质范围预检：src-tauri/src/已含Gateway/Session/ResolutionStore/HTTP上下文/字幕资源记录；src/player.ts现支持单subtitle轨和selectSubtitle，但open_playback.subtitles当前空数组、尚无SRT/ASS转换，需要实际接线/多轨切换清理。本卡范围已含player.ts、tests、必要前端/Cargo清单，可复用原T01短时媒体/WebView与当前播放器测试；SPEC9.4/C8/C9和完整原卡已读，无范围缺口须先修冻结定义。
+- DASH按原条件：当前已读本地replica-spec/tests/协议样例未见MPD制品，不能据此声称真实原插件基线永不出现DASH。现行卡允许未出现时单列NOT RUN并在N02补查；先汇总现有真实观察，任何实际出现清晰DASH须落实全部BaseURL/List/Base/SIDX/受约束模板/seek/query/非法变量及必要MSE门。真实CS/Yjys仍N02，原条件和权限/资源/阈值保持。整体重写监管提示移除T10操作后，才原next/start/handoff/普通drive once default2启动T11，T13原暂停保持。
