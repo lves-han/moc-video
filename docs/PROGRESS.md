@@ -1237,3 +1237,9 @@
 - 决定：用户针对真实隐式IV逐片序列号素材/前置断言/独立校验及完整复验，明确回复“批准 T0.10 追加一次”，仅一次2→3，按ADR030执行。
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 原sessions2/失败2/gen0、source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1及全部原成功/失败/完成副本/CLEAR保持历史；第三许可尚未消费。固定文档独立round29 CLEAR后唯一原drive --once --max-sessions 3，实际计数3即已消费，其他卡default2/原权限资源时限及T13paused保持。完成勾选仍撤回，真实隐式IV仍NOT RUN，新源须准确A1/完整verify/done/Git/新固定独立CLEAR/干净树后才完整完成，T11等待。冻结保持，无rebaseline。
+
+
+## T0.10 第三会话授权独立文档CLEAR 2026-10-29T09:59:02.467011+00:00
+
+- 原独立只读round29：CLEAR；报告docs/reviews/doc-review/round-29.md，固定HEAD2389e053ec90692fcfc88b428a97572354a6fc19/source84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际文档SHA与ADR030分段匹配，6份缺口证据副本SHA保持。
+- 原s2/f2/g0保持，第三许可未消费；紧邻顺序/原身份/两锁/clean核对后仅一次原drive --once --max-sessions 3，计数3即消费，其他卡default2/T13paused/原权限资源时限不变。真实隐式IV仍NOT RUN，新源完整原质量门复验，T11等待。
