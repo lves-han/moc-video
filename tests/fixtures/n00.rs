@@ -533,7 +533,7 @@ fn n00_host_sync_home_details_and_native_images() {
             "resolve_episode",
             json!({"episode_ref": details["groups"][0]["episodes"][0]["ref"], "match_id": "unregistered"}),
         ),
-        "BAD_REQUEST",
+        "SESSION_EXPIRED",
     );
 }
 

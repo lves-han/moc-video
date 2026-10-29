@@ -298,18 +298,24 @@ fn t08_maccms_http_match_expiry_order_cancel_and_configuration_change() {
 
 #[test]
 fn t08_maccms_http_english_alias_two_queries_ten_each_and_partial_error() {
-    for failed in [false, true] {
+    for response_kind in ["valid", "invalid_json", "invalid_item"] {
         let fixture = Fixture::new(move |request, _| {
             if let Some(reply) = metadata_reply(request) {
                 return reply;
             }
             if let Some(query) = request.query.get("wd") {
-                if failed && query == "已有别名" {
+                if response_kind == "invalid_json" && query == "已有别名" {
                     return Reply::raw("broken JSON", "application/json");
                 }
-                let items: Vec<_> = (0..15).map(|index| if index < 10 {
-                    json!({"vod_id":format!("{query}/{index}"), "vod_name":"Same title remake", "vod_year":if index == 0 {Value::Null} else {json!(1990+index)}})
-                } else { json!({"deliberately":"outside the ten-candidate limit"}) }).collect();
+                let mut items: Vec<_> = (0..15)
+                    .map(|index| {
+                        json!({"vod_id":format!("{query}/{index}"), "vod_name":"Same title remake", "vod_year":if index == 0 {Value::Null} else {json!(1990+index)}})
+                    })
+                    .collect();
+                if response_kind == "invalid_item" && query == "已有别名" {
+                    // Response validation also covers rows beyond the candidate limit.
+                    items[10].as_object_mut().unwrap().remove("vod_id");
+                }
                 return Reply::json(response(json!(items), json!([])));
             }
             Reply::json(response(json!([]), json!([])))
@@ -329,12 +335,19 @@ fn t08_maccms_http_english_alias_two_queries_ten_each_and_partial_error() {
         assert_eq!(local["details"]["title"], "已有别名");
         assert_eq!(local["metadata_ref"], input["metadata_ref"]);
         let result = call(&host, "match_playback", input);
-        if failed {
+        if response_kind != "valid" {
             error(&result, "UPSTREAM_FAILED");
         } else {
             assert_eq!(result["data"]["status"], "needs_confirmation");
             assert_eq!(result["data"]["candidates"].as_array().unwrap().len(), 20);
             assert!(result["data"]["context"].is_null());
+            for (query_index, query) in ["Same title", "已有别名"].iter().enumerate() {
+                for index in 0..10 {
+                    let candidate = &result["data"]["candidates"][query_index * 10 + index];
+                    let expected = json!(["maccms", format!("{query}/{index}")]).to_string();
+                    assert_eq!(candidate["content_ref"]["data"], expected);
+                }
+            }
         }
         let queries: Vec<_> = fixture
             .requests
