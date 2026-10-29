@@ -890,3 +890,13 @@
 - 受验source：4b44b7be0512795bb364a360ded9eb8f56e4788441efba245f40550af21972bb；protected：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；generation0，原sessions1/失败1及全部WIP/失败保持。执行器/payload身份均退出，两锁实际空闲，冻结/范围检查通过，工作树在完成记录前干净。原4096MiB RSS采样/jobs2/线程1保持，普通进程内HTTP fixture按自身生命周期停止/join，无真实集群。
 - 原完成收尾：task done及受验Git完成提交后原drive --review-only固定独立巡检，真实CLEAR且干净树后才整体更新监管提示并按序T0.7。产品阶段长耐久NOT RUN按ADR020保持，当前短功能门均已执行。
 - 完整verify路径更正：上行微秒文件名为外层录入误写，实际原收据为`evidence/verify/20261029T020615675594.json`；以该原文件及其六门运行收据为准。native实际50单元+16宿主集成通过、0失败/忽略，原completion_evidence逐项核对通过。
+
+
+## T0.6 独立巡检P1执行器异常清理阻塞 2026-10-29T02:22:32.259657+00:00
+
+- 结果：BLOCKED
+- 原独立报告：`evidence/reviews/20261029T021055842631-T0.6/output.log`，固定提交ebb644ad417be8271540204e9730b0d433fdd1e0，真实结束exit0/REVIEW-VERDICT BLOCKING。本卡当前成功A1/六门verify的日志报告摘要完整，功能通过事实保留；当前整体质量门因执行器P1未闭环。
+- 已确认根因：platform_runtime.run_payload先launch、后首次枚举/observe；首次枚举EPERM后finally再次枚举异常跳过终止及wait。workflow检查空payload_refs后将运行标finished并封存日志。实际首A1记录hash=f70443f7453b38e522b9dda8f4c1fc7baf196f1116ebc5ea9b98eba2f1f9ab89正好等于日志前两行；当前全日志hash=2e4abd94cdc9b55abe3ed133dfad762b83a47a4d479c1088e7a8c4c173219c73，封存后有输出。
+- 原事实更正：首会话及外层早先“未创建/未启动payload”描述不准确。真实payload已启动并在执行器封存后继续输出资源入口失败；原生业务未执行的结论保持。历史当时退出时间及用量未验证；本次只读当前核查已记录runner/reviewer身份退出，未发现仍在运行的匹配T06验收命令，原两锁实际空闲，无清理身份不明资源。
+- 完成标记：因真实独立BLOCKING撤回T0.6完成勾选，保留原done.json/成功A1/完整verify/受验Git及所有失败为历史，不手写删除状态或accept-review。原sessions1/失败1/gen0、T13paused/s1/gen2保持；T07不启动。
+- 最小决定：请求仅批准原platform_runtime.py、workflow.py及相应scripts/tests异常清理与封存回归修订；保留原权限/资源/时限/预算及全部历史，通过原入口同步迁移当前T06与paused T13基线后重验并独立复巡。原batch rebaseline无需扩展，真实批准后新摘要/ADR/RESOLVED/独立文档审查按原流程；当前控制器/冻结正文未改、尚无此修订授权。提案及原样观测副本：`evidence/drive/t06-runtime-blocker-20261029T022232Z`。

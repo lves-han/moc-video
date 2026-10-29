@@ -456,7 +456,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 语言补充：按18.3.1验证选定Stremio metadata扩展的en/zh-CN确切配置及请求，保留英文基础ID/引用，本地化同ID展示字段；覆盖中文缺失/失败回退、ja/fr映射en、分语言缓存和中→英→中乱序；记录真实元数据证据。
 
 ### T0.6 T06 推荐首页数据适配
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.3, T0.4, T0.5
 - 需求：R15, R18, R19, R21, R35, R59, R60, REQ-T06 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `src/models.ts`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
