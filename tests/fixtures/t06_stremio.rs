@@ -146,7 +146,7 @@ fn t06_stremio_column_localization_shares_30s_deadline() {
     }
     worker.join().unwrap();
     let response = within_column_deadline.expect("localization renewed the column deadline");
-    assert!(response.get("error").is_none(), "{response}");
+    assert!(response.get("error").is_none(), "{}", diagnostic(&response));
     assert_eq!(
         response["data"]["page"]["sections"][0]["items"][0]["title"],
         "Synthetic same title"

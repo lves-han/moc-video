@@ -47,6 +47,27 @@ fn vector(raw: &Value, value: &Value, registered: &HashMap<String, Image>) {
 
 #[test]
 fn t07_stremio_http_movie_series_anime_seasons_200_and_images() {
+    fn restore_expiry(value: &mut Value, original: &HashMap<String, Value>) {
+        match value {
+            Value::Object(fields)
+                if fields.contains_key("resource_id") && fields.contains_key("capability") =>
+            {
+                value["expires_at"] =
+                    original[value["resource_id"].as_str().unwrap()]["expires_at"].clone();
+            }
+            Value::Object(fields) => {
+                for value in fields.values_mut() {
+                    restore_expiry(value, original);
+                }
+            }
+            Value::Array(items) => {
+                for value in items {
+                    restore_expiry(value, original);
+                }
+            }
+            _ => {}
+        }
+    }
     for kind in ["movie", "series", "anime"] {
         let raw = full_meta(kind);
         let served = raw.clone();
@@ -132,9 +153,9 @@ fn t07_stremio_http_movie_series_anime_seasons_200_and_images() {
         let state = cat.state.lock().unwrap();
         assert_eq!(state.images.len(), if kind == "movie" { 3 } else { 203 });
         crate::details::images(details, &mut |image| {
-            assert_eq!(
-                state.images[image["resource_id"].as_str().unwrap()].reference,
-                *image
+            assert!(
+                state.images[image["resource_id"].as_str().unwrap()].reference == *image,
+                "registered image differs from details DTO"
             );
             Ok(())
         })
@@ -142,8 +163,48 @@ fn t07_stremio_http_movie_series_anime_seasons_200_and_images() {
         vector(&raw, &value, &state.images);
         drop(state);
         drop(committed);
+        let before = time::OffsetDateTime::now_utc();
         let again = ok(&host, "get_details", json!({"ref":card["ref"]}));
-        assert_eq!(again["details"], *details);
+        let after = time::OffsetDateTime::now_utc();
+        let mut original_images = HashMap::new();
+        crate::details::images(details, &mut |image| {
+            original_images.insert(
+                image["resource_id"].as_str().unwrap().to_owned(),
+                image.clone(),
+            );
+            Ok(())
+        })
+        .unwrap();
+        let mut stable = again["details"].clone();
+        let mut compared = 0;
+        crate::details::images(&stable, &mut |image| {
+            let original = &original_images[image["resource_id"].as_str().unwrap()];
+            let expiry = time::OffsetDateTime::parse(
+                image["expires_at"].as_str().unwrap(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap();
+            let old_expiry = time::OffsetDateTime::parse(
+                original["expires_at"].as_str().unwrap(),
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap();
+            assert!(expiry > old_expiry, "new DTO did not renew the image lease");
+            assert!(
+                expiry >= before + time::Duration::minutes(30)
+                    && expiry <= after + time::Duration::minutes(30),
+                "image lease is not 30 minutes from the new request"
+            );
+            compared += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert!(compared >= original_images.len() && compared > 0);
+        restore_expiry(&mut stable, &original_images);
+        assert!(
+            stable == *details,
+            "repeat details changed stable metadata or image identity/path/capability"
+        );
         assert_eq!(value["metadata_ref"]["content_ref"], card["ref"]);
         assert!(
             fixture

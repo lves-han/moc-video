@@ -231,25 +231,9 @@ fn standard(request: &Request) -> Reply {
         panic!("unexpected metadata request: {}", request.target);
     }
 }
-fn redact(value: &mut Value) {
-    match value {
-        Value::Object(object) => {
-            for (key, value) in object {
-                if key == "capability" {
-                    *value = json!("r".repeat(43));
-                } else {
-                    redact(value);
-                }
-            }
-        }
-        Value::Array(array) => {
-            for value in array {
-                redact(value);
-            }
-        }
-        _ => {}
-    }
-}
+#[path = "observation_redaction.rs"]
+mod observation_redaction;
+use observation_redaction::{diagnostic, redact};
 fn observation(command: &str, args: &Value, response: &Value) -> Result<Value, ApiError> {
     // Validate original values before a schema-shaped placeholder can hide them.
     Contracts::get().validate(&format!("Result_{command}"), response)?;
@@ -267,11 +251,11 @@ fn call(host: &Host, command: &str, input: Value) -> Value {
 }
 fn ok(host: &Host, command: &str, input: Value) -> Value {
     let response = call(host, command, input);
-    assert!(response.get("error").is_none(), "{response}");
+    assert!(response.get("error").is_none(), "{}", diagnostic(&response));
     response["data"].clone()
 }
 fn error(response: &Value, code: &str) {
-    assert_eq!(response["error"]["code"], code, "{response}");
+    assert_eq!(response["error"]["code"], code, "{}", diagnostic(response));
     assert!(response.get("data").is_none());
 }
 fn configure(host: &Host, urls: Vec<String>) {
@@ -922,7 +906,7 @@ fn n01_aggregate_45s_reserve_partial_and_cancellation() {
     thread::sleep(Duration::from_millis(150));
     clock.0.store(44000, Ordering::SeqCst);
     let response = worker.join().unwrap();
-    assert!(response.get("error").is_none(), "{response}");
+    assert!(response.get("error").is_none(), "{}", diagnostic(&response));
     assert_eq!(response["data"]["page"]["sections"][0]["index"], 0);
     assert_eq!(response["data"]["page"]["failed_sections"][0]["index"], 1);
     assert_eq!(
@@ -1319,7 +1303,7 @@ fn n01_language_storage_failure_preserves_confirmed_locale() {
     error(&call(&host, "save_settings", settings), "INTERNAL_ERROR");
     assert_eq!(ok(&host, "get_settings", json!({}))["ui_locale"], "en");
     let response = host.execute(queued);
-    assert!(response.get("error").is_none(), "{response}");
+    assert!(response.get("error").is_none(), "{}", diagnostic(&response));
     assert_eq!(
         response["data"]["page"]["sections"][0]["items"][0]["title"],
         "Synthetic same title"
@@ -1383,6 +1367,12 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
         "resource_id":"synthetic-image", "path":"/images/synthetic-image",
         "capability":"s".repeat(43), "expires_at":"2026-10-28T11:00:00Z"
     });
+    let image_url = "/data/images/0/url";
+    *response.pointer_mut(image_url).unwrap() = json!(format!(
+        "http://127.0.0.1:1234/images/synthetic-image?cap={}&keep=a%2Fb",
+        "s".repeat(43)
+    ));
+    let original = response.clone();
     let observed = observation("get_home", &args, &response).unwrap();
     Contracts::get()
         .validate("Result_get_home", &observed["response"])
@@ -1390,7 +1380,27 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
     let capability = format!("{poster}/capability");
     let mut expected = response.clone();
     *expected.pointer_mut(&capability).unwrap() = json!("r".repeat(43));
-    assert_eq!(observed["response"], expected);
+    for image in expected["data"]["images"].as_array_mut().unwrap() {
+        let mut url = Url::parse(image["url"].as_str().unwrap()).unwrap();
+        let pairs: Vec<_> = url
+            .query_pairs()
+            .map(|(key, value)| {
+                let value = if key == "cap" {
+                    "r".repeat(43)
+                } else {
+                    value.into_owned()
+                };
+                (key.into_owned(), value)
+            })
+            .collect();
+        url.query_pairs_mut().clear().extend_pairs(pairs);
+        image["url"] = json!(url.as_str());
+    }
+    assert!(
+        observed["response"] == expected,
+        "safe observation changed stable response fields"
+    );
+    assert!(response == original, "observing mutated the real response");
     assert_eq!(observed["args"], args);
     assert_eq!(observed["capabilities_redacted"], true);
     assert_eq!(
@@ -1409,6 +1419,12 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
         *response.pointer_mut(&capability).unwrap() = invalid;
         assert!(observation("get_home", &args, &response).is_err());
     }
+    let mut invalid_url = response.clone();
+    *invalid_url.pointer_mut(image_url).unwrap() = json!(format!(
+        "http://127.0.0.1:1234/images/synthetic-image?cap={}",
+        "s".repeat(42)
+    ));
+    assert!(observation("get_home", &args, &invalid_url).is_err());
     configure(&host, vec![fixture.url("/other/manifest.json")]);
     let newer = sync(&host);
     assert_ne!(source["source_revision"], newer["source_revision"]);

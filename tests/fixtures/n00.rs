@@ -355,25 +355,9 @@ fn id() -> String {
     Uuid::new_v4().to_string()
 }
 
-fn redact(value: &mut Value) {
-    match value {
-        Value::Object(fields) => {
-            for (key, value) in fields {
-                if key == "capability" {
-                    *value = json!("r".repeat(43));
-                } else {
-                    redact(value);
-                }
-            }
-        }
-        Value::Array(items) => {
-            for value in items {
-                redact(value);
-            }
-        }
-        _ => {}
-    }
-}
+#[path = "observation_redaction.rs"]
+mod observation_redaction;
+use observation_redaction::{diagnostic, redact};
 
 fn call(host: &Host, command: &str, input: Value) -> Value {
     let args = json!({"request_id": id(), "input": input});
@@ -389,7 +373,7 @@ fn call(host: &Host, command: &str, input: Value) -> Value {
 
 fn ok(host: &Host, command: &str, input: Value) -> Value {
     let result = call(host, command, input);
-    assert!(result.get("error").is_none(), "{result}");
+    assert!(result.get("error").is_none(), "{}", diagnostic(&result));
     result["data"].clone()
 }
 

@@ -672,9 +672,7 @@ fn t09_range_if_range_200_206_416_and_head() {
             } else {
                 start.parse().unwrap()
             };
-            let end = if end.is_empty() {
-                4095
-            } else if range.starts_with("bytes=-") {
+            let end = if end.is_empty() || range.starts_with("bytes=-") {
                 4095
             } else {
                 end.parse::<usize>().unwrap().min(4095)
@@ -753,13 +751,21 @@ fn t09_gzip_redirects_private_hops_and_html() {
     const GZIP: &[u8] = &[
         31, 139, 8, 0, 0, 0, 0, 0, 2, 19, 75, 73, 77, 206, 79, 73, 77, 81, 200, 77, 77, 201, 76,
         84, 40, 72, 172, 204, 201, 79, 76, 73, 25, 21, 28, 21, 28, 21, 28, 21, 28, 21, 28, 21, 28,
-        21, 28, 21, 28, 21, 28, 21, 68, 21, 4, 0, 152, 159, 90, 251, 52, 8, 0, 0,
+        21, 28, 21, 68, 21, 4, 0, 152, 159, 90, 251, 52, 8, 0, 0,
     ];
     let fixture = Fixture::new(|r, port| match r.target.as_str() {
         "/gzip" => Reply::body(GZIP, "video/mp4")
             .header("Content-Encoding", "gzip")
             .header("Set-Cookie", "never=browser")
             .header("X-Upstream", "private"),
+        "/gzip-crc" => {
+            let mut broken = GZIP.to_vec();
+            broken[GZIP.len() - 8] ^= 1;
+            Reply::body(broken, "video/mp4").header("Content-Encoding", "gzip")
+        }
+        "/gzip-truncated" => {
+            Reply::body(&GZIP[..GZIP.len() - 8], "video/mp4").header("Content-Encoding", "gzip")
+        }
         "/redirect" => Reply::redirect("/gzip".into()),
         "/cross" => Reply::redirect(format!("http://other.fixture.test:{port}/capture")),
         "/private" => Reply::redirect(format!("http://127.0.0.1:{port}/must-not-reach")),
@@ -782,6 +788,28 @@ fn t09_gzip_redirects_private_hops_and_html() {
         assert!(!r.headers.contains_key("set-cookie"));
         assert!(!r.headers.contains_key("x-upstream"));
         assert_eq!(r.headers["transfer-encoding"], "chunked");
+        assert_eq!(state(&gateway, &view)["state"], "ready");
+    }
+    for path in ["/gzip-crc", "/gzip-truncated"] {
+        let view = session(&gateway, fixture.url(path));
+        let mut reader = connect(media(&view), "GET", &[]);
+        let response = read_head(&mut reader);
+        let mut body = Vec::new();
+        reader.read_to_end(&mut body).unwrap();
+        // Decode failures may arrive before headers or after streaming starts.
+        if response.status == 200 {
+            assert_eq!(response.headers["transfer-encoding"], "chunked");
+            assert!(
+                !body.ends_with(b"0\r\n\r\n"),
+                "invalid gzip completed successfully"
+            );
+        } else {
+            assert_eq!(response.status, 502);
+            let error: Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(error["error"]["code"], "UPSTREAM_FAILED");
+        }
+        wait_for(|| state(&gateway, &view)["state"] == "failed");
+        assert_eq!(state(&gateway, &view)["error"]["code"], "UPSTREAM_FAILED");
     }
     let mut l = link(fixture.url("/cross"));
     for (name, value) in [

@@ -94,7 +94,7 @@ fn t06_maccms_reserve_keeps_completed_and_unstarted_positions() {
     thread::sleep(Duration::from_millis(100));
     clock.0.store(44000, Ordering::SeqCst);
     let response = worker.join().unwrap();
-    assert!(response.get("error").is_none(), "{response}");
+    assert!(response.get("error").is_none(), "{}", diagnostic(&response));
     let page = &response["data"]["page"];
     assert_eq!(page["sections"].as_array().unwrap().len(), 1);
     assert_eq!(page["sections"][0]["index"], 0);

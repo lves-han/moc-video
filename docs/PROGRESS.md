@@ -1107,3 +1107,16 @@
 - 独立只读round27：CLEAR；原报告docs/reviews/doc-review/round-27.md，固定HEADc956f9cf7f749cf0b1f7eed5a9f34fccfccc2854/source305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。实际文件SHA/ADR028分段逐项匹配；原26份快照副本全部SHA一致，当前handoff正常动态更新，旧副本沿copy字段读取。
 - 原sessions2/失败4/gen0保持，唯一第三许可尚未消费；紧邻最早/current/next/身份/两锁检查后一次原drive --once --max-sessions 3，实际原计数3即已消费。默认2/其他卡预算和T13paused/session1/gen3保持。
 - 原准确A1仍FAIL，原16原生15pass1fail；外层JUnit为2pass14fail，统计层级分别记录。独立8观测/28反例/RSS诊断及旧N00/N01/T06/T08通过事实保持，完整verify/done/固定独立CLEAR须修复后准确闭环。另原A1 native_credential_lines=24，现有43字符统一检测也命中旧fixture合法非秘密占位，修复测试脱敏时保留真实泄露检查并实际区分占位；不删除安全门。
+
+## T0.9 第三会话测试夹具与观测修复交接 2026-10-29T06:24:39.948108+00:00
+
+- 实施状态：WIP；ADR-028唯一第三会话已消费（sessions=3/3），仅本卡tests范围修复及本记录。按ADR-010由外层受监管复验与Git收尾；未勾卡、未调用done/rebaseline、未写RESOLVED/AUTHORIZED或新增BLOCKED，T10等待，T13原暂停保持。
+- Changed：t09_gateway修复有效gzip正例（删除4个误加的压缩字节，64→60字节）；原期望payload `decoded media payload`×100（2100字节）断言原样保留。补CRC单字节损坏及缺失trailer负例，验证502或已开始200流的非正常完成，并要求get_resource_status最终failed/UPSTREAM_FAILED。合并Range的end为空/suffix两分支，原200/206/416/If-Range/HEAD断言保持。
+- Changed：T07逐个校验重复详情所有图片到期时间严格增加且落在本次请求前后时间各加30分钟的区间；只还原已校验的expires_at后比较完整详情。稳定元数据、图片resource_id/path/capability及原200集/5分组/顺序/schema断言保持；全图对象比较改用静态失败文字，避免Debug打印真实cap。
+- Changed：MacCMS/Stremio既有redact复用tests/fixtures/observation_redaction.rs，覆盖嵌套capability/media_capability/控制令牌/Authorization/Cookie和URL查询cap（含编码键），固定合法非秘密r×43占位保持。真实响应先schema校验；观测只操作副本，ok/error及T06相关失败诊断先脱敏。N01回归保留全部稳定值/原响应比较并补images.url原值无效时拒绝，shared回归检查嵌套Session/图片、非秘密字段及Debug安全。
+- Changed：T09落盘过滤仅豁免准确固定r×43，其余43字符cap仍过滤并使native_credential_lines门失败；新增tests/acceptance/test_t09.py六项回归，包含真实子进程输出、合法占位零泄漏计数、真实cap判失败且落盘无原值、混合输出及多种token形状。原16原生行为/8独立观测/13需求、安全、负载、阈值与资源门保持；无产品代码/schema/控制脚本/冻结定义修改。
+- Why：原gzip直接inflate为2616字节且CRC错误，与原2100字节payload断言冲突；有效常量应满足原断言。图片按SPEC被新DTO引用即续期，重复详情只允许expires_at变化并单独严格验证。新增网关images.url及Session凭据需要与ImageRef相同的观测脱敏；合法固定占位需要与实际cap区分。
+- Verified：task.py check/start/show/status均exit0，check=35卡。Python AST解析2个修改文件成功；独立标准库gzip读回为60→2100字节且逐字节等于原payload（CRC/长度校验成功）；Rust edition2024 rustfmt及--check成功；git diff --check成功。静态清单为原16原生测试及新增6个Python回归。以上为静态/夹具完整性检查，Rust类型检查和真实网关行为尚待运行。
+- 自验证尝试：原argv为[{python}, -B, scripts/run.py, verify-t09-output-filter, --, {python}, -B, -m, unittest, discover, -s, tests/acceptance, -p, test_t09.py]。真实exit125；日志evidence/runs/20261029T061950143691-verify-t09-output-filter/output.log与同目录receipt.json；status=cleanup_failed/raw_exit=null/tests=null，sysctl进程树权限拒绝，实际行为测试0（NOT RUN）。执行器PID63571创建时间1793254790.15066，payload PID63577创建时间1793254790.296616。保留收据/身份/失败，停止再启动重命令，未绕过原执行器或尝试扩大权限；源码随后仅完成独立静态读回，旧收据无法证明当前源码。
+- 验收 A1：NOT RUN；当前源码locked构建、all-targets Clippy、Rust新旧回归与完整verify.py all均NOT RUN。原15/16失败A1及旧回归只保留历史，不用于本版完成。
+- Remaining/外层顺序：先按真实PID+创建时间核对并处理上述cleanup_failed及原锁，确认本CLI退出/源码稳定；代办WIP T0.9: fix gateway fixtures and credential-safe observations。随后原run.py重跑verify-t09-output-filter（应6 tests）；原locked/offline cargo check与all-targets Clippy -D warnings；cargo test --lib credentials_in_nested_observations_and_failure_debug_are_redacted -- --test-threads=1 --nocapture（两个来源模块各一次）；原n00_/n01_/t06_/t07_/t08_回归。使用现有T09输出过滤处理落盘，保留真正泄漏判失败。之后按task.py show准确argv执行A1，16行为/8观测/13需求及真实RSS门全部成功后直接verify.py all，再原勾卡/done/受验完成提交/固定独立CLEAR与干净树。任何实现失败沿既有额度和授权规则报告，维持sessions3及全部失败历史。

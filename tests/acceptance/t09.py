@@ -45,8 +45,10 @@ RUST_TESTS = {
 
 def redact(line):
     # Assertions can print an unexpected URL/token on failure. Redact before
-    # persisting subprocess output as well as in successful observations.
-    return re.sub(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])", "<redacted-cap-256>", line)
+    # persisting output. The shared fixture observer uses one fixed nonsecret,
+    # schema-valid placeholder; all other capability-shaped values fail the gate.
+    return re.sub(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])",
+                  lambda match: match[0] if match[0] == "r" * 43 else "<redacted-cap-256>", line)
 
 
 class Acceptance(BaseAcceptance):
