@@ -1091,3 +1091,12 @@
 - 已确认测试日志缺口：旧N00/N01 fixture递归redact仅覆盖capability键，T09新增images.url查询cap在本次旧组诊断中出现；T07失败Debug同样可打印临时fixture cap。原T09 A1落盘前已有redact，新增T08回归也复用该过滤且0处查询cap；原已封存日志及SHA保留，测试进程均结束。下一原CLI最小修测试观测查询cap及失败输出脱敏，保持原始生产响应校验与占位合法schema；不改生产鉴权或原收据。
 - 证据：`evidence/drive/t09-second-validation-20261029T055116Z/decision-evidence/manifest.json`保存当前原状态/收据/日志/JSON/XML副本与SHA，源/冻结/计数一致。原WIPe760cc9、7709c5d及4次失败全部保留。
 - 最小决定：仅为T0.9追加一次开发会话2→3，原gpt-6.1-sol/workspace-write CLI修上述测试夹具/续期断言/日志脱敏并相关自验证；原16行为8观测13需求及所有协议、安全、负载、阈值、资源、时限保持。外层随后原locked构建/Clippy/准确A1、成功后直接完整verify、done/Git/固定独立CLEAR。其他卡默认2和原历史不变，当前无授权追加记录，不执行额外drive。按moc-init预算耗尽规则暂停推进与监管，等待真实回复。
+
+
+## T0.9 第三修复会话真实批准 2026-10-29T06:09:55.791867+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对本卡唯一追加2→3、原CLI修gzip/Range夹具、图片续期兼容断言与测试日志脱敏后完整复验的问题，明确答“批准 T0.9 追加一次”，按ADR028执行。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 原sessions2/失败4/generation0、source=305a1333ff06844af64028e2dae881038af457e27faebf6822c758b55dd21615及全部原失败/收据/日志/WIP保持；第三许可尚未消费。仅解除此次预算阻塞，准确A1仍FAIL、完整verify/done/固定独立CLEAR尚NOT RUN，后卡严格等待。
+- 下一步：固定实际文档独立round27 CLEAR后，紧邻顺序/原身份/两锁核对，唯一一次原drive --once --max-sessions 3；实际计数3即已消费。其他卡默认2，T13暂停/历史保持；原权限/资源/时限/安全/全部原门不变，无冻结修订/rebaseline。监管同ID更新实际授权后恢复。
