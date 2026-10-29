@@ -969,3 +969,13 @@
 - 实施状态：WIP；原sessions1/2、失败1、generation0、source=22e0b93da9075163f195e2faaf24a84c462e1348fea5a14c19d967555039a93e/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持，无冻结变更。
 - 准确A1：PASS；`evidence/runs/20261029T032302973765-A1/output.log`，10原生、19投影/119篡改反例、21JUnit通过0失败。最新完整verify：FAIL；`evidence/verify/20261029T032312309820.json`，前5门exit0、第6fmt/check通过后Clippy question_mark拒绝stremio.rs1393小时单位解析写法，日志`evidence/runs/20261029T032459700827-verify-project/output.log`；原生全量test未到达，最新完整失败保留。
 - 下一步：在原剩余第2会话内由原脚本最小修复该None传播写法，保持显式min/m/h单位、未知/溢出/单位顺序、UTC和所有原schema/投影反例，不抑制lint、不加max-sessions。静态/实际相关自验证后按既有沙箱分工稳定交接，外层重新准确A1/直接完整verify/done/Git/固定独立CLEAR。旧身份/执行器均退出、两锁空闲，当前clean/frozen/scope核对通过，后卡等待，无用户新决定需求。
+
+
+## T0.7 T07 小时单位传播最小修复交接 2026-10-29T03:29:45.583171+00:00
+
+- 实施状态：WIP；原第2/2会话，失败1、generation0与全部失败历史保持；冻结定义未改，TASKS未勾、未done/rebaseline，未写RESOLVED/AUTHORIZED/BLOCKED。
+- Changed / Why：按原verify的Clippy question_mark建议，仅将src-tauri/src/stremio.rs小时单位末分支的显式None返回改为strip_prefix('h')?，保持min/m/h、单位顺序、未知值与溢出处理、UTC、原schema、全部分组与测试断言。
+- Verified：rustfmt --edition 2024 --check src-tauri/src/stremio.rs及git diff --check均exit0；完整文件差异精确核对为唯一上述替换，其他源码/测试未修改；原t07.py AST解析及10项原生清单静态核对通过。证据：`evidence/task-state/T0.7/session-2/static-validation.json`。原task check/start/show/status/scope均exit0。
+- 验收 A1：NOT RUN for modified source；本轮实际行为测试数0，Clippy、构建与完整verify均NOT RUN。原source22e0b93d的A1通过与最新verify失败保留各自日志，历史通过未当作修复源通过。
+- 稳定源码：b0be348d1b93eb10dda8ec2228b8086bfd5e57635457fef40adc2e31657be37c；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；按ADR-010已知sandbox分工移交外层，未重复探测sysctl/sccache/.git权限。WIP提交交外层代办，建议`WIP T0.7: use question mark for hour duration parsing`。
+- Remaining：外层确认开发CLI/旧payload真实身份退出、两锁空闲与源码稳定后，按`evidence/task-state/T0.7/session-2/outer-validation-argv.json`通过原run执行相关Clippy、locked构建和准确A1（含合法/未知/溢出/单位顺序负例）；A1后直接完整verify.py all，再原勾卡/真实记录/done/受验Git提交/固定独立CLEAR。保持4096MiB macOS RSS采样、jobs2、线程1及原时限；后卡与T13原暂停保持，无新增开发额度请求。

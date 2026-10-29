@@ -1390,10 +1390,9 @@ fn duration_ms(value: &Value) -> Option<u64> {
             (60_000, tail)
         } else if let Some(tail) = rest.strip_prefix('m') {
             (60_000, tail)
-        } else if let Some(tail) = rest.strip_prefix('h') {
-            (3_600_000, tail)
         } else {
-            return None;
+            let tail = rest.strip_prefix('h')?;
+            (3_600_000, tail)
         };
         if unit >= previous_unit {
             return None;
