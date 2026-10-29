@@ -602,7 +602,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 匹配验收：同名重拍/别名/年份缺失、外部ID确认、跨季/特别季/小数集、无search能力、人工选集、乱序/取消/修订变化、match_id过期，以及Stremio媒体resolve被拒绝。受控MacCMS先验收，Cloudstream真实行为在N02验收。
 
 ### T0.9 T09 通用媒体与图片网关
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.8
 - 需求：R06, R12, R19, R25, R26, R27, R31, R34, R37, R44, R46, R63, REQ-T09 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`

@@ -1158,3 +1158,13 @@
 - Verified：四文件rustfmt --check --edition 2024 --config skip_children=true退出0；git diff --check退出0；原task.py check/start/show/scope/status均退出0，35卡且all changes inside scope。源码静态读回确认唯一共享声明/两处引用/helper原字节与可见性保持；AST/源码清单确认16项T09原生测试、13项需求、6项Python回归原样存在，8观测门原样保持。静态报告与准确外层计划：evidence/task-state/T0.9/session-4/static-validation.json、outer-validation-argv.json。初次格式检查仅N01链式调用换行失败，已note、局部rustfmt并成功复查；一次不存在dto.rs检索已note并按实际schema定位。
 - 验收 A1：NOT RUN；本轮Rust类型检查、locked构建、all-targets Clippy、共享/N01及相关旧回归、完整verify均NOT RUN，实际行为测试0。旧A1通过保留历史，新源码须重新执行。沿ADR010/ADR029使用已确认sysctl/sccache/Git权限限制和原125证据，本轮未重复探测/启动受限重命令，未绕过run.py，也未产生新的资源收据；资源后端仍待实际外层新收据记录。
 - Remaining/外层顺序：确认本CLI完全退出，核对原PID+创建时间及两锁、稳定source后，代办WIP T0.9: fix shared observer wiring and image map fixture；原run locked/offline check、all-targets Clippy -D warnings、6项Python回归、共享脱敏单项和N00/N01/T06/T07/T08相关回归。Rust输出继续复用现有t09.redact先过滤落盘，旧组保留原Cargo退出和真实计数，准确A1自身凭据门保持。按计划保留A1 payload首个冻结{python}字面量；16原生/8观测/13需求/原负载阈值全部通过后直接完整verify.py all，保持源码不再修改，再勾卡/追加真实完成记录/task.py done/受验完成提交/固定独立CLEAR/干净树。无第五会话许可，无新用户决定待确认；Git及受控行为复验按既有明确分工交外层。
+
+
+## T0.9 T09 通用媒体与图片网关受验完成 2026-10-29T08:05:53.507012+00:00
+
+- 结果：DONE
+- Changed/Why：原网关/Session/图片租约与HTTP边界实现及原测试修复已同源复验。第四会话按ADR029将共享脱敏模块仅在host.rs的cfg(test)登记一次，两fixture复用同一helper；N01夹具按真实ImageAccessMap映射构造/遍历，真实值先schema/原响应不变/稳定字段和全部URL反例保持。原16行为8观测13需求、协议/安全/负载/资源门保持，未扩大生产DTO或鉴权。
+- 验收 A1：PASS；日志：`evidence/runs/20261029T080146314335-A1/output.log`；16原生全过/0skip，19必需case、32JUnit全过；8独立观测与28篡改拒绝通过，native_credential_lines=0。真实256MiB流RSS增长2408448字节（基线102367232，峰值104775680），低于67108864功能门；真实Header/Cookie/Range/gzip/重定向/慢流/断开/SSRF/图片字节像素/可控时间超5分钟及Session/Resolution/旧清理/诊断序号/取消边界均本次断言通过。
+- 直接完整verify：PASS；最近六门完整尝试全部通过，workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/90单元+16集成全过。原completion_evidence已核当前source/protected/gen与全部最新日志/报告SHA及非零case。另6项Python、共享Rust1、旧N00 17/N01 19/T06 14/T07 10/T08 13均过；日志见当前validation目录outer-sequence.json。
+- 基线/历史：source=3d87e230b8c25eaccc8ebde2b3739a7033e9de2bc153ba7018db52b0529f141d，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，原sessions4/失败10保持，ADR029第四许可已消费，无第五许可。全部旧WIP/失败/受限125恢复前副本/误判事实及历史收据保持；当前成功证据副本`evidence/drive/t09-fourth-validation-20261029T080043Z/completion-evidence/manifest.json`。核对源码稳定/冻结scope/两锁实际空闲、旧写入者与重任务结束后完成记录，源码不再修改。
+- Remaining：原task done/受验提交/固定独立CLEAR及干净树须闭环后才完整完成，T10严格等待。真实Cloudstream七包/Android原网关/interceptor/DELETE仍N02，HLS重写T10/字幕T11及长产品耐久按原后卡；本轮普通宿主自有TCP/UDP fixtures与合成callback上下文准确标注，未替代真实后卡。T13原paused/s1/gen3保持，其他平台原未运行边界不变。
