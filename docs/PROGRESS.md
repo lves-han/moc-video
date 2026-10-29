@@ -834,3 +834,9 @@
 - 批准摘要：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d
 - 原sessions4/失败5/generation1与WIP9c6f6ac、准确A1通过及最新完整verify失败全部保留。第5许可尚未消费，独立文档CLEAR后紧邻顺序/身份/锁复核，唯一原drive --once --max-sessions 5，计数达到5即本次已使用，其他卡默认2保持。
 - 本次解除预算/Clippy修复阻塞；修改后准确A1/完整verify/done/受验完成提交/固定独立CLEAR仍须闭环。后卡等待，T0.13顺序暂停和原计数保持；源码/冻结摘要不变，无rebaseline。
+
+
+## T0.5 第五会话增量授权独立CLEAR 2026-10-29T01:23:52.323316+00:00
+
+- 独立只读round25：CLEAR；报告`docs/reviews/doc-review/round-25.md`，固定HEAD8324bf5106e57f78e5acad11630ab9d0de677f60/sourcefce64ea699d9b01c623c052f455dfd93ca468d86fbf14f69fbe244db597b86c8/protected01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d，受审四项SHA与ADR026分段逐项核对一致。
+- 原sessions4/失败5/gen1保持，第5许可尚未消费；紧邻安全核对后唯一原drive --once --max-sessions 5，达到原计数5即使用。原Clippy失败保持，修复后重跑全部质量门，后卡等待。
