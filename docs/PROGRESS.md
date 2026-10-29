@@ -1038,3 +1038,10 @@
 - 完整verify：PASS；原收据`evidence/verify/20261029T042941160493.json`，六门全部exit0：workflow128项121通过7平台skip、归档及working contracts、frontend57测试/类型及生产构建、native fmt/check/Clippy和全量Rust测试通过。原completion_evidence逐项验证最新A1/六门同source/protected/generation、日志/报告SHA与非零测试全部匹配，最新完整尝试保存。
 - 受验source：e0cc779c0ecfa08906e247172df9414aee90ea4ce6f1713f7a930404389fb851；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b；generation0，原sessions2/失败3和T13paused/s1/gen3及所有历史保持；原所有记录身份退出、两锁实际空闲、当前范围/冻结/记录前干净树通过。4096MiB RSS采样/jobs2/线程1/原时限权限保持，普通进程内HTTP fixture按所有权清理，无真实集群。
 - 原收尾：task done/受验Git提交后必须原drive --review-only固定提交独立巡检，真实CLEAR及完成树/干净树成立后才完整完成并整体改写提示按序T09。长期耐久/其他平台按原阶段决定保持待验。
+
+
+## T0.8 固定完成提交独立巡检CLEAR 2026-10-29T04:45:16.708535+00:00
+
+- 原独立巡检：CLEAR；`evidence/reviews/20261029T043409131594-T0.8/review.json`，真实read-only CLI结束exit0/ended，固定完成提交dc25f99af63043f98460741cbae76b32311ca0f8。报告`evidence/reviews/20261029T043409131594-T0.8/output.log`核对实际Host匹配/签发/消费、匹配上限/租约、Resolution所有权、13原生/5向量16反例/27JUnit及六门verify；未确认新增高严重度问题。
+- 外层再次核对原done/当前及固定source/protected/gen0、完整证据、完成树/干净树、旧身份退出和两锁实际空闲，全部成立。T0.1..T0.8均具原completed及最新固定独立CLEAR；下一原next/严格顺序最早未完成T0.9。原s2/失败3及所有原错误/恢复前副本/WIP、T13paused/s1/gen3保持。
+- 原巡检注明非阻塞验证缺口：T08专属HTTP测试覆盖排队取消及配置后拒绝，在途HTTP取消/改配置竞态缺直接证据；如实保留并交下一网关/Session验收重点，不宣称此直接场景已执行。真实CS七包/DELETE仍N02，实际Session归T09。先整体改写提示移除T08操作，再T09范围预检/原start/handoff/default2接续。
