@@ -26,10 +26,18 @@ function playerFixture(mse: boolean, nativeHls: string) {
     currentTime: 0, duration: 30, src: "", crossOrigin: "", preload: "",
     pause() {}, load() {}, canPlayType: () => nativeHls,
     removeAttribute(name: string) { if (name === "src") this.src = ""; },
-    querySelectorAll: () => [],
+    tracks: [] as any[],
+    append(track: any) { this.tracks.push(track); },
+    querySelectorAll() { return [...this.tracks]; },
   });
+  Object.defineProperty(video, "textTracks", { get: () => video.tracks.map(track => track.track) });
   const exports: Record<string, any> = {};
-  runInNewContext(moduleSource, { exports, require: () => ({ default: Hls }), AbortController, performance });
+  const document = { createElement() {
+    const track = Object.assign(new EventTarget(), { id: "", kind: "", label: "", srclang: "", src: "", default: false,
+      track: { mode: "disabled" }, remove() { video.tracks.splice(video.tracks.indexOf(this), 1); } });
+    return track;
+  } };
+  runInNewContext(moduleSource, { exports, require: () => ({ default: Hls }), AbortController, performance, document });
   const events: any[] = [];
   const player = exports.createPlayer(video, (event: unknown) => events.push(event));
   return { player, video, streams, events };
@@ -39,6 +47,38 @@ test("HLS uses the supported MSE transport when native HLS is unavailable", () =
   const { player, streams } = playerFixture(true, "");
   assert.equal(player.open({ kind: "hls", url: "https://fixture.invalid/index.m3u8" }).engine, "hls.js");
   assert.equal(streams[0].source, "https://fixture.invalid/index.m3u8");
+});
+
+test("subtitle DTO tracks switch, disable, and release with the previous episode", () => {
+  const { player, video, events } = playerFixture(false, "maybe");
+  player.open({ kind: "mp4", url: "https://fixture.invalid/a.mp4", subtitles: [
+    { id: "zh", label: "中文", language: "zh-CN", url: "https://fixture.invalid/zh.vtt" },
+    { id: "en", label: "English", language: null, url: "https://fixture.invalid/en.vtt" },
+  ] });
+  assert.deepEqual(video.tracks.map(t => [t.id, t.label, t.srclang, t.default]), [["zh", "中文", "zh-CN", true], ["en", "English", "und", false]]);
+  player.selectSubtitle(1);
+  assert.deepEqual(video.textTracks.map(t => t.mode), ["disabled", "showing"]);
+  player.selectSubtitle(null);
+  assert.deepEqual(video.textTracks.map(t => t.mode), ["disabled", "disabled"]);
+  assert.throws(() => player.selectSubtitle(2), /unavailable/);
+  const old = video.tracks[1];
+  old.dispatchEvent(new Event("error"));
+  assert.match(events.at(-1).error, /SUBTITLE_LOAD_FAILED: en/);
+  player.open({ kind: "mp4", url: "https://fixture.invalid/b.mp4" });
+  const count = events.length;
+  old.dispatchEvent(new Event("error"));
+  assert.equal(events.length, count);
+  assert.equal(video.tracks.length, 0);
+  assert.equal(player.diagnostics().tracks, 0);
+});
+
+test("legacy subtitle remains supported and an explicit empty list disables it", () => {
+  const { player, video } = playerFixture(false, "maybe");
+  player.open({ kind: "mp4", url: "https://fixture.invalid/a.mp4", subtitle: "https://fixture.invalid/legacy.vtt" });
+  assert.equal(video.tracks.length, 1);
+  assert.equal(video.tracks[0].src, "https://fixture.invalid/legacy.vtt");
+  player.open({ kind: "mp4", url: "https://fixture.invalid/b.mp4", subtitle: "https://fixture.invalid/legacy.vtt", subtitles: [] });
+  assert.equal(video.tracks.length, 0);
 });
 
 test("HLS uses native playback when MSE is unavailable", () => {

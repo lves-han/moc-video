@@ -132,7 +132,7 @@ class Acceptance(BaseAcceptance):
         return int(counts["failed"] > 0 or any(r["result"] != "PASS" for r in summaries))
 
 
-def resources(run):
+def resources(run, card="T0.10"):
     require(os.environ.get("AGENT_WORKFLOW_RUN") == "1", "original run.py wrapper required")
     cfg = workflow.config()
     require((cfg["memory_mib"], cfg["jobs"]) == (4096, 2), "approved resource budget differs")
@@ -150,7 +150,7 @@ def resources(run):
         time.sleep(0.05)
     require(len(matches) == 1, "one live original resource receipt must own A1")
     path, receipt = matches[0]
-    require(receipt["source"] == run.source and receipt["card"] == "T0.10", "receipt source/card differs")
+    require(receipt["source"] == run.source and receipt["card"] == card, "receipt source/card differs")
     env = receipt["environment"]
     require(env["backend"] == workflow.runtime.backend() and env["memory_mib"] == 4096
             and env["jobs"] == 2 and env["test_threads"] == 1, "actual receipt backend/budget differs")

@@ -1,10 +1,11 @@
 // Imported only by Vite's t01 mode. The production artifact gate verifies removal.
-import { capabilities, nativeInvoke, type PlaybackSource, type Player } from "../../../src/player";
+import { capabilities, nativeInvoke, type PlaybackSource, type Player, type SubtitleSource } from "../../../src/player";
 
 declare global {
   interface Window { __T01_BOOTSTRAP__?: { base: string; cap: string } }
 }
-type Command = { id: number; op: string; kind?: "mp4" | "hls"; seconds?: number; value?: number };
+type Command = { id: number; op: string; kind?: "mp4" | "hls"; seconds?: number; value?: number;
+  view?: { media_url: string; subtitles: SubtitleSource[] }; episode?: "first" | "second" };
 type NativeVisibility = { visible: boolean; focused: boolean; minimized: boolean };
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 function assertCondition(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
@@ -156,6 +157,47 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await audio.resume();
         await delay(500);
         return { opened, foreground: activated, sample: sample(), native: await nativeInvoke("t01_control", { action: "identity" }) };
+      }
+      case "t11-subtitles": {
+        await foreground();
+        const view = command.view;
+        assertCondition(view && view.subtitles.length === 3 && command.episode, "T11 requires the actual Host view and episode");
+        const old = Array.from(video.querySelectorAll("track"));
+        const beforeFrames = frames;
+        open({ url: view.media_url, kind: "mp4", subtitles: view.subtitles });
+        assertCondition(old.every(t => !t.isConnected && t.track.mode === "disabled"), "Old episode track remains active");
+        await until(() => video.readyState >= 2 || Boolean(video.error), "T11 media did not become ready");
+        assertCondition(!video.error, "T11 actual gateway media failed");
+        await click("play");
+        await until(() => !video.paused && video.currentTime > 0.2, "T11 video did not play");
+        await until(() => frames > beforeFrames, "T11 new episode did not present a frame");
+        player.pause();
+        const tracks = Array.from(video.querySelectorAll("track"));
+        assertCondition(tracks.length === 3 && video.textTracks.length === 3, "Host tracks did not reach the video element");
+        for (const t of tracks) t.track.mode = "hidden";
+        await until(() => tracks.every(t => t.readyState === 2 || t.readyState === 3), "Authenticated subtitle did not load");
+        assertCondition(tracks.every(t => t.readyState === 2), "Subtitle WebVTT parse/load failed");
+        player.seek(1.5);
+        await until(() => !video.seeking && Math.abs(video.currentTime - 1.5) < 0.1, "T11 seek failed");
+        const observations = [];
+        for (const [i, format] of ["vtt", "srt", "ass"].entries()) {
+          player.selectSubtitle(i);
+          const track = tracks[i].track;
+          await until(() => Boolean(track.activeCues?.length), "T11 timed subtitle did not become active");
+          const cue = track.activeCues![0] as VTTCue;
+          assertCondition(cue.startTime === 1.25 && cue.endTime === 3.75 && cue.text === `${command.episode} ${format.toUpperCase()}\n第二行`, "T11 cue time/text/newline changed");
+          assertCondition(Array.from(video.textTracks).every((t, n) => t.mode === (n === i ? "showing" : "disabled")), "T11 subtitle switch left multiple tracks showing");
+          assertCondition(tracks[i].id === view.subtitles[i].id && track.label === view.subtitles[i].label && track.language === "zh-CN", "T11 track metadata changed");
+          observations.push({ format, start: cue.startTime, end: cue.endTime, text: cue.text, mode: track.mode, cues: track.cues?.length });
+        }
+        player.seek(4);
+        await until(() => !video.seeking && !tracks[2].track.activeCues?.length, "T11 cue persisted past its end");
+        player.selectSubtitle(null);
+        assertCondition(Array.from(video.textTracks).every(t => t.mode === "disabled"), "T11 subtitle off failed");
+        return { episode: command.episode, observations, old_tracks_removed: old.length,
+          disabled: true, cue_ended: true, actual_gateway: video.currentSrc === view.media_url,
+          new_frames: frames - beforeFrames, sample: sample(),
+          native: await nativeInvoke("t01_control", { action: "identity" }) };
       }
       case "controls": {
         await click("play");

@@ -136,9 +136,22 @@ pub(super) fn references(text: &str) -> Result<Vec<Reference>, ApiError> {
                     if !matches!(value("METHOD"), Some("NONE" | "AES-128"))
                         || value("KEYFORMAT").is_some_and(|v| v != "identity")
                     {
+                        let drm_type = match value("KEYFORMAT") {
+                            Some("com.apple.streamingkeydelivery") => "fairplay",
+                            Some("urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed") => "widevine",
+                            Some(
+                                "com.microsoft.playready"
+                                | "urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95",
+                            ) => "playready",
+                            Some("identity") | None => "unsupported_encryption",
+                            _ => "unknown",
+                        };
                         return Err(ApiError::new(
                             "MEDIA_UNSUPPORTED",
                             "HLS DRM or encryption method is unsupported",
+                        )
+                        .with_details(
+                            serde_json::json!({"media_type":"hls", "drm_type":drm_type}),
                         ));
                     }
                     if value("METHOD") == Some("AES-128") && value("URI").is_none() {

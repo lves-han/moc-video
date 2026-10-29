@@ -2,6 +2,8 @@
 //! Source callback contexts are synthetic; original Android providers remain N02.
 #[path = "t10_hls.rs"]
 mod t10;
+#[path = "t11_subtitles.rs"]
+mod t11;
 use super::*;
 use crate::resolution::{Link, ResolutionStore, Subtitle};
 use sha2::{Digest, Sha256};

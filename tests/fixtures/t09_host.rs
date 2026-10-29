@@ -1,6 +1,8 @@
 //! Invoke-to-resource tests reuse the established MacCMS/Stremio HTTP fixture.
 use super::*;
 use std::net::TcpStream;
+#[path = "t11_host.rs"]
+mod t11;
 
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());

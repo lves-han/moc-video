@@ -2,7 +2,8 @@ import Hls from "hls.js";
 
 export type PlayerState = "preparing" | "ready" | "playing" | "paused" | "buffering" | "position" | "ended" | "failed" | "stopped";
 export type PlayerEvent = { state: PlayerState; epoch: number; position_ms: number; duration_ms: number | null; error?: string };
-export type PlaybackSource = { url: string; kind: "mp4" | "hls"; subtitle?: string };
+export type SubtitleSource = { id: string; label: string; language: string | null; url: string };
+export type PlaybackSource = { url: string; kind: "mp4" | "hls"; subtitle?: string; subtitles?: readonly SubtitleSource[] };
 
 declare global {
   interface Window {
@@ -45,6 +46,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     hls?.destroy();
     hls = undefined;
     video.removeAttribute("src");
+    Array.from(video.textTracks).forEach(track => { track.mode = "disabled"; });
     video.querySelectorAll("track").forEach(track => track.remove());
     video.load();
     notify("stopped");
@@ -76,13 +78,18 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     }, { signal: active.signal });
     video.crossOrigin = "anonymous";
     video.preload = "auto";
-    if (source.subtitle) {
+    const subtitles = source.subtitles ?? (source.subtitle ? [{ id: "legacy", label: "样机字幕", language: "zh-CN", url: source.subtitle }] : []);
+    for (const [index, subtitle] of subtitles.entries()) {
       const track = document.createElement("track");
       track.kind = "subtitles";
-      track.label = "样机字幕";
-      track.srclang = "zh-CN";
-      track.src = source.subtitle;
-      track.default = true;
+      track.id = subtitle.id;
+      track.label = subtitle.label;
+      track.srclang = subtitle.language || "und";
+      track.src = subtitle.url;
+      track.default = index === 0;
+      track.addEventListener("error", () => {
+        if (epoch === current) notify("failed", `SUBTITLE_LOAD_FAILED: ${subtitle.id}`);
+      }, { signal: active.signal });
       video.append(track);
     }
     if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {

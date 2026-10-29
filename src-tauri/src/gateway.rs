@@ -31,6 +31,8 @@ use uuid::Uuid;
 
 #[path = "hls.rs"]
 mod hls;
+#[path = "subtitle.rs"]
+mod subtitle;
 
 const SESSION_IDLE_MS: u64 = 300_000;
 const IMAGE_IDLE_MS: u64 = 1_800_000;
@@ -223,9 +225,13 @@ impl Gateway {
         let cap = capability()?;
         let resource = selected.stream_id.clone();
         let path = format!("/media/{id}/{resource}");
+        let subtitles: Vec<_> = selected.subtitles.iter().map(|s| json!({
+            "id":s.id,"label":s.subtitle.label,"language":s.subtitle.language,"format":"vtt",
+            "source_format":s.subtitle.format,"url":self.url(&format!("/media/{id}/{}", s.id), &cap)
+        })).collect();
         let value = json!({"session_id":id,"resolution_id":selected.resolution_id,"stream_id":selected.stream_id,
             "source_id":selected.link.provider,"source_revision":selected.source_revision,"episode_ref":selected.episode_ref,
-            "stream_kind":selected.link.kind,"mime_type":selected.link.mime_type,"media_url":self.url(&path,&cap),"subtitles":[],"expires_at":expires_after(SESSION_IDLE_MS)?});
+            "stream_kind":selected.link.kind,"mime_type":selected.link.mime_type,"media_url":self.url(&path,&cap),"subtitles":subtitles,"expires_at":expires_after(SESSION_IDLE_MS)?});
         let mut resources = HashMap::from([(
             resource,
             Resource {
@@ -799,9 +805,15 @@ async fn transfer(
     let url = http_url(&lease.url, false)?;
     let mut headers = lease.headers.clone();
     if let Some(selected) = &lease.selected {
-        if !selected.link.referer.is_empty()
-            && http_url(&selected.link.url, false)?.origin() == url.origin()
-        {
+        let same_origin = http_url(&selected.link.url, false)?.origin() == url.origin();
+        if lease.kind == "subtitle" && same_origin {
+            // Merge on demand: copying a large media header into every subtitle
+            // record would amplify the bounded Resolution's retained context.
+            let mut inherited = selected.link.headers.clone();
+            inherited.extend(headers);
+            headers = inherited;
+        }
+        if !selected.link.referer.is_empty() && same_origin {
             headers.insert(
                 "referer",
                 selected
@@ -853,12 +865,15 @@ async fn transfer(
         "accept-encoding",
         "identity".parse().expect("Static header"),
     );
-    let manifest = lease.kind == "manifest" || url.path().to_ascii_lowercase().ends_with(".m3u8");
+    let is_subtitle = lease.kind == "subtitle";
+    let manifest = !is_subtitle
+        && (lease.kind == "manifest" || url.path().to_ascii_lowercase().ends_with(".m3u8"));
+    let transformed = manifest || is_subtitle;
     if let Some(range) = req.headers.get("range") {
         if lease.kind == "image" || !valid_range(range.to_str().unwrap_or("")) {
             return Err(ApiError::bad("Invalid single byte Range"));
         }
-        if !manifest {
+        if !transformed {
             headers.insert("range", range.clone());
             if let Some(v) = req.headers.get("if-range") {
                 headers.insert("if-range", v.clone());
@@ -866,15 +881,15 @@ async fn transfer(
         }
     }
     for name in ["if-none-match", "if-modified-since"] {
-        if !manifest
+        if !transformed
             && lease.kind != "image"
             && let Some(value) = req.headers.get(name)
         {
             headers.insert(name, value.clone());
         }
     }
-    // A manifest HEAD describes the rewritten representation, so fetch its body.
-    let method = if req.method == Method::HEAD && lease.kind != "image" && !manifest {
+    // A transformed HEAD describes the local representation, so fetch its body.
+    let method = if req.method == Method::HEAD && lease.kind != "image" && !transformed {
         Method::HEAD
     } else {
         Method::GET
@@ -921,7 +936,7 @@ async fn transfer(
         );
     }
     if status == 304
-        && !manifest
+        && !transformed
         && lease.kind != "image"
         && (req.headers.contains_key("if-none-match")
             || req.headers.contains_key("if-modified-since"))
@@ -973,6 +988,9 @@ async fn transfer(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_ascii_lowercase();
+    if is_subtitle {
+        return transfer_subtitle(req, lease, read, write, sent, response).await;
+    }
     let manifest = manifest || is_hls_mime(&content_type);
     if manifest {
         if status != 200 {
@@ -998,9 +1016,6 @@ async fn transfer(
     }
     if content_type.contains("text/html") || content_type.contains("application/xhtml") {
         return Err(upstream("Resource server returned HTML"));
-    }
-    if lease.kind == "subtitle" && known_length.is_some_and(|n| n > IMAGE_BYTES as u64) {
-        return Err(ApiError::new("RESOURCE_LIMIT", "Subtitle exceeds 8 MiB"));
     }
     if lease.kind == "image" {
         if known_length.is_some_and(|n| n > IMAGE_BYTES as u64) {
@@ -1130,9 +1145,6 @@ async fn transfer(
         if length.is_some_and(|n| total > n) {
             return Err(upstream("Resource body exceeds Content-Length"));
         }
-        if lease.kind == "subtitle" && total > IMAGE_BYTES as u64 {
-            return Err(ApiError::new("RESOURCE_LIMIT", "Subtitle exceeds 8 MiB"));
-        }
         write_chunk(lease, read, write, &chunk, length.is_none()).await?;
     }
     if length.is_some_and(|n| total != n) {
@@ -1145,6 +1157,89 @@ async fn transfer(
         .await?;
     }
     Ok(())
+}
+
+async fn transfer_subtitle(
+    req: &Request,
+    lease: &RequestLease,
+    read: &mut OwnedReadHalf,
+    write: &mut OwnedWriteHalf,
+    sent: &mut bool,
+    mut response: reqwest::Response,
+) -> Result<(), ApiError> {
+    if response.status().as_u16() != 200 {
+        return Err(upstream("Subtitle requires a complete response"));
+    }
+    if response
+        .content_length()
+        .is_some_and(|n| n > subtitle::LIMIT as u64)
+    {
+        return Err(ApiError::new("RESOURCE_LIMIT", "Subtitle exceeds 8 MiB"));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = watched(lease, read, async {
+        response.chunk().await.map_err(resource_error)
+    })
+    .await?
+    {
+        if body.len().saturating_add(chunk.len()) > subtitle::LIMIT {
+            return Err(ApiError::new("RESOURCE_LIMIT", "Subtitle exceeds 8 MiB"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let format = lease
+        .selected
+        .as_ref()
+        .and_then(|s| s.subtitles.iter().find(|s| s.id == lease.resource))
+        .map(|s| s.subtitle.format.as_str())
+        .ok_or_else(|| ApiError::internal("Subtitle resource lost its registered format"))?;
+    let body = subtitle::convert(&body, format)?;
+    let mut output = HeaderMap::new();
+    output.insert(
+        "content-type",
+        "text/vtt; charset=utf-8".parse().expect("VTT MIME"),
+    );
+    output.insert("cache-control", "no-store".parse().expect("Cache header"));
+    output.insert(
+        "etag",
+        format!("\"{:x}\"", Sha256::digest(&body))
+            .parse()
+            .expect("VTT ETag"),
+    );
+    let not_modified = req
+        .headers
+        .get("if-none-match")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|value| {
+            value.split(',').any(|v| {
+                v.trim() == "*"
+                    || v.trim().strip_prefix("W/").unwrap_or(v.trim())
+                        == output["etag"].to_str().expect("VTT ETag")
+            })
+        });
+    *sent = true;
+    if not_modified {
+        watched(
+            lease,
+            read,
+            write_head(write, 304, &output, None, req.origin.as_deref(), false),
+        )
+        .await
+    } else {
+        watched(
+            lease,
+            read,
+            respond(
+                write,
+                200,
+                &output,
+                &body,
+                req.origin.as_deref(),
+                req.method == Method::HEAD,
+            ),
+        )
+        .await
+    }
 }
 
 fn is_hls_mime(mime: &str) -> bool {

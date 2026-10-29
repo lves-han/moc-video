@@ -359,7 +359,8 @@ class NativeSession:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         def output():
             for line in self.process.stdout:
-                self.stream.write(line.replace(fixture.cap, "<redacted>"))
+                safe = line.replace(fixture.cap, "<redacted>")
+                self.stream.write(getattr(run, "redact_output", str)(safe))
                 self.stream.flush()
         self.output_thread = threading.Thread(target=output, name=f"t01-output-{index}", daemon=True)
         self.output_thread.start()
