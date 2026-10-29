@@ -1243,3 +1243,15 @@
 
 - 原独立只读round29：CLEAR；报告docs/reviews/doc-review/round-29.md，固定HEAD2389e053ec90692fcfc88b428a97572354a6fc19/source84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际文档SHA与ADR030分段匹配，6份缺口证据副本SHA保持。
 - 原s2/f2/g0保持，第三许可未消费；紧邻顺序/原身份/两锁/clean核对后仅一次原drive --once --max-sessions 3，计数3即消费，其他卡default2/T13paused/原权限资源时限不变。真实隐式IV仍NOT RUN，新源完整原质量门复验，T11等待。
+
+## T0.10 第三会话真实序列IV素材与独立字节校验交接 2026-10-29T10:05:44+00:00
+
+- 实施状态：WIP；当前sessions3/失败2/generation0，ADR030唯一第三许可已消费。本轮只改tests内素材生成、独立oracle、相应回归及本追加记录；保留生产实现、冻结定义、任务完成勾选和所有历史。T0.13保持原暂停，T11等待。本轮未调用done/rebaseline/accept-review，未写RESOLVED/AUTHORIZED/BLOCKED。
+- Changed：隐式分支使用FFmpeg生成起始序列37的两个原明文TS，再用原有openssl逐片按37/38大端128位IV及同一固定公开测试key执行AES128CBC/PKCS7加密。原清单明确无IV属性；原明文在临时目录保留到fixture结束，原始清单、每片实际密文字节、明文/密文/正确解密/零IV解密/错误序列解密SHA256从实际文件和命令结果输出。原生断言对正确IV解密后的整个明文做字节相等，对零IV和错误序列解密做完整字节不等，避免解码器容忍首个TS包损坏掩盖问题。
+- Changed：复用原T10_VECTOR观测通道，独立Python oracle读取原清单检查无IV、非零序列、同key、两个不同URI及逐片序列顺序；从实际密文字节独立调用openssl解密并重算完整明文长度/SHA256和两个错误IV反证。补充显式IV、零序列、缺片、乱序、错误序列、伪造长度/摘要/反证和篡改密文但同步改密文摘要的拒绝检查，并核对两片实际签名请求都经过网关。
+- Changed：原8项Rust行为、原17项观测和R26/R28/REQ-T10保持，增加1项真实序列IV观测，当前预期18项、68项篡改拒绝；三模式decode观测补原本地HLS视频帧数/完整hash和非零音频，原本地与网关各自24视频帧完整等于源的断言保持。test_t10.py保留4项凭据回归，增加4项独立oracle正负回归，共8项定义；这些数量为本轮待执行要求。
+- Why：旧无第三行keyinfo仍由FFmpeg输出显式IV0，原成功解码和旧CLEAR留下真实隐式IV验证缺口。当前从明文重新逐片序列加密，并以完整字节及独立重算的反证绑定素材语义，符合ADR030授权范围，无新增依赖或控制状态。
+- Verified：原task.py check/start/show/status/scope均exit0；check为35卡，scope为all changes inside scope；rustfmt --edition 2024 --check tests/fixtures/t10_hls.rs exit0；两份Python文件AST解析通过，静态核对8项Rust测试名准确一致与8项Python测试定义；git diff --check exit0。辅助AST清单检查曾对IDS引用调用literal_eval失败，已task note并修正为只读取字典字符串key后静态通过。首次rustfmt使用2021 edition带来额外格式差异，已按Cargo实际edition2024恢复，仅保留本卡必要差异。上述均为静态检查，实际行为测试0。
+- 验收 A1：NOT RUN；本轮Rust类型检查/locked构建/all-targets Clippy、Python行为回归、原生加密/解码/HTTP、准确A1和完整verify均NOT RUN。沿ADR010/030及既有真实125证据，本轮未重复探测sysctl/sccache/Git限制、未启动受限重命令、未绕过run.py，未新增重任务收据；资源后端待外层本轮真实收据记录。
+- 稳定源码：3c54e651d64e88b80dac58b69638e7dacb4cc7c92c3de50d334e8c58da9ee123；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑，当前交接argv已生成并逐项读回：evidence/acceptance/T10-session-3-outer-argv.json；只替换外层首个{python}为实际venv解释器，保留A1 payload的冻结字面量{python}。
+- Remaining/外层顺序：本CLI退出后核对原PID+创建时间、两锁、scope和稳定source，沿ADR010代办WIP Git（建议WIP T0.10: verify actual implicit HLS sequence IVs）；按清单依次原run locked/offline构建、all-targets Clippy -D warnings、T10 Python8项/T09 Python6项/T09原生16项相关回归、准确A1。8原生/18观测/68反例/3需求及全部原资源安全门通过后直接完整verify.py all，保持源码，再勾卡/追加真实收据/task.py done/受验提交/新固定独立CLEAR/干净树。原成功A1/verify/完成提交/旧CLEAR及implicit-iv-gap摘要副本和所有失败保持历史。第三许可已用完，无第四许可。

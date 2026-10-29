@@ -6,6 +6,7 @@ are synthetic; real Android/Yjys interceptor order belongs to N02.
 import argparse
 import copy
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -110,6 +111,7 @@ class Acceptance(BaseAcceptance):
             media=dict(provenance="CC0-1.0; project-generated testsrc2 and sine tone", duration_seconds=2,
                 modes=["AES-128 TS explicit IV", "AES-128 TS implicit sequence IV", "fMP4 single-file init/byterange"],
                 verification="original HLS and gateway each equal all 24 source video frame hashes; nonzero decoded AAC frames in each mode",
+                implicit_iv="nonzero media sequences; no IV attribute; raw encrypted segment bytes retained; independent AES-CBC complete plaintext SHA256 and zero/wrong sequence IV counterexamples",
                 fmp4_client="http_seekable=0 avoids FFmpeg 9.0.2 AVIO offset reuse; explicit HLS Range requests remain asserted"),
             deployment="ordinary native process and owned loopback socket fixtures; no cluster",
             cleanup="fixture/gateway Drop joins owned workers; temporary media deleted after fixture shutdown; original run.py owns descendants",
@@ -184,6 +186,10 @@ def check_vector(v):
                 and v["audio_frames"] > 0 and v["source_sha256"] == v["decoded_sha256"]
                 and re.fullmatch("[a-f0-9]{64}", v["source_sha256"]) is not None,
                 "real decoded frame equality/audio missing")
+        original = v["original"]
+        require(original["mode"] == v["mode"] and original["video_frames"] == 24
+                and original["audio_frames"] > 0 and original["video_sha256"] == v["source_sha256"],
+                "original HLS complete frame equality/audio missing")
         require(v["resolution_released"] is True and v["same_cap"] is True, "decode lost session ownership")
         requests = v["requests"]
         require(any("/index.m3u8?sig=A%2FB+x&cap=upstream" in r["target"] for r in requests), "signed media playlist missing")
@@ -193,24 +199,87 @@ def check_vector(v):
         else:
             require(sum("stream.mp4" in r["target"] and r["range"] is not None for r in requests) >= 2,
                     "fMP4 init/segment byterange requests missing")
+    elif v["kind"] == "implicit_iv":
+        check_implicit_iv(v)
     else:
         raise ValueError("unknown T10 observation kind")
 
 
+def check_implicit_iv(v):
+    # Read the original manifest independently of the production HLS parser.
+    # The fixture key is fixed public test data, never a gateway capability.
+    lines = v["playlist"].splitlines()
+    require(not re.search(r"\bIV\s*=", v["playlist"], re.I), "implicit fixture contains an explicit IV")
+    require([line for line in lines if line.startswith("#EXT-X-KEY:")]
+            == ['#EXT-X-KEY:METHOD=AES-128,URI="key.bin"'], "implicit fixture key differs")
+    sequences = [line.split(":", 1)[1] for line in lines if line.startswith("#EXT-X-MEDIA-SEQUENCE:")]
+    require(len(sequences) == 1 and sequences[0].isdigit() and int(sequences[0]) > 0,
+            "one nonzero implicit media sequence required")
+    start = int(sequences[0])
+    uris = [line for line in lines if line and not line.startswith("#")]
+    require(len(uris) == len(v["segments"]) == 2 and len(set(uris)) == 2, "two distinct implicit segments required")
+    key = bytes(range(16))
+    require(v["key_sha256"] == hashlib.sha256(key).hexdigest(), "implicit key bytes differ")
+    for offset, segment in enumerate(v["segments"]):
+        sequence = start + offset
+        require(segment["sequence"] == sequence and segment["uri"] == uris[offset], "implicit segment sequence/order differs")
+        ciphertext = bytes.fromhex(segment["ciphertext_hex"])
+        require(len(ciphertext) > 16 and len(ciphertext) % 16 == 0
+                and hashlib.sha256(ciphertext).hexdigest() == segment["ciphertext_sha256"], "encrypted segment bytes differ")
+        hashes = []
+        for iv in (sequence, 0, sequence + 1):
+            result = subprocess.run(["openssl", "enc", "-d", "-aes-128-cbc", "-K", key.hex(),
+                                     "-iv", iv.to_bytes(16, "big").hex()], input=ciphertext,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            require(result.returncode == 0, "independent AES segment decrypt failed")
+            require(len(result.stdout) == segment["plaintext_bytes"] > 188, "complete plaintext byte count differs")
+            hashes.append(hashlib.sha256(result.stdout).hexdigest())
+        require(hashes[0] == segment["plaintext_sha256"] == segment["decrypted_sha256"],
+                "complete segment plaintext differs under sequence IV")
+        require(hashes[1] == segment["wrong_iv_sha256"] != hashes[0]
+                and hashes[2] == segment["wrong_sequence_sha256"] != hashes[0],
+                "zero/wrong sequence IV counterexample missing")
+
+
 def independent(run, output):
     vectors = [json.loads(line.split("T10_VECTOR:", 1)[1]) for line in output.splitlines() if "T10_VECTOR:" in line]
-    require(len(vectors) == 17, f"17 actual independent observations required, got {len(vectors)}")
+    require(len(vectors) == 18, f"18 actual independent observations required, got {len(vectors)}")
     require({v["fixture"] for v in vectors if v["kind"] == "parser"} == set(range(11)), "independent fixtures incomplete")
     require({v["mode"] for v in vectors if v["kind"] == "decode"} == {"aes-explicit", "aes-implicit", "fmp4"}, "decode modes incomplete")
-    require({v["kind"] for v in vectors} == {"parser", "http", "response_order", "lifetime", "decode"}, "observation kinds missing")
+    require({v["kind"] for v in vectors} == {"parser", "http", "response_order", "lifetime", "decode", "implicit_iv"}, "observation kinds missing")
+    implicit = next(v for v in vectors if v["kind"] == "implicit_iv")
+    decode = next(v for v in vectors if v["kind"] == "decode" and v["mode"] == "aes-implicit")
+    require(all(any(r["target"] == "/assets/aes-implicit/" + segment["uri"] + "?sig=A%2FB+x&cap=upstream"
+                    for r in decode["requests"]) for segment in implicit["segments"]),
+            "each sequence-encrypted segment must pass through the real gateway")
     rejected = 0
     for vector in vectors:
         check_vector(vector)
         key = dict(parser="preserved", http="same_cap", response_order="source_before_rewrite",
-                   lifetime="resolution_released", decode="same_cap")[vector["kind"]]
+                   lifetime="resolution_released", decode="same_cap", implicit_iv="key_sha256")[vector["kind"]]
         edits = [(key, False)]
         if vector["kind"] == "decode":
             edits += [("video_frames", 0), ("audio_frames", 0), ("decoded_sha256", "corrupt"), ("requests", [])]
+            for field, value in [("video_frames", 12), ("audio_frames", 0), ("video_sha256", "corrupt")]:
+                original = copy.deepcopy(vector["original"])
+                original[field] = value
+                edits.append(("original", original))
+        elif vector["kind"] == "implicit_iv":
+            edits += [("playlist", vector["playlist"].replace('URI="key.bin"', 'URI="key.bin",IV=0x0')),
+                      ("playlist", vector["playlist"].replace("#EXT-X-MEDIA-SEQUENCE:37", "#EXT-X-MEDIA-SEQUENCE:0")),
+                      ("segments", vector["segments"][:1]), ("segments", list(reversed(vector["segments"])))]
+            for field, value in [("sequence", 0), ("plaintext_bytes", 188), ("plaintext_sha256", "corrupt"),
+                                 ("decrypted_sha256", "corrupt"), ("wrong_iv_sha256", vector["segments"][0]["plaintext_sha256"]),
+                                 ("wrong_sequence_sha256", vector["segments"][0]["plaintext_sha256"])]:
+                segments = copy.deepcopy(vector["segments"])
+                segments[0][field] = value
+                edits.append(("segments", segments))
+            segments = copy.deepcopy(vector["segments"])
+            ciphertext = bytearray.fromhex(segments[0]["ciphertext_hex"])
+            ciphertext[0] ^= 1
+            segments[0]["ciphertext_hex"] = ciphertext.hex()
+            segments[0]["ciphertext_sha256"] = hashlib.sha256(ciphertext).hexdigest()
+            edits.append(("segments", segments))
         elif vector["kind"] == "response_order":
             edits += [("etag", '"upstream"'), ("head_length", "1"), ("conditional_status", 200)]
         elif vector["kind"] == "lifetime":
@@ -268,7 +337,7 @@ def main():
             and options.junit.resolve() == ROOT / "evidence/acceptance/T10-all.xml", "T10 destinations differ from A1")
     run = Acceptance(options.report, options.junit)
     ready = run.case("resource-ownership", ["REQ-T10"], "original resource scope and local platform", lambda: resources(run))
-    run.case("native-behaviors", list(IDS), "eight named native tests and 17 independent HLS observations",
+    run.case("native-behaviors", list(IDS), "eight named native tests and 18 independent HLS observations including full-byte sequence-IV crypto",
              lambda: rust(run) if ready else require(False, "NOT RUN: resource ownership failed"))
     return run.save()
 

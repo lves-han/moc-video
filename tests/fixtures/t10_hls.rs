@@ -920,6 +920,85 @@ fn signed_playlist(text: &str) -> String {
     output
 }
 
+// The fixture key is public test data. Encrypt each plaintext segment ourselves:
+// FFmpeg's keyinfo writer emits an explicit IV even when its third line is absent.
+fn sequence_aes(path: &Path, sequence: u128, decrypt: bool) -> Vec<u8> {
+    let mut command = Command::new("openssl");
+    command.args(["enc", "-aes-128-cbc"]);
+    if decrypt {
+        command.arg("-d");
+    }
+    let output = command
+        .args(["-K", "000102030405060708090a0b0c0d0e0f", "-iv"])
+        .arg(format!("{sequence:032x}"))
+        .arg("-in")
+        .arg(path)
+        .output()
+        .expect("openssl executable required for sequence-IV fixture");
+    assert!(
+        output.status.success(),
+        "sequence-IV AES operation failed (sequence={sequence}, decrypt={decrypt}): {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output.stdout
+}
+
+fn implicit_iv_fixture(target: &Path) {
+    let path = target.join("index.m3u8");
+    let original = fs::read_to_string(&path).unwrap();
+    assert!(original.contains("#EXT-X-MEDIA-SEQUENCE:37\n"));
+    assert!(!original.contains("#EXT-X-KEY:"));
+    let playlist = original.replacen(
+        "#EXT-X-MEDIA-SEQUENCE:37\n",
+        "#EXT-X-MEDIA-SEQUENCE:37\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n",
+        1,
+    );
+    assert!(!playlist.contains("IV="));
+    let uris: Vec<_> = playlist
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect();
+    assert_eq!(uris.len(), 2);
+    fs::create_dir(target.join("plaintext")).unwrap();
+    let mut segments = Vec::new();
+    for (offset, uri) in uris.iter().enumerate() {
+        let sequence = 37 + offset as u128;
+        let encrypted_path = target.join(uri);
+        let plain_path = target.join("plaintext").join(uri);
+        fs::rename(&encrypted_path, &plain_path).unwrap();
+        let plaintext = fs::read(&plain_path).unwrap();
+        let ciphertext = sequence_aes(&plain_path, sequence, false);
+        fs::write(&encrypted_path, &ciphertext).unwrap();
+        let decrypted = sequence_aes(&encrypted_path, sequence, true);
+        let wrong_iv = sequence_aes(&encrypted_path, 0, true);
+        let wrong_sequence = sequence_aes(&encrypted_path, sequence + 1, true);
+        // A decoder can tolerate damage in the first TS packet. Compare every
+        // plaintext byte as well as the downstream 24-frame decode assertion.
+        assert_eq!(decrypted, plaintext, "sequence IV plaintext differs");
+        assert_ne!(wrong_iv, plaintext, "zero IV unexpectedly matched");
+        assert_ne!(
+            wrong_sequence, plaintext,
+            "wrong sequence unexpectedly matched"
+        );
+        segments.push(json!({
+            "uri":uri,"sequence":sequence as u64,"plaintext_bytes":plaintext.len(),
+            "plaintext_sha256":format!("{:x}",Sha256::digest(&plaintext)),
+            "ciphertext_sha256":format!("{:x}",Sha256::digest(&ciphertext)),
+            "ciphertext_hex":ciphertext.iter().map(|b|format!("{b:02x}")).collect::<String>(),
+            "decrypted_sha256":format!("{:x}",Sha256::digest(&decrypted)),
+            "wrong_iv_sha256":format!("{:x}",Sha256::digest(&wrong_iv)),
+            "wrong_sequence_sha256":format!("{:x}",Sha256::digest(&wrong_sequence))
+        }));
+    }
+    fs::write(path, &playlist).unwrap();
+    println!(
+        "T10_VECTOR:{}",
+        json!({"kind":"implicit_iv","playlist":playlist,
+            "key_sha256":format!("{:x}",Sha256::digest(fs::read(target.join("key.bin")).unwrap())),
+            "segments":segments})
+    );
+}
+
 #[test]
 fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
     let folder = tempfile::tempdir().unwrap();
@@ -971,22 +1050,23 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         0,
     );
     assert_eq!(expected.len(), 24);
+    let mut originals = Vec::new();
     for mode in ["aes-explicit", "aes-implicit", "fmp4"] {
         let target = folder.path().join(mode);
         fs::create_dir(&target).unwrap();
         let keyinfo = target.join("keyinfo");
         if mode.starts_with("aes") {
             fs::write(target.join("key.bin"), (0u8..16).collect::<Vec<_>>()).unwrap();
-            let iv = if mode == "aes-explicit" {
-                "\n00000000000000000000000000000025"
-            } else {
-                ""
-            };
-            fs::write(
-                &keyinfo,
-                format!("key.bin\n{}{iv}\n", target.join("key.bin").display()),
-            )
-            .unwrap();
+            if mode == "aes-explicit" {
+                fs::write(
+                    &keyinfo,
+                    format!(
+                        "key.bin\n{}\n00000000000000000000000000000025\n",
+                        target.join("key.bin").display()
+                    ),
+                )
+                .unwrap();
+            }
         }
         let mut args = vec![
             "-i",
@@ -1009,16 +1089,26 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
                 "-hls_segment_filename",
                 "stream.mp4",
             ]);
-        } else {
+        } else if mode == "aes-explicit" {
             args.extend([
                 "-hls_key_info_file",
                 "keyinfo",
                 "-hls_segment_filename",
                 "segment-%03d.ts",
             ]);
+        } else {
+            args.extend([
+                "-start_number",
+                "37",
+                "-hls_segment_filename",
+                "segment-%03d.ts",
+            ]);
         }
         args.push("index.m3u8");
         ffmpeg(&target, &args, None);
+        if mode == "aes-implicit" {
+            implicit_iv_fixture(&target);
+        }
         eprintln!(
             "T10_SOURCE:{}",
             json!({"mode":mode,"playlist":fs::read_to_string(target.join("index.m3u8")).unwrap()})
@@ -1058,6 +1148,11 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         assert!(
             !frame_hashes(&original, 1).is_empty(),
             "{mode}: original HLS audio missing"
+        );
+        originals.push(
+            json!({"mode":mode,"video_frames":frame_hashes(&original, 0).len(),
+            "audio_frames":frame_hashes(&original, 1).len(),
+            "video_sha256":format!("{:x}",Sha256::digest(frame_hashes(&original, 0).join(",")))}),
         );
         fs::write(target.join("master.m3u8"),"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=500000,CODECS=\"avc1.42c00a,mp4a.40.2\"\nindex.m3u8\n").unwrap();
     }
@@ -1125,7 +1220,10 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         Reply::body(bytes, mime)
     });
     let gateway = Gateway::start().unwrap();
-    for mode in ["aes-explicit", "aes-implicit", "fmp4"] {
+    for (mode, original) in ["aes-explicit", "aes-implicit", "fmp4"]
+        .into_iter()
+        .zip(originals)
+    {
         let start = fixture.state.requests.lock().unwrap().len();
         let mut source = hls_link(fixture.url(&format!("/entry/{mode}.m3u8")));
         source.referer = "https://provider.invalid/owned-media".into();
@@ -1225,7 +1323,7 @@ fn t10_real_aes128_explicit_implicit_iv_and_fmp4_decode() {
         }
         println!(
             "T10_VECTOR:{}",
-            json!({"kind":"decode","mode":mode,"video_frames":video.len(),"audio_frames":audio.len(),"source_sha256":format!("{:x}",Sha256::digest(expected.join(","))),"decoded_sha256":format!("{:x}",Sha256::digest(video.join(","))),"requests":requests.iter().map(|r|json!({"target":r.target,"range":r.headers.get("range")})).collect::<Vec<_>>(),"resolution_released":true,"same_cap":true})
+            json!({"kind":"decode","mode":mode,"video_frames":video.len(),"audio_frames":audio.len(),"original":original,"source_sha256":format!("{:x}",Sha256::digest(expected.join(","))),"decoded_sha256":format!("{:x}",Sha256::digest(video.join(","))),"requests":requests.iter().map(|r|json!({"target":r.target,"range":r.headers.get("range")})).collect::<Vec<_>>(),"resolution_released":true,"same_cap":true})
         );
     }
 }
