@@ -1208,3 +1208,14 @@
 - 验收 A1：NOT RUN；新源locked构建、all-targets Clippy、4项新增/6项原Python回归、16项旧T09、真实三模式及8行为17观测的准确A1、完整verify均NOT RUN。首轮A1失败及其SHA副本保持，旧build/Clippy/T09通过只作为历史，本轮未生成成功报告。
 - 稳定源码：84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。准确外层argv清单已生成并读回：`evidence/acceptance/T10-session-2-outer-argv.json`，保持A1 payload首项冻结字面量{python}。Git按ADR-010既有分工交外层代办，未重复探测.git写权限；建议WIP T0.10: fix HLS decode client and credential output gate。
 - Remaining/外层顺序：待本CLI完全退出，核对PID+创建时间、两锁及稳定source，保存本次cleanup_failed收据/日志原件副本后原task.py recover一次，原run依次locked/offline check、all-targets Clippy -D warnings、新旧Python回归、旧T09、准确A1；核对三模式完整源/代理hash、非零音频及Range/上下文诊断。候选修复效果以本次真实结果为准；发生新功能失败保留证据并报告原2/2额度，无额外开发授权。A1成功直接完整verify.py all，源码保持，随后真实记录/勾卡/task done/受验完成提交/固定独立CLEAR与干净树全部成立才完成。原权限、资源和全部原义务保持。
+
+
+## T0.10 T10 HLS代理保真受验完成 2026-10-29T09:22:38.321047+00:00
+
+- 结果：DONE
+- Changed/Why：结构化URI span重写保留tag/属性/IV/时间线，全部子清单/key/map/分片/音轨字幕登记同Session并复用原源HTTP上下文；响应处理先于重写，8MiB清单/派生资源有界、重定向最终基址/签名/同cap/租约/取消及SSRF保持。HTML归UPSTREAM_FAILED、条件If-None-Match/304、gzip实体头与清单变换后Length/Encoding/ETag补实际HTTP断言。
+- 验收 A1：PASS；日志：`evidence/runs/20261029T091808706613-A1/output.log`；8原生/11必需case/14JUnit全过0skip，17独立观测、47篡改反例拒绝通过。真实AES128显式/隐式IV与fMP4三模式的原HLS及网关各完整24视频帧逐帧hash等于原源，每模式95音频帧；请求日志证明派生key/分片同cap及原上下文，Resolution释放后保持，活动跨5分钟后继续刷新/读取。原24帧、三模式、音频、安全及全部原门保持。
+- 首fMP4 12/24问题按本机FFmpeg9.0.2 HLS Range复用候选客户端参数处理，当前仅fMP4 http_seekable=0，仍真实发送Range并核对byterange/全部帧；非生产网关绕过，头/字节与请求证据保留。固定runner测试名误判已仅在现8函数的标准runner/失败列表/panic前缀排除，JSON/URL/Debug真cap仍安全过滤并失败，新4及旧6Python正负例实际通过。
+- 直接完整verify：PASS；最近六门全部通过，workflow128项121pass7平台skip、契约两门、frontend57/生产构建、native fmt/check/all-targetsClippy/98单元+16集成全过；另旧T09 16/16回归通过。原completion_evidence核对当前source/protected/gen/最近原日志报告SHA、非零汇总与完整verify。
+- 原source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，sessions2/失败2保持，原default2已用尽，无第三许可。WIP2ed3743/a7bdcc2、首准确A1失败与125收据及恢复前副本/全部历史保留；当前成功证据`evidence/drive/t10-second-validation-20261029T091723Z/completion-evidence/manifest.json`。旧全部身份结束/两锁实际空闲，源码稳定及scope/冻结核对通过；源码不再修改。
+- Remaining：原done/受验Git提交/固定独立CLEAR及干净树闭环后才完整完成，T11等待。真实Cloudstream/Yjys原interceptor仍N02，当前原生响应callback明确合成；本fixture未输出DASH，原真实基线后卡继续检查。字幕转换T11、长产品耐久按ADR020，原权限资源/时限/T13paused/s1/gen3及其他平台未运行边界保持。
