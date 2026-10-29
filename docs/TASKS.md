@@ -550,7 +550,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 验证：HTTP多季、opaque JSON合成引用、单片、中文特殊字符、超长列表及无可播条目；真实Ddys/SuperVod在N02执行。
 
 ### T0.8 T08 跨源匹配 原始loadLinks与资源登记
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.7
 - 需求：U08, R05, R19, R22, R25, R59, R61, R65, R66, R67, REQ-T08 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `src/api.ts`, `src/models.ts`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`

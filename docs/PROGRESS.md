@@ -1028,3 +1028,13 @@
 - 验收 A1：NOT RUN for modified source；本轮实际行为测试数0。修复源构建、Clippy、N00行为回归、准确A1、完整verify及独立CLEAR均NOT RUN；首轮12/13与N00 16/17失败及旧5向量16篡改诊断沿原证据保留，当前未据旧结果宣称通过。
 - 稳定源码：e0cc779c0ecfa08906e247172df9414aee90ea4ce6f1713f7a930404389fb851；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；外层确认本开发CLI/旧payload真实身份结束、两锁空闲和同源后，按`evidence/task-state/T0.8/session-2/outer-validation-argv.json`执行原run locked/offline构建、all-targets Clippy、N00回归和准确A1；A1通过后直接verify.py all，再原真实记录/勾卡/done/受验Git提交/固定独立CLEAR。
 - Remaining：Git WIP按ADR-010交外层代办，建议`WIP T0.8: repair candidate limit fixture and expired match assertion`；旧sysctl失败已由外层原recover封存，本轮无需重复recover。保持4096MiB macOS RSS采样/jobs2/线程1、原时限与权限。真实Session留T09，Cloudstream真实7包/loadLinks/DELETE留N02；后卡及T13原暂停等待。未请求新增会话或扩大额度。
+
+
+## T0.8 T08 跨源匹配与资源登记 功能验收完成 2026-10-29T04:34:06.835357+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261029T042939314313-A1/output.log`；断言：exit0，16必需case/27JUnit通过0失败0跳过，13原生行为、5独立匹配/归属/解析向量及16篡改反例拒绝通过。受控MacCMS/Stremio真实HTTP匹配、人工确认/选集、错误与零匹配、英文/已有别名2×10=20精确候选、完整响应拒绝坏JSON及11项非法字段、match_id绑定/256与5分钟过期/取消及双来源撤销、原episode_ref、Resolution登记/释放/过期和引用保有均实测。Cloudstream loadLinks/isCasting=false/多回调/字幕/false/空no_links/异常/晚到/版本取消为明确合成共用边界，真实7包/DELETE仍N02，实际Session仍T09。
+- 修正与历史：第2原会话仅修合法超额fixture及精确前10顺序、保留坏JSON/非法11项整响应拒绝；旧N00未登记match负例按现真实登记契约SESSION_EXPIRED，产品/schema不变，原N00回归17项通过。原受限fmt125已按真实session结束后原recover归档并保留未封存副本；首准确A1及旧N00诊断失败/WIP均保留。
+- 完整verify：PASS；原收据`evidence/verify/20261029T042941160493.json`，六门全部exit0：workflow128项121通过7平台skip、归档及working contracts、frontend57测试/类型及生产构建、native fmt/check/Clippy和全量Rust测试通过。原completion_evidence逐项验证最新A1/六门同source/protected/generation、日志/报告SHA与非零测试全部匹配，最新完整尝试保存。
+- 受验source：e0cc779c0ecfa08906e247172df9414aee90ea4ce6f1713f7a930404389fb851；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b；generation0，原sessions2/失败3和T13paused/s1/gen3及所有历史保持；原所有记录身份退出、两锁实际空闲、当前范围/冻结/记录前干净树通过。4096MiB RSS采样/jobs2/线程1/原时限权限保持，普通进程内HTTP fixture按所有权清理，无真实集群。
+- 原收尾：task done/受验Git提交后必须原drive --review-only固定提交独立巡检，真实CLEAR及完成树/干净树成立后才完整完成并整体改写提示按序T09。长期耐久/其他平台按原阶段决定保持待验。
