@@ -210,3 +210,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 执行：本次固定实际文档独立只读复审CLEAR后，紧邻核对earliest/current/next=T0.5、原sessions4、旧驱动/CLI/执行器/payload身份退出且两锁空闲，仅一次原drive.py --once --max-sessions 5。计数达到5即本次许可已消费；其他卡和workflow默认2保持，不加session-hours，不重置计数/失败/历史或复用已消费许可。
 证据：原准确A1 20261028T101847528569 exit0，19native/162schema观测/真实TMDB3.1.7 en-zh四响应/36JUnit通过；原完整verify20261028T101915217237最新尝试exit1，前5门通过，第6native fmt/check后Clippy cmp_owned失败，full native test未运行。保留原sessions4/失败5/gen1、WIP9c6f6ac及全部报告/失败证据，历史通过沿原证据保留，修改后重新全门。
 保持与验收：开发先执行相关格式/构建/行为合法与非规范负例和Clippy验证，通过后正常交接；真实已知sandbox限制沿既有受控代验分工准确WIP，不重复权限探测或扩大权限。稳定退出后外层重新locked构建、准确A1、直接完整verify、原done/Git及固定提交独立CLEAR，后卡按严格顺序等待。4096MiB RSS采样/jobs2/线程1、项目锁、原权限与会话/命令时限/阶段/范围保持。当前protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d、source=fce64ea699d9b01c623c052f455dfd93ca468d86fbf14f69fbe244db597b86c8保持，无冻结内容/控制器修改或rebaseline。
+
+
+## ADR-027 2026-10-29T02:28:42.013419+00:00 — 已采纳：最小执行器异常清理修复及原双卡迁移
+
+来源：当前聊天询问“仅修复platform_runtime.py、workflow.py及对应scripts/tests，补故障回归，并通过现有入口同步迁移T0.6与暂停T0.13基线后重新验收；原预算、权限、资源、暂停状态和全部历史保持”，用户明确回复“批准最小修复及迁移”。
+决定：仅上述原控制文件和对应生命周期回归允许最小修订，不改权限/资源/时限/默认会话、迁移接口或业务要求。payload创建后尽早登记真实身份；首轮和清理枚举异常时仍回收所创建进程，清理边界未确认保留未完成状态并阻止新重任务；确认收尾后封存日志，不把枚举失败视为空进程或伪造历史摘要。补首枚举与清理枚举同时EPERM、身份登记/直属进程与子进程清理、cleanup_failed/恢复/重入及日志稳定性正负回归，复用既有执行器和状态。
+实施路线：先隔离候选由现行原run受监管验证，再应用已批准文件，追加实际新protected的真实RESOLVED及迁移暂停卡T0.13，经原task.py rebaseline T0.6 --protected NEW --include-paused T0.13迁移，不扩展原入口、不手写状态。T0.6完成勾选已因原真实BLOCKING撤回，原done/成功A1/verify/受验提交/报告全部保留为历史，未完成集合正好T0.6/T0.13。原T06 sessions1/failure1/gen0及T13paused/s1/gen2保留，generation按原入口各增加一次；其他已完成卡保留各自历史基线及真实CLEAR。
+复验：实际修订/迁移经原受控回归和固定独立文档复审CLEAR后，当前T06重新准确A1/完整verify/原done/Git/固定独立复巡。原功能通过事实保留，原P1 BLOCKING及旧日志/收据不改写，原未登记payload历史退出/RSS如实未知。严格顺序T07等待，普通预算不追加，4096MiB RSS采样/jobs2/线程1和原最小权限保持。当前批准处旧protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；实际新摘要将在候选验证应用后记录，当前无伪造新摘要或已迁移结论。
