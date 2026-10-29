@@ -1308,3 +1308,11 @@
 - 验收 A1：NOT RUN（本轮修改后的源码）；单元行为、Rust构建/Clippy、真实WK字幕与完整verify均NOT RUN，原先通过收据仅作历史。当前真实桌面锁定；重任务与Git按ADR010既定分工处理，未直接执行绕过原run的测试或构建，未尝试Git写入。
 - 稳定源码：2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。外层计划及过滤后的GUI证据：evidence/acceptance/T11-session-2-outer-argv.json。源码停止编辑，建议外层按既定授权提交WIP T0.11: align unauthorized subtitle assertion and retain native IPC diagnostics。
 - Remaining：本CLI结束后，外层核对原driver/CLI/旧payload身份、两锁、scope与稳定source，代办WIP；桌面解锁后按计划运行10项oracle、T01 fixture回归、包含t01-automation feature的all-target check/Clippy及准确A1，读回新源日志/报告与清理。A1通过后直接完整verify，再真实记录、勾卡、task.py done、受验完成提交和固定独立CLEAR。若仍超时，依据webview_transport的DEQUEUE及native阶段定位真实卡点；原失败保留，不以诊断代替成功，不增加开发会话。DASH沿原条件NOT RUN/N02补查，T13暂停及所有资源/权限/时限保持。未写DONE/RESOLVED/AUTHORIZED，未修改冻结定义或执行rebaseline。
+
+
+## T0.11 第二源原生通过、真实GUI前提等待 2026-10-29T11:23:07.002735+00:00
+
+- 实施状态：WIP；原sessions2/失败3/gen0保持，两次默认开发额度已消费，本次纯验收无需新开发许可。WIP0d63800/source2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0，protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结/scope核对通过。
+- 实际非GUI检查：原run oracle/fixture回归、带t01-automation的alltargets类型检查/Clippy均通过；独立原run t11-native-functional-diagnostic实跑8原生全过0skip，13实际观测及13篡改反例拒绝通过，错误cap401/关闭410/字幕转换/原HTTP鉴权/资源回收等断言保持。此诊断未替代原准确A1，报告`evidence/drive/t11-second-validation-20261029T112048Z/native-functional-diagnostic.json`。
+- 真实环境：通过既有t01.native_gui_session仅保存过滤后的ioreg锁屏标志，当前screen_locked=true；已读第二CLI同样观察为true。历史第一次identity超时当时无此标志，原因仍不据当前状态追认。当前原WK验收需要可用GUI，因此尚不启动当前源准确A1/包构建/真实WK，也不运行其后完整verify；两集六轨/cue/时间轴/切换/清理与30s门保持NOT RUN。
+- 下一步：已请求用户解锁Mac，监管保持ACTIVE仅复核GUI就绪；锁定期间不重复A1/WK、不启动开发、不弱化断言、不改系统锁屏配置。实际解锁后复核同source/clean/原身份/两锁，按原准确A1（冻结{python}字面payload）及直接完整verify/Git/固定独立CLEAR闭环。若解锁后仍失败，保留实际stage/transport诊断再按原额度规则处理。后卡/T13paused及所有权限资源/时限/历史保持，原首A1/诊断超时仍原样保留。
