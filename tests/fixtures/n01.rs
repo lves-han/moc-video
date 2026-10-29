@@ -231,9 +231,7 @@ fn standard(request: &Request) -> Reply {
         panic!("unexpected metadata request: {}", request.target);
     }
 }
-#[path = "observation_redaction.rs"]
-mod observation_redaction;
-use observation_redaction::{diagnostic, redact};
+use crate::host::observation_redaction::{diagnostic, redact};
 fn observation(command: &str, args: &Value, response: &Value) -> Result<Value, ApiError> {
     // Validate original values before a schema-shaped placeholder can hide them.
     Contracts::get().validate(&format!("Result_{command}"), response)?;
@@ -1367,11 +1365,18 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
         "resource_id":"synthetic-image", "path":"/images/synthetic-image",
         "capability":"s".repeat(43), "expires_at":"2026-10-28T11:00:00Z"
     });
-    let image_url = "/data/images/0/url";
-    *response.pointer_mut(image_url).unwrap() = json!(format!(
-        "http://127.0.0.1:1234/images/synthetic-image?cap={}&keep=a%2Fb",
-        "s".repeat(43)
-    ));
+    response["data"]["images"].as_object_mut().unwrap().insert(
+        "synthetic-image".into(),
+        json!({
+            "resource_id":"synthetic-image",
+            "url":format!(
+                "http://127.0.0.1:1234/images/synthetic-image?cap={}&keep=a%2Fb",
+                "s".repeat(43)
+            ),
+            "expires_at":"2026-10-28T11:00:00Z"
+        }),
+    );
+    let image_url = "/data/images/synthetic-image/url";
     let original = response.clone();
     let observed = observation("get_home", &args, &response).unwrap();
     Contracts::get()
@@ -1380,7 +1385,11 @@ fn n01_cache_bounds_revision_and_synthetic_vectors() {
     let capability = format!("{poster}/capability");
     let mut expected = response.clone();
     *expected.pointer_mut(&capability).unwrap() = json!("r".repeat(43));
-    for image in expected["data"]["images"].as_array_mut().unwrap() {
+    for image in expected["data"]["images"]
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+    {
         let mut url = Url::parse(image["url"].as_str().unwrap()).unwrap();
         let pairs: Vec<_> = url
             .query_pairs()

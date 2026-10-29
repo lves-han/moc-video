@@ -16,6 +16,9 @@ use uuid::Uuid;
 
 #[path = "maccms.rs"]
 pub mod maccms;
+#[cfg(test)]
+#[path = "../../tests/fixtures/observation_redaction.rs"]
+mod observation_redaction;
 #[path = "stremio.rs"]
 pub mod stremio;
 

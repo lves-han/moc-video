@@ -355,9 +355,7 @@ fn id() -> String {
     Uuid::new_v4().to_string()
 }
 
-#[path = "observation_redaction.rs"]
-mod observation_redaction;
-use observation_redaction::{diagnostic, redact};
+use crate::host::observation_redaction::{diagnostic, redact};
 
 fn call(host: &Host, command: &str, input: Value) -> Value {
     let args = json!({"request_id": id(), "input": input});

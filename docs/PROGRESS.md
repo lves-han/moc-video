@@ -1147,3 +1147,14 @@
 
 - 独立只读round28：CLEAR；原报告docs/reviews/doc-review/round-28.md，固定HEAD5b8b934addfc22f4097b65b2138e38cad65e6f9f/sourcead2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际SHA与ADR029分段匹配。
 - 原s3/f10/g0保持，第四许可尚未消费；紧邻顺序/身份/两锁/clean检查后唯一原drive --once --max-sessions 4，实际计数4即消费。其他卡default2/T13paused/原权限资源时限和全部质量门保持；新源须原准确A1/完整verify/Git/固定独立CLEAR。
+
+
+## T0.9 第四会话单次测试模块与ImageAccessMap修复交接 2026-10-29T07:56:24.167876+00:00
+
+- 实施状态：WIP；ADR-029唯一第四会话已消费，当前sessions=4/4、失败10、generation0；本轮仅修改host.rs测试接线、N00/N01测试fixture与本记录。source=3d87e230b8c25eaccc8ebde2b3739a7033e9de2bc153ba7018db52b0529f141d，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原全部失败、A1/verify历史和WIP保持；T10等待，T13原暂停保持，未勾卡/未调用done/rebaseline，未新增RESOLVED/AUTHORIZED/BLOCKED。
+- Changed：host.rs以cfg(test)+path单次声明原observation_redaction模块；N00/N01均从crate::host::observation_redaction引用diagnostic/redact。helper文件逐字节与HEAD相同，原pub(super)可见性已覆盖host后代，无需扩大。共享回归从两个模块实例变为一个，下一次应实跑1项；N00/N01具名组仍分别17/19项。
+- Changed：N01合成poster保持原ImageRef字段；向真实images对象以synthetic-image为key插入完整ImageAccess（resource_id/url/expires_at），URL路径/cap/到期与poster一致；URL负例使用/data/images/synthetic-image/url，期望脱敏按values_mut遍历全部映射。保留原真实值先schema校验、观测副本、原响应不变、所有稳定字段/keep参数比较、6种非法cap与非法URL拒绝。生产DTO/schema/鉴权及helper行为保持。
+- Why：已读原完整verify的duplicate_mod错误及N01原n01.rs1371 pointer_mut unwrap失败（18pass/1fail）。重复模块声明造成Clippy失败，数组路径与ImageAccessMap对象形状冲突；本轮最小改动分别移除重复声明和使用实际映射契约。无产品功能改动。
+- Verified：四文件rustfmt --check --edition 2024 --config skip_children=true退出0；git diff --check退出0；原task.py check/start/show/scope/status均退出0，35卡且all changes inside scope。源码静态读回确认唯一共享声明/两处引用/helper原字节与可见性保持；AST/源码清单确认16项T09原生测试、13项需求、6项Python回归原样存在，8观测门原样保持。静态报告与准确外层计划：evidence/task-state/T0.9/session-4/static-validation.json、outer-validation-argv.json。初次格式检查仅N01链式调用换行失败，已note、局部rustfmt并成功复查；一次不存在dto.rs检索已note并按实际schema定位。
+- 验收 A1：NOT RUN；本轮Rust类型检查、locked构建、all-targets Clippy、共享/N01及相关旧回归、完整verify均NOT RUN，实际行为测试0。旧A1通过保留历史，新源码须重新执行。沿ADR010/ADR029使用已确认sysctl/sccache/Git权限限制和原125证据，本轮未重复探测/启动受限重命令，未绕过run.py，也未产生新的资源收据；资源后端仍待实际外层新收据记录。
+- Remaining/外层顺序：确认本CLI完全退出，核对原PID+创建时间及两锁、稳定source后，代办WIP T0.9: fix shared observer wiring and image map fixture；原run locked/offline check、all-targets Clippy -D warnings、6项Python回归、共享脱敏单项和N00/N01/T06/T07/T08相关回归。Rust输出继续复用现有t09.redact先过滤落盘，旧组保留原Cargo退出和真实计数，准确A1自身凭据门保持。按计划保留A1 payload首个冻结{python}字面量；16原生/8观测/13需求/原负载阈值全部通过后直接完整verify.py all，保持源码不再修改，再勾卡/追加真实完成记录/task.py done/受验完成提交/固定独立CLEAR/干净树。无第五会话许可，无新用户决定待确认；Git及受控行为复验按既有明确分工交外层。
