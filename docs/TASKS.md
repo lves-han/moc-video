@@ -402,7 +402,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 验证：协议向量、非数字页码、Unicode、URL中$及#编码、HTML播放页、超限、取消、重定向目标、禁用/删除；真实源闭环在T20记录。
 
 ### T0.5 N01 Stremio HTTP来源
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.3, T0.4
 - 需求：U08, R06, R19, R39, R46, R49, R58, R60, R61, R62, R64, R65, REQ-N01 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/host.rs`, `src-tauri/src/stremio.rs`, `src-tauri/src/source_dispatch.rs`, `src-tauri/src/commands.rs`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`

@@ -850,3 +850,13 @@
 - 验收 A1：NOT RUN for session-5 source；当前修复源的编译、合法引用与两项非规范反例行为、Clippy、完整verify均NOT RUN，实际运行行为通过数0。沿ADR010/026已知sandbox分工移交外层，未重复探测进程枚举/sccache/.git权限，未扩权或绕过原run执行器。前会话A1通过及最新verify失败保留各自原证据。
 - 外层下一步：确认本开发CLI及旧执行器/payload真实身份结束、两锁空闲、源码稳定后，按`evidence/task-state/T0.5/session-5/outer-validation-argv.json`逐项执行原run的locked/offline构建、focused规范引用正负例及all-targets Clippy -D warnings；继而准确A1原argv（含19项行为/独立schema/本次真实en/zh证据），全过后直接verify.py all。每个{python}替换用户给定项目venv解释器。保持4096MiB RSS采样/jobs2/测试线程1/原共享锁与超时，按原真实记录/勾卡/done/受验完成提交/固定独立CLEAR闭环。
 - Remaining：当前产品与测试源码停止编辑，source=0c467c4c440e691932fd2ae635074114b78ccb112da86e32c27b2a4045f5da1f；格式检查已通过，编译/Clippy与真实行为须外层复验。Git WIP按ADR010交外层代办，建议`WIP T0.5: preserve canonical reference checks without owned comparison`。既有5会话与失败证据保留，本次许可已消费。
+
+
+## T0.5 N01 Stremio HTTP来源 功能验收完成 2026-10-29T01:38:13.318319+00:00
+
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261029T013420163198-A1/output.log`；断言：exit0、23必需case/36JUnit通过0失败0跳过，19原生行为/164真实Host响应独立schema/4真实TMDB3.1.7 en-US与zh-CN响应通过；同ID tmdb:27205返回Inception/盗梦空间。manifest事务、资源过滤/required extras、分页去重、原始video顺序、meta回退与warnings、45秒聚合取消、语言缓存/竞态、真实值脱敏前验证及六类非法capability、非规范JSON引用拒绝保持并实测。
+- 构建与修复回归：原locked构建、canonical focused正负例及all-targets Clippy exit0；Clippy修复保留规范序列化文本精确相等，无告警抑制。源码稳定后执行准确A1，之后直接完整verify，无源码改动。
+- 完整verify：PASS；原收据`evidence/verify/20261029T013440366004.json`，六门全部exit0；workflow118通过/7平台skip、archived contracts、working contracts179结构/89语义、frontend57测试、类型及前端生产构建、native fmt/check/clippy及36单元+16宿主集成通过。最新日志/报告哈希及全部同source/protected/generation由原completion_evidence核对通过。
+- 受验source：0c467c4c440e691932fd2ae635074114b78ccb112da86e32c27b2a4045f5da1f；protected：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；generation1。原累计sessions5/失败5、全部WIP及失败报告保留；执行器/payload身份均结束，两锁空闲，当前树范围及冻结校验通过。macOS进程树RSS采样4096MiB/jobs2/线程1保持，当前六门最大峰值约1224MiB，无真实集群成员。
+- 当前完成收尾：按原task done及受验Git提交后，启动原drive --review-only固定提交独立只读巡检；真实CLEAR及干净树成立后才按序下一卡。产品阶段耐久待办沿ADR020保持NOT RUN，其他桌面平台沿既有平台决定。
