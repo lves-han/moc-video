@@ -945,3 +945,10 @@
 - 完整verify：PASS；原收据`evidence/verify/20261029T024601709058.json`，新source/protected/generation全部匹配、六门exit0：workflow128项121通过7平台skip；归档及working contracts；frontend57测试/类型/生产构建；native fmt/check/Clippy及50单元+16集成通过。原completion_evidence逐项检查本次最新A1/六门、日志/报告SHA、非零测试等成功，最新完整尝试保留。
 - 受验source：0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b；generation1。原sessions1/失败2（含原实现红测）、T13paused/s1/gen3、全部原历史与既定权限/4096MiB RSS采样/jobs2/线程1/时限保持；已记录身份全退出、两锁空闲、范围/冻结/干净树通过。产品长期耐久仍按ADR020移交，其他桌面平台按既有授权未实机执行。
 - 原完成收尾：task done/新受验Git提交后必须原drive --review-only对新固定提交独立复巡，真实CLEAR且干净树后才按序T07，当前不据文档CLEAR提前宣称本卡完整完成。
+
+
+## T0.6 新基线固定完成提交独立复巡CLEAR 2026-10-29T02:57:36.429156+00:00
+
+- 原固定独立复巡：CLEAR；`evidence/reviews/20261029T024917898675-T0.6/review.json`，真实read-only CLI结束exit0；固定完成提交f21cd25b0539447d29b4cad536aeed5aa0c89762。报告`evidence/reviews/20261029T024917898675-T0.6/output.log`确认原P1当前实现已修复、新基线准确A1/六门verify与日志/报告完整、8项需求追溯通过。
+- 外层再次核对原done/source/protected/gen1、完成树/干净树、真实ended/CLEAR/exit0及旧身份退出/两锁实际空闲，全部成立。T0.1..T0.6均具原completed和固定独立CLEAR，下一卡原next/严格文件顺序最早未完成=T0.7。原T06s1/失败2含红测、T13paused/s1/gen3及全部失败/旧done/旧P1报告/坏hash观测保留。
+- 当前控制修订与功能质量闭环完整完成。旧未登记payload历史退出/RSS仍如实未验证；产品长耐久及其它平台按原阶段决定保持待验。先整体重写同ID监管提示，移除已完成T06及其修复操作，再T07实质范围预检和原start/handoff/default2接续。
