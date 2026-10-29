@@ -1229,3 +1229,11 @@
 - 最小修复计划：仅tests内真实隐式IV素材构造（按每片非零序列号独立加密，清单无IV属性）及前置/独立oracle断言和反例；可用已有ffmpeg/openssl，不改生产DTO/鉴权/原要求。实际原HLS本地和原网关两路全部24帧逐帧等于原源且非零音频、所有分片/key/同cap/源上下文/序列仍完整验证，不能只删IV属性而保留原固定IV密文，不能把显式素材重新命名当隐式。保留原8行为/17观测/3需求与所有安全/负载/资源门。
 - 当前撤回T10完成勾选，原done.json及原成功A1/verify/受验提交a4dc860/独立CLEAR均保留历史并在`evidence/drive/t10-second-validation-20261029T091723Z/implicit-iv-gap/manifest.json`保存副本SHA；不手写状态或覆盖收据，不accept-review。source84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持。
 - 需要最小决定：原sessions2/失败2/gen0和全部历史保持，default2已用尽，请求仅T0.10追加一次2→3，由原CLI落实上述测试素材/前置与oracle最小修复并相关自验证，再外层原构建/Clippy/准确A1/直接完整verify/原done/Git/新固定独立CLEAR及干净树。其他卡default2、原权限/资源/时限/阈值及T13paused不变，当前未批准，不启动开发或后卡；按预算耗尽规则暂停监管等待真实回复。
+
+
+## T0.10 第三隐式IV修复会话真实批准 2026-10-29T09:57:10.277026+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对真实隐式IV逐片序列号素材/前置断言/独立校验及完整复验，明确回复“批准 T0.10 追加一次”，仅一次2→3，按ADR030执行。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 原sessions2/失败2/gen0、source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1及全部原成功/失败/完成副本/CLEAR保持历史；第三许可尚未消费。固定文档独立round29 CLEAR后唯一原drive --once --max-sessions 3，实际计数3即已消费，其他卡default2/原权限资源时限及T13paused保持。完成勾选仍撤回，真实隐式IV仍NOT RUN，新源须准确A1/完整verify/done/Git/新固定独立CLEAR/干净树后才完整完成，T11等待。冻结保持，无rebaseline。

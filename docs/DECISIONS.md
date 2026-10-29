@@ -234,3 +234,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 决定：仅T0.9累计上限3→4，唯一第四会话完成共用observation_redaction测试模块在host.rs的cfg(test)入口一次声明及两fixture引用；按原ImageAccessMap以resource_id构造/遍历N01脱敏夹具，保留真实响应先schema、原响应不变、全部稳定字段及URL正负例。保持helper行为/原16原生8观测13需求/负载阈值与安全门，不抑制lint、复制实现或修改生产DTO/鉴权；host.rs原已在本卡范围，仅测试编译接线改变。
 实施：固定实际文档独立round28 CLEAR后，紧邻current/next/严格最早=T0.9、原s3/f10/g0、旧全部身份退出/两锁空闲/clean/source/protected核对，唯一一次原drive --once --max-sessions 4。实际计数4即消费许可，其他卡default2及原权限/资源/全部时限保持，不重置历史、不延长时长。T13paused/s1/gen3保持，T10等待。
 复验：沿ADR010原CLI实施与真实相关自验证；已知sandbox sysctl/sccache/Git限制已由原125确认，不重复探测或绕过执行器，准确受限WIP在稳定退出边界交外层原run构建/Clippy/共享脱敏和N01等相关回归/准确A1；A1成功后直接完整verify、原done/Git/固定独立CLEAR及干净树全部成立才完成。旧A1通过、失败完整verify/旧回归及WIP、10失败（含两外层误判）均保持历史，新源重新验收。当前source=ad2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结定义保持，此单卡预算批准不调用rebaseline。
+
+
+## ADR-030 2026-10-29T09:57:10.277026+00:00 — 已采纳：仅T0.10追加一次真实隐式IV素材与校验修复会话
+
+来源：当前聊天明确询问“独立巡检确认T0.10标称隐式IV素材实际含显式IV=0，真实隐式IV尚未验证，原两次会话已用完；是否仅追加一次2→3，由原CLI修正逐片序列号加密素材、前置断言和独立校验，再完整复验，完整24帧、音频、安全门、资源、权限及全部历史保持，T11等待”，用户明确回复“批准 T0.10 追加一次”。
+决定：仅本卡累计开发上限2→3，唯一第三会话仅修tests内真实隐式IV素材生成及前置/独立oracle校验。按每个分片的非零媒体序列号大端128位IV独立AES128CBC加密，原清单不含IV属性；不只删除显式属性却复用固定IV密文。原本地HLS与原网关均须完整24视频帧逐帧hash等于原源、非零音频；显式/真实隐式/fMP4三模式、同cap/源上下文/全部子资源请求/序列及原8行为17观测3需求和全部安全/负载门保持，补素材前提及篡改反证，不改生产DTO/鉴权或降低断言。可复用已在用ffmpeg/openssl，不增加全局配置或控制器。
+实施：固定实际文档独立round29 CLEAR后，紧邻严格最早/current/next=T0.10、原s2/f2/g0、旧身份退出/两锁空闲/clean/source/protected核对，唯一一次原drive --once --max-sessions 3。实际计数3即消费，仅本卡一次；其他卡default2、原权限/4096MiB RSS采样/jobs2/线程1/全部时限保持，T13paused/s1/gen3和所有历史不变。
+复验：原CLI真实相关自验证读回，已确认sandbox sysctl/sccache/Git限制不重复探测或绕过原执行器；真实受限按ADR010稳定WIP退出边界交外层原run构建/Clippy/相关回归/准确A1，成功直接完整verify、原done/Git/新固定独立CLEAR/干净树齐备才完整完成，T11严格等待。原成功A1/完整verify/受验提交/独立CLEAR均保持历史，缺口修复后新源重新全验，不accept-review或覆盖历史。当前source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结定义保持，仅本卡预算和范围内测试修复授权，不调用rebaseline。
