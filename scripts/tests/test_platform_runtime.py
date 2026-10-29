@@ -1,5 +1,6 @@
 """Real local processes and OS locks; no online agent calls."""
 import contextlib
+import errno
 import importlib.util
 import json
 import os
@@ -39,6 +40,50 @@ class PlatformTests(unittest.TestCase):
         result = self.payload("raise SystemExit(7)")
         self.assertEqual(result["raw_exit"], 7)
         self.assertEqual(result["exit"], 7)
+
+    @unittest.skipIf(os.name == "nt", "POSIX session enumeration failure")
+    def test_initial_and_cleanup_enumeration_failure_registers_and_reaps_payload(self):
+        marker = self.base / "enumeration-failure-ready.json"
+        code = ("import subprocess,sys,json,time,psutil; from pathlib import Path; "
+                "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(20)']); "
+                f"Path({str(marker)!r}).write_text(json.dumps(dict(pid=child.pid,"
+                "identity='created:'+repr(psutil.Process(child.pid).create_time())))); time.sleep(20)")
+        observed, launched = [], []
+        original_launch = runtime.launch
+
+        def launch(*args, **kwargs):
+            kwargs.update(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            process = original_launch(*args, **kwargs)
+            launched.append((process, runtime.identity(process.pid)))
+            return process
+
+        def denied(*_args):
+            deadline = time.monotonic() + 3
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(marker.exists(), "real child must exist before the injected error")
+            raise PermissionError(errno.EPERM, "injected session enumeration denied")
+
+        try:
+            with runtime.FileLock(self.base / "enumeration-failure.lock") as lock:
+                self.assertTrue(lock.acquire())
+                with patch.object(runtime, "launch", side_effect=launch), \
+                        patch.object(runtime, "session_family", side_effect=denied), \
+                        self.assertRaisesRegex(runtime.WorkflowError, "清理"):
+                    runtime.run_payload(["{python}", "-B", "-c", code], cwd=self.base,
+                                        env=os.environ.copy(), seconds=5, memory_mib=128,
+                                        sampled=True, lock_fd=lock.fileno(),
+                                        observe=lambda pid, token, refs: observed.append((pid, token, refs)))
+            process, token = launched[0]
+            self.assertTrue(observed, "the first enumeration error must not hide the payload")
+            self.assertEqual(observed[0][0:2], (process.pid, token))
+            self.assertIn(dict(pid=process.pid, identity=token), observed[0][2])
+            self.assertIsNotNone(process.returncode, "owned direct child must be reaped")
+            self.assertFalse(runtime.alive(json.loads(marker.read_text())))
+        finally:
+            for process, token in launched:
+                runtime.terminate_session(process.pid, token)
+                process.wait(timeout=5)
 
     def test_watchdog_timeout_cleans_parent_and_child(self):
         code = "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)']); time.sleep(20)"

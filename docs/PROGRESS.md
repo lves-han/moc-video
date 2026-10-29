@@ -900,3 +900,32 @@
 - 原事实更正：首会话及外层早先“未创建/未启动payload”描述不准确。真实payload已启动并在执行器封存后继续输出资源入口失败；原生业务未执行的结论保持。历史当时退出时间及用量未验证；本次只读当前核查已记录runner/reviewer身份退出，未发现仍在运行的匹配T06验收命令，原两锁实际空闲，无清理身份不明资源。
 - 完成标记：因真实独立BLOCKING撤回T0.6完成勾选，保留原done.json/成功A1/完整verify/受验Git及所有失败为历史，不手写删除状态或accept-review。原sessions1/失败1/gen0、T13paused/s1/gen2保持；T07不启动。
 - 最小决定：请求仅批准原platform_runtime.py、workflow.py及相应scripts/tests异常清理与封存回归修订；保留原权限/资源/时限/预算及全部历史，通过原入口同步迁移当前T06与paused T13基线后重验并独立复巡。原batch rebaseline无需扩展，真实批准后新摘要/ADR/RESOLVED/独立文档审查按原流程；当前控制器/冻结正文未改、尚无此修订授权。提案及原样观测副本：`evidence/drive/t06-runtime-blocker-20261029T022232Z`。
+
+
+## T0.6 执行器最小修订批准落实与基线迁移 2026-10-29T02:37:08.638996+00:00
+
+- 结果：RESOLVED
+- 决定：当前聊天用户针对仅platform_runtime.py、workflow.py及对应scripts/tests生命周期修复/故障回归，以及现有原入口同步迁移T0.6与paused T0.13、预算权限资源历史保持的问题明确回复“批准最小修复及迁移”，按ADR027实施。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 迁移暂停卡：T0.13
+- 实施：仅原4文件应用隔离候选；先登记已创建payload anchor，重复枚举异常后仍回收直属Popen/同身份初始进程组和已知子进程；不确定边界记录cleanup_failed、不封存log_hash、重入屏障在原heavy锁内发布。原recover实时核对包括未登记子进程的session，确认清理后才将失败归档。未将枚举失败解释为空边界，未修改权限/资源/时限/默认会话或迁移逻辑。
+- 候选实际验证：原run runtime-cleanup-red20261029T023008600621在原实现上2项真实失败（1failure/1error）已保留并累计原失败计数；修复后focused20261029T023050668201两项通过。candidate-tests20261029T023259122703原127项回归通过/7平台skip；补未知子进程换组/leader退出仍阻止recover的正负回归session-recovery20261029T023504863712通过。实际应用后将从原入口再跑当前128项回归，固定文档独立复审及当前新基线准确A1/完整verify/done/Git/固定独立复巡全部仍待执行。
+- 历史保持：T06原sessions1、当前失败2（含明确红测）、gen0和T13paused/s1/gen2将经原rebaseline各加一次generation；旧done/成功A1/verify/受验提交/原P1 BLOCKING及坏hash收据日志保留，副本/候选/迁移前状态在`evidence/drive/runtime-cleanup-repair-20261029T022842Z`。T07等待；产品目录未改，整体source随4控制文件修订从4b44b7be0512795bb364a360ded9eb8f56e4788441efba245f40550af21972bb更新为0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc，当前批准该真实新摘要及T06/T13集合，不扩展其它控制器/路线。
+
+
+## T0.6 原入口双卡迁移已执行 2026-10-29T02:37:49.954721+00:00
+
+- 原task.py rebaseline T0.6 --protected 97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b --include-paused T0.13退出0，迁移2卡；T06 generation0→1、T13 generation2→3。逐字段核对除protected/generation/原rebaseline事件/append_only/rebaseline_scope外全部不变，原sessions/失败/硬额度/base/segments/current/paused均保留；T13继续paused，T07未启动。
+- source=0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc，当前/暂停卡原check_frozen及scope均通过，迁移日志与前后状态已保存于`evidence/drive/runtime-cleanup-repair-20261029T022842Z`。即将通过新原执行器完整回归128项并固定实际文档独立复审；当前A1/完整verify/完成提交/CLEAR均需新基线重验，旧证据仅保留历史。
+
+
+## T0.6 执行器实际修订后回归通过 2026-10-29T02:40:01.580252+00:00
+
+- 原受控回归：PASS；日志：`evidence/runs/20261029T023750424218-runtime-cleanup-tests/output.log`；exit0，实际128项，121通过/7平台skip。包含原125项及3项新增故障/恢复回归；首次与清理枚举同时EPERM的真实进程测试、失败收据不封存/重入拒绝/恢复后日志稳定、leader退出后未观察子进程另组仍阻止恢复均通过。新原执行器早登记身份、已创建直属进程回收及cleanup_failed屏障/最终session核对实跑，旧原实现红测失败证据保留。
+- 同source=0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b/generation1，原日志SHA匹配、所有原记录执行器/payload身份已结束，未完成运行为空。旧首次失败坏hash不回写，历史unknown用量不补造。原预算、权限、资源与暂停记录不变；下一步固定当前实际文件/基线与ADR027做独立文档复审，CLEAR后恢复同ID，重新准确A1/完整verify/done/Git/固定独立复巡。
+
+
+## T0.6 执行器入口完整校验通过 2026-10-29T02:42:06.933671+00:00
+
+- 原validate.py：PASS；经原run受监管，日志`evidence/runs/20261029T024002173220-runtime-document-check/output.log`，exit0；128项121通过7平台skip与task check/drive status/run无参数/verify无效参数四入口退出码均符合原契约，报告`evidence/script-validation.json`。
+- 新protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、source=0e96d6015d635dbdb919efc7abae2d0cdebc429ca7e5192526d18b0ab1a41bcc稳定，原执行器/payload身份全部退出。实际新控制器与原双卡迁移将以固定Git版本进行独立只读文档/修订复审，当前尚未把原P1 BLOCKING当CLEAR或推进T07。

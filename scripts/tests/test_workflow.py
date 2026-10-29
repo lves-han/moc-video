@@ -1556,6 +1556,42 @@ with w.runtime.FileLock(w.heavy_path()) as lock:
         run = dict(log="evidence/runs/missing-identity/output.log", payload_refs=[dict(pid=999999999, identity=None)])
         self.assertFalse(self.w.run_alive(run))
 
+    @unittest.skipIf(os.name == "nt", "POSIX session survives its leader")
+    def test_recovery_checks_unobserved_payload_session_after_leader_exit(self):
+        marker = self.repo / "evidence/unobserved-child.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        code = ("import subprocess,sys,json; from pathlib import Path; "
+                "child=subprocess.Popen([sys.executable,'-B','-c','import time; time.sleep(20)'],process_group=0); "
+                f"Path({str(marker)!r}).write_text(json.dumps(child.pid))")
+        process = self.w.runtime.launch([sys.executable, "-B", "-c", code], cwd=self.repo,
+                                        detached=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        token = "created:" + repr(self.w.runtime.psutil.Process(process.pid).create_time())
+        folder = self.repo / "evidence/runs/unobserved-child"
+        folder.mkdir(parents=True)
+        (folder / "output.log").write_text("partial output\n")
+        run = dict(id="unobserved-child", card=None, created=time.time()-10,
+                   status="cleanup_failed", log="evidence/runs/unobserved-child/output.log",
+                   payload_pid=process.pid, payload_identity=token,
+                   payload_refs=[dict(pid=process.pid, identity=token)])
+        self.w.write_json(folder / "receipt.json", run)
+        try:
+            self.assertEqual(process.wait(timeout=5), 0)
+            self.assertTrue(marker.exists())
+            self.assertTrue(self.w.run_alive(run), "unknown child in the original session must block recovery")
+            with self.assertRaisesRegex(self.w.WorkflowError, "仍存活"):
+                self.w.recover_runs()
+            self.assertNotIn("log_hash", self.w.read_json(folder / "receipt.json"))
+            self.w.runtime.terminate_session(process.pid, token)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.w.recover_runs()
+            recovered = self.w.read_json(folder / "receipt.json")
+            self.assertEqual(recovered["status"], "finished")
+            self.assertEqual(recovered["exit"], 125)
+            self.assertEqual(recovered["log_hash"], self.w.digest((folder / "output.log").read_bytes()))
+        finally:
+            self.w.runtime.terminate_session(process.pid, token)
+            process.wait(timeout=5)
+
     def test_executor_failure_keeps_live_payload_unfinished(self):
         self.w.start("T0.1")
         child = subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(20)"], cwd=self.repo)
@@ -1579,6 +1615,71 @@ with w.runtime.FileLock(w.heavy_path()) as lock:
         finally:
             self.w.runtime.terminate([dict(pid=child.pid, identity=token)])
             child.wait(timeout=5)
+
+    @unittest.skipIf(os.name == "nt", "POSIX session enumeration failure")
+    def test_enumeration_failure_blocks_reentry_and_seals_only_after_recovery(self):
+        self.w.start("T0.1")
+        marker = self.repo / "evidence/fault-payload.json"
+        payload = ("import os,json,time,psutil; from pathlib import Path; "
+                   f"Path({str(marker)!r}).write_text(json.dumps(dict(pid=os.getpid(),"
+                   "identity='created:'+repr(psutil.Process().create_time())))); "
+                   "print('payload ready',flush=True); time.sleep(.3); "
+                   "print('payload must stop before sealing',flush=True); time.sleep(20)")
+        bootstrap = '''import errno,sys,time
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0,sys.argv[1])
+import workflow as w
+def denied(*_):
+    deadline=time.monotonic()+3
+    while not Path(sys.argv[3]).exists() and time.monotonic()<deadline:
+        time.sleep(.01)
+    raise PermissionError(errno.EPERM,"injected session enumeration denied")
+with patch.object(w.runtime,"session_family",side_effect=denied):
+    raise SystemExit(w.execute_receipt(Path(sys.argv[2])))
+'''
+        original_launch = self.w.runtime.launch
+
+        def launch(argv, **kwargs):
+            self.assertIn("_execute", argv)
+            return original_launch([sys.executable, "-B", "-c", bootstrap,
+                                    str(self.repo / "scripts"), str(argv[-1]), str(marker)], **kwargs)
+
+        try:
+            with patch.object(self.w.runtime, "launch", side_effect=launch), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                run = self.w.run_command("enumeration-failure", ["{python}", "-B", "-c", payload])
+            self.assertEqual(run["status"], "cleanup_failed")
+            self.assertEqual(run["exit"], 125)
+            self.assertIn("payload_identity", run)
+            self.assertTrue(run["payload_refs"])
+            self.assertNotIn("log_hash", run, "unfinished output must remain unsealed")
+            self.assertIsNone(self.w.identity(run["payload_pid"]))
+            count = len(self.w.receipts())
+            with self.assertRaisesRegex(self.w.WorkflowError, "清理"):
+                self.w.run_command("must-not-start", ["{python}", "-B", "-c", "assert False"])
+            self.assertEqual(len(self.w.receipts()), count)
+            path = self.repo / Path(run["log"]).parent / "receipt.json"
+            run["created"] -= 10
+            self.w.write_json(path, run)
+            with patch.object(self.w.runtime, "session_family", side_effect=PermissionError("still denied")), \
+                    self.assertRaisesRegex(self.w.WorkflowError, "无法确认"):
+                self.w.recover_runs()
+            self.assertEqual(self.w.read_json(path)["status"], "cleanup_failed")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.w.recover_runs()
+            recovered = self.w.read_json(path)
+            self.assertEqual(recovered["status"], "finished")
+            self.assertEqual(recovered["exit"], 125)
+            log = self.repo / run["log"]
+            sealed = recovered["log_hash"]
+            time.sleep(.4)
+            self.assertEqual(self.w.digest(log.read_bytes()), sealed)
+            self.assertNotIn("payload must stop before sealing", log.read_text())
+        finally:
+            if marker.exists():
+                ref = json.loads(marker.read_text())
+                self.w.runtime.terminate_session(ref["pid"], ref["identity"])
 
     def test_agent_cleanup_preserves_previously_observed_detached_payload(self):
         child = subprocess.Popen([sys.executable, "-B", "-c", "import time; time.sleep(20)"], cwd=self.repo)

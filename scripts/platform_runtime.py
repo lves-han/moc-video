@@ -21,6 +21,10 @@ class WorkflowError(Exception):
         self.code = code
 
 
+class PayloadCleanupError(WorkflowError):
+    """The created payload boundary could not be proved fully cleaned."""
+
+
 def require_process_support():
     if psutil is None:
         raise WorkflowError("缺少 psutil；使用当前 Python 执行 -m pip install -r scripts/requirements.txt")
@@ -277,8 +281,10 @@ def terminate_session(session_id, leader_token):
 
 def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observe):
     require_process_support()
+    cleanup_exceptions = (WorkflowError, OSError, subprocess.TimeoutExpired)
     if os.name == "nt":
         from windows_job import WindowsPayload, JobError
+        cleanup_exceptions += (JobError,)
         try:
             process = WindowsPayload(resolve_argv(argv), cwd=cwd, env=env)
         except JobError as error:
@@ -301,6 +307,9 @@ def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observ
         # capture the anchor before the first poll, including quick root exits.
         token = (identity(process.pid) if os.name == "nt" else
                  "created:" + repr(psutil.Process(process.pid).create_time()))
+        anchor = dict(pid=process.pid, identity=token)
+        known[(process.pid, token)] = anchor
+        observe(process.pid, token, [anchor])
         started = time.monotonic()
         if os.name != "nt":
             members = lambda: session_family(process.pid, token)
@@ -332,6 +341,7 @@ def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observ
                 break
             time.sleep(.1)
     finally:
+        cleanup_errors = []
         try:
             if os.name == "nt":
                 process.terminate()
@@ -339,16 +349,46 @@ def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observ
                 if token is None:
                     # Popen retains child ownership and checks exit before
                     # signaling. No unverified SID may authorize a group kill.
+                    cleanup_errors.append("payload 身份未登记，无法确认其 session 边界")
                     process.kill()
                 else:
                     terminate_session(process.pid, token)
-                # Also stop confirmed children observed before leaving their
-                # session; detached daemons are not a supported payload pattern.
-                terminate(list(known.values()))
-                process.wait(timeout=5)
+        except cleanup_exceptions as error:
+            cleanup_errors.append(str(error))
+            if os.name != "nt" and token:
+                # The unreaped Popen child anchors this initial group even when
+                # enumeration is denied. Other groups remain unverified.
+                try:
+                    if ("created:" + repr(psutil.Process(process.pid).create_time()) == token
+                            and os.getsid(process.pid) == process.pid
+                            and os.getpgid(process.pid) == process.pid):
+                        os.killpg(process.pid, signal.SIGKILL)
+                except (psutil.NoSuchProcess, ProcessLookupError):
+                    pass
+                except (WorkflowError, OSError, psutil.AccessDenied) as failure:
+                    cleanup_errors.append(str(failure))
         finally:
-            if os.name == "nt":
-                process.close()
+            if os.name != "nt":
+                # A session enumeration error must not skip already-known
+                # children, including any that changed their process group.
+                try:
+                    terminate(list(known.values()))
+                except cleanup_exceptions as error:
+                    cleanup_errors.append(str(error))
+            try:
+                if os.name != "nt" and process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5)
+            except cleanup_exceptions as error:
+                cleanup_errors.append(str(error))
+            finally:
+                if os.name == "nt":
+                    try:
+                        process.close()
+                    except cleanup_exceptions as error:
+                        cleanup_errors.append(str(error))
+        if cleanup_errors:
+            raise PayloadCleanupError("payload 边界清理未确认：" + "; ".join(cleanup_errors), 125)
     raw = process.returncode
     return dict(raw_exit=raw, exit=forced if forced is not None else raw if raw >= 0 else 128 - raw,
                 note=note, peak_rss_bytes=peak if sampled else None)

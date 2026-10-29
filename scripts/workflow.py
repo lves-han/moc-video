@@ -826,6 +826,14 @@ def run_alive(run):
         return True
     if any(runtime.alive(item) for item in run.get("payload_refs", [])):
         return True
+    if os.name != "nt" and run.get("payload_pid") and run.get("payload_identity"):
+        try:
+            if runtime.session_family(run["payload_pid"], run["payload_identity"]):
+                return True
+        except (WorkflowError, OSError) as error:
+            raise WorkflowError("无法确认 payload session 清理；保留未完成状态") from error
+    elif run.get("status") == "cleanup_failed" or (run.get("started") and run.get("status") != "finished"):
+        raise WorkflowError("无法确认未登记 payload 边界的清理；保留未完成状态")
     if sys.platform == "linux" and run.get("scope_started"):
         if run.get("boot") != Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip():
             return False
@@ -939,7 +947,7 @@ def execute_receipt(path):
     write_json(path, run)
     lock_path = heavy_path(cfg)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    rc, raw_rc, note, counts = 2, None, "", None
+    rc, raw_rc, note, counts, cleanup_failed = 2, None, "", None, False
     try:
         with runtime.FileLock(lock_path) as lock:
             deadline = time.monotonic() + 1800
@@ -949,6 +957,8 @@ def execute_receipt(path):
                 if time.monotonic() >= deadline:
                     raise WorkflowError("等待全局重任务锁超时")
                 time.sleep(0.2)
+            if any(item.get("status") == "cleanup_failed" for item in receipts()):
+                raise WorkflowError("存在未完成清理的重命令；先核对并 recover")
             if run.get("card"):
                 check_frozen(run["card"])
             run.update(status="running", source=snapshot(), started=utc())
@@ -971,8 +981,16 @@ def execute_receipt(path):
                     run.update(payload_pid=pid, payload_identity=token, payload_refs=refs)
                     write_json(path, run)
 
-            result = runtime.run_payload(run["argv"], cwd=REPO, env=env, seconds=timeout, memory_mib=cfg["memory_mib"],
-                                         sampled=runtime.backend() == "process-watchdog", lock_fd=lock.fileno(), observe=observe)
+            try:
+                result = runtime.run_payload(run["argv"], cwd=REPO, env=env, seconds=timeout, memory_mib=cfg["memory_mib"],
+                                             sampled=runtime.backend() == "process-watchdog", lock_fd=lock.fileno(), observe=observe)
+            except runtime.PayloadCleanupError as error:
+                # Publish the barrier while still holding the heavy lock. A
+                # queued executor must see it before it can launch a payload.
+                cleanup_failed = True
+                run.update(status="cleanup_failed", exit=125, note=str(error))
+                write_json(path, run)
+                raise
             raw_rc, rc, note = result["raw_exit"], result["exit"], result["note"]
             run["peak_rss_bytes"] = result["peak_rss_bytes"]
             run["after_source"] = snapshot()
@@ -1000,13 +1018,21 @@ def execute_receipt(path):
         print(f"run: {error}", flush=True)
         if raw_rc == 0:
             rc = 3
-    remaining = any(runtime.alive(item) for item in run.get("payload_refs", []))
-    if remaining:
-        rc, note = 125, "自己的子进程尚未清理；保留未完成状态，不允许重复启动或验收"
-    run.update(status="cleanup_failed" if remaining else "finished", raw_exit=raw_rc, exit=rc, tests=counts, note=note, ended=utc())
+    try:
+        remaining = any(runtime.alive(item) for item in run.get("payload_refs", []))
+    except (WorkflowError, OSError) as error:
+        remaining = True
+        note = str(error)
+    if remaining or cleanup_failed:
+        detail = run.get("note", "") if cleanup_failed else note
+        rc, note = 125, "payload 边界清理未确认；保留未完成状态，不允许重复启动或验收"
+        if detail:
+            note += "；" + detail
+    run.update(status="cleanup_failed" if remaining or cleanup_failed else "finished", raw_exit=raw_rc, exit=rc, tests=counts, note=note, ended=utc())
     print(f"run: id={run['id']} exit={rc} tests={counts} log={run['log']} note={note}", flush=True)
     record_failure(run)
-    run["log_hash"] = digest((REPO / run["log"]).read_bytes())
+    if run["status"] == "finished":
+        run["log_hash"] = digest((REPO / run["log"]).read_bytes())
     write_json(path, run)
     return rc
 
@@ -1015,6 +1041,8 @@ def run_command(name, argv, check=None):
     if os.environ.get("AGENT_WORKFLOW_RUN"):
         raise WorkflowError("run.py/verify.py 不可嵌套")
     cfg, cid = config(), current()
+    if any(item.get("status") == "cleanup_failed" for item in receipts()):
+        raise WorkflowError("存在未完成清理的重命令；先核对并 recover")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or not argv:
         raise WorkflowError("运行名或命令无效")
     if cid:
@@ -1060,12 +1088,17 @@ def run_command(name, argv, check=None):
         write_json(folder / "launcher.json", dict(pid=process.pid, identity=identity(process.pid)))
         rc = process.wait()
     record = read_json(path)
-    if record["status"] != "finished":
-        alive = run_alive(record)
+    if record["status"] not in ("finished", "cleanup_failed"):
+        try:
+            alive = run_alive(record)
+            cleanup_note = ""
+        except (WorkflowError, OSError) as error:
+            alive, cleanup_note = True, "；" + str(error)
         record.update(status="cleanup_failed" if alive else "finished", exit=(rc if rc > 0 else 128 - rc if rc < 0 else 125), raw_exit=rc, ended=utc(),
-                      tests=None, note="执行器失败或被中断；没有完整验收证据" + ("；旧子进程仍存活，禁止重复启动" if alive else ""))
+                      tests=None, note="执行器失败或被中断；没有完整验收证据" + ("；旧边界清理未确认，禁止重复启动" if alive else "") + cleanup_note)
         record_failure(record)
-        record["log_hash"] = digest(log.read_bytes())
+        if not alive:
+            record["log_hash"] = digest(log.read_bytes())
         write_json(path, record)
     print("\n".join(log.read_text(errors="replace", encoding="utf-8").splitlines()[-30:]))
     return record
