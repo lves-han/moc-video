@@ -1,5 +1,7 @@
 //! Synthetic protocol fixtures. Real addon responses have a separate live test
 //! and evidence directory; none of these values are presented as real metadata.
+#[path = "t06_stremio.rs"]
+mod t06;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{

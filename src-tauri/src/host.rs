@@ -213,14 +213,14 @@ impl Host {
                 "http_source_sync"
             }
             .into(),
-            "get_home" if input["page"] == 1 && input["section_ref"].is_null() => {
+            "get_home" => {
                 let committed = self.committed.lock().expect("Host commit lock");
                 committed
                     .sources
                     .source(input["source_id"].as_str().unwrap_or(""), None)
                     .ok()
                     .and_then(|source| source["kind"].as_str())
-                    .map(|kind| format!("{kind}_home"))
+                    .map(|kind| crate::home::operation(kind, input))
                     .unwrap_or_else(|| "default_metadata".into())
             }
             _ => "default_metadata".into(),

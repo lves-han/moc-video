@@ -867,3 +867,15 @@
 - 原独立巡检：CLEAR；`evidence/reviews/20261029T013815823337-T0.5/review.json`，实际read-only CLI结束exit0，固定完成提交b7fa9ef556b5cb55add4f506ad9c57599a80fddc。报告`evidence/reviews/20261029T013815823337-T0.5/output.log`，13项需求/原产品与Host/真实功能证据审查通过。
 - 外层再次核对原done/source/protected/generation及完成树、准确A1/六门verify、review固定提交和干净树，全部成立；旧驱动/巡检/执行器/payload身份已退出，原两锁实际空闲。T0.1至T0.5均具原completed及固定独立CLEAR，下一卡原next/严格顺序最早未完成为T0.6。
 - 历史N00失败日志摘要维护问题仍按BACKLOG保留，本卡最新完成证据完整。长时耐久按ADR020仍移交产品测试阶段。原全部会话/失败保留；先整体重写同ID监管提示词，再T0.6范围预检与原start/handoff/default2接续。
+
+
+## T0.6 T06 第1会话首页数据适配与ADR010代验交接 2026-10-29T02:04:15.504028+00:00
+
+- 实施状态：WIP；当前T0.6、sessions=1/2、failures=1、generation=0、protected=01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d。仅处理本卡范围，TASKS保持未勾选，冻结协议/规格/控制器/预算未改，T0.13既有暂停保持。
+- Changed / Why：新增src-tauri/src/home.rs共用首页关系校验、预算选择和栏目子deadline。Host按来源与全量/单栏范围选择预算；两类HTTP适配复用栏目子任务及共用结果校验。MacCMS进入1000ms预留区时保留已成功栏目，剩余栏目按原index/section_ref记入failed_sections；空页停止分页。Stremio本地化和回退沿同一栏目30秒deadline，保留当前成功数据/回退诊断，避免各子HTTP续获时限。
+- 共用客体边界：GuestHome保存host/guest epoch、source/revision、客体原section_ref与宿主映射；一次响应多栏/重复标题/动态全量刷新保留返回顺序与独立引用。局部重试/翻页核对原index/id/continuation并原样转发客体引用，失败及取消保持原登记；同provider首页串行，排队时间计入原deadline。当前Host的Cloudstream真实运输仍返回ENGINE_NOT_READY，真实getMainPage与7包/全部实例由N02接入验证；本卡报告明确将这些共用DTO/客体边界向量标为synthetic。
+- 验收实现：tests/acceptance/t06.py包含全部8项需求汇总、14项原生行为清单与独立Python schema/home_response/section identity核对。tests/fixtures/t06*.rs复用N00/N01原生HTTP fixture，覆盖单/多/重复/动态栏目、A成功B失败C成功的0/1/2位置、单栏失败/成功恢复、原分类与offset翻页、空/全错/部分错、未执行栏目重试、30秒共享时限、45秒预留、顺序调用、排队超时/取消、旧世代/修订/错误引用及排序/分页关系反例。src/models.ts已有准确字段，沿用原DTO。
+- Verified（实际静态检查）：task.py check/start/show/status退出0，35卡规则核对通过；rustfmt --check --edition 2024 --config skip_children=true针对本卡8个Rust文件退出0；git diff --check退出0；Python AST、14项Rust定义与A1清单相等/需求覆盖、协议与配置JSON及Cargo TOML/lock解析退出0。静态记录：`evidence/task-state/T0.6/session-1/static-validation.json`。当前稳定source=4b44b7be0512795bb364a360ded9eb8f56e4788441efba245f40550af21972bb。
+- 验收 A1：执行器FAIL，行为NOT RUN；准确原argv经run.py发起后在macOS sysctl进程枚举阶段收到EPERM，exit2、raw_exit=null、tests=null，未创建payload，编译与行为通过数0。日志：`evidence/runs/20261029T015844789474-A1/output.log`；收据：`evidence/runs/20261029T015844789474-A1/receipt.json`。已task.py note说明原因与下一步，保留失败历史。收据标明process-watchdog/RSS采样4096MiB/jobs2/线程1；资源范围启动前失败，未宣称完成内存监管实测。未重复权限探测、扩权或绕过原run。
+- Remaining：Rust类型检查/构建、14项真实原生测试及独立Python观测断言、Clippy与完整verify均NOT RUN；当前实现只经过上述静态检查。按ADR010交外层代办WIP Git与原run验收，不新增用户决定或BLOCKED。准确报告尚未生成；禁止据静态检查勾卡/done/宣称DONE。
+- 外层下一步：确认本开发CLI与旧执行器真实身份结束、两锁空闲和源码稳定后，按`evidence/task-state/T0.6/session-1/outer-validation-argv.json`先原run locked/offline构建，再准确A1：argv=["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/t06.py","--suite","all","--report","evidence/acceptance/T06-all.json","--junit","evidence/acceptance/T06-all.xml"]。全部通过后直接argv=["{python}","-B","scripts/verify.py","all"]，保持原资源/锁/时限；再真实记录/勾选/task.py done/受验完成提交/固定独立CLEAR。若暴露代码或测试问题，通过原开发会话修复并保留本次失败。建议WIP提交：`WIP T0.6: adapt scoped home data and preserve section deadlines`。

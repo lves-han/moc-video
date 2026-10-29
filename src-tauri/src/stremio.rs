@@ -757,7 +757,11 @@ impl Catalog {
                 chunk
                     .iter()
                     .map(|section| {
-                        scope.spawn(move || self.column(http, section, page, language, job))
+                        scope.spawn(move || {
+                            crate::home::column(job, handle.is_none(), |child| {
+                                self.column(http, section, page, language, child)
+                            })
+                        })
                     })
                     .collect::<Vec<_>>()
                     .into_iter()
@@ -792,22 +796,23 @@ impl Catalog {
                             return Err(error);
                         }
                         first_error.get_or_insert_with(|| error.clone());
-                        failed.push(json!({"title": section.title, "section_ref": section.handle, "index": section.index, "error": error}));
+                        failed.push(crate::home::failure(
+                            &section.title,
+                            &section.handle,
+                            section.index,
+                            &error,
+                        ));
                     }
                 }
             }
         }
         job.check()?;
-        if success
-            .as_array()
-            .expect("Stremio sections array")
-            .is_empty()
-        {
-            return Err(
-                first_error.unwrap_or_else(|| upstream("Stremio home has no successful catalogs"))
-            );
-        }
-        output.value = json!({"page": {"source_id": self.captured.source_id, "source_revision": self.captured.source_revision, "sections": success, "failed_sections": failed}, "images": {}});
+        let success = match success {
+            Value::Array(sections) => sections,
+            _ => unreachable!("Stremio sections array"),
+        };
+        let page = crate::home::page(input, success, failed, first_error)?;
+        output.value = json!({"page": page, "images": {}});
         output.diagnostics.truncate(64);
         wire_size(&output.value, LIMIT)?;
         Contracts::get().validate("HomeViewData", &output.value)?;

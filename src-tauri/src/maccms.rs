@@ -601,22 +601,26 @@ impl Catalog {
         let mut images = Vec::new();
         let mut first_error = None;
         for chunk in sections.chunks(if section_ref.is_some() { 1 } else { 4 }) {
-            if section_ref.is_none() && job.aggregate_remaining_ms()? == 0 {
-                return Err(ApiError::new(
-                    "UPSTREAM_TIMEOUT",
-                    "MacCMS home exhausted its cleanup reserve",
-                ));
+            if section_ref.is_none()
+                && let Some(error) = crate::home::reserve_error(job)?
+            {
+                first_error.get_or_insert_with(|| error.clone());
+                failed.extend(chunk.iter().map(|section| {
+                    crate::home::failure(&section.title, &section.handle, section.index, &error)
+                }));
+                continue;
             }
             let results = std::thread::scope(|scope| {
-                let workers: Vec<_> = chunk.iter().map(|section| scope.spawn(move || {
+                let workers: Vec<_> = chunk.iter().map(|section| scope.spawn(move || crate::home::column(job, section_ref.is_none(), |job| {
                     let page_text = page.to_string();
                     let response = self.request(http, &[("ac", "detail"), ("t", &section.type_id), ("pg", &page_text)], job, false)?;
                     let mapped = self.cards(&response, page)?;
                     let count = number(&response["pagecount"], 0)?;
+                    let has_next = !mapped.value.as_array().expect("Mapped cards").is_empty() && page < count && page < 10000;
                     Ok::<_, ApiError>((json!({"id": section.id, "title": section.title, "section_ref": section.handle,
-                        "index": section.index, "items": mapped.value, "has_next": page < count,
-                        "next_page": if page < count { Some(page + 1) } else { None }, "page": page}), mapped.images))
-                })).collect();
+                        "index": section.index, "items": mapped.value, "has_next": has_next,
+                        "next_page": if has_next { Some(page + 1) } else { None }, "page": page}), mapped.images))
+                }))).collect();
                 workers
                     .into_iter()
                     .map(|worker| {
@@ -639,18 +643,18 @@ impl Catalog {
                             return Err(error);
                         }
                         first_error.get_or_insert_with(|| error.clone());
-                        failed.push(json!({"title": section.title, "section_ref": section.handle, "index": section.index, "error": error}));
+                        failed.push(crate::home::failure(
+                            &section.title,
+                            &section.handle,
+                            section.index,
+                            &error,
+                        ));
                     }
                 }
             }
         }
-        if success.is_empty() {
-            return Err(
-                first_error.unwrap_or_else(|| upstream("MacCMS home has no successful columns"))
-            );
-        }
-        let value = json!({"page": {"source_id": self.captured.source_id, "source_revision": self.captured.source_revision,
-            "sections": success, "failed_sections": failed}, "images": {}});
+        let page = crate::home::page(input, success, failed, first_error)?;
+        let value = json!({"page": page, "images": {}});
         wire_size(&value, RESPONSE_LIMIT)?;
         Ok(Home {
             mapped: Mapped { value, images },

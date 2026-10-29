@@ -1,5 +1,7 @@
 //! Compiled as unit tests of the production module, so the two fixed fixture
 //! hostnames are unavailable in ordinary application builds.
+#[path = "t06_maccms.rs"]
+mod t06;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
