@@ -1141,3 +1141,9 @@
 - 决定：用户针对仅T0.9一次3→4、host.rs仅cfg(test)单次测试模块接线与N01 ImageAccessMap夹具修复后完整复验明确答“批准 T0.9 再追加一次”，并指示继续，按ADR029执行。
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 原sessions3/失败10/generation0、source=ad2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e和全部历史保持；第四许可尚未消费。固定文档round28独立CLEAR后唯一原drive --once --max-sessions 4，实际计数4即已消费。其他卡默认2/T13paused/原权限资源时限及全部质量门保持。当前旧源A1通过、完整verify失败，未done/完整完成；新源须重新准确A1/fullverify/Git/固定独立CLEAR，T10等待。无冻结修订/rebaseline。
+
+
+## T0.9 第四会话授权独立文档CLEAR 2026-10-29T07:51:43.474594+00:00
+
+- 独立只读round28：CLEAR；原报告docs/reviews/doc-review/round-28.md，固定HEAD5b8b934addfc22f4097b65b2138e38cad65e6f9f/sourcead2b5de36d1616ff00d2c4423366038dbbbc9ae976904c8713f28d88220d3e1e/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际SHA与ADR029分段匹配。
+- 原s3/f10/g0保持，第四许可尚未消费；紧邻顺序/身份/两锁/clean检查后唯一原drive --once --max-sessions 4，实际计数4即消费。其他卡default2/T13paused/原权限资源时限和全部质量门保持；新源须原准确A1/完整verify/Git/固定独立CLEAR。
