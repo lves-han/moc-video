@@ -1189,3 +1189,10 @@
 - 验收 A1：NOT RUN；Rust类型检查/locked构建/all-targets Clippy、真实HTTP/解码/时钟断言、准确A1与完整verify均NOT RUN。本会话沿ADR-010及前卡真实125证据，未重复探测已确认sysctl/sccache/Git权限限制，未绕过原run或产生新的重任务收据；实际资源后端须由外层新收据记录。
 - 稳定源码：bbb45000d1be394e49c262e1d753be7f4270cbdf406a246cd36608a49f055dbb；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑；Git WIP 按ADR-010交外层，建议 WIP T0.10: implement session-bound HLS manifest rewriting。
 - Remaining/外层顺序：本CLI退出后按PID+创建时间核对原身份与两锁、冻结/scope及稳定source，代办WIP；准确argv见 evidence/acceptance/T10-session-1-outer-argv.json，依次原run.py locked/offline check、all-targets Clippy -D warnings、t09_相关回归、准确A1（保留payload首个冻结{python}字面量）。八原生/17观测/三需求和全部负例通过后直接verify.py all，源码保持，再真实记录、勾卡、task.py done、受验完成提交及固定独立CLEAR。新旧失败及全部历史保留；原4096MiB macOS RSS采样/jobs2/线程1、时限和权限保持，无新增用户决定待确认。
+
+
+## T0.10 首轮真实验收返修 2026-10-29T09:00:59.004278+00:00
+
+- 实施状态：WIP；原sessions1/2、失败1/gen0，build及all-targetsClippy通过、旧T09 16/16通过。准确A1失败，原日志evidence/runs/20261029T085806284243-A1/output.log；8原生实跑7pass1fail，完整verify尚NOT RUN。
+- 真实失败：t10_real_aes128_explicit_implicit_iv_and_fmp4_decode在1132逐帧比较得到前12帧而原源为24帧，前三种模式尚未完整验证，根因待定位。另t10输出过滤把固定43字符测试名误报凭据，保留原Cargo101与实际解码失败事实。需保存脱敏模式/清单/请求与FFmpeg诊断再最小修复，保留24完整帧逐帧hash、音频、三模式、8行为17观测/3需求及全部安全/资源门，不降低数量或删反例。
+- 证据副本及SHA：evidence/drive/t10-first-validation-20261029T085730Z/first-failure/manifest.json；原WIP2ed3743及所有收据保持。原note/准确handoff后用原剩余第二开发会话普通drive --once/default2，未申请新预算/权限/时限；后卡严格等待，T13paused保持。
