@@ -962,3 +962,10 @@
 - Verified（实际静态检查）：task.py check/start/show/status/scope退出0，35卡且all changes inside scope；rustfmt --check --edition 2024 --config skip_children=true针对9个相关Rust文件退出0；git diff --check退出0。Python AST、10项Rust函数与A1清单一致/8项需求覆盖、Cargo TOML/lock及协议/配置JSON解析退出0。静态记录：`evidence/task-state/T0.7/session-1/static-validation.json`；稳定source=22e0b93da9075163f195e2faaf24a84c462e1348fea5a14c19d967555039a93e。
 - 验收 A1：NOT RUN；Rust类型检查/构建、10项原生行为、独立Python投影、Clippy、完整verify、done与固定提交独立CLEAR均NOT RUN，本轮真实行为执行数0。已知sandbox进程枚举/sccache/.git限制沿ADR010处理，未重复探测或扩权。正常A1报告及JUnit尚未生成；原失败历史保持。
 - Remaining：源码停止编辑，外层确认本开发CLI/旧重命令真实身份已结束、两锁空闲及源码稳定后，按`evidence/task-state/T0.7/session-1/outer-validation-argv.json`执行原run locked/offline构建和准确A1；A1通过后直接verify.py all，再按原规则真实记录、勾卡、task.py done、受验完成提交及固定独立CLEAR。Git WIP按ADR010交外层代办，建议`WIP T0.7: normalize detail metadata and preserve episode groups`。真实Cloudstream原7包、Ddys/SuperVod继续N02；资源URL网关/图像访问映射继续T09，当前验证目标为详情实际引用的内存登记与递归覆盖。
+
+
+## T0.7 首次准确功能通过与Clippy返修 2026-10-29T03:27:23.487889+00:00
+
+- 实施状态：WIP；原sessions1/2、失败1、generation0、source=22e0b93da9075163f195e2faaf24a84c462e1348fea5a14c19d967555039a93e/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持，无冻结变更。
+- 准确A1：PASS；`evidence/runs/20261029T032302973765-A1/output.log`，10原生、19投影/119篡改反例、21JUnit通过0失败。最新完整verify：FAIL；`evidence/verify/20261029T032312309820.json`，前5门exit0、第6fmt/check通过后Clippy question_mark拒绝stremio.rs1393小时单位解析写法，日志`evidence/runs/20261029T032459700827-verify-project/output.log`；原生全量test未到达，最新完整失败保留。
+- 下一步：在原剩余第2会话内由原脚本最小修复该None传播写法，保持显式min/m/h单位、未知/溢出/单位顺序、UTC和所有原schema/投影反例，不抑制lint、不加max-sessions。静态/实际相关自验证后按既有沙箱分工稳定交接，外层重新准确A1/直接完整verify/done/Git/固定独立CLEAR。旧身份/执行器均退出、两锁空闲，当前clean/frozen/scope核对通过，后卡等待，无用户新决定需求。
