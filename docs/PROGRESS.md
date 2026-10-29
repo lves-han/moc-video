@@ -860,3 +860,10 @@
 - 完整verify：PASS；原收据`evidence/verify/20261029T013440366004.json`，六门全部exit0；workflow118通过/7平台skip、archived contracts、working contracts179结构/89语义、frontend57测试、类型及前端生产构建、native fmt/check/clippy及36单元+16宿主集成通过。最新日志/报告哈希及全部同source/protected/generation由原completion_evidence核对通过。
 - 受验source：0c467c4c440e691932fd2ae635074114b78ccb112da86e32c27b2a4045f5da1f；protected：01b1775adb18066ee1627c284689f16eab9f1cb8c4e734bee4ed887660aac45d；generation1。原累计sessions5/失败5、全部WIP及失败报告保留；执行器/payload身份均结束，两锁空闲，当前树范围及冻结校验通过。macOS进程树RSS采样4096MiB/jobs2/线程1保持，当前六门最大峰值约1224MiB，无真实集群成员。
 - 当前完成收尾：按原task done及受验Git提交后，启动原drive --review-only固定提交独立只读巡检；真实CLEAR及干净树成立后才按序下一卡。产品阶段耐久待办沿ADR020保持NOT RUN，其他桌面平台沿既有平台决定。
+
+
+## T0.5 固定完成提交独立巡检CLEAR 2026-10-29T01:45:46.167757+00:00
+
+- 原独立巡检：CLEAR；`evidence/reviews/20261029T013815823337-T0.5/review.json`，实际read-only CLI结束exit0，固定完成提交b7fa9ef556b5cb55add4f506ad9c57599a80fddc。报告`evidence/reviews/20261029T013815823337-T0.5/output.log`，13项需求/原产品与Host/真实功能证据审查通过。
+- 外层再次核对原done/source/protected/generation及完成树、准确A1/六门verify、review固定提交和干净树，全部成立；旧驱动/巡检/执行器/payload身份已退出，原两锁实际空闲。T0.1至T0.5均具原completed及固定独立CLEAR，下一卡原next/严格顺序最早未完成为T0.6。
+- 历史N00失败日志摘要维护问题仍按BACKLOG保留，本卡最新完成证据完整。长时耐久按ADR020仍移交产品测试阶段。原全部会话/失败保留；先整体重写同ID监管提示词，再T0.6范围预检与原start/handoff/default2接续。
