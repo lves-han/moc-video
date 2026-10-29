@@ -18,6 +18,14 @@ pub type Context = Arc<dyn Any + Send + Sync>;
 /// interceptors remain owned/executed by the Cloudstream bridge (N02).
 pub type HttpHeaders = dyn Fn(&url::Url, &mut HeaderMap) -> Result<(), ApiError> + Send + Sync;
 pub struct HttpContext(pub Box<HttpHeaders>);
+/// Optional native manifest response processing, after HTTP decoding and before
+/// URI registration. It retains the same source instance as request processing.
+pub type HttpManifest =
+    dyn Fn(&url::Url, &mut HeaderMap, &mut Vec<u8>) -> Result<(), ApiError> + Send + Sync;
+pub struct HttpManifestContext {
+    pub request: Box<HttpHeaders>,
+    pub response: Box<HttpManifest>,
+}
 #[derive(Clone)]
 pub struct Link {
     pub original: Value,

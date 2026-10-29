@@ -2,9 +2,9 @@
 //! authorize registered resources, never browser-supplied upstream URLs.
 use crate::{
     contracts::ApiError,
-    host::maccms::{Http, Image, http_url},
+    host::maccms::{Http, Image, http_url, redirect_headers},
     requests::{Clock, MonotonicClock},
-    resolution::{HttpContext, LinkRecord},
+    resolution::{HttpContext, HttpManifestContext, LinkRecord},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use reqwest::{Method, header::HeaderMap};
@@ -28,6 +28,9 @@ use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 use uuid::Uuid;
+
+#[path = "hls.rs"]
+mod hls;
 
 const SESSION_IDLE_MS: u64 = 300_000;
 const IMAGE_IDLE_MS: u64 = 1_800_000;
@@ -97,6 +100,7 @@ struct Records {
     sequence: u64,
 }
 struct Shared {
+    address: SocketAddr,
     records: Mutex<Records>,
     clock: Arc<dyn Clock>,
     token: String,
@@ -126,6 +130,7 @@ impl Gateway {
             .local_addr()
             .map_err(|_| ApiError::internal("Loopback address unavailable"))?;
         let shared = Arc::new(Shared {
+            address,
             records: Mutex::new(Records::default()),
             clock,
             token: capability()?,
@@ -226,7 +231,11 @@ impl Gateway {
             Resource {
                 url: selected.link.url.clone(),
                 headers: selected.link.headers.clone(),
-                kind: "media",
+                kind: if selected.link.kind == "hls" {
+                    "manifest"
+                } else {
+                    "media"
+                },
                 diagnostic: Diagnostic::default(),
             },
         )]);
@@ -622,10 +631,14 @@ impl RequestLease {
             }
             d.completed = self.sequence;
             d.failure = result.err().map(|e| {
-                (
-                    self.sequence,
-                    e.with_details(json!({"resource_kind":self.kind})),
-                )
+                let mut details = e
+                    .details
+                    .as_ref()
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                details.insert("resource_kind".into(), json!(self.kind));
+                (self.sequence, e.with_details(Value::Object(details)))
             });
         }
     }
@@ -719,7 +732,10 @@ async fn serve(
                 .is_none_or(|h| {
                     h.to_str().is_ok_and(|v| {
                         v.split(',').all(|s| {
-                            matches!(s.trim().to_ascii_lowercase().as_str(), "range" | "if-range")
+                            matches!(
+                                s.trim().to_ascii_lowercase().as_str(),
+                                "range" | "if-range" | "if-none-match" | "if-modified-since"
+                            )
                         })
                     })
                 });
@@ -783,7 +799,9 @@ async fn transfer(
     let url = http_url(&lease.url, false)?;
     let mut headers = lease.headers.clone();
     if let Some(selected) = &lease.selected {
-        if !selected.link.referer.is_empty() {
+        if !selected.link.referer.is_empty()
+            && http_url(&selected.link.url, false)?.origin() == url.origin()
+        {
             headers.insert(
                 "referer",
                 selected
@@ -797,13 +815,17 @@ async fn transfer(
             .into_iter()
             .flatten()
         {
-            let context = context.downcast_ref::<HttpContext>().ok_or_else(|| {
-                ApiError::new(
+            let request = if let Some(context) = context.downcast_ref::<HttpContext>() {
+                &context.0
+            } else if let Some(context) = context.downcast_ref::<HttpManifestContext>() {
+                &context.request
+            } else {
+                return Err(ApiError::new(
                     "CAPABILITY_UNAVAILABLE",
                     "Network context requires its original provider gateway",
-                )
-            })?;
-            (context.0)(&url, &mut headers).map_err(|error| {
+                ));
+            };
+            request(&url, &mut headers).map_err(|error| {
                 let code = match error.code.as_str() {
                     "CANCELLED" => "CANCELLED",
                     "UPSTREAM_TIMEOUT" => "UPSTREAM_TIMEOUT",
@@ -816,7 +838,7 @@ async fn transfer(
             })?;
         }
     }
-    // Browser credentials terminate locally. Only Range/If-Range are copied;
+    // Browser credentials terminate locally. Only representation headers are copied;
     // provider credentials come exclusively from the original native context.
     for name in [
         "host",
@@ -831,16 +853,28 @@ async fn transfer(
         "accept-encoding",
         "identity".parse().expect("Static header"),
     );
+    let manifest = lease.kind == "manifest" || url.path().to_ascii_lowercase().ends_with(".m3u8");
     if let Some(range) = req.headers.get("range") {
         if lease.kind == "image" || !valid_range(range.to_str().unwrap_or("")) {
             return Err(ApiError::bad("Invalid single byte Range"));
         }
-        headers.insert("range", range.clone());
-        if let Some(v) = req.headers.get("if-range") {
-            headers.insert("if-range", v.clone());
+        if !manifest {
+            headers.insert("range", range.clone());
+            if let Some(v) = req.headers.get("if-range") {
+                headers.insert("if-range", v.clone());
+            }
         }
     }
-    let method = if req.method == Method::HEAD && lease.kind != "image" {
+    for name in ["if-none-match", "if-modified-since"] {
+        if !manifest
+            && lease.kind != "image"
+            && let Some(value) = req.headers.get(name)
+        {
+            headers.insert(name, value.clone());
+        }
+    }
+    // A manifest HEAD describes the rewritten representation, so fetch its body.
+    let method = if req.method == Method::HEAD && lease.kind != "image" && !manifest {
         Method::HEAD
     } else {
         Method::GET
@@ -848,18 +882,36 @@ async fn transfer(
     let mut response = watched(
         lease,
         read,
-        lease.shared.http.open(url, headers, method, 10_000, false),
+        lease
+            .shared
+            .http
+            .open(url.clone(), headers.clone(), method.clone(), 10_000, false),
     )
     .await?;
     let status = response.status().as_u16();
+    if response
+        .headers()
+        .get("content-encoding")
+        .is_some_and(|value| value != "identity")
+    {
+        return Err(upstream("Unsupported upstream resource content encoding"));
+    }
     // Body::size_hint shrinks as chunks are consumed. Capture it before reading
     // the prefix, and preserve the representation length separately for HEAD.
     let known_length = response.content_length();
     let mut output = response_headers(response.headers());
+    // reqwest removes Encoding/Length during gzip decoding, but retains ETag.
+    // Unknown-length streaming responses cannot safely advertise a byte validator
+    // for the upstream encoded entity. Bounded transforms generate their own hash.
+    if !response.headers().contains_key("content-length") {
+        output.remove("etag");
+        output.remove("last-modified");
+    }
     if !output.contains_key("content-type")
         && let Some(mime) = lease
             .selected
             .as_ref()
+            .filter(|s| lease.resource == s.stream_id)
             .and_then(|s| s.link.mime_type.as_ref())
     {
         output.insert(
@@ -867,6 +919,20 @@ async fn transfer(
             mime.parse()
                 .map_err(|_| ApiError::bad("Invalid native media MIME"))?,
         );
+    }
+    if status == 304
+        && !manifest
+        && lease.kind != "image"
+        && (req.headers.contains_key("if-none-match")
+            || req.headers.contains_key("if-modified-since"))
+    {
+        *sent = true;
+        return watched(
+            lease,
+            read,
+            write_head(write, 304, &output, None, req.origin.as_deref(), false),
+        )
+        .await;
     }
     if status == 416 {
         if !req.headers.contains_key("range")
@@ -907,11 +973,31 @@ async fn transfer(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_ascii_lowercase();
+    let manifest = manifest || is_hls_mime(&content_type);
+    if manifest {
+        if status != 200 {
+            return Err(upstream("HLS manifest requires a complete response"));
+        }
+        if method == Method::HEAD {
+            response = watched(
+                lease,
+                read,
+                lease
+                    .shared
+                    .http
+                    .open(url, headers, Method::GET, 10_000, false),
+            )
+            .await?;
+            if response.status().as_u16() != 200 {
+                return Err(upstream(
+                    "HLS manifest HEAD could not obtain complete representation",
+                ));
+            }
+        }
+        return transfer_manifest(req, lease, read, write, sent, response, Vec::new()).await;
+    }
     if content_type.contains("text/html") || content_type.contains("application/xhtml") {
-        return Err(ApiError::new(
-            "MEDIA_UNSUPPORTED",
-            "Resource server returned HTML",
-        ));
+        return Err(upstream("Resource server returned HTML"));
     }
     if lease.kind == "subtitle" && known_length.is_some_and(|n| n > IMAGE_BYTES as u64) {
         return Err(ApiError::new("RESOURCE_LIMIT", "Subtitle exceeds 8 MiB"));
@@ -994,7 +1080,22 @@ async fn transfer(
         }
     }
     if looks_html(&first[..first.len().min(STREAM_BUFFER)]) {
-        return Err(ApiError::new("MEDIA_UNSUPPORTED", "Resource body is HTML"));
+        return Err(upstream("Resource body is HTML"));
+    }
+    if first.starts_with(b"#EXTM3U") && lease.kind != "image" {
+        if status != 200 {
+            return Err(upstream("HLS manifest requires a complete response"));
+        }
+        if let Some(chunk) = pending {
+            if first.len().saturating_add(chunk.len()) > hls::LIMIT {
+                return Err(ApiError::new(
+                    "RESOURCE_LIMIT",
+                    "HLS manifest exceeds 8 MiB",
+                ));
+            }
+            first.extend_from_slice(&chunk);
+        }
+        return transfer_manifest(req, lease, read, write, sent, response, first).await;
     }
     let length = known_length;
     *sent = true;
@@ -1045,6 +1146,248 @@ async fn transfer(
     }
     Ok(())
 }
+
+fn is_hls_mime(mime: &str) -> bool {
+    matches!(
+        mime.split(';').next().unwrap_or("").trim(),
+        "application/vnd.apple.mpegurl"
+            | "application/x-mpegurl"
+            | "audio/mpegurl"
+            | "audio/x-mpegurl"
+    )
+}
+
+async fn transfer_manifest(
+    req: &Request,
+    lease: &RequestLease,
+    read: &mut OwnedReadHalf,
+    write: &mut OwnedWriteHalf,
+    sent: &mut bool,
+    mut response: reqwest::Response,
+    mut body: Vec<u8>,
+) -> Result<(), ApiError> {
+    if response
+        .headers()
+        .get("content-encoding")
+        .is_some_and(|value| value != "identity")
+    {
+        return Err(upstream("Unsupported upstream resource content encoding"));
+    }
+    if response
+        .content_length()
+        .is_some_and(|n| n > hls::LIMIT as u64)
+    {
+        return Err(ApiError::new(
+            "RESOURCE_LIMIT",
+            "HLS manifest exceeds 8 MiB",
+        ));
+    }
+    let base = response.url().clone();
+    let mut headers = response.headers().clone();
+    while let Some(chunk) = watched(lease, read, async {
+        response.chunk().await.map_err(resource_error)
+    })
+    .await?
+    {
+        if body.len().saturating_add(chunk.len()) > hls::LIMIT {
+            return Err(ApiError::new(
+                "RESOURCE_LIMIT",
+                "HLS manifest exceeds 8 MiB",
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    if let Some(context) = lease
+        .selected
+        .as_ref()
+        .and_then(|s| s.link.interceptor.as_ref())
+        .and_then(|c| c.downcast_ref::<HttpManifestContext>())
+    {
+        (context.response)(&base, &mut headers, &mut body).map_err(|error| {
+            let code = match error.code.as_str() {
+                "CANCELLED" => "CANCELLED",
+                "UPSTREAM_TIMEOUT" => "UPSTREAM_TIMEOUT",
+                "UNAUTHORIZED" => "UNAUTHORIZED",
+                "INTERACTION_REQUIRED" => "INTERACTION_REQUIRED",
+                "RESOURCE_LIMIT" => "RESOURCE_LIMIT",
+                "MEDIA_UNSUPPORTED" => "MEDIA_UNSUPPORTED",
+                _ => "UPSTREAM_FAILED",
+            };
+            ApiError::new(code, "Original source manifest response processing failed")
+        })?;
+    }
+    if body.len() > hls::LIMIT {
+        return Err(ApiError::new(
+            "RESOURCE_LIMIT",
+            "Processed HLS manifest exceeds 8 MiB",
+        ));
+    }
+    if looks_html(&body) {
+        return Err(upstream("Resource body is HTML"));
+    }
+    let text = std::str::from_utf8(&body).map_err(|_| upstream("HLS manifest is not UTF-8"))?;
+    let body = rewrite_manifest(lease, &base, text)?;
+    let mut output = response_headers(&headers);
+    for name in ["content-range", "accept-ranges", "last-modified"] {
+        output.remove(name);
+    }
+    output.insert(
+        "content-type",
+        "application/vnd.apple.mpegurl".parse().expect("HLS MIME"),
+    );
+    output.insert("cache-control", "no-store".parse().expect("Cache header"));
+    output.insert(
+        "etag",
+        format!("\"{:x}\"", Sha256::digest(&body))
+            .parse()
+            .expect("HLS ETag"),
+    );
+    let not_modified = req
+        .headers
+        .get("if-none-match")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|value| {
+            value.split(',').any(|v| {
+                v.trim() == "*"
+                    || v.trim().strip_prefix("W/").unwrap_or(v.trim())
+                        == output["etag"].to_str().expect("HLS ETag")
+            })
+        });
+    *sent = true;
+    if not_modified {
+        watched(
+            lease,
+            read,
+            write_head(write, 304, &output, None, req.origin.as_deref(), false),
+        )
+        .await
+    } else {
+        watched(
+            lease,
+            read,
+            respond(
+                write,
+                200,
+                &output,
+                &body,
+                req.origin.as_deref(),
+                req.method == Method::HEAD,
+            ),
+        )
+        .await
+    }
+}
+
+fn rewrite_manifest(
+    lease: &RequestLease,
+    base: &url::Url,
+    text: &str,
+) -> Result<Vec<u8>, ApiError> {
+    let refs = hls::references(text)?;
+    let mut inherited = lease.headers.clone();
+    redirect_headers(&http_url(&lease.url, false)?, base, &mut inherited)?;
+    let mut records = lease
+        .shared
+        .records
+        .lock()
+        .map_err(|_| ApiError::internal("Resource registry poisoned"))?;
+    let session = records
+        .sessions
+        .get_mut(&lease.target)
+        .filter(|s| !s.cancelled.load(Ordering::SeqCst))
+        .ok_or_else(ApiError::cancelled)?;
+    let mut pending = HashMap::new();
+    let mut output = String::with_capacity(text.len());
+    let mut previous = 0;
+    let mut state_bytes = session
+        .resources
+        .values()
+        .map(|r| {
+            r.url.len()
+                + r.headers
+                    .iter()
+                    .map(|(k, v)| k.as_str().len() + v.len())
+                    .sum::<usize>()
+        })
+        .sum::<usize>();
+    for reference in refs {
+        let url = base
+            .join(&text[reference.span.clone()])
+            .map_err(|_| upstream("Invalid HLS resource URI"))?;
+        http_url(url.as_str(), false)?;
+        let mut headers = inherited.clone();
+        redirect_headers(base, &url, &mut headers)?;
+        let kind = if reference.playlist || url.path().to_ascii_lowercase().ends_with(".m3u8") {
+            "manifest"
+        } else {
+            "media"
+        };
+        // Stable identity preserves byterange implicit offsets and repeated live
+        // refreshes. Include inherited headers so different scopes never alias.
+        let mut digest = Sha256::new();
+        digest.update(url.as_str().as_bytes());
+        digest.update([0]);
+        digest.update(kind.as_bytes());
+        let mut fields: Vec<_> = headers.iter().collect();
+        fields.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        for (name, value) in fields {
+            digest.update([0]);
+            digest.update(name.as_str().as_bytes());
+            digest.update([0]);
+            digest.update(value.as_bytes());
+        }
+        let id = format!("hls-{:x}", digest.finalize());
+        if !session.resources.contains_key(&id) && !pending.contains_key(&id) {
+            state_bytes = state_bytes.saturating_add(
+                url.as_str().len()
+                    + headers
+                        .iter()
+                        .map(|(k, v)| k.as_str().len() + v.len())
+                        .sum::<usize>(),
+            );
+            if session.resources.len() + pending.len() >= 65_536 || state_bytes > hls::LIMIT {
+                return Err(ApiError::new(
+                    "RESOURCE_LIMIT",
+                    "HLS resource registry exceeds its count or 8 MiB context budget",
+                ));
+            }
+            pending.insert(
+                id.clone(),
+                Resource {
+                    url: url.to_string(),
+                    headers,
+                    kind,
+                    diagnostic: Diagnostic::default(),
+                },
+            );
+        }
+        output.push_str(&text[previous..reference.span.start]);
+        output.push_str(&format!(
+            "http://{}/media/{}/{id}?cap={}",
+            lease.shared.address, lease.target, session.cap
+        ));
+        previous = reference.span.end;
+        if output.len() > hls::LIMIT {
+            return Err(ApiError::new(
+                "RESOURCE_LIMIT",
+                "Rewritten HLS manifest exceeds 8 MiB",
+            ));
+        }
+    }
+    output.push_str(&text[previous..]);
+    if output.len() > hls::LIMIT {
+        return Err(ApiError::new(
+            "RESOURCE_LIMIT",
+            "Rewritten HLS manifest exceeds 8 MiB",
+        ));
+    }
+    session.resources.extend(pending);
+    if let Some(resource) = session.resources.get_mut(&lease.resource) {
+        resource.kind = "manifest";
+    }
+    Ok(output.into_bytes())
+}
+
 fn valid_range(value: &str) -> bool {
     let Some((start, end)) = value.strip_prefix("bytes=").and_then(|v| v.split_once('-')) else {
         return false;
@@ -1203,7 +1546,7 @@ async fn write_head(
         "HTTP/1.1 {status} {reason}\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nVary: Origin\r\n"
     );
     if let Some(origin) = origin {
-        head.push_str(&format!("Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range, If-Range\r\nAccess-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, ETag\r\n"));
+        head.push_str(&format!("Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range, If-Range, If-None-Match, If-Modified-Since\r\nAccess-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, ETag\r\n"));
     }
     for (name, value) in headers {
         if let Ok(value) = value.to_str() {

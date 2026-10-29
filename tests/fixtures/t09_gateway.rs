@@ -1,5 +1,7 @@
 //! Real sockets through the production gateway, stores and public HTTP boundary.
 //! Source callback contexts are synthetic; original Android providers remain N02.
+#[path = "t10_hls.rs"]
+mod t10;
 use super::*;
 use crate::resolution::{Link, ResolutionStore, Subtitle};
 use sha2::{Digest, Sha256};

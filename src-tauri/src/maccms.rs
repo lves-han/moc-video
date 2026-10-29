@@ -40,6 +40,7 @@ fn unsafe_target(config: bool) -> ApiError {
         },
         "unsafe_target: public HTTP target validation failed",
     )
+    .with_details(json!({"reason":"unsafe_target", "stage":"public_http"}))
 }
 
 pub fn http_url(value: &str, config: bool) -> Result<Url, ApiError> {
@@ -317,7 +318,7 @@ impl Http {
                 .headers(headers.clone());
             let response = request.send().await.map_err(http_error)?;
             self.check_peer(&url, &addresses, response.remote_addr())?;
-            if response.status().is_redirection() {
+            if matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
                 if hop == 5 {
                     return Err(upstream("HTTP redirect limit exceeded"));
                 }
@@ -338,7 +339,11 @@ impl Http {
     }
 }
 
-fn redirect_headers(from: &Url, to: &Url, headers: &mut HeaderMap) -> Result<(), ApiError> {
+pub(crate) fn redirect_headers(
+    from: &Url,
+    to: &Url,
+    headers: &mut HeaderMap,
+) -> Result<(), ApiError> {
     http_url(to.as_str(), false)?;
     if from.scheme() == "https" && to.scheme() != "https" {
         return Err(upstream("HTTPS redirect downgrade rejected"));
@@ -355,6 +360,8 @@ fn redirect_headers(from: &Url, to: &Url, headers: &mut HeaderMap) -> Result<(),
                         | "user-agent"
                         | "range"
                         | "if-range"
+                        | "if-none-match"
+                        | "if-modified-since"
                         | "accept-encoding"
                 )
             })
