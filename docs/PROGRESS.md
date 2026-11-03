@@ -1661,3 +1661,13 @@
 - 验收 A1：NOT RUN；真实WK、类型/行为/Rust相关构建及完整verify均NOT RUN。外层清单evidence/acceptance/T13-session-4-outer-argv.json已生成读回，9条命令，A1 payload逐项等于冻结卡并保留首项{python}字面；先oracle/类型/全前端行为，再原run下实际WK退出正负探针及完整UI诊断预检、相关原格式/native检查，之后准确完整A1，成功才direct verify.py all。UI预检单独输出T13-session4-ui-preflight.json，明确diagnostic_only，不替代14冻结cases的完整A1。
 - 稳定源码：c739dea75e1ca6afeafd912b8cdd832454fbe403cbe651f15d2d7b5b803bb72b；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本次产品/验收源码仅10个范围内文件，无范围外Rust host/gateway/依赖/冻结控制或模型权限修改。Git写入沿ADR010由外层在CLI结束、原创建身份全退出和两锁实得后代办，建议WIP T0.13: fix resolution-scoped stream recovery and native UI acceptance。
 - Remaining：先外层执行上述真实检查并读回；过期实际恢复、具体对比度/role/焦点和AppKit自然退出仍须真实WK证据。准确A1/direct完整verify/原done/受验完成提交/新固定独立CLEAR/clean全部成立才完整完成。若需进一步实现，留真实失败证据与最小决定并暂停，无第五开发许可；纯验收/Git沿现有授权继续，后卡等待。History会话预览/SQLite T18、移动另授权、真实CS条件DASH N02及产品耐久原安排保持。
+
+## T0.13 第四源历史完成重播预检失败 2026-11-03T09:43:24.443024+00:00
+- 结果：BLOCKED
+- 当前：ADR039唯一第四已消费，原s4/f6/gen3/pausedfalse及所有历史保持，无第五许可，当前WIP `65ecdef`/source `c739dea75e1ca6afeafd912b8cdd832454fbe403cbe651f15d2d7b5b803bb72b`，未重启开发/切模型或重置计数。
+- 相关实测：原run13oracle/136行为/npm类型/fmt/automation alltargets check Clippy过；新轮换句柄行为回归过，但新源真实打包过期链未运行。
+- 真实UI诊断预检：`evidence/runs/20261103T093845983466-verify-t13-session4-ui-preflight/output.log` finished/exit1、diagnostic_only、3项2pass1fail，同source/protected/gen；成功与故意失败探针自然main返回exit0/1和remaining=[]，主UI25.821秒正常返回exit1/remaining=[]。11case10pass1fail，返回筛选及完整20矩阵/4DPI等本轮过，对比度五类最小5.80767/9.83967/8.45664/12.11729/10.50417，原4.5门保持。
+- 当前失败：history case在browser.js247报Completed record has no replay action；原生video.ended后历史截图Episode3 00:29/00:30仍Continue watching。须补失败时controller/epoch/session/原生ended映射/HistoryEntry及保存提交时序，区分生产与夹具异步前提；原onEnded/watch/hashchange多条保存和updated_at替换为候选，根因未定。后续重播/单删清空焦点确认未触达，五startup未跑。
+- 验收 A1：NOT RUN（第四源）；完整verify/done/受验完成提交/独立完成巡检均NOT RUN。现T13-all仍第三源失败，旧50/51和后续未跑事实不代第四源。诊断预检失败后未同源重跑UI/A1。
+- 需要用户决定：是否仅本卡再追加一次4→5，原CLI补真实失败状态/提交顺序诊断、确认最小修历史完成重播或正确夹具前提、相关旧写/旧身份/新重播正负例及真WK，再完整原A1/directverify/完成门；原14cases/50切51RSS十窗/20矩阵4DPI五首帧/安全资源权限期限保持，不以进度阈值/合成ended/跳门/同源筛选获得通过，不rebaseline或改范围外源。未批准只读证据与Git，不新开发。
+- 证据：`evidence/drive/t13-fourth-validation-20261103T093814Z/history-replay-preflight-failure/manifest.json`104份原始副本SHA；原第三90/第二29份、125未封存与所有WIP计数历史沿baseline.previous_validation保持。全部原创建身份结束及两锁实得已核，准确handoff已存，后卡严格等待。
