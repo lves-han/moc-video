@@ -1475,3 +1475,11 @@
 - 当前失败：EOS超时Formal EOS event missing。前一unknown样本phase=playing/paused=false；EOS夹具seek末尾后无条件gesture点击播放暂停切换按钮，正式toggle在playing/buffering下pause，静态动作与已播放前提冲突明确；EOS后正式视频状态未保存，需最小补实测确认，未据超时宣称生产EOS缺陷。EOS/layout/正常stop-dispose/Host finish/fullverify仍未通过/未运行，nativefinally-15/lingering=[]。
 - 需要用户决定：是否仅本卡再追加一次5→6，由原CLI仅最小修EOS夹具已播放/已暂停动作前提、补正负例和失败状态诊断并完整复验，保持真实结束事件/epoch/一次DOM ended及全部50/51/十窗/帧PCM/安全权限资源时限，不直接synthetic ended或放宽跳门。未经真实批准不开发，不重置历史或复用许可。
 - 证据：`evidence/drive/t12-fifth-validation-20261103T044639Z/eos-fixture-failure/manifest.json`保存原报告/逐模式与图片/每轮结果/CPU RSS/Host native/源码/收据日志SHA；所有旧42/41/18/35/39份、125未封存副本及全部WIP历史保持，准确handoff已保存，后卡严格等待。
+
+
+## T0.12 唯一第六会话真实批准 2026-11-03T05:37:10.923201+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T12再追加一次5→6，原CLI最小修EOS测试动作、补回归并完整复验，生产EOS语义/真实结束事件及全部原验收门保持”明确回复“批准 T0.12 再追加一次（5→6）”；按ADR035唯一一次，原s5/f8/g0，第六尚未消费，实际s6即消费，未授权第七，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：第五源分类与重连/图片/50和资源/auto unknown已有真实观测及独立校验过，准确A1仍EOS超时；EOS前playing/pausedfalse与无条件toggle动作冲突，EOS后正式状态缺失仍待补实测。原43份副本`evidence/drive/t12-fifth-validation-20261103T044639Z/eos-fixture-failure/manifest.json`和所有旧失败保持，原status存`evidence/drive/t12-fifth-validation-20261103T044639Z/sixth-authorization/original-status.json`。
+- 执行与完成门：固定文档独立round34 CLEAR后紧邻原顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions6，仅tests动作与回归诊断最小修，原50/51/十窗/真实EOS及全部安全资源权限时限保持，成功准确A1后直接完整verify/原done/受验提交/新固定独立CLEAR/clean全闭环才完整完成，不rebaseline，T13paused及后卡等待。
