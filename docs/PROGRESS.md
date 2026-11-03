@@ -1452,3 +1452,11 @@
 - 当前失败：errors动作报Browser error was misclassified as an HTTP status，未记录具体失败mode/实际code/current MediaError/status response，原因尚未确认；不据报错直接认定生产从browser message推HTTP。后续完整errors矩阵/track/401重连及autoplay/unknown/EOS/layout/正常stop-dispose/Host finish/fullverify NOT RUN，native finally强制-15/lingering=[]。
 - 需要用户决定：是否仅本卡再追加一次4→5，由原CLI补逐模式真实分类与身份/状态查询诊断，最小修证据确认原因并完整复验；原50/51/十窗口资源/每轮PCM帧/全部安全恢复门、权限资源时限保持。未经真实批准不启动开发，不弱化原鉴权/错误类别或改期待迎合夹具。
 - 证据：`evidence/drive/t12-fourth-validation-20261103T041547Z/error-classification-failure/manifest.json`保存原报告/逐轮和图片观测/逐进程CPU RSS/Host native/源码/收据日志SHA；全部旧41/18/35/39份及125未封存副本/WIP历史保持，原handoff已准确保存。
+
+
+## T0.12 唯一第五会话真实批准 2026-11-03T04:24:11.523101+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T12再追加一次4→5，原CLI补逐模式错误分类证据、最小修复并完整复验，原规模/资源门/安全要求/权限时限保持”明确回复“批准 T0.12 再追加一次（4→5）”；按ADR034唯一一次，原s4/f7/g0，第五尚未消费，实际s5即消费，未授权第六，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实：第四源50完整切集/51样本十窗口原资源门/真实图片链路观测及原validator诊断通过，准确A1仍因errors分类检查失败，未记录具体mode/实际code，根因待定位；完整errors矩阵及autoplay/unknown/EOS/layout/正常stop-dispose/Host finish/fullverify NOT RUN，原finally-15/lingering=[]如实保留。
+- 证据与执行：`evidence/drive/t12-fourth-validation-20261103T041547Z/error-classification-failure/manifest.json`原42份SHA副本和所有旧失败保持，原status存`evidence/drive/t12-fourth-validation-20261103T041547Z/fifth-authorization/original-status.json`；固定文档独立round33 CLEAR后紧邻顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions5，原全部门保持，成功准确A1后直接完整verify/原done/受验提交/新固定CLEAR/clean齐备才完整完成。原ADR010分工/权限资源时限/T13paused/s1/gen3/严格后卡等待保持，不rebaseline。
