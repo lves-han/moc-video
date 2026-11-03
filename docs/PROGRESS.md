@@ -1402,3 +1402,8 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 验证及证据：第2源真实50切集通过，准确A1仍因图片过期未刷新失败；缓存/真实失效请求/error回调阶段尚待诊断，后续门与完整verify NOT RUN。原`evidence/drive/t12-second-validation-20261103T022445Z/image-expiry-failure/manifest.json`与所有旧失败保持，原task status留存于`evidence/drive/t12-second-validation-20261103T022445Z/third-authorization/original-status.json`。
 - 执行顺序：固定授权文档独立round31 CLEAR后紧邻最早/current/next、旧全部身份退出/两锁实得、clean/source/protected及计数核对，唯一原drive --once --max-sessions 3；原50次/全部安全/错误/资源/30s/命令时限保持。原CLI实施，ADR010受限协作及原run准确A1→直接完整verify→done/受验提交/新固定CLEAR/clean门齐备才完成，T13paused/s1/gen3及后卡等待；无冻结定义变化，不rebaseline。
+
+
+## T0.12 第三会话授权固定文档独立CLEAR 2026-11-03T02:52:50.642995+00:00
+- 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-31.md`，固定8b415244b6b2b561672edb9c8f3048839b8523ca、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR032 c7417df2199f93cde98bd89d2bd3c61ec1ebb8473c35f3662cce2e5ecda1580e。独立只读核对真实授权、T12/SPEC10.3/10.5/11.3/C9、原预算与路线/控制器语义、当前s2/f4/g0/T13paused以及35份SHA副本，完整原始报告已保存，作者未代宣CLEAR。
+- 结论与限制：本次唯一第三许可仍未消费；源中图片max-age60与约37秒同src立即重赋/20秒等待仅为缓存复用线索，原生失效HTTP/error/回调具体根因与新源完整复验仍NOT RUN。启动前紧邻核身份/两锁/strict earliest/current/next/clean/source/protected及原计数，原drive --once --max-sessions3实际s3即消费；原权限资源时限/50完整切集/安全和恢复门/T13paused及历史保持。
