@@ -112,7 +112,15 @@ fn t11_host_open_release_switch_and_live_webview() {
                 format!("1\n00:00:01,250 --> 00:00:03,750\n<b>{episode} SRT</b>\n第二行\n")
             } else {
                 format!(
-                    "[Script Info]\nWrapStyle: 0\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{{\\b1}}{episode} ASS{{\\b0}}\\N第二行\n"
+                    concat!(
+                        "[Script Info]\nWrapStyle: 0\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n",
+                        "Dialogue: 0,0:00:01.25,0:00:03.75,Default,,0,0,0,,{{\\b1}}{episode} ASS{{\\b0}}\\N第二行\n",
+                        "Dialogue: 0,0:00:04.25,0:00:05.75,Default,,0,0,0,,前{{literal}}中文，2 < 3！{{注释\\b1}}后{{\\b0}}\\N第二行\n",
+                        "Dialogue: 0,0:00:06.25,0:00:07.75,Default,,0,0,0,,\\N\\N前\\N\\N\\N后\\N\\N\n",
+                        "Dialogue: 0,0:00:08.25,0:00:09.75,Default,,0,0,0,,{{\\q2}}\\n前\\n\\n后\\h尾\\n\n",
+                        "Dialogue: 0,0:00:10.25,0:00:11.75,Default,,0,0,0,,\\N前{{\\p1}}m 0 0 l 1 1{{comment}}{{\\p0}}\\N\\N后\\N\n",
+                    ),
+                    episode = episode
                 )
             };
             return Reply::raw(text, "text/plain");

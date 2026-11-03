@@ -185,16 +185,36 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
           const track = tracks[i].track;
           await until(() => Boolean(track.activeCues?.length), "T11 timed subtitle did not become active");
           const cue = track.activeCues![0] as VTTCue;
-          assertCondition(cue.startTime === 1.25 && cue.endTime === 3.75 && cue.text === `${command.episode} ${format.toUpperCase()}\n第二行`, "T11 cue time/text/newline changed");
+          const text = cue.getCueAsHTML().textContent;
+          assertCondition(cue.startTime === 1.25 && cue.endTime === 3.75 && text === `${command.episode} ${format.toUpperCase()}\n第二行`, "T11 cue time/text/newline changed");
           assertCondition(Array.from(video.textTracks).every((t, n) => t.mode === (n === i ? "showing" : "disabled")), "T11 subtitle switch left multiple tracks showing");
           assertCondition(tracks[i].id === view.subtitles[i].id && track.label === view.subtitles[i].label && track.language === "zh-CN", "T11 track metadata changed");
-          observations.push({ format, start: cue.startTime, end: cue.endTime, text: cue.text, mode: track.mode, cues: track.cues?.length });
+          observations.push({ format, start: cue.startTime, end: cue.endTime, text, mode: track.mode, cues: track.cues?.length });
         }
         player.seek(4);
         await until(() => !video.seeking && !tracks[2].track.activeCues?.length, "T11 cue persisted past its end");
+        const assBoundaries = [];
+        const expectedBoundaries: [number, number, string][] = [
+          [4.25, 5.75, "前中文，2 < 3！后\n第二行"],
+          [6.25, 7.75, "\n\n前\n\n\n后\n\n"],
+          [8.25, 9.75, "\n前\n\n后\u00a0尾\n"],
+          [10.25, 11.75, "\n前\n\n后\n"],
+        ];
+        for (const [start, end, expectedText] of expectedBoundaries) {
+          player.seek(start + 0.25);
+          await until(() => !video.seeking && Math.abs(video.currentTime - start - 0.25) < 0.1 &&
+            tracks[2].track.activeCues?.length === 1, "T11 ASS boundary cue did not become active");
+          const cue = tracks[2].track.activeCues![0] as VTTCue;
+          const text = cue.getCueAsHTML().textContent;
+          assertCondition(cue.startTime === start && cue.endTime === end && text === expectedText,
+            "T11 ASS boundary complete text/time/newlines changed");
+          player.seek(end + 0.1);
+          await until(() => !video.seeking && !tracks[2].track.activeCues?.length, "T11 ASS boundary cue persisted past its end");
+          assBoundaries.push({ start: cue.startTime, end: cue.endTime, text, wire_text: cue.text, cue_ended: true });
+        }
         player.selectSubtitle(null);
         assertCondition(Array.from(video.textTracks).every(t => t.mode === "disabled"), "T11 subtitle off failed");
-        return { episode: command.episode, observations, old_tracks_removed: old.length,
+        return { episode: command.episode, observations, ass_boundaries: assBoundaries, old_tracks_removed: old.length,
           disabled: true, cue_ended: true, actual_gateway: video.currentSrc === view.media_url,
           new_frames: frames - beforeFrames, sample: sample(),
           native: await nativeInvoke("t01_control", { action: "identity" }) };

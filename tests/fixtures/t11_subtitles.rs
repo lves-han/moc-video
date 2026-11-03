@@ -35,7 +35,7 @@ fn t11_structured_text_timeline_and_independent_vectors() {
         (
             "ass",
             ASS,
-            "WEBVTT\n\n00:00:01.250 --> 00:00:03.750\n你好 &amp; world\n第二行,comma soft\u{a0}space {literal} 2 &lt; 3\n\n01:02:03.000 --> 01:02:04.010\nlatertext\nnew\n\n",
+            "WEBVTT\n\n00:00:01.250 --> 00:00:03.750\n你好 &amp; world\n第二行,comma soft\u{a0}space  2 &lt; 3\n\n01:02:03.000 --> 01:02:04.010\nlatertext\nnew\n\n",
         ),
     ];
     for (format, input, expected) in samples {
@@ -85,6 +85,35 @@ fn t11_structured_text_timeline_and_independent_vectors() {
     );
     let actual = String::from_utf8(subtitle::convert(braces.as_bytes(), "ass").unwrap()).unwrap();
     assert_eq!(actual.matches('{').count(), 100_000);
+}
+
+#[test]
+fn t11_ass_comments_and_empty_lines_preserve_complete_cues() {
+    let input = concat!(
+        "[Script Info]\nWrapStyle: 0\n[Events]\nFormat: Start,End,Text\n",
+        "Dialogue: 0:00:04.25,0:00:05.75,前{literal}中文，2 < 3！{注释\\b1}后{\\b0}\\N第二行\n",
+        "Dialogue: 0:00:06.25,0:00:07.75,\\N\\N前\\N\\N\\N后\\N\\N\n",
+        "Dialogue: 0:00:08.25,0:00:09.75,{\\q2}\\n前\\n\\n后\\h尾\\n\n",
+        "Dialogue: 0:00:10.25,0:00:11.75,\\N前{\\p1}m 0 0 l 1 1{comment}{\\p0}\\N\\N后\\N\n",
+    );
+    let output = String::from_utf8(subtitle::convert(input.as_bytes(), "ass").unwrap()).unwrap();
+    assert_eq!(
+        output,
+        concat!(
+            "WEBVTT\n\n00:00:04.250 --> 00:00:05.750\n前中文，2 &lt; 3！后\n第二行\n\n",
+            "00:00:06.250 --> 00:00:07.750\n<c></c>\n<c></c>\n前\n<c></c>\n<c></c>\n后\n<c></c>\n<c></c>\n\n",
+            "00:00:08.250 --> 00:00:09.750\n<c></c>\n前\n<c></c>\n后\u{a0}尾\n<c></c>\n\n",
+            "00:00:10.250 --> 00:00:11.750\n<c></c>\n前\n<c></c>\n后\n<c></c>\n\n",
+        )
+    );
+    assert_eq!(
+        subtitle::convert(input.as_bytes(), "unknown").unwrap(),
+        output.as_bytes()
+    );
+    println!(
+        "T11_VECTOR:{}",
+        json!({"kind":"ass-boundaries","input":input,"output":output})
+    );
 }
 
 #[test]

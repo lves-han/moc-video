@@ -1353,3 +1353,16 @@
 
 - 原独立只读round30：CLEAR；原报告docs/reviews/doc-review/round-30.md，固定HEAD4eb16cb981fb8d7f7fbe33de9b88e150b0fcfebf/source2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际文档SHA/ADR031分段匹配，8份缺口副本SHA保持。
 - 原s2/f3/g0保持，第三许可尚未消费；紧邻顺序/身份/两锁/clean核对后唯一原drive --once --max-sessions 3，实际计数3即消费，其他卡default2/原权限资源时限/T13paused及历史保持。真实WK新ASS边界仍NOT RUN，新源完整原质量门重验，T12等待。
+
+
+## T0.11 第三会话ASS注释与完整换行最小修复 2026-11-03T01:27:00+00:00
+
+- 实施状态：WIP；原task.py check/start/scope实际执行，当前T0.11、sessions3/3、失败3/generation0；ADR031唯一第三许可已消费。按ADR010/031开发与外层验收/Git分工交接；第四会话未获授权，T12等待，T13原paused保持。
+- 问题/依据：原实际ASS观测及原生/Python期望将覆盖块内的{literal}注释显示；当前ass_text仅在覆盖块含反斜线时丢弃该块。ASS换行直接写WebVTT物理空行会分隔cue，原真实六轨仅覆盖单换行。已读当前代码、C8/C9/C10、ADR010/031及官方Aegisub ASS tags与W3C WebVTT；既有失败、旧成功与ass-boundaries-gap/manifest.json完整保留。
+- Changed/Why：subtitle.rs在完整覆盖块中处理既有p/q/r后忽略块内未识别文本，包括普通及混合注释；块外基础文本与既有转义保持。仅在ASS转换产生的空文本行写入合法空class span <c></c>，其文本内容为空；原连续、首尾换行与前后全文留在同一cue，绘图全空事件仍省略。沿既有escape与8MiB输入/输出限制，未增加依赖、配置或产品接口。
+- Changed/原生与独立校验：原8原生及13观测保持，纠正原ASS错误注释期望；新增第9项原生测试和第14条实际观测入口，其中含4个原始ASS cue，覆盖普通/混合注释、中文/标点/字面小于号、连续及首尾空行、q2软换行/h空格及绘图排除。Python独立oracle核对准确原始输入、实际WebVTT解析后的全文与起止时间；新增篡改反例拒绝注释泄露、空行截断、折叠换行、丢尾文、错误时间与绘图泄露。11项oracle测试仅静态确认声明，实际执行尚NOT RUN。
+- Changed/真实WK入口：保留两集六轨及原单换行cue，每集ASS另加4个边界cue；开关、切轨、seek、原cue结束与新增4个cue结束均要求实际观察。原生TextTrack读取cue.getCueAsHTML().textContent完整文本及起止时间，wire_text单独记录并由Python独立解析交叉核对；ASS轨道要求实际5个cue，其余两轨各1个。两集8条边界观测数量从真实返回值计数，成功前不预填结果。Host原鉴权头/Cookie/Referer/query、Resolution释放后加载、旧轨移除/Session关闭、原30s命令及资源/安全门保持。
+- Verified：Python两改动文件AST解析退出0；静态枚举9项Rust测试与A1具名清单精确相同、11项Python测试声明；Rustfmt三文件格式化及--check退出0；git diff --check退出0；task.py scope为all changes inside scope。准确A1交接payload与冻结卡argv逐项相同，首个{python}字面量保持。这些为静态检查，实际行为测试数0。
+- 验收 A1：NOT RUN；本轮Rust/TS类型、locked构建/all-targets Clippy、Python行为回归、真实HTTP/Host/WK字幕、准确A1与完整verify均NOT RUN。已确认的sysctl/sccache/Git限制按ADR010/031处理，本轮未重复探测、未启动受限重命令、未绕过run.py、未产生新的资源收据；外层须以本轮真实收据记录process-watchdog/RSS采样、4096MiB/jobs2/线程1与实际清理。
+- 稳定源码：e7bcf235e779126729f907bfacc57862073a97a9aecab7c23cf5b2b26689c4db；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。产品源码停止编辑；准确argv和新计数见evidence/acceptance/T11-session-3-outer-argv.json。Git WIP沿ADR010交外层，建议WIP T0.11: preserve ASS comments and complete cue newlines。
+- Remaining/外层顺序：本CLI退出后核原driver/CLI/重任务PID+创建时间与两锁、冻结scope及稳定source，按既定授权代办WIP；通过原run执行11项oracle、T01 fixture回归、带t01-automation的all-target check/Clippy及准确A1。新源A1必须实际9原生/14观测、两集六轨加8边界cue及全部原门通过，然后直接verify.py all，保持源码，真实记录、勾卡、task.py done、受验完成提交、新固定独立CLEAR及干净树齐备才完成。真实GUI若锁定，准确等待人类解锁，原30s保持；当前GUI状态未重新采样。DASH沿当前实有制品条件NOT RUN并由N02补查，观察到DASH必须补全门。旧done/A1/verify/提交/CLEAR及所有失败历史保持；本轮未写DONE/RESOLVED/AUTHORIZED、未改冻结定义、未rebaseline。

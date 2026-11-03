@@ -226,30 +226,29 @@ fn ass_text(text: &str, wrap: u8) -> Result<String, ApiError> {
             && rest.as_bytes()[end] == b'}'
         {
             let block = &rest[1..end];
-            if block.contains('\\') {
-                for tag in block.split('\\').skip(1) {
-                    if let Some(n) = tag
-                        .strip_prefix('p')
-                        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
-                    {
-                        drawing = n
-                            .parse::<u32>()
-                            .map_err(|_| invalid("ASS drawing mode overflow"))?
-                            > 0;
-                    }
-                    if let Some(n) = tag
-                        .strip_prefix('q')
-                        .filter(|n| matches!(*n, "0" | "1" | "2" | "3"))
-                    {
-                        wrap = n.parse().expect("ASS wrap mode");
-                    }
-                    if tag.starts_with('r') {
-                        drawing = false;
-                    }
+            for tag in block.split('\\').skip(1) {
+                if let Some(n) = tag
+                    .strip_prefix('p')
+                    .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+                {
+                    drawing = n
+                        .parse::<u32>()
+                        .map_err(|_| invalid("ASS drawing mode overflow"))?
+                        > 0;
                 }
-                rest = &rest[end + 1..];
-                continue;
+                if let Some(n) = tag
+                    .strip_prefix('q')
+                    .filter(|n| matches!(*n, "0" | "1" | "2" | "3"))
+                {
+                    wrap = n.parse().expect("ASS wrap mode");
+                }
+                if tag.starts_with('r') {
+                    drawing = false;
+                }
             }
+            // ASS ignores unrecognized text in override blocks, including comments.
+            rest = &rest[end + 1..];
+            continue;
         }
         let c = rest.chars().next().expect("Nonempty ASS text");
         rest = &rest[c.len_utf8()..];
@@ -275,7 +274,19 @@ fn ass_text(text: &str, wrap: u8) -> Result<String, ApiError> {
             plain.push(c);
         }
     }
-    Ok(escape(&plain))
+    // An empty physical WebVTT line terminates the cue. Empty class spans keep
+    // every ASS newline (including leading/trailing ones) without visible text.
+    Ok(escape(&plain)
+        .split('\n')
+        .map(|line| {
+            if line.is_empty() && !plain.is_empty() {
+                "<c></c>"
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n"))
 }
 
 fn ass(text: &str) -> Result<String, ApiError> {

@@ -12,8 +12,37 @@ from unittest.mock import patch
 
 import t11
 
+BOUNDARY_VTT = (
+    "WEBVTT\n\n00:00:04.250 --> 00:00:05.750\n前中文，2 &lt; 3！后\n第二行\n\n"
+    "00:00:06.250 --> 00:00:07.750\n<c></c>\n<c></c>\n前\n<c></c>\n<c></c>\n后\n<c></c>\n<c></c>\n\n"
+    "00:00:08.250 --> 00:00:09.750\n<c></c>\n前\n<c></c>\n后\u00a0尾\n<c></c>\n\n"
+    "00:00:10.250 --> 00:00:11.750\n<c></c>\n前\n<c></c>\n后\n<c></c>\n\n"
+)
+
 
 class VttOracleTests(unittest.TestCase):
+    def test_ass_boundaries_parse_actual_wire_and_reject_comments_truncation_and_collapsed_lines(self):
+        vector = dict(kind="ass-boundaries", input=t11.ASS_BOUNDARY_INPUT, output=BOUNDARY_VTT)
+        t11.check_vector(vector)
+        self.assertEqual(t11.parse_vtt(BOUNDARY_VTT), [
+            (4.25, 5.75, "前中文，2 < 3！后\n第二行"),
+            (6.25, 7.75, "\n\n前\n\n\n后\n\n"),
+            (8.25, 9.75, "\n前\n\n后\u00a0尾\n"),
+            (10.25, 11.75, "\n前\n\n后\n"),
+        ])
+        for output in [BOUNDARY_VTT.replace("前中文", "前{literal}中文"),
+                       BOUNDARY_VTT.replace("！后", "！注释后"),
+                       BOUNDARY_VTT.replace("<c></c>", ""),  # original cue-terminating bug
+                       BOUNDARY_VTT.replace("<c></c>\n", ""),
+                       BOUNDARY_VTT.replace("后\u00a0尾", ""),
+                       BOUNDARY_VTT.replace("04.250", "04.251"),
+                       BOUNDARY_VTT.replace("2 &lt; 3", "2  3"),
+                       BOUNDARY_VTT.replace("前\n<c></c>\n后", "前m 0 0 l 1 1\n<c></c>\n后")]:
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                t11.check_vector(dict(vector, output=output))
+        with self.assertRaises(ValueError):
+            t11.check_vector(dict(vector, input=t11.ASS_BOUNDARY_INPUT.replace("\\N\\N", "\\N")))
+
     def test_independent_plain_text_preserves_markup_entities_and_line_breaks(self):
         text = "WEBVTT\n\ncue-id\n00:01.250 --> 00:03.750 line:90%\n<v 中文><b>你好</b> &amp; world\n第二行\n\n"
         self.assertEqual(t11.parse_vtt(text), t11.EXPECTED["vtt"])
@@ -58,8 +87,10 @@ class VttOracleTests(unittest.TestCase):
 
     def test_webview_oracle_rejects_wrong_time_text_missing_tracks_and_no_frames(self):
         vector = dict(episode="first", disabled=True, cue_ended=True, actual_gateway=True, new_frames=3, old_tracks_removed=0,
-            observations=[dict(format=f, start=1.25, end=3.75, text=f"first {f.upper()}\n第二行", mode="showing", cues=1)
+            observations=[dict(format=f, start=1.25, end=3.75, text=f"first {f.upper()}\n第二行", mode="showing", cues=5 if f == "ass" else 1)
                           for f in ("vtt", "srt", "ass")],
+            ass_boundaries=[dict(start=start, end=end, text=text, wire_text=block.split("\n", 1)[1], cue_ended=True)
+                for (start, end, text), block in zip(t11.ASS_BOUNDARIES, BOUNDARY_VTT[8:].strip().split("\n\n"))],
             sample=dict(media_error=None, width=1920, height=1080, frames=3, diagnostics=dict(tracks=3)))
         t11.validate_webview(vector, "first")
         edits = [("disabled", False), ("cue_ended", False), ("actual_gateway", False), ("new_frames", 0), ("old_tracks_removed", 3),
@@ -72,6 +103,16 @@ class VttOracleTests(unittest.TestCase):
             sample = copy.deepcopy(vector["sample"])
             sample[key] = 0
             edits.append(("sample", sample))
+        edits.append(("ass_boundaries", vector["ass_boundaries"][:3]))
+        for i, row in enumerate(vector["ass_boundaries"]):
+            for key, value in [("start", row["start"] + .001), ("end", row["end"] + .001),
+                               ("text", row["text"].replace("\n\n", "\n") + "{literal}"),
+                               ("text", row["wire_text"]), ("text", row["text"].split("\n")[0]),
+                               ("wire_text", row["wire_text"].replace("<c></c>", "") + "corrupt"),
+                               ("cue_ended", False)]:
+                rows = copy.deepcopy(vector["ass_boundaries"])
+                rows[i][key] = value
+                edits.append(("ass_boundaries", rows))
         for key, value in edits:
             with self.subTest(key=key), self.assertRaises(ValueError):
                 t11.validate_webview(dict(vector, **{key:value}), "first")

@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 IDS = ("R26", "R29", "REQ-T11")
 RUST_TESTS = {
     "gateway::tests::t11::t11_structured_text_timeline_and_independent_vectors",
+    "gateway::tests::t11::t11_ass_comments_and_empty_lines_preserve_complete_cues",
     "gateway::tests::t11::t11_malformed_encoding_format_and_bounded_expansion",
     "gateway::tests::t11::t11_http_auth_queries_transformed_head_and_conditional",
     "gateway::tests::t11::t11_release_expiry_switch_and_cap_revocation",
@@ -40,8 +41,21 @@ LIVE_TEST = next(name for name in RUST_TESTS if name.startswith("host::"))
 EXPECTED = {
     "vtt": [(1.25, 3.75, "你好 & world\n第二行")],
     "srt": [(1.25, 3.75, "你好 & world\n2 < 3 <literal>"), (3723.004, 3724.005, 'later 中 "quote"')],
-    "ass": [(1.25, 3.75, "你好 & world\n第二行,comma soft\u00a0space {literal} 2 < 3"), (3723.0, 3724.01, "latertext\nnew")],
+    "ass": [(1.25, 3.75, "你好 & world\n第二行,comma soft\u00a0space  2 < 3"), (3723.0, 3724.01, "latertext\nnew")],
 }
+ASS_BOUNDARY_INPUT = (
+    "[Script Info]\nWrapStyle: 0\n[Events]\nFormat: Start,End,Text\n"
+    "Dialogue: 0:00:04.25,0:00:05.75,前{literal}中文，2 < 3！{注释\\b1}后{\\b0}\\N第二行\n"
+    "Dialogue: 0:00:06.25,0:00:07.75,\\N\\N前\\N\\N\\N后\\N\\N\n"
+    "Dialogue: 0:00:08.25,0:00:09.75,{\\q2}\\n前\\n\\n后\\h尾\\n\n"
+    "Dialogue: 0:00:10.25,0:00:11.75,\\N前{\\p1}m 0 0 l 1 1{comment}{\\p0}\\N\\N后\\N\n"
+)
+ASS_BOUNDARIES = [
+    (4.25, 5.75, "前中文，2 < 3！后\n第二行"),
+    (6.25, 7.75, "\n\n前\n\n\n后\n\n"),
+    (8.25, 9.75, "\n前\n\n后\u00a0尾\n"),
+    (10.25, 11.75, "\n前\n\n后\n"),
+]
 
 
 def redact(output):
@@ -85,6 +99,7 @@ def parse_vtt(value):
         require(end > start, "converted cue end does not follow start")
         parser = PlainVtt()
         parser.feed("\n".join(lines[index+1:]))
+        parser.close()
         cues.append((start, end, "".join(parser.parts)))
     return cues
 
@@ -109,6 +124,9 @@ def check_vector(v):
             data = v["output"].encode()
             require(int(v["head_length"]) == len(data) and v["etag"] == '"' + hashlib.sha256(data).hexdigest() + '"'
                     and v["same_cap"] is True and v["conditional_status"] == 304, "transformed entity/cap differs")
+    elif kind == "ass-boundaries":
+        require(v["input"] == ASS_BOUNDARY_INPUT, "ASS original boundary input differs")
+        require(parse_vtt(v["output"]) == ASS_BOUNDARIES, "ASS complete boundary text/timeline differs")
     elif kind == "invalid":
         require(v["malformed"] >= 17 and v["input_limit"] is True and v["output_limit"] is True, "negative/limit coverage missing")
     elif kind == "lifetime":
@@ -133,15 +151,17 @@ def check_vector(v):
 
 def native_vectors(run, output):
     vectors = [json.loads(line.split("T11_VECTOR:", 1)[1]) for line in output.splitlines() if "T11_VECTOR:" in line]
-    require(len(vectors) == 13, f"13 actual native observations required, got {len(vectors)}")
+    require(len(vectors) == 14, f"13 original plus one ASS boundary observation required, got {len(vectors)}")
     require({v["format"] for v in vectors if v["kind"] == "conversion"} == set(EXPECTED), "conversion formats incomplete")
     require({v["format"] for v in vectors if v["kind"] == "http"} == set(EXPECTED), "real HTTP formats incomplete")
     require({v["type"] for v in vectors if v["kind"] == "drm"} == {"fairplay", "widevine"}, "DRM fixtures incomplete")
+    require(sum(v["kind"] == "ass-boundaries" for v in vectors) == 1, "ASS boundary observation missing")
     rejected = 0
     for vector in vectors:
         check_vector(vector)
         keys = dict(conversion="output", http="output", invalid="input_limit", lifetime="continued_status",
-                    isolation="private_target_contacted", drm="type", cancel="late_bytes", host="tracks")
+                    isolation="private_target_contacted", drm="type", cancel="late_bytes", host="tracks",
+                    **{"ass-boundaries":"output"})
         broken = copy.deepcopy(vector)
         key = keys[vector["kind"]]
         broken[key] = "corrupt" if isinstance(broken[key], str) else not broken[key] if isinstance(broken[key], bool) else -1
@@ -306,8 +326,18 @@ def validate_webview(value, episode):
     require(value["episode"] == episode and value["disabled"] is True and value["cue_ended"] is True
             and value["actual_gateway"] is True and value["new_frames"] > 0
             and value["old_tracks_removed"] == (0 if episode == "first" else 3), "WebView session switch/off/seek differs")
-    expected = [dict(format=f, start=1.25, end=3.75, text=f"{episode} {f.upper()}\n第二行", mode="showing", cues=1) for f in ("vtt", "srt", "ass")]
+    expected = [dict(format=f, start=1.25, end=3.75, text=f"{episode} {f.upper()}\n第二行",
+                     mode="showing", cues=5 if f == "ass" else 1) for f in ("vtt", "srt", "ass")]
     require(value["observations"] == expected, "actual WebView track cues/timeline differ")
+    boundaries = value["ass_boundaries"]
+    require(len(boundaries) == len(ASS_BOUNDARIES), "actual WebView ASS boundary cues missing")
+    for row, (start, end, text) in zip(boundaries, ASS_BOUNDARIES):
+        require(row["start"] == start and row["end"] == end and row["text"] == text
+                and row["cue_ended"] is True, "actual WebView complete ASS boundary text/timeline differs")
+        # The wire string carries markup; parse it independently and compare it
+        # with the native getCueAsHTML().textContent observation.
+        require(parse_vtt(f"WEBVTT\n\n00:00:{start:06.3f} --> 00:00:{end:06.3f}\n{row['wire_text']}\n\n") == [(start, end, text)],
+                "actual WebView ASS wire/plain text evidence differs")
     sample = value["sample"]
     require(sample["media_error"] is None and sample["width"] == 1920 and sample["height"] == 1080 and sample["frames"] > 0
             and sample["diagnostics"]["tracks"] == 3, "actual native playback/track evidence missing")
@@ -379,7 +409,9 @@ def webview(run):
             require(len(vectors) == 1 and vectors[0]["live_webview"] is True, "live Host bridge evidence missing")
             check_vector(vectors[0])
             run.observed["live_host"] = vectors[0]
-            return dict(episodes=2, decoded_tracks=6, bridge=record["log"], old_and_current_closed=True,
+            return dict(episodes=2, decoded_tracks=6,
+                        ass_boundary_cues=sum(len(value["ass_boundaries"]) for value in run.observed["webview_cues"]),
+                        bridge=record["log"], old_and_current_closed=True,
                         deployment="owned native processes and loopback fixtures; no cluster", browser="project packaged WKWebView harness; Browser plugin not available")
         finally:
             try:
@@ -407,7 +439,7 @@ def main():
     run = Acceptance(options.report, options.junit)
     ready = run.case("resource-ownership", ["REQ-T11"], "original scope, local macOS arm64 and approved RSS sampled budget", lambda: resources(run, card="T0.11"))
     run.case("dash-evidence-inventory", ["R29", "REQ-T11"], "all existing observed DASH must enable its full gate", lambda: dash_baseline(run))
-    native = run.case("native-subtitles", IDS, "eight actual native tests and independent positive/negative oracles",
+    native = run.case("native-subtitles", IDS, "eight original plus one ASS boundary native test and independent positive/negative oracles",
                       lambda: rust(run) if ready else require(False, "NOT RUN: original resource gate failed"))
     run.case("acceptance-oracle-regressions", ["REQ-T11"], "nonzero report/oracle/credential/DASH condition regressions",
              lambda: run.command(["{python}", "-B", "-m", "unittest", "discover", "-s", "tests/acceptance", "-p", "test_t11.py"]) if ready else require(False, "NOT RUN: resource gate failed"))
