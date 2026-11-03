@@ -1615,3 +1615,14 @@
 - 固定授权提交：`b1f0616fa7d9af19212613bf68d35a76bbb1a133`；ADR038分段摘要`e4a2efbfd5e847714bd91e065e18ed4346840f47228afa49f54d64b6801e9528`。
 - 独立只读round37原始报告：`docs/reviews/doc-review/round-37.md`，DOC-REVIEW-VERDICT CLEAR；原14cases、独立oracle至少4、完整UI矩阵/首帧/真实WK与原全部完成门保持。
 - 原s2/f4/gen3/pausedfalse，唯一第三尚未消费，无第四许可；新源修复、准确A1及完整verify均NOT RUN。紧邻核对顺序、所有旧创建身份、两锁实得及clean/source/protected后只启动一次原drive --once --max-sessions 3。
+
+## T0.13 第三会话容量中断遗留补齐待验交接 2026-11-03T08:36:59+00:00
+- 实施状态：WIP；ADR038唯一第三许可已消费，实际sessions3/failures4/generation3，未授权第四。TASKS保持未勾选，未done/rebaseline，未新增RESOLVED/AUTHORIZED/BLOCKED。已知sysctl/sccache/Git限制沿ADR010分工处理，本CLI未重复探测或绕过原执行器。
+- 问题与依据：已读AGENTS、当前卡、C9/C10/C11/C12及其相关契约、SPEC11.1/11.2/11.3/11.4、ADR010/038、当前state/App/UiProvider/API接线和T13/T12验收；原类型日志确认App两处kind索引与Close词典缺项、CatalogView内联回调的app.value诊断，原fmt日志确认lib.rs链式格式，原合成主UI报告因history刷新用例误入首帧分支。原29份first-validation-failure副本逐项SHA相符，全部旧失败及未封存125副本保持。
+- Changed/Why：仅src/App.vue为route computed明确FilmKind联合类型；src/i18n.ts补Close中文词条；src/views/CatalogView.vue把模态show回调移入具名boolean处理函数，沿用原失效动作；src-tauri/src/lib.rs按已有fmt差异修链式缩进。保持原控制器、契约类型及桌面/mobile cfg结构，未扩大类型或改源状态语义。
+- Changed/Why：tests/acceptance/t13.py仅单项first-frame-*报告进入首帧分支，完整主报告保留11项必需交互/20矩阵/4DPI/真实媒体和历史断言，并校验其中的历史刷新首帧、同页刷新及非空刷新前提。单独history刷新报告按缺失完整主套件拒绝。沿用原4.5对比度门及原真实WK/Tauri/Host播放器路径，不以合成报告替代实际交互。
+- 回归入口：新增tests/acceptance/test_t13.py，共12项独立oracle测试声明。包含完整主报告及五色×双语×明暗首帧正例，缺项/重复/失败UI case、缺错矩阵/390裁剪/五类对比度NaN和Infinity、缺错DPI、无解码或无进度、历史续播重播合并和确认、缺错首帧/偏好/系统模式/刷新历史、混杂残缺报告及console错误反例。此处合成输入仅检验Python证据判定器，行为执行仍待外层。
+- Verified：task.py check/start/scope实际exit0；两Python AST解析通过/12个oracle静态声明；App.vue、CatalogView.vue的SFC与script以及i18n.ts语法解析0诊断；git diff --check exit0；旧29份证据副本SHA全部相符。实际本轮行为测试0；类型检查、Rust格式/编译/Clippy、构建及真实WK均NOT RUN，无本轮重任务收据。旧源134行为/native通过仅保留历史事实。
+- 验收 A1：NOT RUN；完整verify NOT RUN。外层准确argv清单evidence/acceptance/T13-session-3-outer-argv.json已生成并读回，共8条（7条原run及A1成功后direct完整verify）；A1 payload逐项等于冻结卡，保留首项{python}字面。外层在本CLI退出、旧创建身份结束及两锁实得后依次执行12oracle/类型/全前端行为/格式/locked offline automation alltargets check与Clippy/准确A1，A1通过后直接verify.py all。真实GUI锁定情况沿原外层只读核对，解锁后执行原完整WK，保持T12安全/50切集/原资源门、20矩阵/4DPI/五色首帧及14冻结需求case。
+- 稳定源码：a2120f9d02c862fa5b02114c8cb2596e1d56d435d4e4a88241738004325b6c4b；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本会话源码停止编辑，工作树含5个已跟踪源码/验收文件修改及新增test_t13.py，另本追加记录；Git WIP沿ADR010由外层代办，建议WIP T0.13: complete interrupted type fixes and UI evidence oracles。
+- Remaining：外层完整读取新源各项真实结果；准确A1/直接完整verify/原done/受验完成提交/新固定独立CLEAR/clean齐备才完整完成。若需新实现，保留证据并报告真实最小决定、暂停本卡，无第四许可；纯验收/Git按现有授权继续。SQLite T18、移动业务另授权、真实CS/条件DASH N02及产品耐久原安排保持，未扩大资源权限时限。

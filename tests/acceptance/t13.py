@@ -32,17 +32,30 @@ ROOT = Path(__file__).resolve().parents[2]
 IDS = ("U07", "U09", "R01", "R08", "R20", "R24", "R31", "R35", "R36", "R40", "R52", "R62", "R67", "REQ-T13")
 
 
+def validate_frame(row):
+    actual = row.get("actual", {})
+    first, expected = actual.get("first", {}), actual.get("expected", {})
+    require(expected.get("color_palette") in ("lime", "ocean", "violet", "rose", "amber")
+            and expected.get("ui_locale") in ("en", "zh-CN")
+            and first.get("palette") == expected["color_palette"] and first.get("lang") == expected["ui_locale"]
+            and isinstance(first.get("dark"), bool) and first.get("scheme") == ("dark" if first["dark"] else "light")
+            and first.get("accent") and actual.get("emptyHistory") is True,
+            "first-frame preference/OS or session history reset differs")
+    if row["id"] == "history-refresh-reset-and-preferences":
+        require(actual.get("samePageReload") is True, "history reset must follow a same-page reload")
+    else:
+        require(row["id"] == "first-frame-" + expected["color_palette"], "first-frame palette case differs")
+
+
 def validate_ui(result):
     """Require the observed interaction matrix, beyond screenshot existence."""
     require(result.get("ok") is True and result.get("cases"), "native UI failed or did not run")
     rows = {row["id"]: row for row in result["cases"]}
     require(len(rows) == len(result["cases"]) and all(row["result"] == "PASS" for row in rows.values()), "duplicate or failed UI cases")
-    if any(name.startswith("first-frame-") or name == "history-refresh-reset-and-preferences" for name in rows):
-        for row in rows.values():
-            actual = row["actual"]; first, expected = actual["first"], actual["expected"]
-            require(first["palette"] == expected["color_palette"] and first["lang"] == expected["ui_locale"]
-                    and first["scheme"] == ("dark" if first["dark"] else "light") and first["accent"] and actual["emptyHistory"] is True,
-                    "first-frame preference/OS or session history reset differs")
+    # A startup window reports one frame. The full interaction report also
+    # contains a history reload frame, alongside its matrix/media assertions.
+    if len(rows) == 1 and next(iter(rows)).startswith("first-frame-"):
+        validate_frame(next(iter(rows.values())))
         return
     required = {"identity-first-frame", "return-and-language-filter", "palette-language-system-matrix", "minimum-window-and-dpi",
                 "storage-failure-feedback", "playback-locale-palette-and-shortcuts", "history-resume-merge-delete-clear-focus",
@@ -69,6 +82,8 @@ def validate_ui(result):
             and history["latestEpisode"] == 3 and all(history[key] is True for key in ("cancelledDeletionPreservedData", "removed", "cleared")),
             "history resume/replay/merge/confirmation evidence differs")
     require(rows["console-and-overlay-health"]["actual"]["logs"] == [], "native UI console errors")
+    require(rows["history-reload-precondition"]["actual"].get("visibleTitlesBeforeReload", 0) > 0, "history reload precondition missing")
+    validate_frame(rows["history-refresh-reset-and-preferences"])
 
 
 class Acceptance(BaseAcceptance):

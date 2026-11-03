@@ -72,13 +72,15 @@ pub fn run() {
             #[cfg(any(mobile, not(feature = "t01-automation")))]
             let entry = "index.html#/home";
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(entry.into()))
-            .title("Yingxiang Video")
-            .on_navigation(|url| {
-                (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
-                    || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
-            });
+                .title("Yingxiang Video")
+                .on_navigation(|url| {
+                    (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
+                        || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
+                });
             #[cfg(not(mobile))]
-            let window = window.inner_size(1200.0, 800.0).min_inner_size(960.0, 640.0);
+            let window = window
+                .inner_size(1200.0, 800.0)
+                .min_inner_size(960.0, 640.0);
             #[cfg(all(not(mobile), feature = "t01-automation"))]
             let window = window.initialization_script(automation::bootstrap()?);
             window.build()?;

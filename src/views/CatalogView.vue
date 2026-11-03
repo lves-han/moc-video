@@ -25,6 +25,9 @@ async function confirm(selection: PlaybackMatchSelection) {
   try { if ((await app.match(result.video_id, selection))?.context) location.hash = "#/playback"; }
   catch (cause) { app.matching.error = { code: "BAD_REQUEST", message: String(cause), retryable: false }; }
 }
+function updateMatchingModal(show: boolean) {
+  if (!show) app.invalidatePlayback();
+}
 </script>
 
 <template>
@@ -58,7 +61,7 @@ async function confirm(selection: PlaybackMatchSelection) {
       <p v-if="app.matching.result?.status === 'not_found'" role="status">{{ t('No matching playback found') }}</p>
     </template>
   </template>
-  <NModal :show="app.matching.result?.status === 'needs_confirmation'" preset="card" role="dialog" :title="t('Confirm episode')" :aria-label="t('Confirm episode')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="value => { if (!value) app.invalidatePlayback(); }">
+  <NModal :show="app.matching.result?.status === 'needs_confirmation'" preset="card" role="dialog" :title="t('Confirm episode')" :aria-label="t('Confirm episode')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateMatchingModal">
     <NButton v-for="candidate in app.matching.result?.candidates ?? []" :key="candidate.content_ref.data" @click="app.loadCandidate(candidate.content_ref)">{{ candidate.title }}</NButton>
     <p v-if="app.matching.loading" role="status">{{ t('Loading catalog') }}</p>
     <NAlert v-if="app.matching.error" type="error">{{ app.matching.error.message }}</NAlert>

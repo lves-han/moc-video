@@ -30,7 +30,7 @@ function readHash() {
   return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
 type Page = "home" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
-const route = computed(() => {
+const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   const stored = appState.route, view = readHash();
   const page: Page = stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
   return { page,

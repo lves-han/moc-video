@@ -189,6 +189,7 @@ export const chinese = {
   "For Stremio, enter the full URL ending in manifest.json.":
     "Stremio 请填写以 manifest.json 结尾的完整地址。",
   Cancel: "取消",
+  Close: "关闭",
   "Welcome to Yingxiang Video": "欢迎来到映象视频",
   "Close preview information": "关闭预览说明",
   "This is an interactive interface preview. Films, credits and synopses are fictional, artwork is AI-generated, and the player uses a local 30-second test clip. Explore details, episodes, subtitles, playback preferences and source management.":
