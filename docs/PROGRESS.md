@@ -1428,3 +1428,12 @@
 - 已确认与未确认：上述为真实资源趋势失败，缓存暖机与实际保留原因待每进程/媒体对象/测试观测持有量定位；未据RSS单项宣称泄漏，未减弱门或重复筛选通过。新源nativeHLS/controls/expire/图片原生新链路/errors/autoplay/unknown/EOS/layout/正常stop-dispose/Host finish/完整verify未运行，native原finally强制结束-15且lingering=[]。
 - 需要用户决定：是否仅本卡再追加一次3→4，由原CLI最小补RSS与资源持有诊断、修证据确认原因并完整复验，原完整50切集/每轮PCM帧/无单调资源增长/安全门/权限资源时限保持，后卡等待。未经真实批准不启动开发，不手改源码或重置额度。
 - 证据：`evidence/drive/t12-third-validation-20261103T030541Z/rss-growth-failure/manifest.json`含原报告/每轮结果/CPU RSS样本/Host/native/源码/收据日志SHA；GUI失败、此前图片失败/50成功、125未封存副本和全部WIP历史保持，当前准确handoff已保存。
+
+
+## T0.12 唯一第四会话真实批准 2026-11-03T03:59:43.666952+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T12再追加一次3→4，由原CLI补资源持有诊断、最小修复并完整复验，保留50次规模/无持续资源增长/安全门/权限资源及时限”的询问明确回复“批准 T0.12 再追加一次”；按ADR033仅一次，当前原s3/f6/g0，第四许可尚未消费，实际sessions4即消费，未授权第五会话，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：第三源准确A1因十个五切RSS中位数持续上升失败，50切集帧PCM通过，根因未定；原51份样本/41份SHA副本`evidence/drive/t12-third-validation-20261103T030541Z/rss-growth-failure/manifest.json`及GUI/图片/所有旧失败保持。图片新链路和后续门/完整verify NOT RUN，原task status保存`evidence/drive/t12-third-validation-20261103T030541Z/fourth-authorization/original-status.json`。
+- 实施：先固定授权文档独立round32 CLEAR，再紧邻严格最早/current/next/旧创建身份结束/两锁实得/clean/source/protected及s3核对，唯一原drive once maxsessions4；原50/51样本/十窗口无单调增长门与全部安全/资源/时限保持，不删弱门/改阈值/抽样本/人为warmup或强制GC/同源重跑筛选通过。仅证据确认原因最小修，实质指标门测法变化另需决定。
+- 完成门：原CLI实施及相关自验、ADR010外层原run准确A1成功直接完整verify/原done/受验提交/新固定独立CLEAR/clean齐备才完整完成；不rebaseline/改冻结或全局配置，T13paused/s1/gen3及后卡等待，全部历史与计数保持。
