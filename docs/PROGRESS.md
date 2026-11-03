@@ -1576,3 +1576,17 @@
 - 基线与历史：source=57bee63a4df4c25361b11c80184a9df278af15fa01ecee2eae2cd554483e176a，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，sessions8/失败10及ADR037唯一第八已消费，无第九；旧done/A1/verify/受验5f651e8/固定CLEAR/P2gap12份与全部旧失败/125未封存副本/WIP保持，不accept-review改历史，不能以旧固定CLEAR代新源。本轮RSS原门通过不追认历史RSS根因，失败专用vmmap NOT RUN，未改阈值强度或warmupGC/抽样/筛选。
 - 证据：`evidence/drive/t12-eighth-validation-20261103T065415Z/completion-evidence/manifest.json`归档54份真实副本含原red和新green/实际repeat；generic NativeSession周期samples缺失1准确列missing_optional_references，原51逐命令CPU RSS/媒体/生命周期样本在JSON/results，未补造文件或声称长耐久。
 - Remaining：原done/新受验完成提交/新固定独立CLEAR/clean全闭环后才完整完成，T13paused严格等待；真实原Cloudstream/条件DASH N02、合成native两线VTT补真实MacCMS边界/产品耐久及其他平台原NOT RUN保持。
+
+
+## T0.12 新固定独立CLEAR与完整质量闭环 2026-11-03T07:15:47.540939+00:00
+- 原独立复巡：CLEAR；`evidence/reviews/20261103T070111808942-T0.12/review.json`和output.log，真实ended/exit0，新固定ef621dcf90b020a01d96af9d1bbeb6a11d1aefda。报告明确旧重复错误覆盖诊断P2已修复、未发现新的已确认缺陷；原sameargv红绿与真实WK401502codec完成query后重复trusted原生错误/诊断动作保留及不增加query证据齐，旧CLEAR和全部失败历史保持。
+- 完整完成核对：当前及固定source=57bee63a4df4c25361b11c80184a9df278af15fa01ecee2eae2cd554483e176a、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、gen0、最近准确A1/directverify/日志报告SHA与完成判定/完成树clean均成立，旧review driver/CLI创建身份退出及两锁实际空闲已核；原s8/f10/g0和54份实际成功副本/周期samples可选缺1准确事实、旧P2gap12/所有WIP历史保持。独立原报告副本及质量证明见`evidence/drive/t12-eighth-validation-20261103T065415Z/quality-closure/manifest.json`。T0.12完整质量闭环成立。
+- 路线重读：严格最早未完成为T0.13；ADR015原暂停仅等待T0.1..T0.12全部完整完成，条件现已满足。T13原WIPb5f979e/可逆隔离ead5af1与原s1/f0/gen3/paused及保护摘要实核，原范围含src全量/lib.rs/main.rs/tests，剩余default2的一次，不重置或复用T12额外许可。
+
+## T0.13 顺序等待条件满足后的原额度恢复 2026-11-03T07:15:47.540939+00:00
+- 结果：RESOLVED
+- 决定：沿当前聊天持续有效的29桌面开发授权与ADR015真实条件指令“前卡完整完成后按序恢复T13原剩余会话及保存WIP”；T0.1..T0.12当前全部完整质量闭环已满足。本记录为既有条件履行，未新增预算/范围/权限决定；T13原s1/default2、f0、generation3保留，待原next/start解除paused，不手写状态。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 实质预检：原state/Api/player/PlaybackView/Host/UiProvider/i18n/SettingsQueue/history及公共lib入口已存在；老WIP16份产品测试文件已原样另存SHA，见`evidence/drive/t13-resume-preflight-20261103T071547Z/manifest.json`与saved-wip.patch，原Git历史不改写。state/App/Api/lib已由T05..T12演进，恢复由原CLI在本卡范围读取旧WIP并适配到当前源码，不盲目覆写或重建第二AppState，不撤销已验Host/播放器/诊断保留修复。
+- 验收边界：原T13单AppState/Route/PlaybackContext/Resolution/Session跨绑定负例、快切/返回/主客epoch与取消/源选择、首页全量单栏分页按index及图像裁剪、英文缺省与中文/五色系×明暗×双语390px/首帧及系统动态/持久化失败、会话内History交互/公共lib桌面cfg检查保持；SQLite真实持久化T18/移动业务阶段与真实CS/DASH/产品耐久原边界保持。旧WIP行为/A1/fullverify全NOT RUN，不当完成证据。
+- 接续顺序：先整体改写监管提示移除T12已完成操作，再原next/start/handoff/普通drive --once（不加额）消耗原第2会话，核实际gpt-6.1-sol/workspace-write身份；原ADR010最小权限/已知sysctl sccache Git限制不重探绕过/4096MiB RSS jobs2 thread1和全部期限、真实GUI锁定等解锁、准确A1成功directverify/done受验提交新固定独立CLEARclean与严格后卡等待保持。无冻结内容变化、不rebaseline。
