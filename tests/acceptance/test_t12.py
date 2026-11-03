@@ -24,7 +24,89 @@ def stopped():
                             tracks=0, audio_rms=0, diagnostics=dict(listening=False, hls_instances=0, retiring=0)))
 
 
+def image_expiry():
+    host = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    reference = dict(source_id="metadata", source_revision="revision", data="show")
+    calls = [dict(command="get_resource_status", request_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                  response_request_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", engine_epoch=host,
+                  kind="image", target_id="poster", response_kind="image", response_target_id="poster",
+                  state="expired", code="SESSION_EXPIRED", started_ms=2, finished_ms=3),
+             dict(command="get_details", request_id="cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                  response_request_id="cccccccc-cccc-4ccc-8ccc-cccccccccccc", engine_epoch=host,
+                  ref=reference.copy(), response_ref=reference.copy(), code=None, started_ms=4, finished_ms=5)]
+    return dict(expired_http_status=410, dto_refreshed=True, decoded=True, owning_ref=reference.copy(),
+                refreshed_ref=reference.copy(), image_error="", resource_id="poster", refreshed_resource_id="new-poster", page_epoch=1, page_epoch_after=1,
+                expected_host_epoch=host, host_epoch_after=host, calls=calls,
+                stages=["before-eviction", "4096-lru-evicted", "expired-http-read", "host-dto-published",
+                        "dto-recovery-finished", "refreshed-image-decoded"],
+                events=[dict(type="error", trusted=True, original_dto=True, original_url=True, owning_url=True, resource_id="poster",
+                             natural_width=0, page_epoch=1, at_ms=1),
+                        dict(type="load", trusted=True, original_dto=False, owning_url=True, resource_id="new-poster", natural_width=1,
+                             page_epoch=1, at_ms=6)],
+                before=dict(command_counts=dict(get_resource_status=20, get_details=1)),
+                after=dict(command_counts=dict(get_resource_status=21, get_details=2)))
+
+
 class NativeOracleTests(unittest.TestCase):
+    def test_image_expiry_accepts_native_error_once_query_owning_dto_refresh_and_decode(self):
+        t12.validate_image_expiry(image_expiry())
+
+    def test_image_expiry_rejects_cached_success_missing_native_events_and_wrong_dto(self):
+        edits = [("expired_http_status", 200), ("dto_refreshed", False), ("decoded", False),
+                 ("refreshed_ref", dict(source_id="other", source_revision="revision", data="show")),
+                 ("image_error", "still failed"), ("page_epoch_after", 2), ("host_epoch_after", "other"),
+                 ("events", []), ("stages", [])]
+        for key, value in edits:
+            row = image_expiry(); row[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                t12.validate_image_expiry(row)
+        for index, changes in [(0, dict(trusted=False)), (0, dict(original_dto=False)), (0, dict(original_url=False)),
+                               (0, dict(resource_id="wrong")), (0, dict(owning_url=False)), (0, dict(natural_width=1)), (0, dict(page_epoch=2)),
+                               (0, dict(at_ms=7)), (1, dict(trusted=False)), (1, dict(original_dto=True)),
+                               (1, dict(natural_width=0)), (1, dict(owning_url=False)), (1, dict(resource_id="wrong")),
+                               (1, dict(page_epoch=2)), (1, dict(at_ms=30000))]:
+            row = image_expiry(); row["events"][index].update(changes)
+            with self.subTest(index=index, changes=changes), self.assertRaises(ValueError):
+                t12.validate_image_expiry(row)
+
+    def test_image_expiry_rejects_duplicate_query_refresh_or_native_events(self):
+        for field in ("calls", "events"):
+            for index in (0, 1):
+                row = image_expiry(); row[field].append(copy.deepcopy(row[field][index]))
+                with self.subTest(field=field, index=index), self.assertRaises(ValueError):
+                    t12.validate_image_expiry(row)
+        for command in ("get_resource_status", "get_details"):
+            for count in (0, 2):
+                row = image_expiry()
+                row["after"]["command_counts"][command] = row["before"]["command_counts"][command] + count
+                with self.subTest(command=command, count=count), self.assertRaises(ValueError):
+                    t12.validate_image_expiry(row)
+
+    def test_image_expiry_rejects_query_identity_target_state_budget_and_refresh_revision(self):
+        changes = [dict(request_id="bad"), dict(response_request_id="other"), dict(engine_epoch="other"),
+                   dict(kind="playback"), dict(target_id="wrong"), dict(response_kind="playback"),
+                   dict(response_target_id="wrong"), dict(state="ready"), dict(code=None),
+                   dict(started_ms=0), dict(finished_ms=3004)]
+        for change in changes:
+            row = image_expiry(); row["calls"][0].update(change)
+            with self.subTest(query=change), self.assertRaises(ValueError):
+                t12.validate_image_expiry(row)
+        changes = [dict(request_id="bad"), dict(response_request_id="other"), dict(engine_epoch="other"),
+                   dict(ref=dict(source_id="other")), dict(response_ref=dict(source_revision="old")),
+                   dict(code="UPSTREAM_FAILED"), dict(started_ms=2), dict(finished_ms=7)]
+        for change in changes:
+            row = image_expiry(); row["calls"][1].update(change)
+            with self.subTest(refresh=change), self.assertRaises(ValueError):
+                t12.validate_image_expiry(row)
+
+    def test_image_query_rejects_over_3s_with_otherwise_ordered_native_events(self):
+        row = image_expiry()
+        row["calls"][0]["finished_ms"] = 3003
+        row["calls"][1].update(started_ms=3004, finished_ms=3005)
+        row["events"][1]["at_ms"] = 3006
+        with self.assertRaisesRegex(ValueError, "3s budget"):
+            t12.validate_image_expiry(row)
+
     def test_frontend_pins_tap_and_keeps_nonzero_inventory(self):
         from types import SimpleNamespace
         calls = []

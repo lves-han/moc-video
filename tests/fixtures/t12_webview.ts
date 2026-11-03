@@ -15,7 +15,7 @@ type Harness = {
   rpc: (value: unknown) => Promise<any>; audio: AudioContext; source: MediaElementAudioSourceNode; analyser: AnalyserNode;
   frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
   errors: string[]; stopErrors: () => void;
-  initialLocale: typeof locale.value;
+  initialLocale: typeof locale.value; details: DetailsViewData;
 };
 const diagnostic = (value: unknown) => String(value).replace(/([?&](?:cap|token|capability)=)[^\s"'<>]*/gi, "$1<redacted>");
 let harness: Harness | undefined;
@@ -107,7 +107,10 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     console.error = (...args) => { errors.push(`console.error: ${args.map(diagnostic).join(" ")}`); oldError(...args); };
     console.warn = (...args) => { errors.push(`console.warn: ${args.map(diagnostic).join(" ")}`); oldWarn(...args); };
     window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
-    appState.details.data = payload.details; appState.details.request_epoch++;
+    // Publish the untouched Host DTO only after LRU eviction in image-expire.
+    // Otherwise the already decoded poster can satisfy a same-src assignment
+    // from its legitimate 60s cache without any native network error.
+    appState.details.data = null; appState.details.request_epoch++;
     appState.sources.data = payload.sources;
     navigatePlayback(payload.initial_context);
     const component = ref<InstanceType<typeof App>>();
@@ -120,7 +123,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     const audio = new AudioContext(); const source = audio.createMediaElementSource(video); const analyser = audio.createAnalyser();
     analyser.fftSize = 4096; source.connect(analyser); analyser.connect(audio.destination);
     const current: Harness = { app, container, video, controller, matches: payload.match_inputs, rpc, audio, source, analyser,
-      frames: 0, callback: 0, originalCore, initialLocale, errors, stopErrors: () => {
+      frames: 0, callback: 0, originalCore, initialLocale, details: payload.details, errors, stopErrors: () => {
         window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
         console.error = oldError; console.warn = oldWarn;
       } };
@@ -198,15 +201,79 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "image-expire": {
-      const dto = appState.details.data!;
-      await current.rpc({ operation: "evict-images" });
-      const image = current.container.querySelector<HTMLImageElement>(".playback-title img")!;
-      const original = image.src;
-      // A fresh native request to the expired capability triggers the real img error handler.
-      image.removeAttribute("src"); image.src = original;
-      await until(() => appState.details.data !== dto || Boolean(current.controller.ui.imageError), "Image error did not query/refresh its DTO");
-      await until(() => Boolean(current.container.querySelector<HTMLImageElement>(".playback-title img")?.naturalWidth), "Refreshed image did not decode");
-      result = { dto_refreshed: appState.details.data !== dto, decoded: image.naturalWidth > 0 || current.container.querySelector<HTMLImageElement>(".playback-title img")!.naturalWidth > 0 };
+      const deadline = started + 30000;
+      const id = current.details.details.poster?.resource_id;
+      check(id && current.details.images[id], "Actual Host poster access is missing");
+      const access = current.details.images[id]!;
+      const host = appState.runtime.engine_epoch;
+      const pageEpoch = appState.details.request_epoch;
+      const events: Record<string, unknown>[] = [], calls: Record<string, unknown>[] = [], stages: string[] = [];
+      const evidence = { resource_id: id, url: diagnostic(access.url), page_epoch: pageEpoch, expected_host_epoch: host, events, calls, stages,
+        expired_http_status: null as number | null, before: null as any, after: null as any };
+      let dto: DetailsViewData | null = null;
+      const core = window.__TAURI__!.core;
+      const observe = (event: Event) => {
+        const image = event.target;
+        if (!(image instanceof HTMLImageElement) || !image.matches(".playback-title img")) return;
+        const owner = appState.details.data;
+        const ownerId = owner?.details.poster?.resource_id;
+        events.push({ type: event.type, trusted: event.isTrusted, resource_id: new URL(image.currentSrc || image.src).pathname.split("/").at(-1),
+          original_url: image.src === access.url, owning_url: Boolean(ownerId && image.src === owner?.images[ownerId]?.url), original_dto: owner === dto,
+          page_epoch: appState.details.request_epoch, natural_width: image.naturalWidth, at_ms: performance.now() - started });
+      };
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), Math.max(0, deadline - performance.now()));
+      current.container.addEventListener("load", observe, true);
+      current.container.addEventListener("error", observe, true);
+      // Observe the real transport; every request still reaches the real Host.
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const input = args?.input as any;
+        const row = name === "get_resource_status" || name === "get_details" ? {
+          command: name, request_id: args?.request_id, kind: input?.kind, target_id: input?.target_id,
+          ref: input?.ref, response_request_id: null as unknown, engine_epoch: null as unknown,
+          state: null as unknown, code: null as unknown, response_ref: null as unknown,
+          response_kind: null as unknown, response_target_id: null as unknown,
+          started_ms: performance.now() - started, finished_ms: null as number | null,
+        } : null;
+        if (row) calls.push(row);
+        const response = await core.invoke<any>(name, args);
+        if (row) Object.assign(row, { response_request_id: response.request_id, engine_epoch: response.engine_epoch,
+          state: response.data?.state ?? null, code: response.data?.error?.code ?? response.error?.code ?? null,
+          response_kind: response.data?.kind ?? null, response_target_id: response.data?.target_id ?? null,
+          response_ref: response.data?.details?.ref ?? null, finished_ms: performance.now() - started });
+        return response;
+      } };
+      try {
+        check(appState.details.data === null && !current.container.querySelector(".playback-title img"), "Poster was already published/cached by the formal view");
+        evidence.before = await current.rpc({ operation: "observe" }); stages.push("before-eviction");
+        await current.rpc({ operation: "evict-images" }); stages.push("4096-lru-evicted");
+        const response = await fetch(access.url, { cache: "no-store", signal: abort.signal });
+        evidence.expired_http_status = response.status;
+        await response.arrayBuffer(); stages.push("expired-http-read");
+        check(response.status === 410, "Actual expired poster HTTP must be 410");
+        appState.details.data = current.details; dto = appState.details.data;
+        stages.push("host-dto-published"); await nextTick();
+        await until(() => appState.details.data !== dto || Boolean(current.controller.ui.imageError), "Image error did not query/refresh its DTO", Math.min(20000, deadline - performance.now()));
+        stages.push("dto-recovery-finished"); await nextTick();
+        await until(() => events.some(event => event.type === "load" && event.trusted === true && event.original_dto === false), "Refreshed image did not emit native load", Math.min(20000, deadline - performance.now()));
+        const image = current.container.querySelector<HTMLImageElement>(".playback-title img");
+        check(image, "Refreshed image element is missing"); await image.decode();
+        stages.push("refreshed-image-decoded");
+        evidence.after = await current.rpc({ operation: "observe" });
+        check(performance.now() < deadline, "Image recovery exceeded its original 30s deadline");
+        result = { ...evidence, dto_refreshed: appState.details.data !== dto, decoded: image.naturalWidth > 0,
+          owning_ref: dto!.details.ref, refreshed_ref: appState.details.data!.details.ref,
+          refreshed_resource_id: appState.details.data!.details.poster?.resource_id,
+          page_epoch_after: appState.details.request_epoch, host_epoch_after: appState.runtime.engine_epoch,
+          image_error: current.controller.ui.imageError };
+      } catch (cause) {
+        // Keep all completed stages and native events even when a later gate fails.
+        throw new Error(`Image expiry chain failed: ${diagnostic(cause)}; evidence=${JSON.stringify(evidence)}`);
+      } finally {
+        clearTimeout(timer); abort.abort(); window.__TAURI__!.core = core;
+        current.container.removeEventListener("load", observe, true);
+        current.container.removeEventListener("error", observe, true);
+      }
       break;
     }
     case "errors": {

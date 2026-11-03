@@ -201,6 +201,45 @@ def validate_stop(value):
             "Stop retained old audio/frames/HTTP/session/listener/media resources")
 
 
+def validate_image_expiry(value):
+    require(value["expired_http_status"] == 410 and value["dto_refreshed"] is True and value["decoded"] is True
+            and value["owning_ref"] == value["refreshed_ref"] and value["image_error"] == ""
+            and value["page_epoch"] == value["page_epoch_after"]
+            and value["expected_host_epoch"] == value["host_epoch_after"] and value["expected_host_epoch"] is not None,
+            "Expired image HTTP/owning DTO/decoded image/epoch recovery differs")
+    require(value["stages"] == ["before-eviction", "4096-lru-evicted", "expired-http-read", "host-dto-published",
+                                "dto-recovery-finished", "refreshed-image-decoded"], "Real image recovery stages missing or reordered")
+    errors = [event for event in value["events"] if event["type"] == "error"]
+    loads = [event for event in value["events"] if event["type"] == "load"]
+    require(len(errors) == 1 and len(loads) == 1, "Native image error/load must each occur once")
+    error, loaded = errors[0], loads[0]
+    require(error["trusted"] is True and error["original_dto"] is True and error["original_url"] is True and error["owning_url"] is True
+            and error["resource_id"] == value["resource_id"] and error["natural_width"] == 0
+            and loaded["trusted"] is True and loaded["original_dto"] is False and loaded["natural_width"] > 0
+            and loaded["owning_url"] is True and loaded["resource_id"] == value["refreshed_resource_id"]
+            and error["page_epoch"] == loaded["page_epoch"] == value["page_epoch"]
+            and 0 <= error["at_ms"] < loaded["at_ms"] < 30000,
+            "Actual native expired img error and refreshed img load evidence missing")
+    calls = value["calls"]
+    require([row["command"] for row in calls] == ["get_resource_status", "get_details"], "Image must query and refresh exactly once")
+    query, refresh = calls
+    for row in calls:
+        require(isinstance(row["request_id"], str) and str(uuid.UUID(row["request_id"])) == row["request_id"]
+                and row["request_id"] == row["response_request_id"] and row["engine_epoch"] == value["expected_host_epoch"]
+                and error["at_ms"] <= row["started_ms"] <= row["finished_ms"] < loaded["at_ms"],
+                "Image call request/Host identity or native event ordering differs")
+    require(query["request_id"] != refresh["request_id"] and query["kind"] == query["response_kind"] == "image"
+            and query["target_id"] == query["response_target_id"] == value["resource_id"]
+            and query["state"] == "expired" and query["code"] == "SESSION_EXPIRED"
+            and query["finished_ms"] - query["started_ms"] <= 3000
+            and query["finished_ms"] <= refresh["started_ms"] and refresh["code"] is None
+            and refresh["ref"] == refresh["response_ref"] == value["owning_ref"],
+            "Image query expiry/3s budget/target or refreshed source revision differs")
+    for command in ("get_resource_status", "get_details"):
+        require(value["after"]["command_counts"].get(command, 0) - value["before"]["command_counts"].get(command, 0) == 1,
+                "Real Host image query/refresh count differs")
+
+
 def process_sample(session):
     rss = session.observe()
     cpu = 0
@@ -263,7 +302,7 @@ def webview(run):
                 require(run.observed["controls"]["resolution_retained"] is True and run.observed["controls"]["paused"] is True
                         and run.observed["controls"]["session_changed"] is True, "Line switch/paused seek changed ownership")
                 require(all(run.observed["expire"][key] is True for key in ("session_changed", "restored", "paused", "recovered_once")), "Expired ResumeSnapshot recovery changed")
-                require(run.observed["image-expire"]["dto_refreshed"] is True and run.observed["image-expire"]["decoded"] is True, "Native LRU image refresh failed")
+                validate_image_expiry(run.observed["image-expire"])
                 require(run.observed["errors"]["reconnects"] == 1 and run.observed["errors"]["track_error"] == "UPSTREAM_FAILED", "Native error diagnosis/reconnect missing")
                 require(run.observed["autoplay"]["continue_button"] is True and run.observed["autoplay"]["resumed"] is True, "Actual continue button did not recover autoplay")
                 require(run.observed["unknown-duration"]["disabled"] is True and run.observed["unknown-duration"]["unknown_text"] is True, "Unknown duration UI/seek differs")

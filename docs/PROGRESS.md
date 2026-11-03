@@ -1407,3 +1407,15 @@
 ## T0.12 第三会话授权固定文档独立CLEAR 2026-11-03T02:52:50.642995+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-31.md`，固定8b415244b6b2b561672edb9c8f3048839b8523ca、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR032 c7417df2199f93cde98bd89d2bd3c61ec1ebb8473c35f3662cce2e5ecda1580e。独立只读核对真实授权、T12/SPEC10.3/10.5/11.3/C9、原预算与路线/控制器语义、当前s2/f4/g0/T13paused以及35份SHA副本，完整原始报告已保存，作者未代宣CLEAR。
 - 结论与限制：本次唯一第三许可仍未消费；源中图片max-age60与约37秒同src立即重赋/20秒等待仅为缓存复用线索，原生失效HTTP/error/回调具体根因与新源完整复验仍NOT RUN。启动前紧邻核身份/两锁/strict earliest/current/next/clean/source/protected及原计数，原drive --once --max-sessions3实际s3即消费；原权限资源时限/50完整切集/安全和恢复门/T13paused及历史保持。
+
+
+## T0.12 第三会话图片LRU原生错误链路诊断与待验交接 2026-11-03T03:01:06.404842+00:00
+- 实施状态：WIP；ADR032唯一第三许可已消费（sessions3/3、failures4、generation0）；仅处理本卡，TASKS未勾选，未done/rebaseline，未写RESOLVED/AUTHORIZED或新增BLOCKED。沿ADR010/032由外层执行原受监管重任务与Git，已知sysctl/sccache/Git限制未重复探测或绕过。
+- 问题与依据：已读AGENTS、当前卡、C8/C9/C10、SPEC10.5/11.3、ADR010/032、round31和原image-expiry-failure/manifest.json。旧测试对已加载图片立即重赋同URL，网关实际private,max-age=60；旧现场缺原生load/error与HTTP证据，缓存复用仍为待验证假设，生产恢复根因未据超时判定。
+- Changed：仅tests/fixtures/t12_webview.ts、tests/acceptance/t12.py、tests/acceptance/test_t12.py及本追加记录。测试保存未经改写的实际Host Details DTO，4096项真实LRU淘汰后先no-store真实GET断言410，再向正式AppState发布原DTO，让正式PlaybackView的img首次加载并触发自身error回调；未直接调用回调或派发synthetic error，未改生产缓存/范围外Rust/模型/依赖/冻结定义。
+- Changed：捕获trusted原生error/load、准确resource_id/所属URL/DTO/页面epoch与30秒内事件时序；透传真实Host并观测request_id/response_request_id/host_epoch/target_id、expired/SESSION_EXPIRED、3秒查询预算及所属ref/source_revision不变、一次get_details刷新和新图decode；对比真实Host命令次数均增1。失败字符串保留已完成阶段/事件/调用/HTTP/计数并脱敏cap，finally还原transport、监听和计时器。
+- 回归入口：新增5项独立Python oracle测试（静态总声明13），含缓存200/缺失或非trusted事件、错误资源URL/DTO/ref/revision、旧epoch/Host、重复事件/查询/刷新、请求/目标错配、3秒超时与缺decode等反例。原40+相关行为、全部50次每轮新PCM与帧/单video/旧410/HTTP及会话和轨道回收/CPU与RSS、native-HLS、暂停seek与同集换线、expired一次恢复及所有后续错误/autoplay/unknown/EOS/layout/stop/dispose/Host finish门保持。
+- Verified：task.py check/start/scope实际exit0；两个修改Python文件AST解析通过、13项测试声明静态计数；git diff --check exit0。第三会话准确外层argv清单已生成并读回：evidence/acceptance/T12-session-3-outer-argv.json；所有scripts入口保留给定venv解释器字面路径，A1 payload逐项等于冻结卡（含{python}字面首项）。
+- 验收 A1：NOT RUN；新源实际行为测试0，TypeScript类型/构建、13 oracle、相关Node行为、真实WK与准确A1、完整verify均NOT RUN；本CLI未启动受限重任务，无本轮资源收据，原失败与旧通过仅保持历史。图片缓存假设及新原生链路实际结果须外层验证。
+- 稳定源码：0bf54dfbc4159459f1d83f3eaa44c9e7f133b759102739118fa8f0952edc4fbe；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑。外层先确认本CLI/旧执行器与payload身份结束及两锁空闲、scope/source，按清单原run执行13 oracle/相关前端/类型/locked check/Clippy/准确A1；A1成功直接verify.py all，保持受验源码，再原done/受验提交/新固定独立CLEAR/clean。实际GUI锁定时等人类解锁，原4096MiB RSS采样/jobs2/线程1/时限保持。
+- Remaining：Git WIP沿ADR010交外层代办，建议WIP T0.12: observe native LRU image expiry without decoded-cache reuse。第三许可已尽；若新真实验收仍需实现修复，保留完整诊断后报告所需最小决定并暂停，无第四许可。T13原paused/s1/gen3与后卡等待，旧35份SHA副本及全部失败历史保持。
