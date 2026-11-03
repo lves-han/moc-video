@@ -1377,3 +1377,11 @@
 - 基线source=e7bcf235e779126729f907bfacc57862073a97a9aecab7c23cf5b2b26689c4db、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、generation0、sessions3/失败3及所有旧done/A1/verify/受验提交/旧CLEAR/ASS缺口SHA副本、首失败/125恢复前副本/WIP历史保持。ADR031唯一第三许可已消费，无第四许可；当前成功副本`evidence/drive/t11-third-validation-20261103T012901Z/completion-evidence/manifest.json`，源码稳定/scope冻结/旧身份结束/两锁实际空闲已核，源码不再修改。
 - 归档沿用准确事实：实际逐命令功能cue/帧/时间轴在JSON/results存在，若通用NativeSession登记但未生成周期samples日志则manifest单列missing_optional_references；当前缺失数1，未补造文件或声称长时周期采样。
 - Remaining：原done/新受验提交/新固定独立CLEAR/clean齐备才完整完成，T12等待。条件DASH依原卡单列NOT RUN并留N02真实provider补查，七包SHA不代表媒体输出，出现DASH须完整适用门；ASS高级特效、真实CS/Yjys/产品耐久/其他平台边界及T13paused/s1/gen3/原权限资源时限保持。
+
+
+## T0.11 新固定独立CLEAR与正式播放控制预检 2026-11-03T01:41:38.424682+00:00
+
+- 原独立复巡：CLEAR；evidence/reviews/20261103T013400995675-T0.11/output.log与review.json，真实ended/exit0，新固定a27d8d9aad3d5841427523aed1633d487f4a0839。报告明确两处ASS注释/连续换行缺陷已修复，真实两集八条新增边界cue全文/时间回归齐备，无新增已确认缺陷。原完成判定/当前及固定source/protected/gen/最新准确A1与完整verify/完成树/clean及旧身份退出/两锁实际空闲均通过，T0.11完整闭环成立；原s3/f3/g0及旧报告/缺口/所有成功失败历史保持。
+- 下一T0.12实质范围预检：原src/player.ts、API、App原页面及协议PlaybackViewSession/PlayerEvent/PlaybackState与C9/C10入口已存在，PlaybackView.vue及state.ts尚不存在但均在本卡明确范围，允许直接创建；tests范围可复用已编译Host/WK harness，不需改范围外Rust入口/冻结定义或清单。实际生产页面仍含演示数据，正式播放验收必须接真实Host DTO/API与epoch/episode绑定，不能仅让demo URL或mock工作。
+- SPEC10.3/10.5及T12完整原义务已读：原native-HLS/hls.js能力选择、250ms位置合并、单video/单HLS实例、autoplay继续按钮、未知时长、PlayerEvent与旧epoch拒绝，切流原旧session/resolution捕获清理；video/img/track一次get_resource_status、expired一次恢复、401/502/codec和查询失败/晚到区分。50次切集是本卡明确功能规模，保持50且核旧音频/旧帧/HTTP/会话/监听/track/HLS和CPU/RSS趋势，不凭ADR020缩减或任意新增资源阈值。原长耐久/跨平台未测边界和条件DASH/N02补查保持。
+- 整体改写监管提示移除已完成T11操作后，才原next/start/handoff/普通drive once default2接续T12，不复用ADR031额外许可，T13原暂停及资源权限时限/严格顺序不变。
