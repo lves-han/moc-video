@@ -1601,3 +1601,11 @@
 - 验收 A1：NOT RUN；源码编译及验收前提尚缺，GUI当前locked，真实WK/精确冻结A1/完整verify/完成提交独立巡检均NOT RUN，不用134行为代替。
 - 需要用户决定：是否仅T13追加一次2→3，原CLI补上述中断实现类型/格式/独立oracle与验收分类分支，保持134既有行为及原全卡功能/14冻结cases/真实矩阵首帧/Host播放器安全/资源权限时限，完整复验；原模型/权限不变、不重置历史或复用别卡许可。未经真实批准不重启开发或改源。
 - 证据：`evidence/drive/t13-second-validation-20261103T080023Z/first-validation-failure/manifest.json`归档真实源码/日志收据/容量stderr SHA；原旧b5f979e/ead5af1及16份preflight快照和所有WIP/失败历史保持，准确handoff已保存，后卡等待。
+
+
+## T0.13 唯一第三会话真实批准 2026-11-03T08:18:22.351766+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T13追加一次2→3，原模型权限补齐容量中断遗留类型/格式/独立oracle与验收分支并完整复验，原范围要求资源时限保持”明确回复“批准 T0.13 追加一次（2→3）”；按ADR038唯一一次，原s2/f4/gen3，第3尚未消费，实际s3即消费，未授权第四，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：原CLI模型capacity中断exit1/未正常交接，当前134前端行为及native类型Clippy通过，4处TS类型和Rust格式/缺独立oracle/主报告firstframe分支KeyError反例未解决，准确A1/fullverify NOT RUN。原29份SHA `evidence/drive/t13-second-validation-20261103T080023Z/first-validation-failure/manifest.json`及未封存125/容量stderr/原第1会话和WIP历史保持，原status存`evidence/drive/t13-second-validation-20261103T080023Z/third-authorization/original-status.json`。
+- 执行与完成门：固定文档独立round37 CLEAR后紧邻strict顺序/旧创建身份/两锁/clean/source/protected及s2核对，唯一原drive once maxsessions3；原全部14case/真实矩阵首帧与负例/Host播放器安全资源权限时限保持，新源准确A1成功direct完整verify/原done/受验提交/新固定独立CLEAR/clean才完整完成，不rebaseline，后卡等待。
