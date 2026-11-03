@@ -1549,3 +1549,8 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 事实与证据：原固定review CLEAR同时确认C9 P2，原run `evidence/runs/20261103T063038571417-t12-post-query-repeat-error/output.log` exit1已复现query完成后UPSTREAM_FAILED/retry被重复MediaError4覆成MEDIA_UNSUPPORTED/无动作，真实WK该时序NOT RUN。原done/A1/verify/受验提交/CLEAR和12份SHA缺口副本/全部旧历史保持，完成勾选已撤，不能复用旧固定CLEAR补新源。原status存`evidence/drive/t12-seventh-validation-20261103T061101Z/eighth-authorization/original-status.json`。
 - 执行：固定文档独立round36 CLEAR后紧邻原顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions8。原同加载尝试/资源/epoch/session诊断保留、一次3s只读status/成功清错/其他资源独立/旧身份和新load门、50/51RSS十窗/所有安全权限资源时限保持；新准确A1成功direct完整verify/原done/新受验提交/新固定独立CLEAR/clean全闭环才完整完成，不rebaseline，T13paused及后卡等待。
+
+
+## T0.12 第八会话授权固定文档独立CLEAR 2026-11-03T06:40:07.347083+00:00
+- 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-36.md`，固定52d5625ac6f256a751f58e9afd39e9affa461fd7、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR037 268ce9b4aceff1c9fff59c8d8d7083212ef3dc9618224ecc55f8ffb9a386ef33。独立只读核真实授权/C9生产因果链与原反例/完成勾选纠正/原预算控制器/12份gap和50份完成归档SHA，原始报告已保存，作者未代宣CLEAR。
+- 限制与下一步：原s7/f10/g0，第八未消费，第九未授权；真实WK query完成后重复时序及新修复效果NOT RUN。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数后唯一原drive --once --max-sessions8，同attempt资源epochSession完成诊断及动作保留、一次3s查询与独立清错身份门/原50和安全权限资源时限保持，新源须新受验提交及新固定CLEAR，T13paused及后卡等待。
