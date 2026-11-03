@@ -79,7 +79,7 @@ class Acceptance(NativeAcceptance):
 
 
 def frontend(run):
-    output = run.command(["node", "--experimental-strip-types", "--test", "--test-concurrency=1", "tests/player.test.ts", "tests/playback.test.ts", "tests/api.test.ts"])
+    output = run.command(["node", "--experimental-strip-types", "--test", "--test-reporter=tap", "--test-concurrency=1", "tests/player.test.ts", "tests/playback.test.ts", "tests/api.test.ts", "tests/t12-webview.test.ts"])
     count = re.search(r"^# tests (\d+)$", output, re.M)
     require(count and int(count[1]) >= 40 and re.search(r"^# fail 0$", output, re.M), "nonzero behavior inventory or passing count missing")
     run.observed["frontend_tests"] = dict(tests=int(count[1]), failed=0)
@@ -182,7 +182,8 @@ def validate_cycle(value, index):
     if index == 51:
         require(value["native"]["audio_playing"] is True, "Native HLS audio is not playing")
     else:
-        require(sample["audio_rms"] > .001 and abs(sample["audio_peak_hz"] - frequency) < 40, "Old or missing episode audio")
+        require(sample["audio_state"] == "running" and sample["session_bound"] is True
+                and sample["audio_rms"] > .001 and abs(sample["audio_peak_hz"] - frequency) < 40, "Old or missing episode audio")
     host = value["host"]
     require(host["live_sessions"] == 1 and host["requests"] == 0 and host["old_http_status"] == 410,
             "Suspended Session/request or old capability remains")
@@ -242,8 +243,10 @@ def webview(run):
                 cycles = []
                 for index in range(1, 51):
                     value = session.command("t12", action="switch", payload=index, timeout=40)
-                    validate_cycle(value, index)
+                    # Keep the rejected raw cycle as well as every preceding one.
                     cycles.append(value)
+                    run.observed["cycles"] = cycles
+                    validate_cycle(value, index)
                     samples.append(process_sample(session))
                 run.observed["cycles"] = cycles
                 run.observed["process_samples"] = samples

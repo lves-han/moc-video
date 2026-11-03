@@ -14,7 +14,7 @@ def cycle():
     return dict(index=1, old_tracks_disabled=True, session_changed=True, new_frames=5, actual_gateway=True,
                 errors=[], host=dict(live_sessions=1, requests=0, old_http_status=410),
                 sample=dict(video_count=1, tracks=1, width=1920, height=1080, media_error=None,
-                            audio_rms=.1, audio_peak_hz=880, pixel=[0, 0, 254, 255],
+                            audio_state="running", session_bound=True, audio_rms=.1, audio_peak_hz=880, pixel=[0, 0, 254, 255],
                             diagnostics=dict(hls_instances=0, listening=True, retiring=0)))
 
 
@@ -25,6 +25,26 @@ def stopped():
 
 
 class NativeOracleTests(unittest.TestCase):
+    def test_frontend_pins_tap_and_keeps_nonzero_inventory(self):
+        from types import SimpleNamespace
+        calls = []
+        run = SimpleNamespace(observed={}, command=lambda argv: calls.append(argv) or "TAP version 13\n# tests 43\n# fail 0\n")
+        self.assertEqual(t12.frontend(run), dict(tests=43, failed=0))
+        self.assertIn("--test-reporter=tap", calls[0])
+        self.assertIn("tests/t12-webview.test.ts", calls[0])
+        self.assertEqual(calls[1], ["npm", "run", "check"])
+
+    def test_frontend_rejects_failures_missing_summary_and_insufficient_inventory(self):
+        from types import SimpleNamespace
+        for output in ("", "ℹ tests 43\nℹ fail 0\n", "# tests 0\n# fail 0\n", "# tests 39\n# fail 0\n",
+                       "# tests 43\n# fail 1\n", "# tests 43\n", "# fail 0\n"):
+            calls = []
+            run = SimpleNamespace(observed={}, command=lambda argv: calls.append(argv) or output)
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                t12.frontend(run)
+            self.assertEqual(len(calls), 1)
+            self.assertNotIn("frontend_tests", run.observed)
+
     def test_cycle_accepts_current_audio_color_and_released_old_handles(self):
         t12.validate_cycle(cycle(), 1)
         value = cycle()
@@ -39,7 +59,8 @@ class NativeOracleTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 t12.validate_cycle(dict(cycle(), **{key: value}), 1)
         edits = [("video_count", 2), ("tracks", 2), ("width", 0), ("height", 0), ("media_error", 3),
-                 ("audio_rms", 0), ("audio_peak_hz", 440), ("pixel", [254, 0, 0, 255]), ("pixel", [0, 0, 0, 255])]
+                 ("audio_state", "suspended"), ("session_bound", False), ("audio_rms", 0), ("audio_peak_hz", 440),
+                 ("pixel", [254, 0, 0, 255]), ("pixel", [0, 0, 0, 255])]
         for key, value in edits:
             row = cycle(); row["sample"][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):

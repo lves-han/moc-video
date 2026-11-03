@@ -37,11 +37,30 @@ function sample(current: Harness) {
   const drawing = canvas.getContext("2d")!;
   if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
   return { position: video.currentTime, paused: video.paused, ready_state: video.readyState, network_state: video.networkState,
+    sampled_at: performance.now(), audio_state: current.audio.state, audio_time: current.audio.currentTime,
+    session_bound: Boolean(appState.playback.session && video.currentSrc === appState.playback.session.media_url),
     source_present: video.hasAttribute("src"), tracks: video.querySelectorAll("track").length,
     video_count: document.querySelectorAll("video").length, frames: current.frames, width: video.videoWidth, height: video.videoHeight,
     audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length), audio_peak_hz: peak * current.audio.sampleRate / current.analyser.fftSize,
     pixel: [...drawing.getImageData(0, 0, 1, 1).data], media_error: video.error?.code ?? null,
     phase: appState.playback.phase, epoch: appState.playback.playback_epoch, diagnostics: current.controller.diagnostics() };
+}
+
+// Video presentation and WebAudio render quanta become ready independently after
+// src changes. A silent PCM block with a smoothed old FFT peak proves neither.
+export async function waitForEpisodeSample(read: () => ReturnType<typeof sample>, index: number, deadline: number) {
+  const observations = [];
+  while (true) {
+    const value = read();
+    observations.push(value);
+    const [red, green, blue, alpha] = value.pixel;
+    const isRed = index % 2 === 0 || index === 51;
+    const frame = alpha === 255 && green < 50 && (isRed ? red > 180 && blue < 50 : blue > 180 && red < 50);
+    const audio = value.audio_state === "running" && value.audio_rms > .001 && Math.abs(value.audio_peak_hz - (isRed ? 440 : 880)) < 40;
+    if (performance.now() >= deadline) throw new Error(`Current episode media did not become ready: ${JSON.stringify({ index, observations })}`);
+    if (value.session_bound && frame && (index === 51 || audio)) return { sample: value, observations };
+    await delay(20);
+  }
 }
 async function gesture(current: Harness) {
   const button = current.container.querySelector<HTMLButtonElement>('[data-action="continue"]') ?? current.container.querySelector<HTMLButtonElement>('[data-action="play"]');
@@ -134,10 +153,11 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
       await until(() => video.querySelector("track")?.readyState === 2, "New episode subtitle failed");
       await until(() => current.frames > before + 1, "New episode did not present frames");
-      await delay(150);
+      const decoded = await waitForEpisodeSample(() => sample(current), index, started + 30000);
       result = { index, old_tracks_disabled: oldTracks.every(t => !t.isConnected && t.track.mode === "disabled"),
         session_changed: appState.playback.session!.session_id !== oldSession, new_frames: current.frames - before,
         actual_gateway: video.currentSrc === appState.playback.session!.media_url,
+        sample: decoded.sample, media_observations: decoded.observations,
         host: await current.rpc({ operation: "observe" }) };
       break;
     }
@@ -284,6 +304,6 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     }
     default: throw new Error(`Unknown formal action ${command.action}`);
   }
-  return { ...result, sample: sample(current), errors: [...current.errors], ui_ms: performance.now() - started,
+  return { ...result, sample: result.sample ?? sample(current), errors: [...current.errors], ui_ms: performance.now() - started,
     native: await nativeInvoke("t01_control", { action: "identity" }) };
 }
