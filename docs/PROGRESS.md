@@ -1419,3 +1419,12 @@
 - 验收 A1：NOT RUN；新源实际行为测试0，TypeScript类型/构建、13 oracle、相关Node行为、真实WK与准确A1、完整verify均NOT RUN；本CLI未启动受限重任务，无本轮资源收据，原失败与旧通过仅保持历史。图片缓存假设及新原生链路实际结果须外层验证。
 - 稳定源码：0bf54dfbc4159459f1d83f3eaa44c9e7f133b759102739118fa8f0952edc4fbe；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。源码停止编辑。外层先确认本CLI/旧执行器与payload身份结束及两锁空闲、scope/source，按清单原run执行13 oracle/相关前端/类型/locked check/Clippy/准确A1；A1成功直接verify.py all，保持受验源码，再原done/受验提交/新固定独立CLEAR/clean。实际GUI锁定时等人类解锁，原4096MiB RSS采样/jobs2/线程1/时限保持。
 - Remaining：Git WIP沿ADR010交外层代办，建议WIP T0.12: observe native LRU image expiry without decoded-cache reuse。第三许可已尽；若新真实验收仍需实现修复，保留完整诊断后报告所需最小决定并暂停，无第四许可。T13原paused/s1/gen3与后卡等待，旧35份SHA副本及全部失败历史保持。
+
+
+## T0.12 第三源50切集RSS趋势门失败 2026-11-03T03:13:39.662504+00:00
+- 结果：BLOCKED
+- 事实：原s3/f6/g0，ADR032唯一第三许可已消费，无第四许可；source=0bf54dfbc4159459f1d83f3eaa44c9e7f133b759102739118fa8f0952edc4fbe，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，WIP cee9ff4。原run 13 oracle/53相关前端/类型/automation alltargets检查和Clippy通过；GUI锁定的一次A1副本完整保留，最新未见锁屏标记后沿授权复验。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T031024087377-A1/output.log`；实际exit1，5必需4pass1fail/JUnit4pass8fail。真实50次切集每轮红蓝帧/440与880PCM/单video轨道/新Session/旧410/HTTP0通过；51份CPU/RSS样本的10个5切窗口中位数严格递增，原无单调资源增长门拒绝。RSS中位数bytes=[290193408, 294912000, 296091648, 296976384, 298008576, 298303488, 301694976, 301776896, 302366720, 302579712]；首283164672→末304742400，峰值合并664846336，原4096MiB采样预算未超。
+- 已确认与未确认：上述为真实资源趋势失败，缓存暖机与实际保留原因待每进程/媒体对象/测试观测持有量定位；未据RSS单项宣称泄漏，未减弱门或重复筛选通过。新源nativeHLS/controls/expire/图片原生新链路/errors/autoplay/unknown/EOS/layout/正常stop-dispose/Host finish/完整verify未运行，native原finally强制结束-15且lingering=[]。
+- 需要用户决定：是否仅本卡再追加一次3→4，由原CLI最小补RSS与资源持有诊断、修证据确认原因并完整复验，原完整50切集/每轮PCM帧/无单调资源增长/安全门/权限资源时限保持，后卡等待。未经真实批准不启动开发，不手改源码或重置额度。
+- 证据：`evidence/drive/t12-third-validation-20261103T030541Z/rss-growth-failure/manifest.json`含原报告/每轮结果/CPU RSS样本/Host/native/源码/收据日志SHA；GUI失败、此前图片失败/50成功、125未封存副本和全部WIP历史保持，当前准确handoff已保存。
