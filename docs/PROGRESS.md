@@ -1523,3 +1523,13 @@
 - 验收 A1：NOT RUN；完整verify NOT RUN。第六源失败及全部旧证据继续保存，新源未据旧通过认定合格。准确外层argv清单evidence/acceptance/T12-session-7-outer-argv.json已生成并读回，7条命令保留给定venv解释器字面路径，A1 payload逐项等于冻结卡含首项{python}字面；按原run顺序执行26oracle/相关前端/类型/locked native check/Clippy/准确A1，A1通过后直接verify.py all。
 - 稳定源码：83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本会话源码停止编辑，Git WIP按ADR010由外层在本CLI稳定退出/旧创建身份结束/两锁实得后代办，建议WIP T0.12: capture native unload and post-failure media ownership。
 - Remaining：外层按清单验证并读取真实生命周期和四阶段系统摘要，内存根因及最小生产修复取决于实际证据。新实现需真实决定且暂停，无第八许可；纯验收/Git按既有授权继续。原4096MiB RSS采样/jobs2/线程1及全部30秒/命令期限保持。准确A1/完整verify/原done/受验提交/新固定独立CLEAR/clean齐备才完整完成，T13paused及严格后卡等待。
+
+
+## T0.12 正式播放控制准确复验受验完成 2026-11-03T06:22:29.171031+00:00
+- 结果：DONE
+- Changed/Why：正式PlaybackView生产分支连接实际Host PlaybackContext/Resolution/stream与单AppState/API及原播放器，处理PlayerEvent/250ms位置/unknown duration/autoplay/旧epoch异步事件/捕获旧句柄清理和按只读状态的资源恢复；复用原前端依赖及Host网关/WK harness。后续仅最小纠正真实codec progressive前提、EOS已播放动作及有界测试观测/逐模式生命周期资源诊断，生产鉴权/类别/缓存/EOS语义保持。
+- 验收 A1：PASS；日志：`evidence/runs/20261103T061525800112-A1/output.log`；actualexit0，5必需全过/JUnit12pass0fail0skip，26独立oracle/66相关行为/真实Host named test1通过。打包WK tauri://localhost正式App/PlaybackView/state/Api/player→实际Host/网关完整50切集每轮1920x1080当前帧与440/880非零PCM、单video/轨道/监听/旧410/HTTP0及全部51CPU RSS十窗原趋势门通过；nativeHLS/暂停seek/同集换线Resolution/expired一次恢复与第二次拒绝及重试、4096LRU原生img410 trustederror→一次3sstatus→所属DTO一次refresh/trustedload decode身份次数、401/502上游/codec/track错误分类/控制401仅runtime_prepare重连1次、autoplay拒绝注入实际继续按钮与native恢复、unknown注入实际UI、当前epoch/session一次真实trusted DOM ended、1200和390布局/停止清理/卸载/Host finish全过。原nativeexit0/lingering=[]、Host64opens closed=true/active_requests0。
+- 直接完整verify：PASS；`evidence/verify/20261103T061640891825.json` exit0，最近六门全部成功：workflow128项121pass7平台skip、契约两门、前端110/生产构建、nativefmt/check/alltargetsClippy/108单元+16集成全过；额外带automation类型Clippy已通过。原completion_evidence核同source/protected/gen/冻结准确argv/非零case/最近原日志报告SHA齐备。
+- 基线：source=83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，sessions7/失败9及ADR036唯一第七已消费，无第八；所有旧成功失败/原125未封存副本/每次准确A1及WIP历史保留，不accept-review或改写收据。当前原RSS门本轮通过不追认历史RSS根因，失败专用vmmap诊断本轮NOT RUN，未改阈值规模/人为warmup或GC/抽样删门。
+- 证据：`evidence/drive/t12-seventh-validation-20261103T061101Z/completion-evidence/manifest.json`归档50份真实副本；generic NativeSession登记的周期samples路径缺失1已准确列missing_optional_references，原51逐命令CPU RSS/生命周期/帧PCM在JSON/results存在，未补造周期文件或声称长耐久。
+- Remaining：原done/新受验完成提交/固定独立CLEAR/clean全部齐备才完整完成，T13paused严格等待。原callbacks明确为native合成两线/VTT补真实MacCMS，不声称原Cloudstream真实执行；条件DASH/真实CS在N02、产品长耐久/其他平台原NOT RUN与全部原资源权限时限边界保持。

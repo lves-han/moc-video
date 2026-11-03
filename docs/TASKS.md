@@ -739,7 +739,7 @@ T0.2的MP4/HLS各1800秒及20次窗口开关移交T0.28/A1；T0.25的30分钟网
 - 记录：基线DASH是否实际出现及其制品证据；未出现的类型标记为未验证。
 
 ### T0.12 T12 正式 WebView 播放控制
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.2, T0.10, T0.11
 - 需求：R08, R23, R30, R32, R34, R48, REQ-T12 → A1（覆盖表含精确对应）
 - 范围：`src/player.ts`, `src/views/PlaybackView.vue`, `src/App.vue`, `tests/`, `docs/PROGRESS.md`, `src/api.ts`, `src/state.ts`
