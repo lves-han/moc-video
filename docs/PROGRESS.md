@@ -1442,3 +1442,13 @@
 ## T0.12 第四会话授权固定文档独立CLEAR 2026-11-03T04:02:48.868461+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-32.md`，固定dca9c384cb171be8cf297dc59ac13e6572bbda10、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR033 b7ac3a6796442e301c136ccb6421ca79c86ec43e261bc676504011cfe37fdde0。独立只读核真实授权增量、T12/SPEC/C9/C14、预算与路线/原控制器语义、51份样本/十窗口原失败和41份SHA副本，原始报告已保存，作者未代宣CLEAR。
 - 限制与下一步：第四许可尚未消费，原s3/f6/g0/T13paused/s1/gen3保持；根因与新诊断修复/新源全部真实验收仍NOT RUN，未将RSS趋势直接定为泄漏。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数核对后唯一原drive --once --max-sessions4，实际s4即消费，未授权第五；原50/51样本/十窗口无单调增长/全部安全资源时限与完整完成门保持。
+
+
+## T0.12 第四源资源与图片链路通过后错误分类门失败 2026-11-03T04:22:22.065394+00:00
+- 结果：BLOCKED
+- 事实：原s4/f7/g0，ADR033唯一第四会话已消费，无第五许可；WIP07006f0，source=587d111a9d64880a9515869fc931986e198b946dd1c8d4d3c0f4916b64e78468，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原16oracle/55相关前端/类型/automation alltargets check与Clippy通过；用户真实确认解锁后沿原准确A1复验。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T041732255478-A1/output.log`；实际exit1，5必需4pass1fail/JUnit4pass8fail。新源50真实切集每轮红蓝帧/440与880PCM/Session URL/单video轨道/旧410/HTTP0、51样本十窗口原资源门通过，未改变规模/阈值或抽样/强制GC；此一次趋势通过仍不追认历史RSS根因已确定。nativeHLS/controls/expire通过，图片实际410/trusted error/一次status与get_details/所属DTO身份/新trusted load及decode证据齐备。
+- 独立证据核验：原run `evidence/runs/20261103T042104424909-t12-fourth-saved-evidence-diagnostic/output.log` exit0，现原validate_image_expiry、50cycle与RSS原门对已存真实观测全部通过；本诊断不替代失败准确A1。图片error225ms/query225..242ms/refresh242..279ms/load288ms，原request/Host/target/ref/revision/页面epoch/次数均通过原oracle。
+- 当前失败：errors动作报Browser error was misclassified as an HTTP status，未记录具体失败mode/实际code/current MediaError/status response，原因尚未确认；不据报错直接认定生产从browser message推HTTP。后续完整errors矩阵/track/401重连及autoplay/unknown/EOS/layout/正常stop-dispose/Host finish/fullverify NOT RUN，native finally强制-15/lingering=[]。
+- 需要用户决定：是否仅本卡再追加一次4→5，由原CLI补逐模式真实分类与身份/状态查询诊断，最小修证据确认原因并完整复验；原50/51/十窗口资源/每轮PCM帧/全部安全恢复门、权限资源时限保持。未经真实批准不启动开发，不弱化原鉴权/错误类别或改期待迎合夹具。
+- 证据：`evidence/drive/t12-fourth-validation-20261103T041547Z/error-classification-failure/manifest.json`保存原报告/逐轮和图片观测/逐进程CPU RSS/Host native/源码/收据日志SHA；全部旧41/18/35/39份及125未封存副本/WIP历史保持，原handoff已准确保存。
