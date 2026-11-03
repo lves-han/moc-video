@@ -1488,3 +1488,13 @@
 ## T0.12 第六会话授权固定文档独立CLEAR 2026-11-03T05:39:17.726785+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-34.md`，固定29d25f99fbb6dd4478542a6518f3f1664ec0a3fc、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR035 6d5674a809870c75775f8b1f52d91cf098e1de30b3582c622f2547269a852946。独立只读核真实授权、原T12/SPEC、预算和原控制器、EOS动作冲突与43份SHA副本，原始报告已保存，作者未代宣CLEAR。
 - 限制与下一步：原s5/f8/g0，第六未消费，第七未授权；EOS后正式状态及新修复效果待实测，未宣称生产EOS缺陷。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数后唯一原drive --once --max-sessions6，仅tests动作与回归诊断最小修、真实DOM ended/epoch与全部原50/51/十窗和安全恢复/权限资源时限保持，T13paused及后卡等待。
+
+
+## T0.12 第六源资源趋势再次失败与进程归因 2026-11-03T05:50:27.949643+00:00
+- 结果：BLOCKED
+- 事实：原s6/f9/g0，ADR035唯一第六已消费，无第七许可；WIP85b3a9d，source=c2f88c950fce441fa4285441aed1c3fc745b49ad16948bada7c5f46d97325fb0，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原23oracle/64相关前端/类型/automation checkClippy通过，仅tests修EOS，生产未改。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T054657730910-A1/output.log`；exit1/5必需4pass1fail/JUnit4pass8fail。50次实际每轮当前帧PCM/Session URL/单video轨道/旧410HTTP0通过，原51aggregate十个五切中位数[288751616, 291094528, 294174720, 298631168, 301137920, 311427072, 312688640, 316358656, 318521344, 318668800] bytes严格递增，原趋势门拒绝；首274841600→末335446016，native合并峰637648896，4096MiB采样预算未超。
+- 归因证据：application RSS下降5341184bytes，renderer增加44515328bytes、GPU增加20299776bytes、network增加1163264bytes。DOM71/texttrack1/监听注册9/Session1/HTTP0/旧轨connected enabled0、scratch24576bytes/1canvas稳定，弱旧轨alive末6；时序250封顶。对象稳定仍不能证明原RSS门通过或确定缓存/泄漏，未强制GC/warmup/删门抽样或重跑筛选通过。
+- 未验证：本轮在RSS门停止，新nativeHLS/controls/expire/图片/errors/auto unknown/EOS/layout/正常stop-dispose/Host finish/fullverify NOT RUN。新EOS动作/回归虽通过相关测试，真实EOS效果尚未执行；nativefinally-15/lingering=[]，旧第五已有后门成功只保留历史。
+- 需要用户决定：是否仅本卡再追加一次6→7，沿原范围补renderer/GPU持有诊断、修证据确认原因并完整复验，原50/51/十窗资源门/每轮PCM帧/全部安全权限资源时限保持；实质指标门测法变化另取真实决定，未批准不得开发/改额度。
+- 证据：`evidence/drive/t12-sixth-validation-20261103T054643Z/rss-recurrence-failure/manifest.json`保存原报告/每身份进程和资源对象/逐轮CPU RSS/Host native/源码/收据日志SHA，旧43/42/41/18/35/39及125未封存副本和所有WIP历史保持，准确handoff已保存，后卡等待。
