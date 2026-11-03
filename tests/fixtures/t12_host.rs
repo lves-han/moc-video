@@ -27,6 +27,8 @@ fn t12_host_formal_webview_bridge() {
     let images = png();
     let mode = Arc::new(AtomicUsize::new(0));
     let observed_mode = mode.clone();
+    let error_requests = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let observed_errors = error_requests.clone();
     let upstream = Fixture::new(move |request, port| {
         if request.target.contains("manifest.json") {
             return metadata_reply(request).unwrap();
@@ -41,7 +43,11 @@ fn t12_host_formal_webview_bridge() {
             return Reply::raw(images.clone(), "image/png");
         }
         if request.target.starts_with("/subtitle.vtt") {
-            return if observed_mode.load(Ordering::SeqCst) == 4 {
+            let mode = observed_mode.load(Ordering::SeqCst);
+            if mode != 0 {
+                observed_errors.lock().unwrap().push(json!({"mode":mode,"target":request.target,"status":if mode == 4 {502} else {200},"mime":if mode == 4 {"text/plain"} else {"text/vtt"}}));
+            }
+            return if mode == 4 {
                 Reply {
                     status: 502,
                     ..Reply::raw("subtitle unavailable", "text/plain")
@@ -54,7 +60,11 @@ fn t12_host_formal_webview_bridge() {
             };
         }
         if request.target.starts_with("/media/") {
-            match observed_mode.load(Ordering::SeqCst) {
+            let mode = observed_mode.load(Ordering::SeqCst);
+            if (1..=3).contains(&mode) {
+                observed_errors.lock().unwrap().push(json!({"mode":mode,"target":request.target,"status":match mode {1=>401,2=>502,_=>200},"mime":if mode == 3 {"video/mp4"} else {"text/plain"}}));
+            }
+            match mode {
                 1 => {
                     return Reply {
                         status: 401,
@@ -167,11 +177,12 @@ fn t12_host_formal_webview_bridge() {
                     break;
                 }
                 "mode" => {
+                    let request_start = error_requests.lock().unwrap().len();
                     mode.store(
                         request["value"].as_u64().unwrap() as usize,
                         Ordering::SeqCst,
                     );
-                    json!({"ok":true})
+                    json!({"ok":true,"request_start":request_start})
                 }
                 "unauthorized-query" => {
                     unauthorized_query = true;
@@ -211,7 +222,7 @@ fn t12_host_formal_webview_bridge() {
                     } else {
                         None
                     };
-                    json!({"open_total":opened.len(),"live_sessions":live,"requests":host.requests.active_count(),"source_active":upstream.active.load(Ordering::SeqCst),"old_http_status":old_status,"resolutions_issued":resolutions.len(),"source_requests":upstream.requests.lock().unwrap().len(),"command_counts":command_counts})
+                    json!({"open_total":opened.len(),"live_sessions":live,"requests":host.requests.active_count(),"source_active":upstream.active.load(Ordering::SeqCst),"old_http_status":old_status,"resolutions_issued":resolutions.len(),"source_requests":upstream.requests.lock().unwrap().len(),"command_counts":command_counts,"error_requests":error_requests.lock().unwrap().clone()})
                 }
                 "invoke" => {
                     let command = request["command"].as_str().unwrap();

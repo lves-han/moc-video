@@ -18,9 +18,18 @@ function fixture(globals: Record<string, unknown> = {}) {
     setTimeout(callback: () => void, milliseconds: number) { now += milliseconds; queueMicrotask(callback); },
     ...globals,
   });
-  return { wait: exports.waitForEpisodeSample, sampler: exports.createMediaSampler, now: () => now };
+  return { wait: exports.waitForEpisodeSample, sampler: exports.createMediaSampler, codec: exports.requireCodecMedia, now: () => now };
 }
 const red = () => ({ audio_state: "running", audio_rms: .1, audio_peak_hz: 440, pixel: [254, 0, 0, 255], session_bound: true });
+
+test("T12 codec stimulus accepts only the current progressive media, rejecting the preceding HLS case", () => {
+  const f = fixture();
+  const media_url = "http://127.0.0.1/sessions/current/media?cap=fixture";
+  f.codec({ stream_kind: "progressive", media_url }, media_url);
+  assert.throws(() => f.codec({ stream_kind: "hls", media_url }, media_url), /progressive MP4/);
+  assert.throws(() => f.codec({ stream_kind: "progressive", media_url }, "http://127.0.0.1/sessions/old/media"), /current session/);
+  assert.throws(() => f.codec(null, ""), /progressive MP4/);
+});
 
 test("T12 observer reuses its PCM/FFT buffers and canvas while returning independent raw values", () => {
   let canvases = 0, allocations = 0, clears = 0, draws = 0;

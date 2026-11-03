@@ -241,6 +241,53 @@ def validate_image_expiry(value):
                 "Real Host image query/refresh count differs")
 
 
+def validate_errors(value):
+    outcomes, calls, events = value["outcomes"], value["calls"], value["events"]
+    require([row["mode"] for row in outcomes] == [1, 2, 3, 4, "unauthorized-query"], "Complete native error matrix is required")
+    for index, row in enumerate(outcomes[:3]):
+        mode, final, opened = row["mode"], row["final"], row["opened"]
+        expected = "MEDIA_UNSUPPORTED" if mode == 3 else "UPSTREAM_FAILED"
+        require(final["phase"] == "failed" and row["code"] == final["code"] == expected
+                and final["pending_requests"] == 0 and final["assigned_bound"] is True
+                and (final["current_path"] is None or final["current_path"] == final["session_path"])
+                and row["before"]["stream_kind"] == opened["stream_kind"] == final["stream_kind"] == "progressive",
+                "Native error classification or progressive codec premise differs")
+        for key in ("epoch", "host_epoch", "session_id", "source_id", "source_revision", "episode_ref", "session_path"):
+            require(opened[key] == final[key], "Error diagnosis belongs to another loading attempt")
+        requests = [request for request in row["requests"] if request["mode"] == mode and request["target"].startswith("/media/")]
+        require(requests and all(request["target"].split("?")[0].endswith(".mp4")
+                and request["status"] == {1: 401, 2: 502, 3: 200}[mode]
+                and request["mime"] == ("video/mp4" if mode == 3 else "text/plain") for request in requests),
+                "Actual upstream media path/status/MIME differs from the error stimulus")
+        next_row = outcomes[index + 1]
+        queries = calls[row["call_start"]:next_row["call_start"]]
+        require(len(queries) == 1, "Native video loading attempt must query exactly once")
+        query = queries[0]
+        response, before = query["response"], query["before"]
+        require(query["mode"] == mode and query["command"] == "get_resource_status"
+                and re.fullmatch(r"[0-9a-f-]{36}", query["request_id"], re.I)
+                and query["request_id"] == response["request_id"] and response["engine_epoch"] == final["host_epoch"]
+                and query["kind"] == response["data"]["kind"] == "playback"
+                and query["target_id"] == response["data"]["target_id"] == final["session_id"]
+                and all(before[key] == final[key] for key in ("epoch", "host_epoch", "session_id", "source_id", "source_revision", "episode_ref"))
+                and 0 <= query["finished_ms"] - query["started_ms"] <= 3000,
+                "Native status query identity/target/3s budget differs")
+        status = response["data"]
+        require(status["state"] == ("ready" if mode == 3 else "failed")
+                and (status["error"] is None if mode == 3 else status["error"]["code"] == expected),
+                "Gateway diagnosis differs from the native media stimulus")
+        native = [event for event in events[row["event_start"]:next_row["event_start"]] if event["target"] == "video"]
+        require(native and all(event["trusted"] is True and event["mode"] == mode and event["epoch"] == final["epoch"]
+                and event["session_id"] == final["session_id"] and event["media_error"] for event in native)
+                and native[0]["at_ms"] <= query["started_ms"], "Trusted current video error must precede its status query")
+        media_code = final["media_error"]["code"]
+        require(row["media_error"] == media_code and media_code in (1, 2, 3, 4)
+                and (mode != 3 or media_code in (3, 4))
+                and final["error"]["details"]["original_error"]["details"]["media_code"] == media_code,
+                "Original native MediaError was lost or codec bytes did not reach the decoder")
+    require(value["track_error"] == "UPSTREAM_FAILED" and value["reconnects"] == 1, "Native track/reconnect behavior differs")
+
+
 def process_sample(session, bridge=None):
     # Keep the original aggregate observation and its budget enforcement intact.
     # Detail reads follow it; their sum can differ as the live processes change.
@@ -342,7 +389,7 @@ def webview(run):
                         and run.observed["controls"]["session_changed"] is True, "Line switch/paused seek changed ownership")
                 require(all(run.observed["expire"][key] is True for key in ("session_changed", "restored", "paused", "recovered_once")), "Expired ResumeSnapshot recovery changed")
                 validate_image_expiry(run.observed["image-expire"])
-                require(run.observed["errors"]["reconnects"] == 1 and run.observed["errors"]["track_error"] == "UPSTREAM_FAILED", "Native error diagnosis/reconnect missing")
+                validate_errors(run.observed["errors"])
                 require(run.observed["autoplay"]["continue_button"] is True and run.observed["autoplay"]["resumed"] is True, "Actual continue button did not recover autoplay")
                 require(run.observed["unknown-duration"]["disabled"] is True and run.observed["unknown-duration"]["unknown_text"] is True, "Unknown duration UI/seek differs")
                 require(run.observed["eos"]["ended"] is True and run.observed["eos"]["dom_events"] == 1, "Native EOS missing")

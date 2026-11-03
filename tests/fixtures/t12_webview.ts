@@ -6,7 +6,7 @@ import { appState, navigatePlayback, type PlaybackController } from "../../src/s
 import { nativeInvoke, type Player } from "../../src/player.ts";
 import { locale } from "../../src/i18n";
 import { api } from "../../src/api.ts";
-import type { PlaybackContext, PlaybackMatchInput, DetailsViewData, AppSourceList } from "../../src/models.ts";
+import type { PlaybackContext, PlaybackMatchInput, PlaybackViewSession, DetailsViewData, AppSourceList } from "../../src/models.ts";
 
 type Command = { action?: string; payload?: unknown };
 type Bootstrap = { initial_context: PlaybackContext; match_inputs: PlaybackMatchInput[]; details: DetailsViewData; sources: AppSourceList };
@@ -99,6 +99,11 @@ async function playing(current: Harness) {
   if (current.video.paused) await gesture(current);
   await until(() => !current.video.paused && current.video.currentTime > .1, "Formal playback did not advance");
   await current.audio.resume();
+}
+
+export function requireCodecMedia(session: PlaybackViewSession | null, currentSrc: string) {
+  check(session?.stream_kind === "progressive", "Codec stimulus requires a progressive MP4 session; an invalid HLS manifest fails at the gateway");
+  check(currentSrc === session.media_url, "Codec stimulus must use the current session media URL");
 }
 
 export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string }) {
@@ -304,34 +309,99 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "errors": {
-      const outcomes = [];
-      for (const mode of [1, 2, 3]) {
-        await current.rpc({ operation: "mode", value: mode });
-        await current.controller.retry();
-        await until(() => appState.playback.phase === "failed" && Boolean(appState.playback.error), "Native resource failure not mapped");
-        await until(() => current.controller.diagnostics().pending_requests === 0, "Native error query still pending");
-        const code = appState.playback.error!.code;
-        check(code === (mode === 3 ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED"), "Browser error was misclassified as an HTTP status");
-        outcomes.push({ mode, code, media_error: video.error?.code ?? null });
+      const outcomes: Record<string, any>[] = [], calls: Record<string, any>[] = [], events: Record<string, any>[] = [];
+      let mode = 0;
+      const snapshot = () => {
+        const state = appState.playback, session = state.session;
+        return { epoch: state.playback_epoch, host_epoch: appState.runtime.engine_epoch, session_id: session?.session_id ?? null,
+          stream_kind: session?.stream_kind ?? null, source_id: session?.source_id ?? null, source_revision: session?.source_revision ?? null,
+          episode_ref: session?.episode_ref ?? null, session_path: session ? new URL(session.media_url).pathname : null,
+          current_path: video.currentSrc ? new URL(video.currentSrc).pathname : null,
+          session_bound: Boolean(session && session.media_url === video.currentSrc), assigned_bound: Boolean(session && session.media_url === video.src), phase: state.phase,
+          code: state.error?.code ?? null, error: state.error ? JSON.parse(diagnostic(JSON.stringify(state.error))) : null,
+          media_error: video.error ? { code: video.error.code, message: diagnostic(video.error.message) } : null,
+          pending_requests: current.controller.diagnostics().pending_requests };
+      };
+      const observe = (event: Event) => {
+        if (event.target !== video && !(event.target instanceof HTMLTrackElement)) return;
+        events.push({ mode, trusted: event.isTrusted, target: event.target === video ? "video" : "track",
+          at_ms: performance.now() - started, ...snapshot() });
+      };
+      const core = window.__TAURI__!.core;
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const input = args?.input as any;
+        const row = name === "get_resource_status" ? { mode, command: name, request_id: args?.request_id,
+          kind: input?.kind, target_id: input?.target_id, before: snapshot(), started_ms: performance.now() - started,
+          response: null as any, finished_ms: null as number | null } : null;
+        if (row) calls.push(row);
+        try {
+          const response = await core.invoke<any>(name, args);
+          if (row) Object.assign(row, { response, after: snapshot(), finished_ms: performance.now() - started });
+          return response;
+        } catch (cause) {
+          if (row) Object.assign(row, { transport_error: diagnostic(cause), finished_ms: performance.now() - started });
+          throw cause;
+        }
+      } };
+      current.container.addEventListener("error", observe, true);
+      try {
+        // The preceding native-HLS case remains intact. Corrupt MP4 bytes must
+        // reach a progressive decoder, rather than HLS syntax validation.
+        await current.rpc({ operation: "mode", value: 0 });
+        const matched = await api.call("match_playback", current.matches[50]!);
+        check(matched.status === "matched" && matched.context, "Codec episode match is missing");
+        navigatePlayback(matched.context); await nextTick(); await current.controller.settled(); await playing(current);
+        requireCodecMedia(appState.playback.session, video.currentSrc);
+        for (mode of [1, 2, 3]) {
+          const row: Record<string, any> = { mode, before: snapshot(), stages: [], call_start: calls.length, event_start: events.length };
+          outcomes.push(row); // Preserve the failing mode before any assertion.
+          const stimulus = await current.rpc({ operation: "mode", value: mode });
+          row.stages.push("stimulus-set");
+          await current.controller.retry(); row.stages.push("retry-opened"); row.opened = snapshot();
+          await until(() => appState.playback.phase === "failed" && Boolean(appState.playback.error), "Native resource failure not mapped");
+          await until(() => current.controller.diagnostics().pending_requests === 0, "Native error query still pending");
+          row.final = snapshot(); row.code = row.final.code; row.media_error = row.final.media_error?.code ?? null;
+          row.host = await current.rpc({ operation: "observe" });
+          row.requests = row.host.error_requests.slice(stimulus.request_start);
+          row.stages.push("diagnosis-finished");
+          check(row.code === (mode === 3 ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED"),
+            `Native classification differs: mode=${mode}, actual=${row.code}, media=${row.media_error}`);
+        }
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        mode = 4;
+        const track: Record<string, any> = { mode, before: snapshot(), call_start: calls.length, event_start: events.length };
+        outcomes.push(track);
+        const stimulus = await current.rpc({ operation: "mode", value: 4 });
+        current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+        await until(() => current.container.querySelector("track")?.readyState === 3, "Native track error not raised");
+        await until(() => appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Native track status query did not finish");
+        track.final = snapshot(); track.host = await current.rpc({ operation: "observe" });
+        track.requests = track.host.error_requests.slice(stimulus.request_start);
+        check(appState.playback.error?.code === "UPSTREAM_FAILED", "Native track error lost gateway diagnosis");
+        const trackError = appState.playback.error.code;
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        const beforePrepare = (await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0;
+        const beforeEpoch = appState.playback.playback_epoch;
+        const reconnect: Record<string, any> = { mode: "unauthorized-query", before: snapshot(), call_start: calls.length, event_start: events.length };
+        outcomes.push(reconnect);
+        await current.rpc({ operation: "unauthorized-query" }); mode = 2;
+        await current.rpc({ operation: "mode", value: 2 }); await current.controller.retry();
+        await until(() => appState.playback.playback_epoch >= beforeEpoch + 2 && appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Unauthorized query did not reconnect and finish its bounded attempt");
+        reconnect.final = snapshot(); reconnect.host = await current.rpc({ operation: "observe" });
+        const reconnects = (reconnect.host.command_counts.runtime_prepare ?? 0) - beforePrepare;
+        check(reconnects === 1, "Unauthorized must reconnect exactly once");
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        result = { outcomes, calls, events, track_error: trackError, reconnects };
+      } catch (cause) {
+        throw new Error(`Native errors chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ mode, outcomes, calls, events, current: snapshot() }))}`);
+      } finally {
+        window.__TAURI__!.core = core;
+        current.container.removeEventListener("error", observe, true);
       }
-      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
-      await current.rpc({ operation: "mode", value: 4 });
-      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
-      await until(() => current.container.querySelector("track")?.readyState === 3, "Native track error not raised");
-      await until(() => appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Native track status query did not finish");
-      check(appState.playback.error?.code === "UPSTREAM_FAILED", "Native track error lost gateway diagnosis");
-      const trackError = appState.playback.error.code;
-      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
-      const beforePrepare = (await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0;
-      const beforeEpoch = appState.playback.playback_epoch;
-      await current.rpc({ operation: "unauthorized-query" });
-      await current.rpc({ operation: "mode", value: 2 });
-      await current.controller.retry();
-      await until(() => appState.playback.playback_epoch >= beforeEpoch + 2 && appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Unauthorized query did not reconnect and finish its bounded attempt");
-      const reconnects = ((await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0) - beforePrepare;
-      check(reconnects === 1, "Unauthorized must reconnect exactly once");
-      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
-      result = { outcomes, track_error: trackError, reconnects }; break;
+      break;
     }
     case "eos": {
       const events: Event[] = [];

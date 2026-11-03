@@ -50,7 +50,90 @@ def image_expiry():
                 after=dict(command_counts=dict(get_resource_status=21, get_details=2)))
 
 
+def native_errors():
+    host = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    outcomes, calls, events = [], [], []
+    for index, mode in enumerate((1, 2, 3)):
+        code = "MEDIA_UNSUPPORTED" if mode == 3 else "UPSTREAM_FAILED"
+        session = f"session-{mode}"
+        final = dict(epoch=mode, host_epoch=host, session_id=session, source_id="source", source_revision="revision",
+                     episode_ref=dict(source_id="source", source_revision="revision", data="episode-50"),
+                     session_path=f"/sessions/{session}/media", current_path=f"/sessions/{session}/media",
+                     phase="failed", code=code, pending_requests=0, session_bound=True, assigned_bound=True, stream_kind="progressive",
+                     media_error=dict(code=4, message="opaque browser message mentions 401 and 502"),
+                     error=dict(details=dict(original_error=dict(details=dict(media_code=4)))))
+        outcomes.append(dict(mode=mode, code=code, media_error=4, before=copy.deepcopy(final), opened=copy.deepcopy(final),
+                             final=final, call_start=index, event_start=index,
+                             requests=[dict(mode=mode, target="/media/a.mp4?episode=50", status={1: 401, 2: 502, 3: 200}[mode],
+                                            mime="video/mp4" if mode == 3 else "text/plain")]))
+        request_id = f"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb{mode}"
+        calls.append(dict(mode=mode, command="get_resource_status", request_id=request_id, kind="playback", target_id=session,
+                          before=copy.deepcopy(final), started_ms=2, finished_ms=3,
+                          response=dict(request_id=request_id, engine_epoch=host, data=dict(kind="playback", target_id=session,
+                                        state="ready" if mode == 3 else "failed", error=None if mode == 3 else dict(code=code)))))
+        events.append(dict(target="video", mode=mode, trusted=True, epoch=mode, session_id=session, at_ms=1, media_error=dict(code=4)))
+    outcomes.extend([dict(mode=4, call_start=3, event_start=3), dict(mode="unauthorized-query")])
+    return dict(outcomes=outcomes, calls=calls, events=events, track_error="UPSTREAM_FAILED", reconnects=1)
+
+
 class NativeOracleTests(unittest.TestCase):
+    def test_native_error_matrix_accepts_http_diagnosis_and_real_progressive_codec(self):
+        t12.validate_errors(native_errors())
+        # A failed source selection may clear currentSrc; the assigned URL and
+        # actual upstream request still identify the current loading attempt.
+        row = native_errors(); row["outcomes"][2]["final"]["current_path"] = None
+        t12.validate_errors(row)
+
+    def test_native_error_matrix_rejects_hls_path_wrong_status_mime_and_codec(self):
+        edits = [("stream_kind", "hls"), ("code", "UPSTREAM_FAILED"), ("assigned_bound", False),
+                 ("current_path", "/sessions/old/media"), ("pending_requests", 1)]
+        for field, value in edits:
+            row = native_errors(); row["outcomes"][2]["final"][field] = value
+            with self.subTest(final=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for field, value in [("target", "/media/index.m3u8"), ("status", 502), ("mime", "application/vnd.apple.mpegurl")]:
+            row = native_errors(); row["outcomes"][2]["requests"][0][field] = value
+            with self.subTest(request=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for code in (1, 2):
+            row = native_errors(); row["outcomes"][2]["final"]["media_error"]["code"] = code
+            row["outcomes"][2]["media_error"] = code
+            with self.subTest(codec=code), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+
+    def test_native_error_matrix_rejects_old_query_identity_and_gateway_classification(self):
+        changes = [("request_id", "bad"), ("engine_epoch", "old-host")]
+        for field, value in changes:
+            row = native_errors(); row["calls"][0]["response"][field] = value
+            with self.subTest(response=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for field, value in [("target_id", "old"), ("kind", "image"), ("state", "ready"), ("error", dict(code="UNAUTHORIZED"))]:
+            row = native_errors(); row["calls"][0]["response"]["data"][field] = value
+            with self.subTest(data=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for field, value in [("epoch", 0), ("source_revision", "old"), ("session_id", "old"), ("host_epoch", "old")]:
+            row = native_errors(); row["calls"][0]["before"][field] = value
+            with self.subTest(before=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        row = native_errors(); row["calls"][0]["finished_ms"] = 3003
+        with self.assertRaises(ValueError):
+            t12.validate_errors(row)
+
+    def test_native_error_matrix_rejects_missing_duplicate_queries_and_untrusted_old_events(self):
+        for count in (0, 2):
+            row = native_errors(); row["calls"][:1] = [copy.deepcopy(row["calls"][0]) for _ in range(count)]
+            for item in row["outcomes"][1:4]:
+                item["call_start"] += count - 1
+            with self.subTest(queries=count), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for field, value in [("trusted", False), ("epoch", 0), ("session_id", "old"), ("at_ms", 4)]:
+            row = native_errors(); row["events"][0][field] = value
+            with self.subTest(event=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        row = native_errors(); row["events"] = []
+        with self.assertRaises(ValueError):
+            t12.validate_errors(row)
+
     def test_rss_windows_keep_all_fifty_switches_and_original_five_sample_medians(self):
         samples = [dict(owned_rss_bytes=n) for n in range(51)]
         self.assertEqual(t12.rss_windows(samples), list(range(3, 50, 5)))
