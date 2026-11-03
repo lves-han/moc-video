@@ -1385,3 +1385,12 @@
 - 下一T0.12实质范围预检：原src/player.ts、API、App原页面及协议PlaybackViewSession/PlayerEvent/PlaybackState与C9/C10入口已存在，PlaybackView.vue及state.ts尚不存在但均在本卡明确范围，允许直接创建；tests范围可复用已编译Host/WK harness，不需改范围外Rust入口/冻结定义或清单。实际生产页面仍含演示数据，正式播放验收必须接真实Host DTO/API与epoch/episode绑定，不能仅让demo URL或mock工作。
 - SPEC10.3/10.5及T12完整原义务已读：原native-HLS/hls.js能力选择、250ms位置合并、单video/单HLS实例、autoplay继续按钮、未知时长、PlayerEvent与旧epoch拒绝，切流原旧session/resolution捕获清理；video/img/track一次get_resource_status、expired一次恢复、401/502/codec和查询失败/晚到区分。50次切集是本卡明确功能规模，保持50且核旧音频/旧帧/HTTP/会话/监听/track/HLS和CPU/RSS趋势，不凭ADR020缩减或任意新增资源阈值。原长耐久/跨平台未测边界和条件DASH/N02补查保持。
 - 整体改写监管提示移除已完成T11操作后，才原next/start/handoff/普通drive once default2接续T12，不复用ADR031额外许可，T13原暂停及资源权限时限/严格顺序不变。
+
+
+## T0.12 图片过期真实验收未闭合 2026-11-03T02:28:30.477126+00:00
+- 结果：BLOCKED
+- 事实：原第2开发会话已消费，累计sessions2/failures4/generation0；source=1178265c43c21db0a639bb4dde16b6d12c278ed5b6c690528d6585f45e95cd3b，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，WIP 44b1b7a。新源类型检查/97前端/8独立oracle通过。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T022508760141-A1/output.log`；退出1，5必需4过1败/JUnit4过8败，相关53行为通过。真实50切集红蓝帧/440与880PCM/旧410/HTTP0/单video及资源窗口通过，native HLS/暂停seek/同集换线Resolution/过期一次恢复及重试通过；图片LRU过期刷新20秒未出现DTO更换或诊断，停于Image error did not query/refresh its DTO。
+- 已确认边界：同一img URL立即重新赋值后的缓存复用、真实失效HTTP和DOM error阶段缺少区分证据，根因尚未确认；不据超时直接认定生产恢复函数错误。后续errors/autoplay/unknown/EOS/layout/正常stop与Host finish/完整verify NOT RUN，native原finally强制结束-15且lingering=[]。通用周期samples未生成如实列manifest，未补造。
+- 需要用户决定：是否仅本卡追加一次2→3，由原CLI补真实原生图片请求/error/身份与Host计数诊断、最小修复已确认原因并补回归，再完整准确A1/verify/固定独立CLEAR；原50切集/权限/资源/时限/安全门保持，T13及后卡等待。
+- 证据：`evidence/drive/t12-second-validation-20261103T022445Z/image-expiry-failure/manifest.json`保存原报告/native/results/Host日志/源码/收据SHA；原首失败与125未封存副本和全部历史保持。无额外开发会话启动，无RESOLVED。
