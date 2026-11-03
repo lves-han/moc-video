@@ -1533,3 +1533,11 @@
 - 基线：source=83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation0，sessions7/失败9及ADR036唯一第七已消费，无第八；所有旧成功失败/原125未封存副本/每次准确A1及WIP历史保留，不accept-review或改写收据。当前原RSS门本轮通过不追认历史RSS根因，失败专用vmmap诊断本轮NOT RUN，未改阈值规模/人为warmup或GC/抽样删门。
 - 证据：`evidence/drive/t12-seventh-validation-20261103T061101Z/completion-evidence/manifest.json`归档50份真实副本；generic NativeSession登记的周期samples路径缺失1已准确列missing_optional_references，原51逐命令CPU RSS/生命周期/帧PCM在JSON/results存在，未补造周期文件或声称长耐久。
 - Remaining：原done/新受验完成提交/固定独立CLEAR/clean全部齐备才完整完成，T13paused严格等待。原callbacks明确为native合成两线/VTT补真实MacCMS，不声称原Cloudstream真实执行；条件DASH/真实CS在N02、产品长耐久/其他平台原NOT RUN与全部原资源权限时限边界保持。
+
+
+## T0.12 固定CLEAR后确认重复错误覆盖诊断功能缺口 2026-11-03T06:32:57.387703+00:00
+- 结果：BLOCKED
+- 独立巡检：原`evidence/reviews/20261103T062248404993-T0.12/review.json`真实ended/exit0/CLEAR，固定5f651e838d288cc589e6242c99aa18e6c34934fb。审阅同时确认C9/SPEC10.5 P2：receive每次failed先fail原生error，随后同资源query guard返回，query完成后重复错误会覆盖已确认分类。报告标签保持原样，未accept-review或覆盖历史；已有功能缺口未满足准确验收，已撤本卡勾选，T13等待。
+- 反例验证：原run `evidence/runs/20261103T063038571417-t12-post-query-repeat-error/output.log` actualexit1，首次查询后UPSTREAM_FAILED/actionretry，再次同资源MediaError4后MEDIA_UNSUPPORTED/action空，明确丢失已确认诊断及重试；真实WK此query完成后重复时序NOT RUN。
+- 当前基线：source=83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b/g0，原sessions7/失败10，第七许可已消费，无第八；原done/五必需A1/JUnit12/完整verify六门/受验提交/固定CLEAR和全部旧失败保留。12份缺口SHA副本`evidence/drive/t12-seventh-validation-20261103T061101Z/repeat-diagnosis-gap/manifest.json`含旧done/A1/verify/review/source/反例，原50份成功归档和可选缺周期samples准确事实保持。
+- 最小需要用户决定：仅本卡追加一次7→8，原CLI最小修同加载尝试/资源/epoch/session的已完成诊断保留，避免query完成后重复原生错误覆盖分类与动作；保持每加载一次3s只读查询/同资源成功清错/其他资源独立/旧epoch与新load身份，补正负例及真实WK相关回归，再完整原50/51RSS十窗/图片errors EOS清理准确A1/directverify/新受验提交/新固定CLEAR/clean。原401502codec/鉴权/规模/安全/权限资源时限保持，未批准不得开发，纯验收Git继续。
