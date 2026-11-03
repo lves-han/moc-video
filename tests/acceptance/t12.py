@@ -297,6 +297,27 @@ def validate_errors(value):
                 and (mode != 3 or media_code in (3, 4))
                 and final["error"]["details"]["original_error"]["details"]["media_code"] == media_code,
                 "Original native MediaError was lost or codec bytes did not reach the decoder")
+        repeat = row.get("repeat")
+        require(isinstance(repeat, dict), "Completed diagnosis needs a same-session native repeat")
+        before_repeat, after_repeat = repeat["before"], repeat["after"]
+        require(repeat["stimulus"] == "native video.load, same session URL after completed query"
+                and query["finished_ms"] <= repeat["started_ms"] <= repeat["finished_ms"]
+                and row["event_start"] < repeat["event_start"] < next_row["event_start"]
+                and repeat["calls_before"] == repeat["calls_after"] == row["call_start"] + 1,
+                "Repeat must follow query completion without querying again")
+        for snapshot in (before_repeat, after_repeat):
+            require(all(snapshot[key] == final[key] for key in
+                        ("epoch", "host_epoch", "session_id", "source_id", "source_revision", "episode_ref", "session_path"))
+                    and snapshot["assigned_bound"] is True and snapshot["pending_requests"] == 0
+                    and snapshot["phase"] == "failed" and snapshot["code"] == expected
+                    and snapshot["error"] == final["error"]
+                    and snapshot["action"] == final["action"] == ("" if mode == 3 else "retry"),
+                    "Repeated native error lost the completed classification, action or loading identity")
+        repeated_events = events[repeat["event_start"]:next_row["event_start"]]
+        require(any(event["target"] == "video" and event["trusted"] is True
+                    and repeat["started_ms"] <= event["at_ms"] <= repeat["finished_ms"] for event in repeated_events)
+                and after_repeat["media_error"] and (mode == 3 or repeat["retry_button"] is True),
+                "Repeat requires a trusted native error and the formal retry control")
     require(value["track_error"] == "UPSTREAM_FAILED" and value["reconnects"] == 1, "Native track/reconnect behavior differs")
 
 

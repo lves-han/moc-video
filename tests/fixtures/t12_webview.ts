@@ -402,7 +402,8 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
           episode_ref: session?.episode_ref ?? null, session_path: session ? new URL(session.media_url).pathname : null,
           current_path: video.currentSrc ? new URL(video.currentSrc).pathname : null,
           session_bound: Boolean(session && session.media_url === video.currentSrc), assigned_bound: Boolean(session && session.media_url === video.src), phase: state.phase,
-          code: state.error?.code ?? null, error: state.error ? JSON.parse(diagnostic(JSON.stringify(state.error))) : null,
+          code: state.error?.code ?? null, action: current.controller.ui.action,
+          error: state.error ? JSON.parse(diagnostic(JSON.stringify(state.error))) : null,
           media_error: video.error ? { code: video.error.code, message: diagnostic(video.error.message) } : null,
           pending_requests: current.controller.diagnostics().pending_requests };
       };
@@ -450,6 +451,23 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
           row.stages.push("diagnosis-finished");
           check(row.code === (mode === 3 ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED"),
             `Native classification differs: mode=${mode}, actual=${row.code}, media=${row.media_error}`);
+          // Start another real native load of the same URL after diagnosis has
+          // completed. Keep the formal controller/session/epoch and its listeners;
+          // neither a synthetic Event nor controller.retry() exercises this gap.
+          const repeat: Record<string, any> = { stimulus: "native video.load, same session URL after completed query",
+            before: snapshot(), started_ms: performance.now() - started, event_start: events.length, calls_before: calls.length };
+          row.repeat = repeat;
+          video.load();
+          await until(() => events.slice(repeat.event_start).some(event => event.target === "video" && event.trusted === true),
+            "Repeated same-session native video error missing after completed query");
+          await until(() => current.controller.diagnostics().pending_requests === 0, "Repeated native error left a pending query");
+          await nextTick();
+          repeat.after = snapshot(); repeat.finished_ms = performance.now() - started; repeat.calls_after = calls.length;
+          repeat.retry_button = Boolean(current.container.querySelector('[data-action="retry"]'));
+          check(repeat.after.code === row.code && repeat.after.action === row.final.action
+            && JSON.stringify(repeat.after.error) === JSON.stringify(row.final.error), "Repeated native error overwrote completed diagnosis/action");
+          check(repeat.calls_after === repeat.calls_before, "Repeated native error queried status again");
+          check(mode === 3 || repeat.retry_button, "Repeated native network error hid the formal retry button");
         }
         mode = 0;
         await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);

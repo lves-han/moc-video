@@ -160,6 +160,76 @@ for (const target of ["video", "track"] as const) test(`T12 native ${target} err
   assert.equal(f.root.playback.error.code, target === "video" ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED");
   assert.equal(f.calls.filter(c => c.command === "runtime_prepare").length, 0);
   if (target === "video") assert.match(f.root.playback.error.message, /401 and 502/);
+  const diagnosed = JSON.stringify(f.root.playback.error);
+  if (target === "video") f.error(2, "later opaque network message");
+  else f.video.tracks[0].dispatchEvent(new Event("error"));
+  await flush();
+  assert.equal(JSON.stringify(f.root.playback.error), diagnosed);
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
+  await f.controller.stop();
+});
+
+for (const target of ["video", "track"] as const) test(`T12 repeated ${target} errors retain pending and completed gateway diagnosis and action`, async () => {
+  const f = fixture(); await f.controller.load(context());
+  const late = deferred<unknown>(); let response: any;
+  f.status("failed", "UPSTREAM_FAILED");
+  f.intercept((command, _args, value) => {
+    if (command === "get_resource_status") { response = value; return late.promise; }
+    return value;
+  });
+  const error = () => target === "video" ? f.error(4, "opaque 401/502 codec message") : f.video.tracks[0].dispatchEvent(new Event("error"));
+  if (target === "video") f.error(2, "first network error"); else error();
+  const pending = JSON.stringify(f.root.playback.error);
+  error(); await flush();
+  assert.equal(JSON.stringify(f.root.playback.error), pending);
+  assert.equal(f.controller.ui.action, "retry");
+  late.resolve(response); await flush();
+  const diagnosed = JSON.stringify(f.root.playback.error);
+  assert.equal(f.root.playback.error.code, "UPSTREAM_FAILED");
+  assert.equal(f.root.playback.error.details.original_error.details.media_code, target === "video" ? 2 : null);
+  f.video.dispatchEvent(new Event("waiting"));
+  for (let i = 0; i < 3; i++) { error(); await flush(); }
+  assert.equal(f.root.playback.phase, "failed");
+  assert.equal(JSON.stringify(f.root.playback.error), diagnosed);
+  assert.equal(f.controller.ui.action, "retry");
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
+  await f.controller.stop();
+});
+
+test("T12 separate resources diagnose independently and duplicate errors preserve the latest diagnosis", async () => {
+  const f = fixture(); await f.controller.load(context());
+  f.status("failed", "UPSTREAM_TIMEOUT"); f.error(4); await flush();
+  assert.equal(f.root.playback.error.code, "UPSTREAM_TIMEOUT");
+  f.status("failed", "MEDIA_UNSUPPORTED");
+  f.video.tracks[0].dispatchEvent(new Event("error")); await flush();
+  assert.equal(f.root.playback.error.code, "MEDIA_UNSUPPORTED");
+  const diagnosed = JSON.stringify(f.root.playback.error);
+  f.error(2); f.video.tracks[0].dispatchEvent(new Event("error")); await flush();
+  assert.equal(JSON.stringify(f.root.playback.error), diagnosed);
+  assert.equal(f.controller.ui.action, "");
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 2);
+  await f.controller.stop();
+});
+
+test("T12 successful playback clears diagnosis; later failure stays visible and a new load queries anew", async () => {
+  const f = fixture(); await f.controller.load(context()); f.ready(); await flush();
+  f.status("failed", "UPSTREAM_FAILED"); f.error(4); await flush();
+  assert.equal(f.controller.ui.action, "retry");
+  await f.controller.play();
+  assert.equal(f.root.playback.error, null); assert.equal(f.controller.ui.action, "");
+  f.error(3, "new decode failure after playback succeeded"); await flush();
+  assert.equal(f.root.playback.error.code, "MEDIA_UNSUPPORTED");
+  assert.match(f.root.playback.error.message, /new decode failure/);
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
+  const old = { playback_epoch: f.root.playback.playback_epoch, engine_epoch: HOST, session_id: f.root.playback.session.session_id };
+  await f.controller.retry();
+  assert.equal(f.root.playback.error, null);
+  f.controller.receive({ ...old, type: "failed", error: { code: "MEDIA_UNSUPPORTED", message: "old", retryable: false,
+    details: { resource_kind: "media", resource_key: "video" } } });
+  assert.equal(f.root.playback.error, null);
+  f.status("failed", "UPSTREAM_TIMEOUT"); f.error(4); await flush(); f.error(4); await flush();
+  assert.equal(f.root.playback.error.code, "UPSTREAM_TIMEOUT"); assert.equal(f.controller.ui.action, "retry");
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 2);
   await f.controller.stop();
 });
 
@@ -204,6 +274,10 @@ test("T12 gateway UNAUTHORIZED reconnects once; UPSTREAM_FAILED/TIMEOUT offer re
     } else {
       assert.equal(f.root.playback.error.code, code);
       if (code !== "MEDIA_UNSUPPORTED") assert.equal(f.controller.ui.action, "retry");
+      const diagnosed = JSON.stringify(f.root.playback.error), action = f.controller.ui.action;
+      f.error(4, "duplicate after status completed: 401/502"); await flush();
+      assert.equal(JSON.stringify(f.root.playback.error), diagnosed); assert.equal(f.controller.ui.action, action);
+      assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
     }
     await f.controller.stop();
   }
@@ -216,7 +290,13 @@ test("T12 structured hls.js HTTP codes use the same once-only diagnosis and reco
     await flush(); await f.controller.settled();
     assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
     if (expected === "UNAUTHORIZED") assert.equal(f.calls.filter(c => c.command === "runtime_prepare").length, 1);
-    else assert.equal(f.root.playback.error.code, expected);
+    else {
+      assert.equal(f.root.playback.error.code, expected);
+      const diagnosed = JSON.stringify(f.root.playback.error), action = f.controller.ui.action;
+      f.streams[0].error("error", { fatal: true, type: "mediaError", details: "later decoder error" }); await flush();
+      assert.equal(JSON.stringify(f.root.playback.error), diagnosed); assert.equal(f.controller.ui.action, action);
+      assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
+    }
     await f.controller.stop();
   }
 });
@@ -231,15 +311,16 @@ test("T12 unauthorized status-query envelope invokes engine reconnect", async ()
   await f.controller.stop();
 });
 
-test("T12 old status response is discarded after episode, source revision or host changes", async () => {
-  for (const change of ["episode", "revision", "host"]) {
+test("T12 old status response is discarded after episode, source revision, host or stop changes", async () => {
+  for (const change of ["episode", "revision", "host", "stop"]) {
     const f = fixture(); await f.controller.load(context());
     const late = deferred<unknown>(); let envelope: any;
     f.intercept((command, _args, data) => { if (command === "get_resource_status") { envelope = data; return late.promise; } return data; });
     f.error(); await flush();
     if (change === "episode") await f.controller.load(context("two"));
     else if (change === "revision") f.root.playback.context.episode_ref.source_revision = "new-rev";
-    else f.root.runtime.engine_epoch = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    else if (change === "host") f.root.runtime.engine_epoch = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    else await f.controller.stop();
     const before = JSON.stringify(f.root.playback);
     late.resolve({ ...envelope, data: { ...envelope.data, state: "expired", error: { code: "SESSION_EXPIRED", message: "old", retryable: true } } });
     await flush(); await f.controller.settled();
@@ -249,18 +330,24 @@ test("T12 old status response is discarded after episode, source revision or hos
 });
 
 test("T12 resource query identity/target/transport failures retain original diagnostics and retry", async () => {
-  for (const fault of ["request", "host", "target", "transport"]) {
+  for (const fault of ["request", "host", "target", "kind", "transport"]) {
     const f = fixture(); await f.controller.load(context());
     f.intercept((command, _args, envelope) => {
       if (command !== "get_resource_status") return envelope;
       if (fault === "transport") throw new Error("offline");
       if (fault === "request") return { ...envelope, request_id: crypto.randomUUID() };
       if (fault === "host") return { ...envelope, engine_epoch: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+      if (fault === "kind") return { ...envelope, data: { ...envelope.data, kind: "image" } };
       return { ...envelope, data: { ...envelope.data, target_id: "wrong-target" } };
     });
     f.error(3, "native decoder failure"); await flush();
     assert.match(f.root.playback.error.message, /native decoder failure/);
     assert.match(f.controller.ui.diagnostic, /查询失败/); assert.equal(f.controller.ui.action, "retry");
+    const diagnosed = JSON.stringify(f.root.playback.error), diagnostic = f.controller.ui.diagnostic;
+    f.error(4, "later browser code after query failed"); await flush();
+    assert.equal(JSON.stringify(f.root.playback.error), diagnosed);
+    assert.equal(f.controller.ui.diagnostic, diagnostic); assert.equal(f.controller.ui.action, "retry");
+    assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 1);
     await f.controller.stop();
   }
 });

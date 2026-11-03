@@ -171,8 +171,17 @@ export function createPlaybackController(root: AppState = appState, client: Pick
 
   async function diagnose(original: Bridge_ApiError, epoch: number, session: PlaybackViewSession) {
     const key = String(original.details?.resource_key ?? "video");
-    if (!current(epoch, session) || queried.has(key)) return;
+    if (!current(epoch, session)) return;
+    if (queried.has(key)) {
+      // Repeated native errors must retain the pending/completed diagnosis and
+      // its recovery action. After successful playback, a new failure is visible
+      // again, while this loading attempt's status query remains once-only.
+      if (state.error) state.phase = "failed";
+      else fail(original);
+      return;
+    }
     queried.add(key);
+    fail(original);
     const host = state.engine_epoch!;
     try {
       const status = await request("get_resource_status", { kind: "playback", target_id: session.session_id }, host);
@@ -222,9 +231,9 @@ export function createPlaybackController(root: AppState = appState, client: Pick
         if (resume.was_playing) void play();
       }
     } else if (event.type === "failed") {
-      fail(event.error);
-      if (event.error.details?.reason === "AUTOPLAY_BLOCKED") { ui.autoplayBlocked = true; ui.action = ""; }
+      if (event.error.details?.reason === "AUTOPLAY_BLOCKED") { fail(event.error); ui.autoplayBlocked = true; ui.action = ""; }
       else if (event.error.details?.resource_kind) void diagnose(event.error, event.playback_epoch, state.session!);
+      else fail(event.error);
     } else if (event.type === "stopped") state.phase = "idle";
     else {
       state.phase = event.type;

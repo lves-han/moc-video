@@ -1554,3 +1554,15 @@
 ## T0.12 第八会话授权固定文档独立CLEAR 2026-11-03T06:40:07.347083+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-36.md`，固定52d5625ac6f256a751f58e9afd39e9affa461fd7、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR037 268ce9b4aceff1c9fff59c8d8d7083212ef3dc9618224ecc55f8ffb9a386ef33。独立只读核真实授权/C9生产因果链与原反例/完成勾选纠正/原预算控制器/12份gap和50份完成归档SHA，原始报告已保存，作者未代宣CLEAR。
 - 限制与下一步：原s7/f10/g0，第八未消费，第九未授权；真实WK query完成后重复时序及新修复效果NOT RUN。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数后唯一原drive --once --max-sessions8，同attempt资源epochSession完成诊断及动作保留、一次3s查询与独立清错身份门/原50和安全权限资源时限保持，新源须新受验提交及新固定CLEAR，T13paused及后卡等待。
+
+
+## T0.12 第八会话查询完成后重复错误诊断保留待验交接 2026-11-03T06:49:30.505324+00:00
+- 实施状态：WIP；ADR037唯一第八许可已消费，原status实际sessions8/failures10/generation0，无第九许可。TASKS保持未勾选，未done/rebaseline，未写RESOLVED/AUTHORIZED或新增BLOCKED。已知sysctl/sccache/Git限制按ADR010分工交外层，本CLI未重复探测或绕过。
+- 问题与依据：已读AGENTS、当前T0.12、C8/C9/C10/C14、SPEC10.5、ADR010/037、round36、原固定review及repeat-diagnosis-gap/manifest.json的12份SHA副本并逐份核对相符。原run反例证实receive先fail原生error，已完成query的去重guard随后返回，UPSTREAM_FAILED/retry被重复MediaError4覆为MEDIA_UNSUPPORTED/空动作。原反例、旧done/A1/verify/固定CLEAR及全部历史保留。
+- Changed：生产仅src/state.ts调整首次资源错误发布顺序至已有diagnose guard内。同key重复保留当前pending/已完成错误与动作，并恢复failed阶段；沿用queried集合，无新增状态/缓存/查询。原playing成功清错后后续真实故障仍可见，同attempt仍只query一次；新load沿原清集合/epoch机制开启新尝试，原过期/重连/身份校验路径保持。
+- Changed：tests/playback.test.ts增加4个执行实例入口（video/track pending及完成后重复、不同资源独立、成功清错与新load），并扩展原ready/gateway/hls.js/查询失败与旧响应例；覆盖不同MediaError不得覆盖、精确保留原error/details和retry、查询request/host/target/kind拒绝、旧epoch/revision/host/stop响应丢弃。全部待行为执行。
+- Changed：真实WK errors动作在原401/502/codec首次query完成后对同正式video调用原生video.load，保持Session/epoch/URL及监听，捕获第二个trusted原生error、query完成与重复事件时序、前后精确error/action和实际retry按钮，断言status仍一次。刺激准确标注native video.load；未合成error事件，未用mock替代Host。Python独立oracle增加正负例拒绝缺失/未完成query/合成或旧身份重复证据、错误/动作覆盖、额外query和隐藏retry。
+- Verified：task.py check/start/scope实际exit0；两个Python AST解析通过，27项oracle静态声明；三个TypeScript文件createSourceFile语法解析0诊断；git diff --check exit0；12份原缺口副本SHA相符。行为测试实际0，类型检查/构建/真实WK重复链路NOT RUN，无本轮资源收据。
+- 验收 A1：NOT RUN；完整verify NOT RUN。外层准确argv清单`evidence/acceptance/T12-session-8-outer-argv.json`生成并读回，7条命令保留给定venv解释器字面路径，A1 payload逐项等于冻结卡含首项{python}字面。按原run顺序执行27oracle/预计70相关前端/类型/locked native check/Clippy/准确A1；A1通过后直接verify.py all。旧源通过保持历史事实，新源全部门须重跑。
+- 稳定源码：57bee63a4df4c25361b11c80184a9df278af15fa01ecee2eae2cd554483e176a；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本会话源码停止编辑；Git WIP按ADR010由外层在本CLI稳定退出/旧创建身份结束/两锁实得后代办，建议`WIP T0.12: retain completed resource diagnosis on repeated native errors`。
+- Remaining：外层按清单完整验证原50切集/51aggregate/十个五切RSS窗、每轮帧440880PCM、单video/HLS/track/监听/HTTP/Session清理及所有图片/errors/auto/unknown/当前epochSession一次trusted EOS/布局/正常stop-dispose/Hostfinish与安全门；新增真实重复链路仍NOT RUN。原4096MiB macOS RSS采样/jobs2/线程1/30秒及所有原时限阈值保持，无warmup/强制GC/抽样本或筛选通过。新实现需真实决定且暂停，无第九；纯验收/Git按既有授权继续。准确A1/完整verify/原done/新受验提交/新固定独立CLEAR/clean齐备才完整完成，T13paused及严格后卡等待。

@@ -68,10 +68,15 @@ def native_errors():
                      episode_ref=dict(source_id="source", source_revision="revision", data="episode-50"),
                      session_path=f"/sessions/{session}/media", current_path=f"/sessions/{session}/media",
                      phase="failed", code=code, pending_requests=0, session_bound=True, assigned_bound=True, stream_kind="progressive",
+                     action="" if mode == 3 else "retry",
                      media_error=dict(code=4, message="opaque browser message mentions 401 and 502"),
                      error=dict(details=dict(original_error=dict(details=dict(media_code=4)))))
         outcomes.append(dict(mode=mode, code=code, media_error=4, before=copy.deepcopy(final), opened=copy.deepcopy(final),
-                             final=final, call_start=index, event_start=index,
+                             final=final, call_start=index, event_start=index * 2,
+                             repeat=dict(stimulus="native video.load, same session URL after completed query",
+                                         before=copy.deepcopy(final), after=copy.deepcopy(final),
+                                         started_ms=4, finished_ms=6, event_start=index * 2 + 1,
+                                         calls_before=index + 1, calls_after=index + 1, retry_button=mode != 3),
                              requests=[dict(mode=mode, target="/media/a.mp4?episode=50", status={1: 401, 2: 502, 3: 200}[mode],
                                             mime="video/mp4" if mode == 3 else "text/plain")]))
         request_id = f"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb{mode}"
@@ -80,7 +85,8 @@ def native_errors():
                           response=dict(request_id=request_id, engine_epoch=host, data=dict(kind="playback", target_id=session,
                                         state="ready" if mode == 3 else "failed", error=None if mode == 3 else dict(code=code)))))
         events.append(dict(target="video", mode=mode, trusted=True, epoch=mode, session_id=session, at_ms=1, media_error=dict(code=4)))
-    outcomes.extend([dict(mode=4, call_start=3, event_start=3), dict(mode="unauthorized-query")])
+        events.append(dict(target="video", mode=mode, trusted=True, epoch=mode, session_id=session, at_ms=5, media_error=dict(code=4)))
+    outcomes.extend([dict(mode=4, call_start=3, event_start=6), dict(mode="unauthorized-query")])
     return dict(outcomes=outcomes, calls=calls, events=events, track_error="UPSTREAM_FAILED", reconnects=1)
 
 
@@ -126,6 +132,27 @@ class NativeOracleTests(unittest.TestCase):
         row = native_errors(); row["calls"][0]["finished_ms"] = 3003
         with self.assertRaises(ValueError):
             t12.validate_errors(row)
+
+    def test_native_repeat_requires_completed_query_current_identity_and_preserved_error_action(self):
+        row = native_errors(); del row["outcomes"][0]["repeat"]
+        with self.assertRaises(ValueError):
+            t12.validate_errors(row)
+        for field, value in [("code", "MEDIA_UNSUPPORTED"), ("action", ""), ("error", {}),
+                             ("epoch", 0), ("session_id", "old"), ("host_epoch", "old"),
+                             ("source_revision", "old"), ("assigned_bound", False), ("pending_requests", 1)]:
+            for phase in ("before", "after"):
+                row = native_errors(); row["outcomes"][0]["repeat"][phase][field] = value
+                with self.subTest(phase=phase, field=field), self.assertRaises(ValueError):
+                    t12.validate_errors(row)
+        for field, value in [("started_ms", 2), ("calls_after", 2), ("calls_before", 0),
+                             ("event_start", 0), ("retry_button", False), ("stimulus", "synthetic Event")]:
+            row = native_errors(); row["outcomes"][0]["repeat"][field] = value
+            with self.subTest(repeat=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
+        for field, value in [("trusted", False), ("at_ms", 2), ("session_id", "old"), ("epoch", 0)]:
+            row = native_errors(); row["events"][1][field] = value
+            with self.subTest(event=field), self.assertRaises(ValueError):
+                t12.validate_errors(row)
 
     def test_native_error_matrix_rejects_missing_duplicate_queries_and_untrusted_old_events(self):
         for count in (0, 2):
