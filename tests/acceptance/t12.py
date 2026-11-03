@@ -6,6 +6,7 @@ are synthetic; all business envelopes, handles and resource URLs come from Host.
 import argparse
 import datetime as dt
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -240,18 +241,55 @@ def validate_image_expiry(value):
                 "Real Host image query/refresh count differs")
 
 
-def process_sample(session):
+def process_sample(session, bridge=None):
+    # Keep the original aggregate observation and its budget enforcement intact.
+    # Detail reads follow it; their sum can differ as the live processes change.
     rss = session.observe()
     cpu = 0
-    for pid, token in session.owned.items():
+    processes = []
+    roles = {pid: role for role, pid in session.record.get("webkit_pids", {}).items() if pid > 0}
+    roles[session.process.pid] = "application"
+    if session.record.get("wake_guard"):
+        roles[session.record["wake_guard"]["pid"]] = "wake_guard"
+    def detail(pid, token, role):
+        row = dict(pid=pid, identity=token, role=role, alive=False, rss_bytes=None, cpu_seconds=None)
         process = workflow.runtime.process_for(pid, token)
         if process:
             try:
                 times = process.cpu_times()
-                cpu += times.user + times.system
+                seconds = times.user + times.system
+                row.update(alive=True, name=process.name(), rss_bytes=process.memory_info().rss, cpu_seconds=seconds)
             except workflow.runtime.psutil.NoSuchProcess:
-                pass
-    return dict(utc=dt.datetime.now(dt.timezone.utc).isoformat(), monotonic=time.monotonic(), owned_rss_bytes=rss, owned_cpu_seconds=cpu)
+                row.update(alive=False, rss_bytes=None, cpu_seconds=None)
+        return row
+    for pid, token in session.owned.items():
+        row = detail(pid, token, roles.get(pid, "owned_child"))
+        cpu += row["cpu_seconds"] or 0
+        processes.append(row)
+    # Host/observer memory belongs to the combined budget, outside owned_rss.
+    support = [detail(os.getpid(), workflow.runtime.identity(os.getpid()), "python_observer")]
+    if bridge is not None:
+        support.append(detail(bridge.process.pid, bridge.token, "real_host"))
+    result_log = session.run.folder / f"results-{session.record['index']}.jsonl"
+    return dict(utc=dt.datetime.now(dt.timezone.utc).isoformat(), monotonic=time.monotonic(), owned_rss_bytes=rss, owned_cpu_seconds=cpu,
+                processes=processes, support_processes=support, detail_rss_bytes=sum(row["rss_bytes"] or 0 for row in processes),
+                observer=dict(command_results=len(session.record.get("commands", [])), queued_commands=session.fixture.commands.qsize(),
+                              queued_results=session.fixture.results.qsize(), queued_samples=session.fixture.samples.qsize(),
+                              retained_samples=len(session.samples), result_log_bytes=result_log.stat().st_size if result_log.exists() else 0,
+                              host_log_lines=len(bridge.lines) if bridge else None,
+                              host_requests=bridge.sequence if bridge else None))
+
+
+def rss_windows(samples):
+    require(len(samples) == 51 and all(isinstance(s["owned_rss_bytes"], (int, float))
+            and not isinstance(s["owned_rss_bytes"], bool) and math.isfinite(s["owned_rss_bytes"])
+            and s["owned_rss_bytes"] >= 0 for s in samples), "All 51 raw CPU/RSS samples are required")
+    return [statistics.median(s["owned_rss_bytes"] for s in samples[i:i+5]) for i in range(1, 51, 5)]
+
+
+def validate_rss_windows(medians):
+    require(len(medians) == 10, "All ten five-switch RSS windows are required")
+    require(not all(a < b for a, b in zip(medians, medians[1:])), "Owned RSS grows monotonically across all ten five-switch windows")
 
 
 def webview(run):
@@ -278,7 +316,8 @@ def webview(run):
                 session.record["commands"][-1]["args"] = dict(action="start", payload="actual Host contexts/DTO; capability URLs transient and redacted")
                 require(start["nonblank"] is True and start["framework_overlay"] is False and not start["errors"] and start["sample"]["video_count"] == 1, "Formal production App did not render")
                 run.observed["formal_entry"] = start
-                samples = [process_sample(session)]
+                samples = [process_sample(session, bridge)]
+                run.observed["process_samples"] = samples
                 cycles = []
                 for index in range(1, 51):
                     value = session.command("t12", action="switch", payload=index, timeout=40)
@@ -286,13 +325,13 @@ def webview(run):
                     cycles.append(value)
                     run.observed["cycles"] = cycles
                     validate_cycle(value, index)
-                    samples.append(process_sample(session))
+                    samples.append(process_sample(session, bridge))
                 run.observed["cycles"] = cycles
                 run.observed["process_samples"] = samples
                 # Preserve every raw sample; a strictly growing series has no evidence of stabilization.
-                medians = [statistics.median(s["owned_rss_bytes"] for s in samples[i:i+5]) for i in range(1, 51, 5)]
-                require(not all(a < b for a, b in zip(medians, medians[1:])), "Owned RSS grows monotonically across all ten five-switch windows")
+                medians = rss_windows(samples)
                 run.observed["rss_windows"] = medians
+                validate_rss_windows(medians)
                 hls = session.command("t12", action="switch", payload=51, timeout=40)
                 validate_cycle(hls, 51)
                 require(hls["sample"]["diagnostics"]["engine"] == "native", "WKWebView native HLS capability was ignored")
@@ -312,7 +351,7 @@ def webview(run):
                 stop = session.command("t12", action="stop")
                 validate_stop(stop)
                 run.observed["stop"] = stop
-                run.observed["idle_process_sample"] = process_sample(session)
+                run.observed["idle_process_sample"] = process_sample(session, bridge)
                 disposed = session.command("t12", action="dispose")
                 require(disposed["audio_closed"] is True and disposed["videos"] == 0 and not disposed["errors"], "Unmount retains native media/AudioContext or errors")
                 run.observed["disposed"] = disposed

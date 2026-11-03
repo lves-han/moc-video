@@ -333,7 +333,8 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       player?.selectSubtitle(index); state.subtitle_id = id;
     },
     fullscreen: () => player?.fullscreen(),
-    diagnostics: () => ({ ...player?.diagnostics(), retiring: retiring.length, pending_requests: pendingRequests.size }),
+    diagnostics: () => ({ ...player?.diagnostics(), retiring: retiring.length, pending_requests: pendingRequests.size,
+      queried_resources: queried.size, queried_images: queriedImages.size }),
     settled: () => tail,
   };
 }

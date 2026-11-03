@@ -126,11 +126,13 @@ test("T12 50 actual controller switches release single transport, tracks, listen
     assert.equal(f.streams.filter(s => !s.destroyed).length, 1);
     assert.equal(f.video.tracks.length, 1);
     if (i) assert.equal(f.listeners(), count);
+    assert.equal(f.controller.diagnostics().listener_registrations, f.listeners());
     count = f.listeners();
     assert.ok(oldTracks.every(t => t.track.mode === "disabled"));
   }
   await f.controller.stop();
   assert.equal(f.sessions.size, 0); assert.equal(f.resolutions.size, 0); assert.equal(f.listeners(), 0);
+  assert.equal(f.controller.diagnostics().listener_registrations, 0);
   assert.equal(f.video.tracks.length, 0); assert.equal(f.video.src, "");
   const order = f.calls.filter(c => ["close_playback", "release_resolution", "resolve_episode"].includes(c.command));
   for (let i = 1; i < order.length; i += 3) assert.deepEqual(order.slice(i, i + 3).map(c => c.command), ["close_playback", "release_resolution", ...(i + 2 < order.length ? ["resolve_episode"] : [])]);

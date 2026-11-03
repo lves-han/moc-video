@@ -13,6 +13,7 @@ type Bootstrap = { initial_context: PlaybackContext; match_inputs: PlaybackMatch
 type Harness = {
   app: VueApp; container: HTMLElement; video: HTMLVideoElement; controller: PlaybackController; matches: PlaybackMatchInput[];
   rpc: (value: unknown) => Promise<any>; audio: AudioContext; source: MediaElementAudioSourceNode; analyser: AnalyserNode;
+  sampling: ReturnType<typeof createMediaSampler>; retiredTracks: WeakRef<HTMLTrackElement>[];
   frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
   errors: string[]; stopErrors: () => void;
   initialLocale: typeof locale.value; details: DetailsViewData;
@@ -25,24 +26,48 @@ async function until(predicate: () => boolean, message: string, timeout = 20000)
   const end = performance.now() + timeout;
   while (!predicate()) { check(performance.now() < end, message); await delay(20); }
 }
+// Keep observer scratch storage bounded independently of readiness polling.
+// The previous 50-switch report contains 437 reads, each allocating 24 KiB
+// plus a canvas. Raw numeric observations still leave the WebView in full.
+export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNode, sampleRate: number) {
+  const bins = new Float32Array(analyser.fftSize);
+  const spectrum = new Float32Array(analyser.frequencyBinCount);
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+  const drawing = canvas.getContext("2d");
+  check(drawing, "Media observation requires a canvas 2D context");
+  let reads = 0;
+  return {
+    read() {
+      reads++;
+      analyser.getFloatTimeDomainData(bins);
+      analyser.getFloatFrequencyData(spectrum);
+      let peak = 0;
+      for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+      drawing.clearRect(0, 0, 1, 1);
+      if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
+      return { audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length),
+        audio_peak_hz: peak * sampleRate / analyser.fftSize, pixel: [...drawing.getImageData(0, 0, 1, 1).data] };
+    },
+    diagnostics: () => ({ reads, scratch_buffers: 2, scratch_bytes: bins.byteLength + spectrum.byteLength, scratch_canvases: 1 }),
+    dispose() { canvas.width = canvas.height = 0; },
+  };
+}
 function sample(current: Harness) {
   const video = current.video;
-  const bins = new Float32Array(current.analyser.fftSize);
-  current.analyser.getFloatTimeDomainData(bins);
-  const spectrum = new Float32Array(current.analyser.frequencyBinCount);
-  current.analyser.getFloatFrequencyData(spectrum);
-  let peak = 0;
-  for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
-  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
-  const drawing = canvas.getContext("2d")!;
-  if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
+  const media = current.sampling.read();
+  const retained = current.retiredTracks.flatMap(reference => { const track = reference.deref(); return track ? [track] : []; });
   return { position: video.currentTime, paused: video.paused, ready_state: video.readyState, network_state: video.networkState,
     sampled_at: performance.now(), audio_state: current.audio.state, audio_time: current.audio.currentTime,
     session_bound: Boolean(appState.playback.session && video.currentSrc === appState.playback.session.media_url),
     source_present: video.hasAttribute("src"), tracks: video.querySelectorAll("track").length,
     video_count: document.querySelectorAll("video").length, frames: current.frames, width: video.videoWidth, height: video.videoHeight,
-    audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length), audio_peak_hz: peak * current.audio.sampleRate / current.analyser.fftSize,
-    pixel: [...drawing.getImageData(0, 0, 1, 1).data], media_error: video.error?.code ?? null,
+    ...media, media_error: video.error?.code ?? null,
+    resources: { dom_nodes: document.querySelectorAll("*").length, text_tracks: video.textTracks.length,
+      buffered_ranges: video.buffered.length, resource_timing_entries: performance.getEntriesByType("resource").length,
+      retired_tracks_observed: current.retiredTracks.length, retired_tracks_alive: retained.length,
+      retired_tracks_connected: retained.filter(track => track.isConnected).length,
+      retired_tracks_enabled: retained.filter(track => track.track.mode !== "disabled").length,
+      observer: current.sampling.diagnostics() },
     phase: appState.playback.phase, epoch: appState.playback.playback_epoch, diagnostics: current.controller.diagnostics() };
 }
 
@@ -123,6 +148,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     const audio = new AudioContext(); const source = audio.createMediaElementSource(video); const analyser = audio.createAnalyser();
     analyser.fftSize = 4096; source.connect(analyser); analyser.connect(audio.destination);
     const current: Harness = { app, container, video, controller, matches: payload.match_inputs, rpc, audio, source, analyser,
+      sampling: createMediaSampler(video, analyser, audio.sampleRate), retiredTracks: [],
       frames: 0, callback: 0, originalCore, initialLocale, details: payload.details, errors, stopErrors: () => {
         window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
         console.error = oldError; console.warn = oldWarn;
@@ -146,6 +172,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       const index = Number(command.payload);
       check(index >= 1 && index <= 51, "Episode index outside fixture");
       const oldTracks = [...video.querySelectorAll("track")]; const oldSession = appState.playback.session!.session_id;
+      current.retiredTracks.push(...oldTracks.map(track => new WeakRef(track)));
       const before = current.frames;
       // The production state action and App route feed the same mounted PlaybackView.
       const matched = await api.call("match_playback", current.matches[index]!);
@@ -362,6 +389,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     case "dispose": {
       await current.controller.stop(); current.app.unmount(); await current.controller.settled();
       video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect(); await current.audio.close();
+      current.sampling.dispose();
       current.container.remove(); current.stopErrors();
       window.__TAURI__!.core = current.originalCore;
       locale.value = current.initialLocale;

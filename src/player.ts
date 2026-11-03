@@ -38,6 +38,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
   protocol?: (event: ProtocolEvent) => void) {
   let hls: Hls | undefined;
   let listeners: AbortController | undefined;
+  let listenerRegistrations = 0;
   let epoch = 0;
   let lastPosition = 0;
   let engine: "native" | "hls.js" = "native";
@@ -67,6 +68,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     epoch++;
     listeners?.abort();
     listeners = undefined;
+    listenerRegistrations = 0;
     video.pause();
     hls?.destroy();
     hls = undefined;
@@ -84,27 +86,31 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     const openedAt = performance.now();
     const active = new AbortController();
     listeners = active;
+    const listen = (target: EventTarget, name: string, callback: EventListener) => {
+      target.addEventListener(name, callback, { signal: active.signal });
+      listenerRegistrations++;
+    };
     lastPosition = -Infinity;
     notify("preparing");
     const fresh = (event: Event) => epoch === current && event.timeStamp >= openedAt;
-    const on = (name: string, state: PlayerState, valid: () => boolean = () => true) => video.addEventListener(name, event => {
+    const on = (name: string, state: PlayerState, valid: () => boolean = () => true) => listen(video, name, event => {
       if (fresh(event) && valid()) notify(state);
-    }, { signal: active.signal });
+    });
     on("loadedmetadata", "ready", () => video.readyState >= 1);
     on("durationchange", "ready", () => video.readyState >= 1);
     on("playing", "playing", () => !video.paused);
     on("pause", "paused", () => video.paused);
     on("waiting", "buffering");
     on("ended", "ended", () => video.ended);
-    video.addEventListener("timeupdate", event => {
+    listen(video, "timeupdate", event => {
       if (fresh(event) && performance.now() - lastPosition >= 250) {
         lastPosition = performance.now();
         notify("position");
       }
-    }, { signal: active.signal });
-    video.addEventListener("error", event => {
+    });
+    listen(video, "error", event => {
       if (fresh(event) && video.error) mediaFailure("video", `MediaError ${video.error.code}: ${video.error.message ?? "load failed"}`, video.error.code);
-    }, { signal: active.signal });
+    });
     video.crossOrigin = "anonymous";
     video.preload = "auto";
     const subtitles = source.subtitles ?? (source.subtitle ? [{ id: "legacy", label: "样机字幕", language: "zh-CN", url: source.subtitle }] : []);
@@ -116,9 +122,9 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       track.srclang = subtitle.language || "und";
       track.src = subtitle.url;
       track.default = index === 0;
-      track.addEventListener("error", event => {
+      listen(track, "error", event => {
         if (fresh(event)) mediaFailure(subtitle.id, `SUBTITLE_LOAD_FAILED: ${subtitle.id}`);
-      }, { signal: active.signal });
+      });
       video.append(track);
     }
     if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -174,7 +180,8 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       Array.from(video.textTracks).forEach((track, i) => { track.mode = i === index ? "showing" : "disabled"; });
     },
     fullscreen: () => window.__TAURI__ ? nativeInvoke<boolean>("player_fullscreen") : video.requestFullscreen().then(() => true),
-    diagnostics: () => ({ epoch, engine, hls_instances: hls ? 1 : 0, listening: Boolean(listeners), tracks: video.querySelectorAll("track").length }),
+    diagnostics: () => ({ epoch, engine, hls_instances: hls ? 1 : 0, listening: Boolean(listeners), listener_registrations: listenerRegistrations,
+      tracks: video.querySelectorAll("track").length }),
   };
 }
 
