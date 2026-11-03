@@ -1636,3 +1636,10 @@
 - 诊断边界：过期失败generic video诊断非正式App/controller；真实根因尚未全部确定。返回状态保存恢复、对比度实际selector/数值、确认role与本机退出循环需原范围最小诊断及正负例/真实WK确认；不据截图或超时单项武断宣称全部生产缺陷。原run `evidence/runs/20261103T090518246712-t13-third-saved-media-evidence/receipt.json`校保存50cycle/51样本及原RSS门过，仅诊断，不覆盖失败A1。
 - 需要用户决定：是否仅本卡再追加一次3→4，由原模型权限CLI在原T13范围补正式失败状态诊断并最小修上述确认原因/相关正负例和真实WK，完整复验；原14cases/50次51RSS十窗/20矩阵4DPI五色首帧/安全恢复一次查询/资源权限时限保持，不改冻结或范围外Rust/依赖/控制配置，不rebaseline。未批准前只读证据和Git，不改源/重启开发/同源筛选重跑，后卡等待。
 - 证据：`evidence/drive/t13-third-validation-20261103T084301Z/native-acceptance-failure/manifest.json`封存90份实际副本SHA；generic周期samples缺1准确optional，51逐命令JSON/results与UI RSS齐，旧29份/容量stderr/125未封存/所有WIP历史沿baseline.previous_validation保持。原所有创建身份退出及两锁实得已核，准确handoff保存。
+
+## T0.13 唯一第四会话真实批准 2026-11-03T09:11:24.169312+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天仅T13追加一次3→4、定位最小修真实播放/界面失败并完整复验、原模型权限范围全部门资源时限保持的明确回复“仅批准 T0.13 追加一次（3→4）”；按ADR039唯一一次，原s3/f5/gen3，第四尚未消费，未授权第五。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 真实证据：`evidence/drive/t13-third-validation-20261103T084301Z/native-acceptance-failure/manifest.json`90份SHA及原A1失败不改写；现有正式过期诊断/错误message与实际role缺失，原因待区分；原50/51RSS过与12oracle134行为及类型格式native过只历史。
+- 执行与完成：固定独立round38 CLEAR原文保存提交后紧邻strict最早/current/next、旧创建身份/两锁实得/clean source protected原s3核对，唯一原drive once maxsessions4；全部原14cases/50次51RSS十窗/20矩阵4DPI五色首帧/一次查询恢复/安全资源权限期限保持，新源准确A1成功direct完整verify/done/受验提交/新固定独立CLEAR/clean才完成，不rebaseline、后卡等待。
