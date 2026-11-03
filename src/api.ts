@@ -26,7 +26,11 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 // No caller can select a process, path or arbitrary invoke command.
 const nativeInvoke: Invoke = async (command, args) => {
   const tauri = (globalThis as typeof globalThis & { __TAURI__?: { core: { invoke: Invoke } } }).__TAURI__;
-  if (!tauri) throw new Error("Tauri host is unavailable");
+  if (!tauri) {
+    if (typeof window === "undefined") throw new Error("Tauri host is unavailable");
+    // The browser interface preview is explicit; native failures never fall back.
+    return (await import("./data/preview.ts")).previewInvoke(command, args);
+  }
   return tauri.core.invoke(command, args);
 };
 

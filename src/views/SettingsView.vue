@@ -2,17 +2,16 @@
 import { computed } from "vue";
 import { NRadioGroup, NRadioButton, NSwitch, NTag, useOsTheme } from "naive-ui";
 import Icon from "../components/Icon.vue";
-import { locale, setLocale, getStremioLanguage, t } from "../i18n";
+import { locale, getStremioLanguage, t } from "../i18n";
 import {
   palette,
   paletteOptions,
-  setPalette,
-  type PaletteId,
 } from "../ui/theme";
 
 const speed = defineModel<number>("speed", { required: true });
+defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
-const emit = defineEmits<{ notice: [message: string] }>();
+const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string] }>();
 const osTheme = useOsTheme();
 const metadataLanguage = computed(() => getStremioLanguage(locale.value));
 const languageOptions = [
@@ -25,22 +24,10 @@ const speedOptions = [0.5, 1, 1.25, 1.5, 2].map((value) => ({
 }));
 function changeLanguage(value: string) {
   if (value !== "en" && value !== "zh-CN") return;
-  if (!setLocale(value))
-    emit(
-      "notice",
-      t(
-        "Language changed, but the preference could not be saved on this device. Reloading will restore English.",
-      ),
-    );
+  emit("language", value);
 }
 function changePalette(value: string | number | boolean) {
-  if (!setPalette(value as PaletteId))
-    emit(
-      "notice",
-      t(
-        "Color palette changed, but the preference could not be saved on this device.",
-      ),
-    );
+  emit("palette", String(value));
 }
 </script>
 
@@ -135,7 +122,7 @@ function changePalette(value: string | number | boolean) {
       <div>
         <h3>{{ t("Metadata provider") }}</h3>
         <p>
-          {{ t("Metadata language preview · Live Stremio connection pending") }}
+          {{ t(preview ? "Metadata language preview · Live Stremio connection pending" : "Follows the app: Chinese uses Chinese; all other languages use English.") }}
         </p>
       </div>
       <NTag :bordered="false">Stremio</NTag>
@@ -196,12 +183,12 @@ function changePalette(value: string | number | boolean) {
         <h3>{{ t("Yingxiang Video") }}</h3>
         <p>{{ t("A place for good stories.") }}</p>
       </div>
-      <NTag :bordered="false">{{ t("Interface preview 0.1.0") }}</NTag>
+      <NTag :bordered="false">{{ preview ? t("Interface preview 0.1.0") : '0.1.0' }}</NTag>
     </div>
     <p class="about-copy">
       {{
         t(
-          "Explore discovery, film details, episodes, embedded playback and source management. Artwork is original, playback uses a local 30-second demo, and playback preferences last for this page session.",
+          preview ? "Explore discovery, film details, episodes, embedded playback and source management. Artwork is original, playback uses a local 30-second demo, and playback preferences last for this page session." : "A place for good stories.",
         )
       }}
     </p>

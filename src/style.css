@@ -2347,3 +2347,9 @@ main {
 }
 
 .history-preview-note { color: var(--muted); font-size: 12px; margin: -8px 0 24px; }
+/* Playback keeps preference controls available without replacing the media view. */
+.playback-preferences { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 12px; padding: 12px 24px; }
+.playback-preferences select { max-width: min(44vw, 240px); min-height: 44px; color: var(--text); background: var(--surface); }
+.quick-palette { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.poster-lettering { padding: 8px; border-radius: 6px; background-color: #07100be6; }
+.preference-alert { position: fixed; bottom: 96px; right: 16px; max-width: min(480px, calc(100vw - 32px)); z-index: 3000; }

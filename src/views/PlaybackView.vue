@@ -1,20 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { NAlert, NButton } from "naive-ui";
-import { appState, createPlaybackController } from "../state.ts";
+import { appState, appController, createPlaybackController } from "../state.ts";
 import { settingsQueue } from "../api.ts";
-import type { PlaybackContext } from "../models.ts";
+import type { PlaybackContext, ResumeSnapshot } from "../models.ts";
 import { locale } from "../i18n";
 
-const props = defineProps<{ context: PlaybackContext | null }>();
+const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null }>();
 const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number] }>();
-const playback = createPlaybackController(appState, undefined, (context, epoch) => emit("ended", context, epoch));
+const playback = createPlaybackController(appState, undefined, (context, epoch) => emit("ended", context, epoch), runtime => {
+  if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
+  else appController.applyRuntime(runtime);
+});
+const unbind = appController.bindPlayback(playback);
 const state = playback.state;
 const ui = playback.ui;
 const video = ref<HTMLVideoElement>();
 const panel = ref<HTMLElement>();
 const controlsVisible = ref(true);
 const zh = computed(() => locale.value === "zh-CN");
+const native = Boolean(window.__TAURI__);
 const word = (cn: string, en: string) => zh.value ? cn : en;
 const priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -40,7 +45,7 @@ function showControls() {
   }, 3000);
 }
 function keydown(event: KeyboardEvent) {
-  if (event.ctrlKey || event.altKey || event.metaKey || (event.target as HTMLElement).closest("input,select,button,a,textarea,[contenteditable=true]")) return;
+  if (document.querySelector('[role="dialog"], [role="alertdialog"]') || event.ctrlKey || event.altKey || event.metaKey || (event.target as HTMLElement).closest("input,select,button,a,textarea,[role=switch],[role=combobox],[role=radio],[role=slider],[contenteditable=true]")) return;
   if (event.code === "Space") { event.preventDefault(); toggle(); }
   else if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && state.duration_ms !== null) {
     event.preventDefault(); playback.seek(state.position_ms / 1000 + (event.key === "ArrowRight" ? 5 : -5));
@@ -54,7 +59,7 @@ async function fullscreen() {
 }
 watch(() => props.context, context => {
   if (!mounted) return;
-  if (context) void playback.load(context); else void playback.stop();
+  if (context) void playback.load(context, { resume: props.resume }); else void playback.stop();
 });
 watch(playing, showControls);
 onMounted(async () => {
@@ -62,24 +67,26 @@ onMounted(async () => {
   playback.attach(video.value!);
   try { appState.settings = await settingsQueue.initialize(); }
   catch (cause) { ui.diagnostic = String(cause); }
+  await nextTick();
   if (!mounted) return;
   state.volume = appState.settings.volume;
   state.muted = appState.settings.muted;
-  if (props.context) void playback.load(props.context);
+  if (props.context) void playback.load(props.context, { resume: props.resume });
   panel.value?.focus({ preventScroll: true });
 });
 onBeforeUnmount(() => {
+  unbind();
   mounted = false;
   clearTimeout(hideTimer);
-  void playback.stop();
+  if (state.context || state.session || state.resolution || state.phase !== "idle") void playback.stop();
   if (priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
 });
 defineExpose({ playback });
 </script>
 
 <template>
-  <main ref="panel" class="playback-view" tabindex="-1" @keydown="keydown" @pointermove="showControls" @focusin="showControls">
-    <header><a href="#/home">{{ word('返回', 'Back') }}</a><h1>{{ word('正在播放', 'Now playing') }}</h1></header>
+  <main id="main-content" ref="panel" class="playback-view" tabindex="-1" @keydown="keydown" @pointermove="showControls" @focusin="showControls">
+    <header><a :href="context ? native ? `#/details/${encodeURIComponent(JSON.stringify(context.metadata_ref.content_ref))}` : `#/film/${context.metadata_ref.identity.meta_id}` : '#/home'">{{ word('返回', 'Back') }}</a><h1>{{ word('正在播放', 'Now playing') }}</h1></header>
     <div v-if="poster" class="playback-title"><img :key="poster.key" :src="poster.url" :alt="poster.title" @error="poster.error" /><span>{{ poster.title }}</span></div>
     <p v-if="!context" role="status">{{ word('请从影片详情选择已确认的剧集。', 'Choose a confirmed episode from film details.') }}</p>
     <section class="playback-surface" :aria-label="word('视频播放器', 'Video player')">
@@ -102,7 +109,7 @@ defineExpose({ playback });
       </div>
     </section>
     <p role="status" data-playback-phase>{{ state.phase }}</p>
-    <NAlert v-if="state.error" type="error" role="alert">{{ state.error.code }} · {{ state.error.message }}</NAlert>
+    <NAlert v-if="state.error" class="playback-error" type="error" role="alert">{{ state.error.code }} · {{ state.error.message }}</NAlert>
     <p v-if="ui.diagnostic" role="alert">{{ ui.diagnostic }}</p>
     <p v-if="ui.imageError" role="alert">{{ ui.imageError }}</p>
     <NButton v-if="ui.imageError" data-action="retry-images" @click="playback.retryImages()">{{ word('重试图片', 'Retry image') }}</NButton>

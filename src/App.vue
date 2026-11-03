@@ -1,532 +1,241 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
-import { NAlert, NButton, NModal, NSwitch, useMessage } from "naive-ui";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { NAlert, NButton, NModal, NRadioGroup, NRadioButton, useMessage } from "naive-ui";
 import SettingsView from "./views/SettingsView.vue";
 import HistoryView from "./views/HistoryView.vue";
-import { historyRepository } from "./data/history";
-import { historyContentId, type HistoryEntry } from "./data/history-model";
 import SourcesView from "./views/SourcesView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
-import { appState } from "./state.ts";
+import CatalogView from "./views/CatalogView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
-import {
-  films as baseFilms,
-  localizeFilm,
-  sourceText,
-  initialSources,
-  kindLabels,
-  type FilmKind,
-  type Source,
-} from "./data/demo";
-import { locale, setLocale, t, type Message } from "./i18n";
+import { appState, appController } from "./state.ts";
+import { historyRepository } from "./data/history";
+import { historyContentId, type HistoryEntry } from "./data/history-model";
+import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
+import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
+import { locale, t, type Message } from "./i18n";
+import { palette, paletteOptions, normalizePalette } from "./ui/theme";
+import type { Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings } from "./models";
 
-const films = computed(() => baseFilms.map(localizeFilm));
+const native = Boolean(window.__TAURI__);
 const messages = useMessage();
-const languageOptions = [
-  { label: "EN", value: "en" },
-  { label: "中文", value: "zh-CN" },
-];
-
-type Page = "home" | "film" | "watch" | "sources" | "settings" | "history";
-function readRoute(): {
-  page: Page;
-  id: string;
-  kind: FilmKind | "";
-  episode: number;
-  resume: boolean;
-} {
-  const [path, query = ""] = window.location.hash.replace(/^#\/?/, "").split("?");
-  const [name = "home", id = "", episodeValue = "1"] = path!.split("/");
-  const resume = name === "watch" && new URLSearchParams(query).get("resume") === "1";
-  const episode = Math.max(1, Math.floor(Number(episodeValue) || 1));
-  if (name === "kind" && ["movie", "series", "anime"].includes(id))
-    return { page: "home", id: "", kind: id as FilmKind, episode: 1, resume: false };
-  if (["film", "watch", "sources", "settings", "history"].includes(name))
-    return { page: name as Page, id, kind: "", episode, resume };
-  return { page: "home", id: "", kind: "", episode: 1, resume: false };
+const preferenceError = ref("");
+const historySaveError = ref<string | null>(null);
+const hash = ref(location.hash);
+const languageOptions = [{ label: "EN", value: "en" }, { label: "中文", value: "zh-CN" }];
+const films = computed(() => baseFilms.map(localizeFilm));
+function readHash() {
+  const [path = "", query = ""] = hash.value.replace(/^#\/?/, "").split("?");
+  const [name = "home", id = "", episode = "1"] = path.split("/");
+  return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
-const route = ref(readRoute());
-const formalPlayback = ref(window.location.hash.replace(/^#\/?/, "").split("?")[0] === "playback");
+type Page = "home" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
+const route = computed(() => {
+  const stored = appState.route, view = readHash();
+  const page: Page = stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
+  return { page,
+    id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
+});
+const formalPlayback = computed(() => appState.route.name === "playback" || readHash().name === "playback");
 const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
 const playbackView = ref<InstanceType<typeof PlaybackView>>();
 defineExpose({ playbackController: () => playbackView.value?.playback });
-const sources = ref<Source[]>(initialSources.map((source) => ({ ...source })));
-const sourceId = ref(sources.value[0]!.id);
-const source = computed(
-  () =>
-    sources.value.find((item) => item.id === sourceId.value) ||
-    sources.value[0]!,
-);
-const activeGenre = ref<Message>("All");
-const expanded = ref(false);
-const heroIndex = ref(0);
-const homeSnapshots = new Map<
-  string,
-  { genre: Message; expanded: boolean; hero: number; scroll: number }
->();
-const loading = ref(false);
-let loadingTimer: ReturnType<typeof setTimeout> | undefined;
-const heroFilms = computed(() =>
-  route.value.kind
-    ? films.value.filter((film) => film.kind === route.value.kind)
-    : [films.value[0]!, films.value[2]!, films.value[3]!],
-);
-const hero = computed(
-  () => heroFilms.value[heroIndex.value % heroFilms.value.length]!,
-);
-const selectedFilm = computed(
-  () =>
-    films.value.find((film) => film.id === route.value.id) || films.value[0]!,
-);
-const title = computed(() =>
-  route.value.kind
-    ? t(kindLabels[route.value.kind])
-    : {
-        home: t("Discover"),
-        film: t("Film details"),
-        watch: t("Now playing"),
-        sources: t("Source manager"),
-        settings: t("Settings"),
-        history: t("Watch history"),
-      }[route.value.page],
-);
-const filteredFilms = computed(() =>
-  films.value.filter(
-    (film) =>
-      (!route.value.kind || film.kind === route.value.kind) &&
-      (activeGenre.value === "All" || film.genres.includes(activeGenre.value)),
-  ),
-);
-const visibleFilms = computed(() =>
-  expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6),
-);
-const relatedFilms = computed(() =>
-  films.value.filter((film) => film.id !== selectedFilm.value.id).slice(0, 4),
-);
-const genres: Message[] = [
-  "All",
-  "Drama",
-  "Adventure",
-  "Mystery",
-  "Sci-fi",
-  "Feel-good",
-  "Documentary",
-];
-
-function rememberHome() {
-  if (route.value.page === "home")
-    homeSnapshots.set(`${sourceId.value}:${route.value.kind}`, {
-      genre: activeGenre.value,
-      expanded: expanded.value,
-      hero: heroIndex.value,
-      scroll: window.scrollY,
-    });
-}
+const previewSources = ref<Source[]>(initialSources.map(source => ({ ...source })));
+const sources = computed<Source[]>(() => native ? (appState.sources.data?.providers ?? []).map(source => ({
+  id: source.id, name: source.name, kind: source.kind, description: source.error?.message ?? "", enabled: source.runtime_status === "ready", demo: false,
+})) : previewSources.value);
+const sourceId = computed(() => native ? appState.selected_playback_source?.source_id ?? "" : previewSourceId(appState.selected_playback_source));
+const source = computed(() => sources.value.find(item => item.id === sourceId.value) ?? sources.value[0] ?? initialSources[0]!);
+const selectedFilm = computed(() => films.value.find(film => film.id === route.value.id) ?? films.value[0]!);
+const activeGenre = ref<Message>("All"), expanded = ref(false), heroIndex = ref(0);
+const homeSnapshots = new Map<string, { genre: Message; expanded: boolean; hero: number; scroll: number }>();
+const homeKey = () => `${appState.selected_metadata_source?.source_id}:${appState.selected_metadata_source?.source_revision}:${route.value.kind}`;
+function rememberHome() { if (route.value.page === "home") homeSnapshots.set(homeKey(), { genre: activeGenre.value, expanded: expanded.value, hero: heroIndex.value, scroll: scrollY }); }
+const heroFilms = computed(() => route.value.kind ? films.value.filter(film => film.kind === route.value.kind) : [films.value[0]!, films.value[2]!, films.value[3]!]);
+const hero = computed(() => heroFilms.value[heroIndex.value % heroFilms.value.length]!);
+const title = computed(() => route.value.kind ? t(kindLabels[route.value.kind as FilmKind]) : t(({
+  home: "Discover", film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
+} as const)[route.value.page]));
+const filteredFilms = computed(() => films.value.filter(film => (!route.value.kind || film.kind === route.value.kind) && (activeGenre.value === "All" || film.genres.includes(activeGenre.value))));
+const visibleFilms = computed(() => expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6));
+const relatedFilms = computed(() => films.value.filter(film => film.id !== selectedFilm.value.id).slice(0, 4));
+const genres: Message[] = ["All", "Drama", "Adventure", "Mystery", "Sci-fi", "Feel-good", "Documentary"];
+const loading = computed(() => appState.home.phase === "loading");
 const nav = computed(() => [
   { label: t("Discover"), icon: "compass", href: "#/home", kind: "" },
   { label: t("Movies"), icon: "film", href: "#/kind/movie", kind: "movie" },
   { label: t("Series"), icon: "tv", href: "#/kind/series", kind: "series" },
-  {
-    label: t("Animation"),
-    icon: "sparkles",
-    href: "#/kind/anime",
-    kind: "anime",
-  },
+  { label: t("Animation"), icon: "sparkles", href: "#/kind/anime", kind: "anime" },
 ]);
-
-function notify(text: string) {
-  messages.info(text, { duration: 3200 });
-}
-function changeSource(id: string) {
-  void flushHistory();
-  historyContext = null;
-  playbackSequence++;
-  rememberHome();
-  sourceId.value = id;
-  activeGenre.value = "All";
-  expanded.value = false;
-  heroIndex.value = 0;
-  if (route.value.page === "watch")
-    window.location.hash = `#/film/${selectedFilm.value.id}`;
-  loading.value = true;
-  clearTimeout(loadingTimer);
-  loadingTimer = setTimeout(() => {
-    loading.value = false;
-  }, 350);
-  notify(
-    t("Selected {name} · Using the demo catalog", {
-      name: sourceText(source.value).name,
-    }),
-  );
-}
-
-function changeLanguage(value: string) {
-  if (value !== "en" && value !== "zh-CN") return;
-  messages.destroyAll();
-  if (!setLocale(value))
-    notify(
-      t(
-        "Language changed, but the preference could not be saved on this device. Reloading will restore English.",
-      ),
-    );
-}
-watch(
-  locale,
-  () => {
-    document.documentElement.lang = locale.value;
-    updateDocumentTitle();
-  },
-  { immediate: true },
-);
-
-function focusMain() {
-  document.getElementById("main-content")?.focus({ preventScroll: true });
-}
-function updateDocumentTitle() {
-  if (formalPlayback.value) {
-    document.title = `${t("Now playing")} · ${t("Yingxiang Video")}`;
-    return;
-  }
-  document.title = `${route.value.page === "film" || route.value.page === "watch" ? selectedFilm.value.title : title.value} · ${t("Yingxiang Video")}`;
-}
-
-const aboutOpen = ref(false);
-const aboutTrigger = ref<HTMLButtonElement>();
-function addSource(value: Source) {
-  sources.value.push(value);
-  notify(t("Source added to this preview. Live connections will follow."));
-}
-function toggleSource(item: Source) {
-  if (item.id === sourceId.value) {
-    notify(t("Switch to another source before disabling the current one."));
-    return;
-  }
-  item.enabled = !item.enabled;
-  notify(item.enabled ? t("Source enabled") : t("Source disabled"));
-}
-
-const video = ref<HTMLVideoElement>();
-const videoFrame = ref<HTMLDivElement>();
-const isPlaying = ref(false);
-const mediaBusy = ref(false);
-const mediaError = ref(false);
-const position = ref(0);
-const duration = ref(0);
-const volume = ref(0.65);
-const muted = ref(false);
-const speed = ref(1);
-const subtitles = ref(false);
-const episode = ref(Math.min(route.value.episode, selectedFilm.value.episodes));
-const autoNext = ref(true);
-const activeLine = ref(0);
-const historySaveError = ref<string | null>(null);
-const resumeError = ref<string | null>(null);
-let historyContext: Omit<HistoryEntry, 'position_ms' | 'duration_ms' | 'completed' | 'updated_at'> | null = null;
-let lastHistorySnapshot: HistoryEntry | null = null;
-let lastHistoryWrite = 0;
-let playbackSequence = 0;
-let preparingResume = false;
-let pendingSeek: number | null = null;
-
-function historySnapshot(finished = false): HistoryEntry | null {
-  const element = video.value;
-  if (!element || !historyContext || route.value.page !== 'watch' || preparingResume || pendingSeek !== null || mediaError.value || resumeError.value || !Number.isFinite(element.currentTime) || element.currentTime <= 0) return null;
-  const total = Number.isFinite(element.duration) && element.duration > 0 ? Math.round(element.duration * 1000) : null;
-  const current = Math.max(0, Math.round(element.currentTime * 1000));
-  return { ...historyContext, position_ms: total ? Math.min(total,current) : current, duration_ms: total, completed: finished || (total !== null && current >= total), updated_at: Date.now() };
-}
-async function persistHistory(snapshot: HistoryEntry, exit = false) {
+const aboutOpen = ref(false), appearanceOpen = ref(false);
+const aboutTrigger = ref<HTMLButtonElement>(), paletteTrigger = ref<HTMLButtonElement>();
+const speed = computed({ get: () => appState.playback.speed, set: value => { appState.playback.speed = value; } });
+const autoNext = computed({ get: () => appState.settings.auto_next, set: value => { void savePreference(settings => ({ ...settings, auto_next: value })); } });
+function notify(text: string) { messages.info(text, { duration: 3200 }); }
+watch(() => appState.settings, settings => {
+  locale.value = settings.ui_locale ?? "en";
+  palette.value = normalizePalette(settings.color_palette);
+  document.documentElement.dataset.palette = palette.value;
+}, { immediate: true, flush: "sync" });
+watch([locale, title, () => appState.details.data?.details.title], () => {
+  document.documentElement.lang = locale.value;
+  document.title = `${formalPlayback.value ? t("Now playing") : route.value.page === "film" ? native ? appState.details.data?.details.title ?? title.value : selectedFilm.value.title : title.value} · ${t("Yingxiang Video")}`;
+}, { immediate: true });
+async function savePreference(change: (value: Settings) => Settings) {
+  preferenceError.value = "";
   try {
-    if (exit) await historyRepository.saveOnExit(snapshot); else await historyRepository.save(snapshot);
-    historySaveError.value = null;
-  } catch (failure) {
-    const firstFailure = !historySaveError.value;
-    historySaveError.value = failure instanceof Error ? failure.message : String(failure);
-    if (firstFailure && document.visibilityState === 'visible') messages.error(t('Watch history could not be saved'));
-  }
+    const confirmed = await appController.updateSettings(change);
+    // Legacy keys are first-paint mirrors. The full Settings queue owns commits.
+    localStorage.setItem("yingxiang-video.locale", confirmed.ui_locale ?? "en");
+    localStorage.setItem("yingxiang-video.palette", confirmed.color_palette ?? "lime");
+  } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
 }
-function flushHistory(finished = false, exit = false): Promise<void> {
-  const snapshot = historySnapshot(finished);
-  if (!snapshot) return Promise.resolve();
-  lastHistoryWrite = Date.now();
-  lastHistorySnapshot = snapshot;
-  return persistHistory(snapshot,exit);
-}
-function retryHistorySave() {
-  return lastHistorySnapshot ? persistHistory(lastHistorySnapshot) : Promise.resolve();
-}
-function discardPendingHistory(id: string | null) {
-  if (id === null || lastHistorySnapshot?.content_id === id) {
-    lastHistorySnapshot = null;
-    historySaveError.value = null;
-  }
-}
-function onPause() {
-  if (video.value?.paused) {
-    isPlaying.value = false;
-    void flushHistory();
-  }
-}
-function onPlaying() {
-  mediaBusy.value = false;
-  void flushHistory();
-}
-function applyPendingSeek() {
-  if (pendingSeek !== null && video.value && video.value.readyState >= 1) {
-    const total = Number.isFinite(video.value.duration) ? video.value.duration : Infinity;
-    video.value.currentTime = Math.max(0,Math.min(total,pendingSeek));
-    position.value = video.value.currentTime;
-    pendingSeek = null;
-  }
-}
-async function preparePlayback() {
-  const sequence = ++playbackSequence;
-  historyContext = null;
-  preparingResume = true;
-  resumeError.value = null;
-  pendingSeek = 0;
-  let saved: HistoryEntry | null = null;
+function changeLanguage(value: string) { if (value === "en" || value === "zh-CN") return savePreference(settings => ({ ...settings, ui_locale: value })); }
+function changePalette(value: string) { if (paletteOptions.some(item => item.value === value)) return savePreference(settings => ({ ...settings, color_palette: value as NonNullable<Settings["color_palette"]> })); }
+async function retryPreferences() {
   try {
-    if (route.value.resume) {
-      saved = await historyRepository.get(historyContentId(selectedFilm.value.kind,selectedFilm.value.id));
-      if (sequence !== playbackSequence || route.value.page !== 'watch') return;
-      if (!saved || saved.episode !== episode.value) throw new Error(t('No saved progress was found for this episode.'));
-      const savedSource = sources.value.find(item=>item.id===saved!.source_id && item.enabled);
-      if (!savedSource) throw new Error(t('The saved playback source is unavailable. Enable it in Sources before continuing.'));
-      sourceId.value = savedSource.id;
+    if (appController.awaitingCleanup) await appController.retryCleanup();
+    await appController.restoreSettings(); appController.diagnostics.splice(0); preferenceError.value = "";
+  }
+  catch (error) { preferenceError.value = String(error); }
+}
+async function selectNativeSource(id: string, role: "metadata" | "playback") {
+  try {
+    await flushHistory();
+    rememberHome();
+    pendingResume.value = null;
+    await appController.selectSource(id, role);
+    if (role === "metadata") {
+      if (location.hash === "#/home") await appController.loadHome();
+      else location.hash = "#/home";
     }
-    if (sequence !== playbackSequence || route.value.page !== 'watch') return;
-    const film = baseFilms.find(item=>item.id===selectedFilm.value.id)!;
-    historyContext = { content_id: historyContentId(film.kind,film.id), title: film.title, poster: film.artwork, kind: film.kind, episode: episode.value, episode_total: film.episodes, source_id: source.value.id, source_name: source.value.name };
-    pendingSeek = saved && !saved.completed ? saved.position_ms / 1000 : 0;
-    lastHistoryWrite = 0;
-    preparingResume = false;
-    setDuration();
-    await startMedia();
-  } catch (failure) {
-    if (sequence !== playbackSequence) return;
-    preparingResume = false;
-    resumeError.value = failure instanceof Error ? failure.message : String(failure);
-  }
+  } catch (error) { preferenceError.value = String(error); }
 }
+async function changeSource(id: string) {
+  try { await selectNativeSource(native ? id : previewSourceKey(id).source_id, "playback"); }
+  catch (cause) { preferenceError.value = String(cause); }
+}
+function addSource(value: Source) { previewSources.value.push(value); notify(t("Source added to this preview. Live connections will follow.")); }
+function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
+function openDetails(ref: Bridge_MediaRef) { location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`; }
+async function playEpisode(videoId: string) {
+  const result = await appController.match(videoId);
+  if (result?.status === "matched") { location.hash = "#/playback"; }
+}
+const pendingResume = ref<ResumeSnapshot | null>(null);
+let sequence = 0;
+function focusMain() { document.getElementById("main-content")?.focus({ preventScroll: true }); }
+async function onHashChange() {
+  const current = ++sequence;
+  await flushHistory();
+  if (current !== sequence) return;
+  rememberHome(); hash.value = location.hash;
+  const next = readHash();
+  if (next.name === "playback") return;
+  pendingResume.value = null;
+  try {
+    if (next.name === "film" || next.name === "watch" || next.name === "details") {
+      const film = baseFilms.find(film => film.id === next.id);
+      if (!native && !film) throw new Error("Preview title is unavailable");
+      const ref: Bridge_MediaRef = next.name === "details" ? JSON.parse(decodeURIComponent(next.id)) : previewRef(next.id);
+      appController.navigate({ name: "details", ref });
+      await appController.loadDetails(ref);
+      if (current !== sequence || appState.details.phase !== "ready") return;
+      if (next.name === "watch") {
+        const episode = Math.min(next.episode, film!.episodes);
+        let saved: HistoryEntry | null = null;
+        if (next.resume) {
+          saved = await historyRepository.get(historyContentId(film!.kind, film!.id));
+          if (current !== sequence) return;
+          if (!saved || saved.episode !== episode) throw new Error(t("No saved progress was found for this episode."));
+          const original = sources.value.find(source => source.id === saved!.source_id && source.enabled);
+          if (!original) throw new Error(t("The saved playback source is unavailable. Enable it in Sources before continuing."));
+          if (original.id !== sourceId.value) await appController.selectSource(previewSourceKey(original.id).source_id, "playback");
+        }
+        if (current !== sequence) return;
+        const result = await appController.match(`${film!.id}:${episode}`);
+        if (current !== sequence) return;
+        if (result?.context) pendingResume.value = { context: result.context, position_ms: saved && !saved.completed ? saved.position_ms : 0, was_playing: true };
+      }
+    } else {
+      const name = ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
+      appController.navigate({ name });
+      if (name === "home" && !appState.home.data && appState.selected_metadata_source) await appController.loadHome();
+    }
+    if (current !== sequence) return;
+    const home = route.value.page === "home" ? homeSnapshots.get(homeKey()) : undefined;
+    if (route.value.page === "home") { activeGenre.value = home?.genre ?? "All"; expanded.value = home?.expanded ?? false; heroIndex.value = home?.hero ?? 0; }
+    await nextTick();
+    if (current !== sequence) return;
+    scrollTo({ top: home?.scroll ?? 0, behavior: "instant" }); focusMain();
+  } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
+}
+let lastWrite = 0;
+let lastHistory: HistoryEntry | null = null;
+function historySnapshot(finished = false): HistoryEntry | null {
+  if (native) return null;
+  const state = appState.playback, context = state.context;
+  const film = baseFilms.find(film => film.id === context?.metadata_ref.identity.meta_id);
+  if (!context || !film || state.position_ms <= 0 || state.phase === "failed") return null;
+  const episode = Number(context.metadata_video_id.split(":").at(-1));
+  if (!Number.isInteger(episode) || episode < 1 || episode > film.episodes) return null;
+  return { content_id: historyContentId(film.kind, film.id), title: film.title, poster: film.artwork, kind: film.kind,
+    episode, episode_total: film.episodes, source_id: sourceId.value, source_name: source.value.name,
+    position_ms: state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms,
+    duration_ms: state.duration_ms, completed: finished || state.phase === "ended", updated_at: Date.now() };
+}
+async function persistHistory(snapshot: HistoryEntry) {
+  try { await historyRepository.save(snapshot); historySaveError.value = null; }
+  catch (error) { historySaveError.value = String(error); }
+}
+async function flushHistory(finished = false) {
+  const snapshot = historySnapshot(finished);
+  if (snapshot) { lastWrite = Date.now(); lastHistory = snapshot; await persistHistory(snapshot); }
+}
+function retryHistorySave() { if (lastHistory) void persistHistory(lastHistory); }
+function discardPendingHistory(id: string | null) { if (id === null || lastHistory?.content_id === id) { lastHistory = null; historySaveError.value = null; } }
 function continueHistory(entry: HistoryEntry) {
-  const film = baseFilms.find(item=>historyContentId(item.kind,item.id)===entry.content_id);
-  if (!film) { messages.error(t('This title is unavailable in the current catalog.')); return; }
-  if (entry.episode > film.episodes) { messages.error(t('The saved episode is unavailable. Open the film details to choose an episode.')); return; }
-  window.location.hash = `#/watch/${film.id}/${entry.episode}?resume=1`;
+  const film = baseFilms.find(film => historyContentId(film.kind, film.id) === entry.content_id);
+  if (film) location.hash = `#/watch/${film.id}/${entry.episode}?resume=1`;
+  else messages.error(t("This title is unavailable in the current catalog."));
 }
-function onPageHide() { void flushHistory(false,true); }
-function onVisibilityChange() { if (document.visibilityState === 'hidden') void flushHistory(false,true); }
-
-const caption = computed(() =>
-  selectedFilm.value.episodes > 1
-    ? t("Episode {number}", { number: episode.value })
-    : t("Feature"),
-);
-const progress = computed(() =>
-  duration.value ? (position.value / duration.value) * 100 : 0,
-);
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds)) return "00:00";
-  return `${Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0")}:${Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, "0")}`;
-}
-async function startMedia() {
-  if (!video.value || preparingResume || resumeError.value) return;
-  video.value.volume = volume.value;
-  video.value.muted = muted.value;
-  video.value.playbackRate = speed.value;
-  mediaError.value = false;
-  try {
-    await video.value.play();
-  } catch {
-    isPlaying.value = false;
-  }
-}
-function togglePlayback() {
-  if (!video.value) return;
-  if (video.value.paused) void startMedia();
-  else video.value.pause();
-}
-function updateTime() {
-  position.value = video.value?.currentTime || 0;
-  if (isPlaying.value && Date.now() - lastHistoryWrite >= 5000) void flushHistory();
-}
-function setDuration() {
-  duration.value = Number.isFinite(video.value?.duration)
-    ? video.value!.duration
-    : 0;
-  applyPendingSeek();
-}
-function seek(value: number) {
-  if (video.value && duration.value) {
-    video.value.currentTime = Math.max(0, Math.min(duration.value, value));
-    updateTime();
-    void flushHistory();
-  }
-}
-function setVolume(value: number) {
-  volume.value = value;
-  muted.value = value === 0;
-  if (video.value) {
-    video.value.volume = value;
-    video.value.muted = muted.value;
-  }
-}
-function toggleMute() {
-  muted.value = !muted.value;
-  if (video.value) video.value.muted = muted.value;
-}
-function setSpeed(value: number) {
-  speed.value = value;
-  if (video.value) video.value.playbackRate = value;
-}
-function toggleSubtitles() {
-  subtitles.value = !subtitles.value;
-  syncSubtitles();
-}
-function syncSubtitles() {
-  for (const track of Array.from(video.value?.textTracks || [])) {
-    track.mode =
-      subtitles.value && track.language === locale.value
-        ? "showing"
-        : "disabled";
-  }
-}
-watch(locale, () => nextTick(syncSubtitles));
-async function fullscreen() {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await videoFrame.value?.requestFullscreen();
-  } catch {
-    notify(t("Fullscreen is unavailable here. Try maximizing the window."));
-  }
-}
-function selectEpisode(value: number) {
-  void flushHistory();
-  historyContext = null;
-  playbackSequence++;
-  video.value?.pause();
-  episode.value = value;
-  window.history.replaceState(null,"",`#/watch/${selectedFilm.value.id}/${value}`);
-  route.value = { ...route.value, episode: value, resume: false };
-  position.value = 0;
-  void preparePlayback();
-}
-function onEnded() {
-  isPlaying.value = false;
+function onEnded(context: PlaybackContext, epoch: number) {
+  if (epoch !== appState.playback.playback_epoch) return;
   void flushHistory(true);
-  if (autoNext.value && episode.value < selectedFilm.value.episodes)
-    selectEpisode(episode.value + 1);
-}
-function changeLine(value: number) {
-  activeLine.value = value;
-  notify(
-    t("Selected {name} · Both streams use the same local demo clip", {
-      name: t(value ? "Alternative stream" : "Default stream"),
-    }),
-  );
-}
-function reloadVideo() {
-  mediaError.value = false;
-  pendingSeek = position.value;
-  video.value?.load();
-  void startMedia();
-}
-function onHashChange() {
-  formalPlayback.value = window.location.hash.replace(/^#\/?/, "").split("?")[0] === "playback";
-  void flushHistory();
-  historyContext = null;
-  playbackSequence++;
-  pendingSeek = null;
-  preparingResume = false;
-  resumeError.value = null;
-  rememberHome();
-  video.value?.pause();
-  route.value = readRoute();
-  const home =
-    route.value.page === "home"
-      ? homeSnapshots.get(`${sourceId.value}:${route.value.kind}`)
-      : undefined;
-  activeGenre.value = home?.genre || "All";
-  expanded.value = home?.expanded || false;
-  heroIndex.value = home?.hero || 0;
-  episode.value = Math.min(route.value.episode, selectedFilm.value.episodes);
-  position.value = 0;
-  duration.value = 0;
-  isPlaying.value = false;
-  mediaError.value = false;
-  subtitles.value = false;
-  activeLine.value = 0;
-  updateDocumentTitle();
-  nextTick(() => {
-    window.scrollTo({ top: home?.scroll || 0, behavior: "instant" });
-    if (route.value.page === "watch") void preparePlayback();
-  });
-}
-function onKeydown(event: KeyboardEvent) {
-  if (aboutOpen.value) return;
-  if (
-    route.value.page !== "watch" ||
-    (event.target as HTMLElement).closest(
-      'input,select,button,a,textarea,[role="switch"],[role="combobox"],[role="radio"],[role="slider"],[contenteditable="true"]',
-    ) ||
-    event.ctrlKey ||
-    event.metaKey ||
-    event.altKey
-  )
-    return;
-  if (event.code === "Space") {
-    event.preventDefault();
-    togglePlayback();
+  if (!native && appState.settings.auto_next) {
+    const film = baseFilms.find(film => film.id === context.metadata_ref.identity.meta_id);
+    const episode = Number(context.metadata_video_id.split(":").at(-1));
+    if (film && episode < film.episodes) location.hash = `#/watch/${film.id}/${episode + 1}`;
   }
-  if (event.key === "ArrowRight") {
-    event.preventDefault();
-    seek(position.value + 5);
-  }
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    seek(position.value - 5);
-  }
-  if (event.key.toLowerCase() === "m") toggleMute();
-  if (event.key.toLowerCase() === "f") void fullscreen();
 }
-watch(volume, (value) => {
-  if (video.value) video.value.volume = value;
+watch(() => [appState.playback.position_ms, appState.playback.phase], () => {
+  if (["paused", "ended"].includes(appState.playback.phase) || Date.now() - lastWrite >= 5000) void flushHistory();
 });
+function onPageHide() { void flushHistory(); }
+function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
 onMounted(() => {
-  updateDocumentTitle();
+  // T12's formal harness supplies a Host-confirmed context before mounting App.
+  if (readHash().name !== "playback") void onHashChange();
   window.addEventListener("hashchange", onHashChange);
-  window.addEventListener("keydown", onKeydown);
   window.addEventListener("pagehide", onPageHide);
   document.addEventListener("visibilitychange", onVisibilityChange);
-  if (route.value.page === "watch") void preparePlayback();
 });
 onBeforeUnmount(() => {
-  void flushHistory(false,true);
-  historyContext = null;
-  playbackSequence++;
-  clearTimeout(loadingTimer);
+  void flushHistory(); ++sequence;
   window.removeEventListener("hashchange", onHashChange);
-  window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("pagehide", onPageHide);
   document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>
 
 <template>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" />
+  <div v-if="formalPlayback" class="playback-preferences">
+    <a href="#/history">{{ t('History') }}</a>
+    <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
+    <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
+    <select class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
+  </div>
+  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" @ended="onEnded" />
   <template v-else>
   <a class="skip-link" href="#main-content" @click.prevent="focusMain">{{
     t("Skip to content")
@@ -587,7 +296,7 @@ onBeforeUnmount(() => {
           class="preview-button"
           @click="aboutOpen = true"
         >
-          <span class="status-dot" /><span>{{ t("Interface preview") }}</span
+          <span class="status-dot" /><span>{{ t(native ? "About Yingxiang Video" : "Interface preview") }}</span
           ><Icon name="info" :size="14" />
         </button>
         <p class="sidebar-version">{{ t("Yingxiang Video · 0.1.0") }}</p>
@@ -617,14 +326,15 @@ onBeforeUnmount(() => {
           }}</span>
         </div>
         <div class="header-actions">
-          <a
+          <button
+            ref="paletteTrigger"
             class="icon-button palette-shortcut"
-            href="#/settings"
+            @click="appearanceOpen = true"
             :aria-label="t('Customize colors')"
             :title="t('Customize colors')"
           >
             <Icon name="palette" :size="19" />
-          </a>
+          </button>
           <select
             class="language-picker compact-select"
             :value="locale"
@@ -647,7 +357,7 @@ onBeforeUnmount(() => {
               @change="changeSource(($event.target as HTMLSelectElement).value)"
             >
               <option
-                v-for="item in sources.filter((item) => item.enabled)"
+                v-for="item in sources.filter((item) => item.enabled && item.kind !== 'stremio')"
                 :key="item.id"
                 :value="item.id"
               >
@@ -665,7 +375,8 @@ onBeforeUnmount(() => {
       </header>
 
       <main id="main-content" tabindex="-1">
-        <template v-if="route.page === 'home'">
+        <CatalogView v-if="native && ['home', 'film', 'sources'].includes(route.page)" @open="openDetails" @play="playEpisode" @select="selectNativeSource" />
+        <template v-else-if="route.page === 'home'">
           <div class="page-heading">
             <div>
               <p class="eyebrow">A LITTLE ESCAPE, EVERY DAY</p>
@@ -971,255 +682,6 @@ onBeforeUnmount(() => {
           </section>
         </template>
 
-        <template v-else-if="route.page === 'watch'">
-          <NAlert v-if="historySaveError" type="error" class="history-alert" :title="t('Watch history could not be saved')">{{ historySaveError }}<NButton size="small" @click="retryHistorySave">{{ t('Retry') }}</NButton></NAlert>
-          <NAlert v-if="resumeError" type="error" class="history-alert" :title="t('Saved progress could not be restored')">{{ resumeError }}<NButton size="small" @click="preparePlayback">{{ t('Retry') }}</NButton></NAlert>
-          <div class="watch-heading">
-            <div>
-              <h1>
-                {{ selectedFilm.title }}<span>{{ caption }}</span>
-              </h1>
-              <p>
-                {{ sourceText(source).name }}<span>·</span
-                >{{ t("Local demo clip · 00:30") }}
-              </p>
-            </div>
-            <a :href="`#/film/${selectedFilm.id}`" class="text-button"
-              >{{ t("Film details") }}<Icon name="arrow" :size="16"
-            /></a>
-          </div>
-          <div ref="videoFrame" class="video-frame">
-            <video
-              ref="video"
-              src="/demo.mp4"
-              :poster="selectedFilm.artwork"
-              playsinline
-              preload="metadata"
-              @click="togglePlayback"
-              @play="isPlaying = true"
-              @pause="onPause"
-              @timeupdate="updateTime"
-              @loadedmetadata="setDuration"
-              @ended="onEnded"
-              @waiting="mediaBusy = true"
-              @playing="onPlaying"
-              @error="
-                mediaError = true;
-                mediaBusy = false;
-              "
-              @canplay="mediaBusy = false"
-            >
-              <track
-                src="/demo.vtt"
-                kind="subtitles"
-                srclang="zh-CN"
-                label="中文"
-              />
-              <track
-                src="/demo.en.vtt"
-                kind="subtitles"
-                srclang="en"
-                label="English"
-              />
-            </video>
-            <div class="video-watermark">
-              <img src="/mark.svg" width="22" height="22" alt="" /><span>{{
-                t("Yingxiang Video")
-              }}</span>
-            </div>
-            <button
-              v-if="!isPlaying && !mediaError"
-              class="big-play"
-              :aria-label="
-                position >= duration && duration ? t('Replay') : t('Play')
-              "
-              @click="togglePlayback"
-            >
-              <Icon
-                :name="position >= duration && duration ? 'repeat' : 'play'"
-                :size="31"
-              />
-            </button>
-            <div
-              v-if="mediaBusy && !mediaError"
-              class="media-loading"
-              role="status"
-            >
-              {{ t("Preparing video…") }}
-            </div>
-            <div v-if="mediaError" class="media-error" role="alert">
-              <Icon name="info" :size="30" />
-              <h2>{{ t("The clip could not be loaded") }}</h2>
-              <p>
-                {{
-                  t(
-                    "Check that the local preview server is running, then try again.",
-                  )
-                }}
-              </p>
-              <button class="button button-primary" @click="reloadVideo">
-                {{ t("Reload") }}
-              </button>
-            </div>
-            <div class="player-controls">
-              <label class="timeline"
-                ><span class="sr-only">{{ t("Playback progress") }}</span
-                ><input
-                  type="range"
-                  min="0"
-                  :max="duration || 30"
-                  step="0.1"
-                  :value="position"
-                  :style="{ '--progress': `${progress}%` }"
-                  :disabled="!duration"
-                  @input="
-                    seek(Number(($event.target as HTMLInputElement).value))
-                  "
-              /></label>
-              <div class="player-control-row">
-                <button
-                  class="icon-button"
-                  :aria-label="isPlaying ? t('Pause') : t('Play')"
-                  @click="togglePlayback"
-                >
-                  <Icon
-                    :name="isPlaying ? 'pause' : 'play'"
-                    :size="20"
-                  /></button
-                ><button
-                  class="icon-button"
-                  :aria-label="t('Next episode')"
-                  :disabled="episode >= selectedFilm.episodes"
-                  @click="selectEpisode(episode + 1)"
-                >
-                  <Icon name="next" :size="21" /></button
-                ><span class="play-time"
-                  >{{ formatTime(position) }}<span>/</span
-                  >{{ formatTime(duration) }}</span
-                >
-                <div class="player-spacer" />
-                <div class="volume-group">
-                  <button
-                    class="icon-button"
-                    :aria-label="muted ? t('Unmute') : t('Mute')"
-                    @click="toggleMute"
-                  >
-                    <Icon
-                      :name="muted ? 'muted' : 'volume'"
-                      :size="19"
-                    /></button
-                  ><input
-                    :aria-label="t('Volume')"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    :value="muted ? 0 : volume"
-                    :aria-valuetext="`${Math.round((muted ? 0 : volume) * 100)}%`"
-                    @input="
-                      setVolume(
-                        Number(($event.target as HTMLInputElement).value),
-                      )
-                    "
-                  />
-                  <output class="volume-value"
-                    >{{ Math.round((muted ? 0 : volume) * 100) }}%</output
-                  >
-                </div>
-                <label class="speed-select"
-                  ><span class="sr-only">{{ t("Playback speed") }}</span
-                  ><select
-                    :value="speed"
-                    @change="
-                      setSpeed(
-                        Number(($event.target as HTMLSelectElement).value),
-                      )
-                    "
-                  >
-                    <option
-                      v-for="rate in [0.5, 1, 1.25, 1.5, 2]"
-                      :key="rate"
-                      :value="rate"
-                    >
-                      {{ rate }}×
-                    </option>
-                  </select></label
-                ><button
-                  class="icon-button"
-                  :class="{ 'control-active': subtitles }"
-                  :aria-pressed="subtitles"
-                  :aria-label="t('Toggle subtitles')"
-                  @click="toggleSubtitles"
-                >
-                  <Icon name="captions" :size="20" /></button
-                ><button
-                  class="icon-button"
-                  :aria-label="t('Fullscreen')"
-                  @click="fullscreen"
-                >
-                  <Icon name="fullscreen" :size="19" />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="watch-bottom">
-            <p>
-              <span class="status-dot" />{{
-                t(
-                  "Playing an original test clip. All film and credit information is fictional.",
-                )
-              }}
-            </p>
-            <label class="switch-label"
-              ><NSwitch
-                v-model:value="autoNext"
-                :aria-label="t('Auto-play next')"
-              />{{ t("Auto-play next") }}</label
-            >
-          </div>
-          <section class="watch-options">
-            <div class="line-tabs" :aria-label="t('Playback streams')">
-              <button
-                :class="{ selected: activeLine === 0 }"
-                @click="changeLine(0)"
-              >
-                <span class="status-dot" />{{ t("Default stream") }}</button
-              ><button
-                :class="{ selected: activeLine === 1 }"
-                @click="changeLine(1)"
-              >
-                {{ t("Alternative stream") }}
-              </button>
-            </div>
-            <div class="section-heading">
-              <h2>
-                {{ t("Episodes")
-                }}<span class="subtle-label">{{
-                  selectedFilm.episodes > 1
-                    ? t("{count} episodes", { count: selectedFilm.episodes })
-                    : t("1 feature")
-                }}</span>
-              </h2>
-              <span class="subtle-label">{{ caption }}</span>
-            </div>
-            <div class="episode-grid">
-              <button
-                v-for="n in selectedFilm.episodes"
-                :key="n"
-                :class="['episode-link', { selected: episode === n }]"
-                :aria-pressed="episode === n"
-                @click="selectEpisode(n)"
-              >
-                {{
-                  selectedFilm.episodes > 1
-                    ? String(n).padStart(2, "0")
-                    : t("Feature")
-                }}
-              </button>
-            </div>
-          </section>
-        </template>
-
         <HistoryView v-else-if="route.page === 'history'" :save-error="historySaveError" @resume="continueHistory" @retry-save="retryHistorySave" @removed="discardPendingHistory" />
         <SourcesView
           v-else-if="route.page === 'sources'"
@@ -1233,14 +695,17 @@ onBeforeUnmount(() => {
           v-else-if="route.page === 'settings'"
           v-model:speed="speed"
           v-model:auto-next="autoNext"
+          :preview="!native"
           @notice="notify"
+          @language="changeLanguage"
+          @palette="changePalette"
         />
         <footer class="page-footer">
           <span
             >{{ t("Yingxiang Video") }}<span class="footer-cross">✳</span
             >{{ t("Let stories happen") }}</span
           ><span>{{
-            t("Interface preview · Original fictional content")
+            t(native ? "A place for good stories." : "Interface preview · Original fictional content")
           }}</span>
         </footer>
       </main>
@@ -1272,7 +737,7 @@ onBeforeUnmount(() => {
       <p class="dialog-description">
         {{
           t(
-            "This is an interactive interface preview. Films, credits and synopses are fictional, artwork is AI-generated, and the player uses a local 30-second test clip. Explore details, episodes, subtitles, playback preferences and source management.",
+            native ? "A place for good stories." : "This is an interactive interface preview. Films, credits and synopses are fictional, artwork is AI-generated, and the player uses a local 30-second test clip. Explore details, episodes, subtitles, playback preferences and source management.",
           )
         }}
       </p>
@@ -1282,4 +747,11 @@ onBeforeUnmount(() => {
     </NModal>
   </div>
   </template>
+  <NAlert v-if="preferenceError" type="error" class="history-alert preference-alert" :title="t('Preference could not be saved')">{{ preferenceError }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
+  <NAlert v-for="(error, index) in appController.diagnostics" :key="index" type="error" class="history-alert" :title="t('Action failed')">{{ error.message }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
+  <NModal v-model:show="appearanceOpen" preset="card" role="dialog" :aria-label="t('Appearance')" :title="t('Appearance')" :style="{ width: 'min(480px, calc(100vw - 32px))' }" @after-leave="paletteTrigger?.focus()">
+    <p>{{ t('Choose your colors. Each palette adapts to light and dark mode.') }}</p>
+    <NRadioGroup :value="palette" name="quick-color-palette" :aria-label="t('Color palette')" class="quick-palette" @update:value="value => changePalette(String(value))"><NRadioButton v-for="item in paletteOptions" :key="item.value" :value="item.value">{{ t(item.label) }}</NRadioButton></NRadioGroup>
+    <NButton class="appearance-close" @click="appearanceOpen = false">{{ t('Close') }}</NButton>
+  </NModal>
 </template>

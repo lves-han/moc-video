@@ -29,6 +29,17 @@ export function setLocale(value: AppLocale): boolean {
 }
 
 export const chinese = {
+  "Preference could not be saved": "偏好保存失败",
+  "Settings are unavailable": "设置暂不可用",
+  "Action failed": "操作失败",
+  "Choose a metadata source": "选择元数据来源",
+  "Refresh catalog": "刷新目录",
+  "Select source": "选择来源",
+  "Loading catalog": "正在读取目录",
+  "No titles found": "暂无影片",
+  "Load more": "加载更多",
+  "No matching playback found": "暂无匹配播放内容",
+  "Confirm episode": "确认剧集",
   "Remove from history": "删除观看记录",
   "Remove": "删除",
   "Remove {title} and its saved progress from this device?": "删除此设备中《{title}》的观看记录和播放进度？",
