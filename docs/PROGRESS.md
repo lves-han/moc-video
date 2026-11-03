@@ -1437,3 +1437,8 @@
 - 事实与证据：第三源准确A1因十个五切RSS中位数持续上升失败，50切集帧PCM通过，根因未定；原51份样本/41份SHA副本`evidence/drive/t12-third-validation-20261103T030541Z/rss-growth-failure/manifest.json`及GUI/图片/所有旧失败保持。图片新链路和后续门/完整verify NOT RUN，原task status保存`evidence/drive/t12-third-validation-20261103T030541Z/fourth-authorization/original-status.json`。
 - 实施：先固定授权文档独立round32 CLEAR，再紧邻严格最早/current/next/旧创建身份结束/两锁实得/clean/source/protected及s3核对，唯一原drive once maxsessions4；原50/51样本/十窗口无单调增长门与全部安全/资源/时限保持，不删弱门/改阈值/抽样本/人为warmup或强制GC/同源重跑筛选通过。仅证据确认原因最小修，实质指标门测法变化另需决定。
 - 完成门：原CLI实施及相关自验、ADR010外层原run准确A1成功直接完整verify/原done/受验提交/新固定独立CLEAR/clean齐备才完整完成；不rebaseline/改冻结或全局配置，T13paused/s1/gen3及后卡等待，全部历史与计数保持。
+
+
+## T0.12 第四会话授权固定文档独立CLEAR 2026-11-03T04:02:48.868461+00:00
+- 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-32.md`，固定dca9c384cb171be8cf297dc59ac13e6572bbda10、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR033 b7ac3a6796442e301c136ccb6421ca79c86ec43e261bc676504011cfe37fdde0。独立只读核真实授权增量、T12/SPEC/C9/C14、预算与路线/原控制器语义、51份样本/十窗口原失败和41份SHA副本，原始报告已保存，作者未代宣CLEAR。
+- 限制与下一步：第四许可尚未消费，原s3/f6/g0/T13paused/s1/gen3保持；根因与新诊断修复/新源全部真实验收仍NOT RUN，未将RSS趋势直接定为泄漏。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数核对后唯一原drive --once --max-sessions4，实际s4即消费，未授权第五；原50/51样本/十窗口无单调增长/全部安全资源时限与完整完成门保持。
