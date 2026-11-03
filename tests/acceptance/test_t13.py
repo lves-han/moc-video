@@ -29,7 +29,7 @@ def main_report():
     rows["playback-locale-palette-and-shortcuts"]["actual"] = dict(videoWidth=1920, duration=30, position=6)
     rows["history-resume-merge-delete-clear-focus"]["actual"] = dict(
         resumedPosition=6, replayedPosition=0, mergedTitles=1, latestEpisode=3,
-        cancelledDeletionPreservedData=True, removed=True, cleared=True)
+        cancelledDeletionPreservedData=True, removed=True, cleared=True, dialogRole="dialog", focusRestored=True)
     rows["console-and-overlay-health"]["actual"] = dict(logs=[])
     rows["history-reload-precondition"]["actual"] = dict(visibleTitlesBeforeReload=1)
     rows["history-refresh-reset-and-preferences"] = frame(reload=True)
@@ -119,7 +119,8 @@ class UiOracleTests(unittest.TestCase):
 
     def test_wrong_history_resume_merge_or_confirmation_is_rejected(self):
         for key, value in (("resumedPosition", 0), ("replayedPosition", 8), ("mergedTitles", 2), ("latestEpisode", 2),
-                           ("cancelledDeletionPreservedData", False), ("removed", False), ("cleared", False)):
+                           ("cancelledDeletionPreservedData", False), ("removed", False), ("cleared", False),
+                           ("dialogRole", "none"), ("focusRestored", False)):
             report = main_report()
             actual(report, "history-resume-merge-delete-clear-focus")[key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -170,6 +171,17 @@ class UiOracleTests(unittest.TestCase):
         actual(report, "console-and-overlay-health")["logs"] = ["uncaught error"]
         with self.assertRaises(ValueError):
             t13.validate_ui(report)
+
+    def test_real_native_finish_requires_matching_boolean_exit_and_return_marker(self):
+        for ok, code in ((True, 0), (False, 1)):
+            result = dict(ok=ok, marker="native-exit-control")
+            log = f"T13 AppKit run returned; exit={code}\n"
+            t13.validate_native_exit(result, code, ok, log)
+            for bad_result, bad_code, bad_log in ((result, 1 - code, log), (result, None, log),
+                    (dict(result, ok=not ok), code, log), (dict(result, ok=int(ok)), code, log),
+                    (dict(result, marker="wrong"), code, log), (result, code, "wrote report, still running")):
+                with self.subTest(ok=ok, result=bad_result, code=bad_code, log=bad_log), self.assertRaises(ValueError):
+                    t13.validate_native_exit(bad_result, bad_code, ok, bad_log)
 
 
 if __name__ == "__main__":

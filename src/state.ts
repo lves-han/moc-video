@@ -119,6 +119,11 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       ? root.runtime.cloudstream.engine_epoch : undefined;
     player?.stop();
     const keep = options.stream ? state.resolution : null;
+    // Stream handles belong to one Resolution; a fresh resolve signs new IDs.
+    if (!keep) {
+      context.selected_stream_id = null;
+      if (root.route.name === "playback" && root.route.context.match_id === context.match_id) root.route.context.selected_stream_id = null;
+    }
     retiring.push({ session: state.session, resolution: keep ? null : state.resolution });
     state.session = null;
     state.resolution = keep;

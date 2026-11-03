@@ -296,24 +296,82 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "expire": {
-      const old = appState.playback.session!.session_id;
-      const position = video.currentTime;
-      await current.rpc({ operation: "expire-session", session_id: old });
-      video.load();
-      await until(() => appState.playback.session?.session_id !== old && Boolean(appState.playback.session), "Expired session did not recover");
-      await until(() => video.readyState >= 2 && !video.seeking, "Recovered metadata/seek missing");
-      result = { session_changed: old !== appState.playback.session!.session_id, restored: Math.abs(video.currentTime - position) < .1, paused: video.paused };
-      // Automatic recovery is bounded for the same user action.
-      const recovered = appState.playback.session!.session_id;
-      await current.rpc({ operation: "expire-session", session_id: recovered }); video.load();
-      await until(() => appState.playback.error?.code === "SESSION_EXPIRED", "Second expiry must expose retry");
-      result.recovered_once = appState.playback.session?.session_id === recovered;
-      await nextTick();
-      const retry = current.container.querySelector<HTMLButtonElement>('[data-action="retry"]');
-      check(retry && !retry.disabled, "Expired session must expose its actual Retry button");
-      retry.click();
-      await until(() => Boolean(appState.playback.session) && appState.playback.session!.session_id !== recovered, "Manual expiry retry did not open a new session");
-      await playing(current);
+      const calls: Record<string, any>[] = [], events: Record<string, unknown>[] = [], stages: Record<string, unknown>[] = [];
+      const snapshot = () => {
+        const state = appState.playback, session = state.session;
+        return JSON.parse(diagnostic(JSON.stringify({ route: appState.route, context: state.context, resolution: state.resolution,
+          session: session && { session_id: session.session_id, resolution_id: session.resolution_id, stream_id: session.stream_id,
+            episode_ref: session.episode_ref, source_id: session.source_id, source_revision: session.source_revision,
+            stream_kind: session.stream_kind, media_path: new URL(session.media_url).pathname },
+          host_epoch: appState.runtime.engine_epoch, guest_epoch: appState.runtime.cloudstream.engine_epoch,
+          playback_epoch: state.playback_epoch, engine_epoch: state.engine_epoch, phase: state.phase, error: state.error,
+          ui: current.controller.ui, diagnostics: current.controller.diagnostics(), position: video.currentTime, paused: video.paused,
+          ready_state: video.readyState, network_state: video.networkState, seeking: video.seeking,
+          source_present: video.hasAttribute("src"), session_bound: Boolean(session && session.media_url === video.currentSrc),
+          media_error: video.error && { code: video.error.code, message: video.error.message } })));
+      };
+      const before = snapshot(), core = window.__TAURI__!.core;
+      const observe = (event: Event) => {
+        if (event.target === video) events.push({ type: event.type, trusted: event.isTrusted, state: snapshot() });
+      };
+      const names = ["error", "emptied", "loadstart", "loadedmetadata", "pause", "playing"];
+      for (const name of names) video.addEventListener(name, observe);
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const row = ["get_resource_status", "resolve_episode", "open_playback", "close_playback", "release_resolution"].includes(name)
+          ? { command: name, request_id: args?.request_id, input: args?.input, before: snapshot(), response: null as any,
+            started_ms: performance.now() - started, finished_ms: null as number | null } : null;
+        if (row) calls.push(row);
+        try {
+          const response = await core.invoke<any>(name, args);
+          if (row) row.response = name === "get_resource_status" ? response : { request_id: response.request_id,
+            engine_epoch: response.engine_epoch, error: response.error ?? null, id: response.data?.id, session_id: response.data?.session_id,
+            stream_id: response.data?.stream_id, stream_ids: response.data?.streams?.map((stream: { id: string }) => stream.id) };
+          return response;
+        } catch (cause) { if (row) Object.assign(row, { transport_error: diagnostic(cause) }); throw cause; }
+        finally { if (row) row.finished_ms = performance.now() - started; }
+      } };
+      try {
+        const old = appState.playback.session!.session_id, position = video.currentTime;
+        await current.rpc({ operation: "expire-session", session_id: old }); video.load();
+        await until(() => appState.playback.session?.session_id !== old && Boolean(appState.playback.session), "Expired session did not recover");
+        await until(() => video.readyState >= 2 && !video.seeking, "Recovered metadata/seek missing");
+        stages.push({ stage: "automatically-recovered", state: snapshot() });
+        result = { session_changed: old !== appState.playback.session!.session_id, restored: Math.abs(video.currentTime - position) < .1, paused: video.paused };
+        check(appState.playback.resolution!.id !== before.resolution.id
+          && !before.resolution.streams.some((stream: { id: string }) => stream.id === appState.playback.session!.stream_id), "Recovery reused a stale Resolution/stream handle");
+        // Automatic recovery is bounded for the same user action.
+        const recovered = appState.playback.session!.session_id;
+        await current.rpc({ operation: "expire-session", session_id: recovered }); video.load();
+        await until(() => appState.playback.error?.code === "SESSION_EXPIRED", "Second expiry must expose retry");
+        await until(() => current.controller.diagnostics().pending_requests === 0, "Second expiry query did not finish");
+        result.recovered_once = appState.playback.session?.session_id === recovered;
+        stages.push({ stage: "second-expiry-rejected", state: snapshot() });
+        check([old, recovered].every(id => events.some(event => event.type === "error" && event.trusted === true
+          && (event.state as { session: { session_id: string } | null }).session?.session_id === id)),
+        "Expiry recovery requires trusted native video errors bound to both exact sessions");
+        const queries = calls.filter(row => row.command === "get_resource_status");
+        check(queries.length === 2 && [old, recovered].every(id => queries.filter(row => row.input.target_id === id).length === 1)
+          && queries.every(row => row.input.kind === "playback" && row.response?.request_id === row.request_id
+            && row.response.engine_epoch === before.host_epoch && row.response.data?.target_id === row.input.target_id
+            && row.response.data.kind === "playback" && row.response.data.state === "expired" && row.response.data.error?.code === "SESSION_EXPIRED"),
+        "Expiry must query each exact session once with matching request/host/target and expired diagnosis");
+        check(calls.filter(row => row.command === "resolve_episode").length === 1
+          && calls.filter(row => row.command === "open_playback").length === 1, "Second expiry started another automatic recovery");
+        await nextTick();
+        const retry = current.container.querySelector<HTMLButtonElement>('[data-action="retry"]');
+        check(retry && !retry.disabled, "Expired session must expose its actual Retry button"); retry.click();
+        await until(() => Boolean(appState.playback.session) && appState.playback.session!.session_id !== recovered, "Manual expiry retry did not open a new session");
+        await playing(current);
+        stages.push({ stage: "manually-retried", state: snapshot() });
+        check(calls.filter(row => row.command === "resolve_episode").length === 2
+          && calls.filter(row => row.command === "open_playback").length === 2, "Manual expiry retry must resolve/open exactly once");
+        result.evidence = { before, calls, events, stages, final: snapshot() };
+      } catch (cause) {
+        throw new Error(`Native expiry chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ before, calls, events, stages, current: snapshot() }))}`);
+      } finally {
+        window.__TAURI__!.core = core;
+        for (const name of names) video.removeEventListener(name, observe);
+      }
       break;
     }
     case "image-expire": {

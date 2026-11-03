@@ -31,7 +31,7 @@ static int resultCode = 1;
     self.finished = YES;
     if (self.beforeReload) {
         NSMutableDictionary *merged = [self.beforeReload mutableCopy];
-        merged[@"ok"] = @([self.beforeReload[@"ok"] boolValue] && [value[@"ok"] boolValue]);
+        merged[@"ok"] = [self.beforeReload[@"ok"] boolValue] && [value[@"ok"] boolValue] ? @YES : @NO;
         merged[@"cases"] = [self.beforeReload[@"cases"] arrayByAddingObjectsFromArray:value[@"cases"] ?: @[]];
         merged[@"screenshots"] = [self.beforeReload[@"screenshots"] arrayByAddingObjectsFromArray:value[@"screenshots"] ?: @[]];
         if (value[@"error"]) merged[@"reload_error"] = value[@"error"];
@@ -43,6 +43,10 @@ static int resultCode = 1;
     [self.view.configuration.userContentController removeScriptMessageHandlerForName:@"t13" contentWorld:WKContentWorld.pageWorld];
     [self.window close];
     [NSApp stop:nil];
+    // stop: changes the run flag; wake nextEventMatchingMask: so run can return.
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined
+        location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:0
+        context:nil subtype:0 data1:0 data2:0] atStart:YES];
 }
 - (NSDictionary *)identity {
     NSMutableDictionary *pids = [NSMutableDictionary dictionary];
@@ -157,6 +161,7 @@ int main(int argc, const char **argv) {
             [browser finish:@{@"ok": @NO, @"error": @"UI acceptance exceeded 900 seconds", @"cases": @[]}];
         }];
         [NSApp run];
+        fprintf(stderr, "T13 AppKit run returned; exit=%d\n", resultCode);
     }
     return resultCode;
 }

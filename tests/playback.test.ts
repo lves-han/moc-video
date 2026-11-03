@@ -244,6 +244,65 @@ test("T12 expired playback resolves/opens once, restores clamped position and pa
   assert.equal(f.calls.filter(c => c.command === "resolve_episode").length, 2);
   await f.controller.stop();
 });
+test("T13 new Resolution rotates stream handles across automatic recovery, second expiry and manual retry", async () => {
+  const f = fixture();
+  f.intercept((command, _args, envelope) => {
+    if (command === "resolve_episode") for (const stream of envelope.data.streams) stream.id = `${envelope.data.id}:${stream.id}`;
+    return envelope;
+  });
+  const initial = context(); f.root.route = { name: "playback", context: context() };
+  await f.controller.load(initial); f.ready(); await flush();
+  f.controller.pause(); f.controller.seek(12);
+  const original = f.root.playback.resolution;
+  await f.controller.selectStream(original.streams[1].id); f.ready(); await flush();
+  assert.equal(f.root.playback.resolution.id, original.id);
+  assert.equal(f.root.playback.session.stream_id, original.streams[1].id);
+  assert.equal(f.calls.filter(c => c.command === "resolve_episode").length, 1);
+  const oldStream = f.root.playback.context.selected_stream_id;
+  f.status("expired", "SESSION_EXPIRED"); f.error(); await flush(); await f.controller.settled();
+  assert.ok(f.root.playback.session, JSON.stringify(f.root.playback.error));
+  f.ready(); await flush();
+  const recovered = f.root.playback.session.session_id;
+  assert.notEqual(f.root.playback.context.selected_stream_id, oldStream);
+  assert.equal(f.root.route.context.selected_stream_id, f.root.playback.session.stream_id);
+  assert.equal(f.root.playback.session.stream_id, f.root.playback.resolution.streams[0].id);
+  assert.equal(f.video.currentTime, 12); assert.equal(f.video.paused, true);
+  f.error(); await flush(); await f.controller.settled();
+  assert.equal(f.root.playback.session.session_id, recovered);
+  assert.equal(f.root.playback.error.code, "SESSION_EXPIRED");
+  assert.equal(f.controller.ui.action, "retry");
+  assert.equal(f.calls.filter(c => c.command === "get_resource_status").length, 2);
+  assert.equal(f.calls.filter(c => c.command === "resolve_episode").length, 2);
+  f.status("ready"); await f.controller.retry(); f.ready(); await flush();
+  assert.ok(f.root.playback.session); assert.notEqual(f.root.playback.session.session_id, recovered);
+  assert.equal(f.root.route.context.selected_stream_id, f.root.playback.session.stream_id);
+  assert.equal(f.video.currentTime, 12); assert.equal(f.video.paused, true);
+  assert.equal(f.calls.filter(c => c.command === "resolve_episode").length, 3);
+  assert.equal(initial.selected_stream_id, null);
+  await f.controller.stop(); assert.equal(f.sessions.size, 0); assert.equal(f.resolutions.size, 0);
+});
+
+test("T13 fresh Resolution selects a playable new handle and rejects an invalid explicit same-Resolution choice", async () => {
+  const f = fixture();
+  f.intercept((command, _args, envelope) => {
+    if (command === "resolve_episode") {
+      for (const stream of envelope.data.streams) stream.id = `${envelope.data.id}:${stream.id}`;
+      envelope.data.streams[0].playable = false;
+    }
+    return envelope;
+  });
+  await f.controller.load(context());
+  assert.equal(f.root.playback.session.stream_id, f.root.playback.resolution.streams[1].id);
+  const res = f.root.playback.resolution.id, opened = f.calls.filter(c => c.command === "open_playback").length;
+  await f.controller.selectStream("foreign-resolution-stream");
+  assert.equal(f.root.playback.resolution.id, res);
+  assert.equal(f.root.playback.error.code, "MEDIA_UNSUPPORTED");
+  assert.equal(f.root.playback.session, null);
+  assert.equal(f.calls.filter(c => c.command === "open_playback").length, opened);
+  assert.equal(f.calls.filter(c => c.command === "resolve_episode").length, 1);
+  await f.controller.stop();
+});
+
 test("T12 expired playing session restores playing intent, volume, speed and subtitle", async () => {
   const f = fixture(); await f.controller.load(context()); f.ready(); await flush();
   f.controller.seek(6); f.controller.setVolume(.4); f.controller.setSpeed(2); f.controller.selectSubtitle("zh");

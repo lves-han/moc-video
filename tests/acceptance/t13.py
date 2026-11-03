@@ -79,7 +79,8 @@ def validate_ui(result):
             "real decoded media metadata/progress missing")
     history = rows["history-resume-merge-delete-clear-focus"]["actual"]
     require(history["resumedPosition"] > 5 and 0 <= history["replayedPosition"] < 2 and history["mergedTitles"] == 1
-            and history["latestEpisode"] == 3 and all(history[key] is True for key in ("cancelledDeletionPreservedData", "removed", "cleared")),
+            and history["latestEpisode"] == 3 and history.get("dialogRole") == "dialog"
+            and all(history.get(key) is True for key in ("focusRestored", "cancelledDeletionPreservedData", "removed", "cleared")),
             "history resume/replay/merge/confirmation evidence differs")
     require(rows["console-and-overlay-health"]["actual"]["logs"] == [], "native UI console errors")
     require(rows["history-reload-precondition"]["actual"].get("visibleTitlesBeforeReload", 0) > 0, "history reload precondition missing")
@@ -183,7 +184,7 @@ def frontend(run):
             requirements = name.split(":", 1)[0].split("/")
             require(set(requirements) <= set(IDS), "state test declares an unknown requirement")
             state_count += 1
-        elif name.startswith("T12"):
+        elif name.startswith(("T12", "T13")):
             requirements = ["R08", "R31", "R36", "REQ-T13"]
         elif name.startswith("T05"):
             requirements = ["R01", "R31", "R36", "REQ-T13"]
@@ -269,11 +270,22 @@ def observe_native(run, process, folder, owned, samples):
         stream.write(json.dumps(sample) + "\n")
 
 
-def native_session(run, executable, url, name, seed=None):
+def validate_native_exit(result, code, expected_ok, log):
+    require(result.get("marker") == "native-exit-control" and result.get("ok") is expected_ok
+            and code == (0 if expected_ok else 1)
+            and f"T13 AppKit run returned; exit={code}" in log,
+            "native finish must return its real success/failure exit through AppKit")
+
+
+def native_session(run, executable, url, name, seed=None, probe=None):
     folder = run.folder / name
     folder.mkdir()
     script = ROOT / "tests/fixtures/t13" / ("startup.js" if seed else "browser.js")
     report = folder / "ui.json"
+    if probe is not None:
+        script = folder / "exit-probe.js"
+        script.write_text("void window.webkit.messageHandlers.t13.postMessage(" + json.dumps(dict(action="finish",
+            report=dict(ok=probe, cases=[], marker="native-exit-control"))) + ");\n", encoding="utf-8")
     argv = [str(executable), url, str(script), str(report), str(folder)]
     if seed:
         path = folder / "seed.js"
@@ -286,6 +298,8 @@ def native_session(run, executable, url, name, seed=None):
     owned, samples = {}, []
     started = time.monotonic()
     record = dict(argv=argv, cwd=str(ROOT), log=str((folder / "native.log").relative_to(ROOT)), exit=None)
+    if probe is not None:
+        record["expected_exit"] = 0 if probe else 1
     run.commands.append(record)
     with (folder / "native.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(argv, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
@@ -296,6 +310,9 @@ def native_session(run, executable, url, name, seed=None):
                 require(time.monotonic() - started < 930, "native UI session timed out")
                 time.sleep(0.1)
             record["exit"] = process.returncode
+            # A short exit probe can finish between samples. Collect its last
+            # published XPC identities before the same identity-qualified cleanup.
+            observe_native(run, process, folder, owned, samples)
         finally:
             record["seconds"] = time.monotonic() - started
             workflow.runtime.terminate([dict(pid=pid, identity=token) for pid, token in owned.items() if token])
@@ -304,6 +321,11 @@ def native_session(run, executable, url, name, seed=None):
             require(not record["remaining"], "owned native/WebKit resources remain")
     require(report.exists(), "native UI did not produce its assertion report")
     result = read_json(report)
+    if probe is not None:
+        validate_native_exit(result, record["exit"], probe, (folder / "native.log").read_text(encoding="utf-8"))
+        require(samples, "native exit control has no process/RSS observations")
+        return dict(report=str(report.relative_to(ROOT)), exit=record["exit"], expected_ok=probe, seconds=record["seconds"],
+                    remaining=record["remaining"], log=record["log"])
     validate_ui(result)
     for case in result.get("cases", []):
         require(case["requirements"] and set(case["requirements"]) <= set(IDS), "UI case has unknown/missing requirements")
@@ -354,6 +376,8 @@ def browser(run):
                 except (urllib.error.URLError, TimeoutError):
                     require(time.monotonic() < deadline, "Vite did not become ready")
                     time.sleep(0.1)
+            run.observed["native_exit_controls"] = [native_session(run, executable, url, "exit-success", probe=True),
+                                                    native_session(run, executable, url, "exit-failure", probe=False)]
             sessions = [native_session(run, executable, url, "ui")]
             require(sessions[0]["cases"] >= 10, "complete real UI suite required")
             defaults = dict(schema_version=2, last_source_key=None, volume=0.65, muted=False, auto_next=True, window_bounds=None,

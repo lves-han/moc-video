@@ -8,13 +8,26 @@ void (async () => {
     throw new Error(`Timed out: ${description}`);
   };
   const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const settledColors = async () => {
+    await frame();
+    // NGlobalStyle and radio buttons animate colors for .3s. Measure the
+    // rendered target theme after those real CSS transitions have completed.
+    await wait(() => !document.getAnimations().some(animation => animation instanceof CSSTransition
+      && animation.playState === "running"), "theme color transitions");
+    await frame();
+  };
+  const failure = error => ({ name: error?.name, message: String(error?.message ?? error), stack: String(error?.stack ?? ""),
+    measurement: error?.measurement ?? null, hash: location.hash,
+    dialogs: Array.from(document.querySelectorAll('.n-modal[role], .history-confirmation')).map(element => ({
+      role: element.getAttribute("role"), modal: element.getAttribute("aria-modal"), label: element.getAttribute("aria-label"),
+      containsFocus: element.contains(document.activeElement), text: element.textContent.slice(0, 160) })) });
   const visible = element => element && element.getBoundingClientRect().width > 0 && getComputedStyle(element).visibility !== "hidden";
   const select = (selector, value) => { const element = document.querySelector(selector); assert(element, `Missing ${selector}`); element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); };
   const click = selector => { const element = document.querySelector(selector); assert(element && visible(element), `Missing/hidden ${selector}`); element.click(); };
   const shot = async name => { await frame(); const value = await native("screenshot", { name: `${name}.png` }); assert(value.bytes > 1000 && value.width > 0, "Empty native screenshot"); screenshots.push(value); return value; };
   const run = async (name, requirements, work) => {
     try { const actual = await work(); cases.push({ id: name, requirements, result: "PASS", actual }); }
-    catch (error) { cases.push({ id: name, requirements, result: "FAIL", actual: String(error.stack || error) }); try { await shot(`failure-${name}`); } catch {} }
+    catch (error) { cases.push({ id: name, requirements, result: "FAIL", actual: failure(error) }); try { await shot(`failure-${name}`); } catch {} }
   };
   try {
     await wait(() => document.querySelector(".app-shell") && document.querySelector(".film-card"), "first meaningful screen");
@@ -63,15 +76,19 @@ void (async () => {
     const textContrast = selectors => {
       const measured = [];
       for (const element of document.querySelectorAll(selectors)) if (visible(element) && element.textContent.trim()) {
-        const value = contrast(element); assert(value >= 4.5, `Contrast ${value.toFixed(2)}: ${element.className} ${element.textContent.slice(0, 40)}`);
-        measured.push({ text: element.textContent.trim().slice(0, 50), contrast: value });
+        const value = contrast(element), style = getComputedStyle(element);
+        const measurement = { selectors, tag: element.tagName, class: element.className, text: element.textContent.trim().slice(0, 50),
+          contrast: value, color: style.color, background: background(element), palette: document.documentElement.dataset.palette,
+          scheme: document.documentElement.style.colorScheme, lang: document.documentElement.lang };
+        if (!Number.isFinite(value) || value < 4.5) throw Object.assign(new Error(`Contrast ${value.toFixed(2)}: ${element.className} ${measurement.text}`), { measurement });
+        measured.push(measurement);
       }
       assert(measured.length > 0, "No contrast samples"); return measured;
     };
     const language = async value => {
       select(".language-picker", value);
       await wait(() => locale.value === value && document.documentElement.lang === value, `language ${value}`);
-      await frame();
+      await settledColors();
     };
     await run("identity-first-frame", ["U07", "R08", "R31", "R62", "R67", "REQ-T13"], async () => {
       const first = window.__T13_FIRST_FRAME__;
@@ -86,9 +103,11 @@ void (async () => {
     });
     await run("return-and-language-filter", ["U07", "R01", "R36", "R62", "REQ-T13"], async () => {
       click('.genre-bar button:nth-child(2)');
+      await frame();
       const selected = document.querySelector('.genre-bar [aria-pressed="true"]');
       assert(selected, "Genre selection missing");
       const index = Array.from(selected.parentElement.children).indexOf(selected);
+      assert(index === 1, "Genre click did not select Drama after Vue rendered");
       const link = document.querySelector(".film-card .poster-link"); assert(link, "Filtered catalog empty"); const href = link.getAttribute("href");
       link.click(); await wait(() => app.state.route.name === "details" && app.state.details.phase === "ready", "film details");
       const stable = JSON.stringify(app.state.details.data.metadata_ref);
@@ -116,7 +135,7 @@ void (async () => {
         assert(radio, `Missing palette control ${palette.value}`);
         radio.click();
         await wait(() => app.state.settings.color_palette === palette.value && document.documentElement.dataset.palette === palette.value, "palette confirmation");
-        await frame();
+        await settledColors();
         const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
         assert(accent === (dark ? palette.night : palette.day), "System and Naive palette disagree");
         const stored = JSON.parse(localStorage.getItem("yingxiang-video.settings"));
@@ -231,27 +250,30 @@ void (async () => {
       const replayed = document.querySelector("video").currentTime; document.querySelector("video").pause();
       await navigate("#/history", ".history-card");
       const remove = document.querySelector(".history-actions button:last-child"); remove.focus(); remove.click();
-      await wait(() => document.querySelector('[role="alertdialog"]'), "delete confirmation"); await frame();
-      const modal = document.querySelector('[role="alertdialog"]');
+      await wait(() => document.querySelector('.history-confirmation'), "delete confirmation"); await frame();
+      const modal = document.querySelector('.history-confirmation');
+      assert(modal.getAttribute("role") === "dialog" && modal.getAttribute("aria-modal") === "true"
+        && modal.getAttribute("aria-label") === "Remove from history", "History confirmation role/name/modal semantics differ");
       assert(modal.contains(document.activeElement), "Confirmation did not capture focus");
       assert(document.querySelectorAll(".history-card").length === 1, "History deleted before confirmation");
-      textContrast('[role="alertdialog"] .n-dialog__title, [role="alertdialog"] .n-dialog__content');
+      textContrast('.history-confirmation .n-dialog__title, .history-confirmation .n-dialog__content');
       Array.from(modal.querySelectorAll("button")).find(button => button.textContent.trim() === "Cancel").click();
-      await wait(() => !document.querySelector('[role="alertdialog"]'), "cancel deletion"); await new Promise(resolve => setTimeout(resolve, 350));
+      await wait(() => !document.querySelector('.history-confirmation'), "cancel deletion"); await new Promise(resolve => setTimeout(resolve, 350));
       assert(document.activeElement === remove, "Confirmation did not restore trigger focus");
-      remove.click(); await wait(() => document.querySelector('[role="alertdialog"]'), "repeat confirmation");
-      Array.from(document.querySelectorAll('[role="alertdialog"] button')).find(button => button.textContent.trim() === "Remove").click();
+      remove.click(); await wait(() => document.querySelector('.history-confirmation[role="dialog"][aria-modal="true"]'), "repeat confirmation");
+      Array.from(document.querySelectorAll('.history-confirmation button')).find(button => button.textContent.trim() === "Remove").click();
       await wait(() => !document.querySelector(".history-card"), "single-title removal");
       await navigate("#/watch/midnight/1", "video"); await wait(() => document.querySelector("video")?.readyState >= 1, "new playback");
       const again = document.querySelector("video"); again.pause(); seekMedia(4); await wait(() => Math.abs(again.currentTime - 4) < 0.5, "new progress");
       await navigate("#/history", ".history-card");
       Array.from(document.querySelectorAll("button")).find(button => button.textContent.trim() === "Clear history").click();
-      await wait(() => document.querySelector('[role="alertdialog"]'), "clear confirmation");
+      await wait(() => document.querySelector('.history-confirmation[role="dialog"][aria-modal="true"]'), "clear confirmation");
       assert(document.querySelectorAll(".history-card").length === 1, "Clear ran before confirmation");
       await shot("history-clear-confirmation");
-      Array.from(document.querySelectorAll('[role="alertdialog"] button')).find(button => button.textContent.trim() === "Clear history").click();
+      Array.from(document.querySelectorAll('.history-confirmation button')).find(button => button.textContent.trim() === "Clear history").click();
       await wait(() => !document.querySelector(".history-card"), "clear history");
-      return { resumedPosition: resumed, replayedPosition: replayed, mergedTitles: 1, latestEpisode: 3, cancelledDeletionPreservedData: true, removed: true, cleared: true };
+      return { resumedPosition: resumed, replayedPosition: replayed, mergedTitles: 1, latestEpisode: 3, cancelledDeletionPreservedData: true,
+        dialogRole: modal.getAttribute("role"), focusRestored: true, removed: true, cleared: true };
     });
     await run("error-and-poster-contrast", ["U07", "R20", "R40", "R67", "REQ-T13"], async () => {
       await navigate("#/watch/midnight/1", "video");
@@ -280,6 +302,6 @@ void (async () => {
     await native("reload-history", { report: { ok: cases.every(row => row.result === "PASS"), cases, screenshots,
       browser: "native macOS WKWebView", browserPlugin: "Browser plugin not available; reused native WebKit without adding browser dependencies", url: location.href } });
   } catch (error) {
-    await native("finish", { report: { ok: false, error: String(error.stack || error), cases, screenshots } });
+    await native("finish", { report: { ok: false, error: failure(error), cases, screenshots } });
   }
 })();

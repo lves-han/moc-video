@@ -2249,7 +2249,7 @@ main {
   font-weight: 500;
 }
 .palette-name svg {
-  color: var(--accent);
+  color: inherit;
 }
 .source-modal .n-form {
   margin-top: 20px;

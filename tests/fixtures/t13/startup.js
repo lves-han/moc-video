@@ -14,5 +14,5 @@ void (async () => {
     if (reloaded && location.hash !== "#/history") throw new Error("Reload changed the history route");
     const screenshot = await native("screenshot", { name: "startup.png" });
     await native("finish", { report: { ok: true, cases: [{ id: reloaded ? "history-refresh-reset-and-preferences" : `first-frame-${expected.color_palette}`, requirements: ["U09", "R01", "R62", "R67", "REQ-T13"], result: "PASS", actual: { first, expected, emptyHistory: true, samePageReload: reloaded, native: await native("identity") } }], screenshots: [screenshot] } });
-  } catch (error) { await native("finish", { report: { ok: false, error: String(error.stack || error), cases: [] } }); }
+  } catch (error) { await native("finish", { report: { ok: false, error: { message: String(error?.message ?? error), stack: String(error?.stack ?? "") }, cases: [] } }); }
 })();
