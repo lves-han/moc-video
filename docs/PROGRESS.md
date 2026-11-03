@@ -1626,3 +1626,13 @@
 - 验收 A1：NOT RUN；完整verify NOT RUN。外层准确argv清单evidence/acceptance/T13-session-3-outer-argv.json已生成并读回，共8条（7条原run及A1成功后direct完整verify）；A1 payload逐项等于冻结卡，保留首项{python}字面。外层在本CLI退出、旧创建身份结束及两锁实得后依次执行12oracle/类型/全前端行为/格式/locked offline automation alltargets check与Clippy/准确A1，A1通过后直接verify.py all。真实GUI锁定情况沿原外层只读核对，解锁后执行原完整WK，保持T12安全/50切集/原资源门、20矩阵/4DPI/五色首帧及14冻结需求case。
 - 稳定源码：a2120f9d02c862fa5b02114c8cb2596e1d56d435d4e4a88241738004325b6c4b；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本会话源码停止编辑，工作树含5个已跟踪源码/验收文件修改及新增test_t13.py，另本追加记录；Git WIP沿ADR010由外层代办，建议WIP T0.13: complete interrupted type fixes and UI evidence oracles。
 - Remaining：外层完整读取新源各项真实结果；准确A1/直接完整verify/原done/受验完成提交/新固定独立CLEAR/clean齐备才完整完成。若需新实现，保留证据并报告真实最小决定、暂停本卡，无第四许可；纯验收/Git按现有授权继续。SQLite T18、移动业务另授权、真实CS/条件DASH N02及产品耐久原安排保持，未扩大资源权限时限。
+
+## T0.13 第三源真实播放与主UI验收失败 2026-11-03T09:08:11.160416+00:00
+- 结果：BLOCKED
+- 当前：ADR038唯一第三已消费，原sessions3/failures5/generation3/pausedfalse，当前WIP `24c4c32`/source `a2120f9d02c862fa5b02114c8cb2596e1d56d435d4e4a88241738004325b6c4b`，无第四许可；原会话/失败/rebaseline/segments历史保持，未重启开发或切模型。
+- 相关实测：12独立oracle、134前端行为、npm类型、Rust格式及automation alltargets check/Clippy全通过；准确A1内98行为/20named state和7份实际schema交叉状态、公共lib两构建通过。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T084408161514-A1/output.log`；真实finished/exit1，106required104pass2fail，JUnit107pass13fail0skip，同source/protected/gen。完整50次新帧440/880PCM/Session URL/单video轨道监听/旧410HTTP0、51aggregate CPU RSS十窗原门、HLS及暂停seek同Resolution换线过；expire首个自动恢复失败。后续图片/errors重复查询401502codec/track/autoplay unknown EOS/layout/正常stopdispose Hostfinish NOT RUN，finally native -15/lingering=[]、Host -15，未声称正常finish。
+- 主UI实际：原报告11case8pass3fail，返回筛选browser.js98、矩阵文字对比度125/66、删除确认等待alertdialog234失败。确认截图确有模态，须核实际role/焦点/选择器；当前catch仅stack缺message/值，矩阵仅lime-light双语部分截图，20矩阵未完成。程序已写report却存活至原930s，finally remaining=[]，原exit字段null保持。五色startup及完整verify/done/完成提交巡检均NOT RUN。
+- 诊断边界：过期失败generic video诊断非正式App/controller；真实根因尚未全部确定。返回状态保存恢复、对比度实际selector/数值、确认role与本机退出循环需原范围最小诊断及正负例/真实WK确认；不据截图或超时单项武断宣称全部生产缺陷。原run `evidence/runs/20261103T090518246712-t13-third-saved-media-evidence/receipt.json`校保存50cycle/51样本及原RSS门过，仅诊断，不覆盖失败A1。
+- 需要用户决定：是否仅本卡再追加一次3→4，由原模型权限CLI在原T13范围补正式失败状态诊断并最小修上述确认原因/相关正负例和真实WK，完整复验；原14cases/50次51RSS十窗/20矩阵4DPI五色首帧/安全恢复一次查询/资源权限时限保持，不改冻结或范围外Rust/依赖/控制配置，不rebaseline。未批准前只读证据和Git，不改源/重启开发/同源筛选重跑，后卡等待。
+- 证据：`evidence/drive/t13-third-validation-20261103T084301Z/native-acceptance-failure/manifest.json`封存90份实际副本SHA；generic周期samples缺1准确optional，51逐命令JSON/results与UI RSS齐，旧29份/容量stderr/125未封存/所有WIP历史沿baseline.previous_validation保持。原所有创建身份退出及两锁实得已核，准确handoff保存。
