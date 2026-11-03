@@ -1394,3 +1394,11 @@
 - 已确认边界：同一img URL立即重新赋值后的缓存复用、真实失效HTTP和DOM error阶段缺少区分证据，根因尚未确认；不据超时直接认定生产恢复函数错误。后续errors/autoplay/unknown/EOS/layout/正常stop与Host finish/完整verify NOT RUN，native原finally强制结束-15且lingering=[]。通用周期samples未生成如实列manifest，未补造。
 - 需要用户决定：是否仅本卡追加一次2→3，由原CLI补真实原生图片请求/error/身份与Host计数诊断、最小修复已确认原因并补回归，再完整准确A1/verify/固定独立CLEAR；原50切集/权限/资源/时限/安全门保持，T13及后卡等待。
 - 证据：`evidence/drive/t12-second-validation-20261103T022445Z/image-expiry-failure/manifest.json`保存原报告/native/results/Host日志/源码/收据SHA；原首失败与125未封存副本和全部历史保持。无额外开发会话启动，无RESOLVED。
+
+
+## T0.12 唯一第三会话真实批准 2026-11-03T02:48:07.517238+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T0.12追加一次2→3，原CLI补真实图片请求与错误诊断、最小修复并完整复验，原权限/50次规模/安全门/资源/时限及历史保持，后卡等待”的询问明确回复“批准 T0.12 追加一次”；按ADR032仅一次，未消费，实际sessions3即消费，不授权第四次，其他卡default2。原s2/f4/g0和全部证据/WIP历史保持。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 验证及证据：第2源真实50切集通过，准确A1仍因图片过期未刷新失败；缓存/真实失效请求/error回调阶段尚待诊断，后续门与完整verify NOT RUN。原`evidence/drive/t12-second-validation-20261103T022445Z/image-expiry-failure/manifest.json`与所有旧失败保持，原task status留存于`evidence/drive/t12-second-validation-20261103T022445Z/third-authorization/original-status.json`。
+- 执行顺序：固定授权文档独立round31 CLEAR后紧邻最早/current/next、旧全部身份退出/两锁实得、clean/source/protected及计数核对，唯一原drive --once --max-sessions 3；原50次/全部安全/错误/资源/30s/命令时限保持。原CLI实施，ADR010受限协作及原run准确A1→直接完整verify→done/受验提交/新固定CLEAR/clean门齐备才完成，T13paused/s1/gen3及后卡等待；无冻结定义变化，不rebaseline。
