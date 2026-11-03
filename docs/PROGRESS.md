@@ -1366,3 +1366,14 @@
 - 验收 A1：NOT RUN；本轮Rust/TS类型、locked构建/all-targets Clippy、Python行为回归、真实HTTP/Host/WK字幕、准确A1与完整verify均NOT RUN。已确认的sysctl/sccache/Git限制按ADR010/031处理，本轮未重复探测、未启动受限重命令、未绕过run.py、未产生新的资源收据；外层须以本轮真实收据记录process-watchdog/RSS采样、4096MiB/jobs2/线程1与实际清理。
 - 稳定源码：e7bcf235e779126729f907bfacc57862073a97a9aecab7c23cf5b2b26689c4db；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。产品源码停止编辑；准确argv和新计数见evidence/acceptance/T11-session-3-outer-argv.json。Git WIP沿ADR010交外层，建议WIP T0.11: preserve ASS comments and complete cue newlines。
 - Remaining/外层顺序：本CLI退出后核原driver/CLI/重任务PID+创建时间与两锁、冻结scope及稳定source，按既定授权代办WIP；通过原run执行11项oracle、T01 fixture回归、带t01-automation的all-target check/Clippy及准确A1。新源A1必须实际9原生/14观测、两集六轨加8边界cue及全部原门通过，然后直接verify.py all，保持源码，真实记录、勾卡、task.py done、受验完成提交、新固定独立CLEAR及干净树齐备才完成。真实GUI若锁定，准确等待人类解锁，原30s保持；当前GUI状态未重新采样。DASH沿当前实有制品条件NOT RUN并由N02补查，观察到DASH必须补全门。旧done/A1/verify/提交/CLEAR及所有失败历史保持；本轮未写DONE/RESOLVED/AUTHORIZED、未改冻结定义、未rebaseline。
+
+
+## T0.11 ASS注释与连续换行准确复验受验完成 2026-11-03T01:33:50.168729+00:00
+
+- 结果：DONE
+- Changed/Why：按ADR031最小修ASS完整覆盖块/注释忽略，原块外正文/有效字面转义及绘图排除保持；空class span安全表示正文空行，保留首尾/连续换行而不触发WebVTT cue分界。独立oracle和实际WK分别处理wire串与getCueAsHTML语义全文，旧错误{literal}期望按格式语义纠正；非注释中文/标点/小于号和原时间轴保持。
+- 验收 A1：PASS；日志：`evidence/runs/20261103T012915388861-A1/output.log`；原8测试保留并新增边界测试共9原生，原13观测保留并新增含4边界观测共14，14项篡改反例拒绝，7必需case全过，JUnit10pass/0fail/1原条件DASHskip。真实打包WK两集各3轨的原cue仍通过，每集ASS另4组真实边界全文/起止时间/cue结束通过：注释外前后全文、连续及首尾空行、wrap与不换行空格均逐字读回，未折叠换行/只比前缀。原六轨加载/开关切换seek/旧轨移除/Session关闭/Resolution回收后加载、1920x1080新视频帧/无MediaError/退出0无lingering、同源两bundle/codesign/生产隔离与所有安全大小/源上下文/30s门保持。
+- 直接完整verify：PASS；最近六门全部通过：workflow128项121pass7平台skip、契约两门、前端59测试/生产构建、native fmt/check/all-targetsClippy/107单元+16集成全过。新oracle/fixture回归及带automation检查/Clippy亦通过；原completion_evidence已核当前source/protected/gen/最新原日志报告SHA、非零逐需求case及完整门成功齐备。
+- 基线source=e7bcf235e779126729f907bfacc57862073a97a9aecab7c23cf5b2b26689c4db、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、generation0、sessions3/失败3及所有旧done/A1/verify/受验提交/旧CLEAR/ASS缺口SHA副本、首失败/125恢复前副本/WIP历史保持。ADR031唯一第三许可已消费，无第四许可；当前成功副本`evidence/drive/t11-third-validation-20261103T012901Z/completion-evidence/manifest.json`，源码稳定/scope冻结/旧身份结束/两锁实际空闲已核，源码不再修改。
+- 归档沿用准确事实：实际逐命令功能cue/帧/时间轴在JSON/results存在，若通用NativeSession登记但未生成周期samples日志则manifest单列missing_optional_references；当前缺失数1，未补造文件或声称长时周期采样。
+- Remaining：原done/新受验提交/新固定独立CLEAR/clean齐备才完整完成，T12等待。条件DASH依原卡单列NOT RUN并留N02真实provider补查，七包SHA不代表媒体输出，出现DASH须完整适用门；ASS高级特效、真实CS/Yjys/产品耐久/其他平台边界及T13paused/s1/gen3/原权限资源时限保持。
