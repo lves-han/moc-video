@@ -22,6 +22,46 @@ const diagnostic = (value: unknown) => String(value).replace(/([?&](?:cap|token|
 let harness: Harness | undefined;
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 function check(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
+
+// Passive, per-action observations: never retain an Event, track, frame or URL.
+// In particular, NETWORK_EMPTY is useful evidence, not proof that native
+// decoder/GPU allocations have already been returned to the OS.
+export function observeMediaLifecycle(video: HTMLVideoElement) {
+  const events: Record<string, unknown>[] = [];
+  let count = 0;
+  const snapshot = () => {
+    const quality = video.getVideoPlaybackQuality();
+    return { ready_state: video.readyState, network_state: video.networkState,
+      source_present: video.hasAttribute("src"), current_src_present: Boolean(video.currentSrc),
+      paused: video.paused, width: video.videoWidth, height: video.videoHeight,
+      buffered_seconds: Array.from({ length: video.buffered.length }, (_, i) => video.buffered.end(i) - video.buffered.start(i)),
+      text_tracks: video.textTracks.length, cues: Array.from(video.textTracks, track => track.cues?.length ?? null),
+      total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames };
+  };
+  const record = (stage: string, trusted: boolean | null) => {
+    count++;
+    events.push({ stage, trusted, at_ms: performance.now(), ...snapshot() });
+    if (events.length > 64) events.shift();
+  };
+  const names = ["abort", "emptied", "loadstart", "loadedmetadata", "loadeddata", "playing", "pause", "error"];
+  const listener = (event: Event) => record(event.type, event.isTrusted);
+  for (const name of names) video.addEventListener(name, listener);
+  return {
+    mark(stage: string) { record(stage, null); },
+    read: () => ({ count, events: events.map(event => ({ ...event })) }),
+    dispose() { for (const name of names) video.removeEventListener(name, listener); },
+  };
+}
+
+export async function releaseMediaObserver(current: Pick<Harness, "video" | "callback" | "source" | "analyser" | "audio" | "sampling">) {
+  check(current.video.paused && !current.video.hasAttribute("src") && current.video.networkState === 0,
+    "Observer release requires stopped formal media");
+  current.video.cancelVideoFrameCallback(current.callback);
+  current.source.disconnect(); current.analyser.disconnect();
+  if (current.audio.state !== "closed") await current.audio.close();
+  current.sampling.dispose();
+}
+
 async function until(predicate: () => boolean, message: string, timeout = 20000) {
   const end = performance.now() + timeout;
   while (!predicate()) { check(performance.now() < end, message); await delay(20); }
@@ -210,24 +250,34 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     case "switch": {
       const index = Number(command.payload);
       check(index >= 1 && index <= 51, "Episode index outside fixture");
-      const oldTracks = [...video.querySelectorAll("track")]; const oldSession = appState.playback.session!.session_id;
-      current.retiredTracks.push(...oldTracks.map(track => new WeakRef(track)));
-      const before = current.frames;
-      // The production state action and App route feed the same mounted PlaybackView.
-      const matched = await api.call("match_playback", current.matches[index]!);
-      check(matched.status === "matched" && matched.context, "Next episode must be matched again before playing");
-      navigatePlayback(matched.context); await nextTick();
-      await until(() => appState.playback.session?.session_id !== oldSession && Boolean(appState.playback.session), "New episode session not opened");
-      await playing(current);
-      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
-      await until(() => video.querySelector("track")?.readyState === 2, "New episode subtitle failed");
-      await until(() => current.frames > before + 1, "New episode did not present frames");
-      const decoded = await waitForEpisodeSample(() => sample(current), index, started + 30000);
-      result = { index, old_tracks_disabled: oldTracks.every(t => !t.isConnected && t.track.mode === "disabled"),
-        session_changed: appState.playback.session!.session_id !== oldSession, new_frames: current.frames - before,
-        actual_gateway: video.currentSrc === appState.playback.session!.media_url,
-        sample: decoded.sample, media_observations: decoded.observations,
-        host: await current.rpc({ operation: "observe" }) };
+      const lifecycle = observeMediaLifecycle(video);
+      try {
+        lifecycle.mark("before-switch");
+        const oldTracks = [...video.querySelectorAll("track")]; const oldSession = appState.playback.session!.session_id;
+        current.retiredTracks.push(...oldTracks.map(track => new WeakRef(track)));
+        const before = current.frames;
+        // The production state action and App route feed the same mounted PlaybackView.
+        const matched = await api.call("match_playback", current.matches[index]!);
+        check(matched.status === "matched" && matched.context, "Next episode must be matched again before playing");
+        navigatePlayback(matched.context); await nextTick();
+        lifecycle.mark("route-updated");
+        await until(() => appState.playback.session?.session_id !== oldSession && Boolean(appState.playback.session), "New episode session not opened");
+        lifecycle.mark("session-opened");
+        await playing(current);
+        current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+        await until(() => video.querySelector("track")?.readyState === 2, "New episode subtitle failed");
+        await until(() => current.frames > before + 1, "New episode did not present frames");
+        const decoded = await waitForEpisodeSample(() => sample(current), index, started + 30000);
+        lifecycle.mark("current-media-observed");
+        result = { index, old_tracks_disabled: oldTracks.every(t => !t.isConnected && t.track.mode === "disabled"),
+          session_changed: appState.playback.session!.session_id !== oldSession, new_frames: current.frames - before,
+          actual_gateway: video.currentSrc === appState.playback.session!.media_url,
+          sample: decoded.sample, media_observations: decoded.observations,
+          lifecycle: lifecycle.read(),
+          host: await current.rpc({ operation: "observe" }) };
+      } catch (cause) {
+        throw new Error(`${diagnostic(cause)}; lifecycle=${JSON.stringify(lifecycle.read())}`);
+      } finally { lifecycle.dispose(); }
       break;
     }
     case "controls": {
@@ -486,7 +536,9 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     }
     case "dispose": {
       await current.controller.stop(); current.app.unmount(); await current.controller.settled();
-      video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect(); await current.audio.close();
+      video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect();
+      // Failure diagnostics may have already closed the test-owned AudioContext.
+      if (current.audio.state !== "closed") await current.audio.close();
       current.sampling.dispose();
       current.container.remove(); current.stopErrors();
       window.__TAURI__!.core = current.originalCore;
@@ -494,6 +546,14 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       result = { audio_closed: current.audio.state === "closed", errors: current.errors, videos: document.querySelectorAll("video").length };
       harness = undefined;
       return { ...result, native: await nativeInvoke("t01_control", { action: "identity" }) };
+    }
+    case "release-observer": {
+      // Failure-only diagnostic, after the original 51 samples and RSS verdict.
+      // Stop the formal media first; this isolates test-owned frame/WebAudio
+      // observation from the subsequent Vue/DOM unmount. No new media is opened.
+      await releaseMediaObserver(current);
+      return { audio_closed: current.audio.state === "closed", observer: current.sampling.diagnostics(),
+        native: await nativeInvoke("t01_control", { action: "identity" }) };
     }
     default: throw new Error(`Unknown formal action ${command.action}`);
   }

@@ -351,6 +351,51 @@ def validate_rss_windows(medians):
     require(not all(a < b for a, b in zip(medians, medians[1:])), "Owned RSS grows monotonically across all ten five-switch windows")
 
 
+def diagnose_rss_failure(run, session, bridge):
+    """Post-verdict only: preserve the failed series, then isolate owned lifetimes.
+
+    VM summaries are diagnostic categories, never substituted for aggregate RSS.
+    A denied probe is recorded once; no permission changes or retries follow.
+    """
+    stages = []
+    run.observed["rss_failure_diagnostics"] = stages
+    maps_available = platform.system() == "Darwin" and Path("/usr/bin/vmmap").is_file()
+    for stage, action in (("live", None), ("media-stopped", "stop"),
+                          ("observer-released", "release-observer"), ("view-disposed", "dispose")):
+        row = dict(stage=stage, memory_maps=[])
+        stages.append(row)
+        try:
+            if action:
+                row["action"] = session.command("t12", action=action)
+                if action == "stop":
+                    validate_stop(row["action"])
+            row["process_sample"] = process_sample(session, bridge)
+            for process in row["process_sample"]["processes"]:
+                if process["role"] not in ("renderer", "gpu", "GPU") or not process["alive"]:
+                    continue
+                record = dict(pid=process["pid"], identity=process["identity"], role=process["role"], status="NOT RUN")
+                row["memory_maps"].append(record)
+                if not maps_available:
+                    record["reason"] = "vmmap unavailable or an earlier diagnostic probe failed"
+                    continue
+                command_count = len(run.commands)
+                try:
+                    require(workflow.runtime.alive(process), "memory map process identity changed")
+                    run.command(["/usr/bin/vmmap", "-summary", str(process["pid"])], timeout=10)
+                    require(workflow.runtime.alive(process), "memory map process identity changed")
+                    record.update(status="CAPTURED", log=run.commands[-1]["log"])
+                except Exception as cause:
+                    record.update(status="FAILED", error=redact(str(cause)))
+                    if len(run.commands) > command_count:
+                        record["log"] = run.commands[-1]["log"]
+                    maps_available = False
+        except Exception as cause:
+            row["error"] = redact(str(cause))
+            # Keep the original RSS failure and leave remaining cleanup to the
+            # existing identity-bound finally path when a stage cannot finish.
+            break
+
+
 def webview(run):
     run.observed["gui_session"] = t01.native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
@@ -390,7 +435,14 @@ def webview(run):
                 # Preserve every raw sample; a strictly growing series has no evidence of stabilization.
                 medians = rss_windows(samples)
                 run.observed["rss_windows"] = medians
-                validate_rss_windows(medians)
+                try:
+                    validate_rss_windows(medians)
+                except ValueError:
+                    try:
+                        diagnose_rss_failure(run, session, bridge)
+                    except Exception as cause:
+                        run.observed["rss_diagnostic_error"] = redact(str(cause))
+                    raise
                 hls = session.command("t12", action="switch", payload=51, timeout=40)
                 validate_cycle(hls, 51)
                 require(hls["sample"]["diagnostics"]["engine"] == "native", "WKWebView native HLS capability was ignored")

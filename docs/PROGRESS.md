@@ -1511,3 +1511,15 @@
 ## T0.12 第七会话授权固定文档独立CLEAR 2026-11-03T05:58:10.710106+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-35.md`，固定cae589c36015a18b5b7565007bcd57ac5ef8b302、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR036 87bb8edf873c645c7e7228f365e78d6f0ea9ad1be7ca7a4679cbda73fb50087c。独立只读核真实授权、原T12/SPEC/C9/C14、原预算控制器及39份SHA/每身份RSS与对象数据，原始报告已保存，作者未代宣CLEAR。
 - 限制与下一步：原s6/f9/g0，第七未消费，第八未授权；对象稳定仍不证明RSS合格或缓存泄漏根因。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数后唯一原drive --once --max-sessions7，原50/51aggregate/十窗RSS门和全部安全资源权限时限保持，实质门测法变化另需真实决定，T13paused及后卡等待。
+
+## T0.12 第七会话媒体卸载与验收观察器持有诊断待验交接 2026-11-03T06:08:00+00:00
+- 实施状态：WIP；ADR036唯一第七许可已消费，原status实际sessions7/failures9/generation0，未授权第八。TASKS未勾选，未done/rebaseline，未写RESOLVED/AUTHORIZED或新增BLOCKED。已知sysctl/sccache/Git限制按ADR010交外层处理，本CLI未重复探测或绕过。
+- 问题与依据：已读AGENTS、T0.12、C8/C9/C10/C14、SPEC10.3/10.5、ADR010/036、round35、生产player/state/PlaybackView及原生验收代码，已校验第六失败manifest的39份副本SHA全部相符。原逐身份RSS增长与稳定对象计数保持事实；源码已有pause/HLS destroy/src与track移除/load复位，原证据缺少真实emptied到新loadstart时序及媒体停止/验收观察器释放/页面卸载后的独立观察。RSS根因仍未确认，生产实现保持。
+- Changed：仅tests/fixtures/t12_webview.ts、tests/t12-webview.test.ts、tests/acceptance/t12.py、tests/acceptance/test_t12.py及本追加记录。每次切集增加被动原生abort/emptied/loadstart/metadata/data/playing/pause/error与route/session/current-media阶段，最多64条数值快照，记录ready/network/source存在性、尺寸、缓冲秒数、轨道cue数和解码丢帧计数；不保存Event、媒体对象或URL，finally移除观察监听。
+- Changed：原50切集/51份aggregate样本、原采样时点与十个五切窗口及原拒绝门保持。在该门已经失败后，另存live→原stop动作→关闭验收Canvas/WebAudio/帧观察器→原dispose动作四阶段的process_sample；renderer/GPU按PID与创建身份前后核对后采集系统vmmap -summary原日志，各命令10秒，首次探测失败后其余记录NOT RUN且继续所属清理。诊断错误另存，原RSS异常最终重新抛出，全部原finally身份清理保持。该分阶段数据仅供归因，不补入/替换原51样本，不改变门、单位、阈值或成功路径，没有warmup/强制GC/新增sleep。
+- API依据：已读本机/usr/share/man/man1/vmmap.1确认-summary与PID参数、虚拟区域大小的含义及单位；主干WebKit源码仅支持待验证假设，未据此宣称本机根因。按WebAudio close规范https://webaudio.github.io/web-audio-api/#dom-audiocontext-close，测试dispose检查audio.state避免在失败诊断先关闭后重复close产生InvalidStateError；生产音频和播放语义保持。
+- 回归入口：新增2个Node测试声明及3个Python独立oracle声明，涵盖有界无URL快照/移监听、观察器释放顺序与活动媒体拒绝/已关闭音频、原51样本及RSS门保留、分阶段顺序、探测拒绝一次/旧PID身份拒绝和诊断动作失败保留。Python总声明26、相关Node预计66，均待真实执行；原EOS20秒/trusted DOM ended当前epoch/session一次和所有恢复、安全、资源、时限门保持。
+- Verified：task.py check/start/scope实际exit0；两个Python文件AST解析通过、26项oracle静态声明计数；两个TypeScript文件createSourceFile语法解析0诊断；git diff --check exit0；39份原副本SHA相符。未执行行为测试（0），类型检查、构建、vmmap及本机真实WK均NOT RUN，无本轮资源收据。
+- 验收 A1：NOT RUN；完整verify NOT RUN。第六源失败及全部旧证据继续保存，新源未据旧通过认定合格。准确外层argv清单evidence/acceptance/T12-session-7-outer-argv.json已生成并读回，7条命令保留给定venv解释器字面路径，A1 payload逐项等于冻结卡含首项{python}字面；按原run顺序执行26oracle/相关前端/类型/locked native check/Clippy/准确A1，A1通过后直接verify.py all。
+- 稳定源码：83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。本会话源码停止编辑，Git WIP按ADR010由外层在本CLI稳定退出/旧创建身份结束/两锁实得后代办，建议WIP T0.12: capture native unload and post-failure media ownership。
+- Remaining：外层按清单验证并读取真实生命周期和四阶段系统摘要，内存根因及最小生产修复取决于实际证据。新实现需真实决定且暂停，无第八许可；纯验收/Git按既有授权继续。原4096MiB RSS采样/jobs2/线程1及全部30秒/命令期限保持。准确A1/完整verify/原done/受验提交/新固定独立CLEAR/clean齐备才完整完成，T13paused及严格后卡等待。

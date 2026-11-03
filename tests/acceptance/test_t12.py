@@ -8,7 +8,7 @@ import urllib.request
 import json
 import queue
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import t12
 
@@ -199,6 +199,73 @@ class NativeOracleTests(unittest.TestCase):
                 t12.rss_windows(samples)
         with self.assertRaisesRegex(ValueError, "ten five-switch"):
             t12.validate_rss_windows([100] * 9)
+
+    def test_failed_rss_diagnostics_separate_media_observer_and_view_without_replacing_samples(self):
+        samples = [dict(owned_rss_bytes=n) for n in range(51)]
+        medians = t12.rss_windows(samples)
+        run = SimpleNamespace(observed=dict(process_samples=samples, rss_windows=medians), commands=[])
+        actions = []
+        session = SimpleNamespace(command=lambda op, **args: actions.append((op, args)) or stopped())
+        processes = [dict(pid=20, identity="renderer-created", role="renderer", alive=True),
+                     dict(pid=30, identity="gpu-created", role="gpu", alive=True)]
+        def command(argv, timeout):
+            self.assertEqual(argv[:2], ["/usr/bin/vmmap", "-summary"])
+            self.assertEqual(timeout, 10)
+            run.commands.append(dict(log=f"map-{len(run.commands)}.log"))
+        run.command = command
+        with patch.object(t12, "process_sample", return_value=dict(processes=processes)) as sample, \
+                patch.object(t12.platform, "system", return_value="Darwin"), \
+                patch.object(t12.Path, "is_file", return_value=True), \
+                patch.object(t12.workflow.runtime, "alive", return_value=True):
+            t12.diagnose_rss_failure(run, session, None)
+        self.assertEqual(sample.call_count, 4)
+        self.assertEqual([args["action"] for op, args in actions], ["stop", "release-observer", "dispose"])
+        self.assertTrue(all(op == "t12" for op, args in actions))
+        stages = run.observed["rss_failure_diagnostics"]
+        self.assertEqual([row["stage"] for row in stages], ["live", "media-stopped", "observer-released", "view-disposed"])
+        self.assertEqual(len(run.commands), 8)
+        self.assertTrue(all(record["status"] == "CAPTURED" for row in stages for record in row["memory_maps"]))
+        self.assertIs(run.observed["process_samples"], samples)
+        self.assertIs(run.observed["rss_windows"], medians)
+        # The same original samples must still fail even if post-stop RSS falls.
+        with self.assertRaisesRegex(ValueError, "grows monotonically"):
+            t12.validate_rss_windows(medians)
+
+    def test_failed_memory_probe_is_recorded_once_without_retry_or_skipping_owned_cleanup(self):
+        run = SimpleNamespace(observed={}, commands=[], command=Mock(side_effect=ValueError("task_for_pid denied")))
+        actions = []
+        session = SimpleNamespace(command=lambda op, **args: actions.append(args["action"]) or stopped())
+        process = dict(pid=20, identity="created", role="renderer", alive=True)
+        with patch.object(t12, "process_sample", return_value=dict(processes=[process])), \
+                patch.object(t12.platform, "system", return_value="Darwin"), \
+                patch.object(t12.Path, "is_file", return_value=True), \
+                patch.object(t12.workflow.runtime, "alive", return_value=True):
+            t12.diagnose_rss_failure(run, session, None)
+        self.assertEqual(run.command.call_count, 1)
+        self.assertEqual(actions, ["stop", "release-observer", "dispose"])
+        records = [row["memory_maps"][0] for row in run.observed["rss_failure_diagnostics"]]
+        self.assertEqual([row["status"] for row in records], ["FAILED", "NOT RUN", "NOT RUN", "NOT RUN"])
+        self.assertIn("task_for_pid denied", records[0]["error"])
+        run.command.reset_mock(); actions.clear()
+        with patch.object(t12, "process_sample", return_value=dict(processes=[process])), \
+                patch.object(t12.platform, "system", return_value="Darwin"), \
+                patch.object(t12.Path, "is_file", return_value=True), \
+                patch.object(t12.workflow.runtime, "alive", return_value=False):
+            t12.diagnose_rss_failure(run, session, None)
+        run.command.assert_not_called()
+        self.assertEqual(actions, ["stop", "release-observer", "dispose"])
+        self.assertIn("identity changed", run.observed["rss_failure_diagnostics"][0]["memory_maps"][0]["error"])
+
+    def test_failed_diagnostic_stage_retains_error_and_leaves_cleanup_to_original_finally(self):
+        run = SimpleNamespace(observed={}, commands=[])
+        session = SimpleNamespace(command=Mock(side_effect=ValueError("stop failed")))
+        with patch.object(t12, "process_sample", return_value=dict(processes=[])), \
+                patch.object(t12.platform, "system", return_value="other"):
+            t12.diagnose_rss_failure(run, session, None)
+        stages = run.observed["rss_failure_diagnostics"]
+        self.assertEqual([row["stage"] for row in stages], ["live", "media-stopped"])
+        self.assertEqual(stages[1]["error"], "stop failed")
+        session.command.assert_called_once_with("t12", action="stop")
 
     def test_process_detail_keeps_original_aggregate_and_pid_creation_identities(self):
         with tempfile.TemporaryDirectory() as folder:

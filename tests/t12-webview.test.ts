@@ -19,9 +19,57 @@ function fixture(globals: Record<string, unknown> = {}) {
     ...globals,
   });
   return { wait: exports.waitForEpisodeSample, sampler: exports.createMediaSampler, codec: exports.requireCodecMedia,
-    eos: exports.observeNativeEos, now: () => now };
+    eos: exports.observeNativeEos, lifecycle: exports.observeMediaLifecycle, releaseObserver: exports.releaseMediaObserver, now: () => now };
 }
 const red = () => ({ audio_state: "running", audio_rms: .1, audio_peak_hz: 440, pixel: [254, 0, 0, 255], session_bound: true });
+
+test("T12 lifecycle keeps bounded scalar unload/reopen evidence and removes its listeners", () => {
+  const listeners = new Map<string, (event: unknown) => void>();
+  let source = true;
+  const video = { readyState: 4, networkState: 1, currentSrc: "private capability URL", paused: false,
+    videoWidth: 1920, videoHeight: 1080, textTracks: [{ cues: { length: 1 } }],
+    buffered: { length: 1, start: () => 0, end: () => 2 },
+    hasAttribute: () => source, getVideoPlaybackQuality: () => ({ totalVideoFrames: 5, droppedVideoFrames: 0 }),
+    addEventListener(name: string, listener: (event: unknown) => void) { listeners.set(name, listener); },
+    removeEventListener(name: string, listener: (event: unknown) => void) { assert.equal(listeners.get(name), listener); listeners.delete(name); } };
+  const observer = fixture().lifecycle(video);
+  observer.mark("before-switch");
+  source = false; video.readyState = 0; video.networkState = 0; video.paused = true;
+  listeners.get("emptied")!({ type: "emptied", isTrusted: true, target: video });
+  const evidence = observer.read();
+  assert.deepEqual([...evidence.events.map((event: any) => event.stage)], ["before-switch", "emptied"]);
+  assert.equal(evidence.events[1].source_present, false);
+  assert.equal(evidence.events[1].ready_state, 0); assert.equal(evidence.events[1].network_state, 0);
+  assert.equal(evidence.events[1].trusted, true);
+  assert.equal(evidence.events[0].source_present, true);
+  assert.equal(JSON.stringify(evidence).includes("private capability"), false);
+  assert.equal(JSON.stringify(evidence).includes("target"), false);
+  for (let i = 0; i < 100; i++) observer.mark(`stage-${i}`);
+  assert.equal(observer.read().count, 102); assert.equal(observer.read().events.length, 64);
+  assert.equal(observer.read().events[0].stage, "stage-36");
+  observer.dispose(); assert.equal(listeners.size, 0);
+});
+
+test("T12 failure-only observer release closes frame/audio/canvas ownership in order", async () => {
+  const calls: string[] = [];
+  const current = {
+    video: { paused: true, hasAttribute: () => false, networkState: 0,
+      cancelVideoFrameCallback(id: number) { assert.equal(id, 23); calls.push("frame"); } }, callback: 23,
+    source: { disconnect() { calls.push("source"); } }, analyser: { disconnect() { calls.push("analyser"); } },
+    audio: { async close() { calls.push("audio"); } }, sampling: { dispose() { calls.push("canvas"); } },
+  };
+  const f = fixture();
+  await f.releaseObserver(current);
+  assert.deepEqual(calls, ["frame", "source", "analyser", "audio", "canvas"]);
+  calls.length = 0;
+  await f.releaseObserver({ ...current, audio: { ...current.audio, state: "closed" } });
+  assert.deepEqual(calls, ["frame", "source", "analyser", "canvas"]);
+  for (const edit of [{ paused: false }, { hasAttribute: () => true }, { networkState: 2 }]) {
+    calls.length = 0;
+    await assert.rejects(f.releaseObserver({ ...current, video: { ...current.video, ...edit } }), /requires stopped formal media/);
+    assert.deepEqual(calls, []);
+  }
+});
 
 function eosFixture(paused: boolean, ending = "native") {
   const playback = { phase: paused ? "paused" : "playing", playback_epoch: 7, session: { session_id: "current" } };
