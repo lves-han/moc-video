@@ -1506,3 +1506,8 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 事实与证据：第六源50帧PCM通过但51样本十窗RSS严格递增失败，renderer/GPU RSS增加而DOM轨道监听会话HTTP等稳定，原因未确认；新EOS及后门/fullverify NOT RUN。原39份SHA副本`evidence/drive/t12-sixth-validation-20261103T054643Z/rss-recurrence-failure/manifest.json`和所有旧失败保持，原status存`evidence/drive/t12-sixth-validation-20261103T054643Z/seventh-authorization/original-status.json`。
 - 执行与完成门：固定授权文档独立round35 CLEAR后紧邻顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions7，原50/51/十窗RSS门/单位阈值/安全资源权限时限保持，不warmup强制GC/删门抽样或筛选重跑；实质指标门测法变化另需决定。新源准确A1成功direct完整verify/原done/受验提交/新固定独立CLEAR/clean全闭环才完整完成，不rebaseline，T13paused及后卡等待。
+
+
+## T0.12 第七会话授权固定文档独立CLEAR 2026-11-03T05:58:10.710106+00:00
+- 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-35.md`，固定cae589c36015a18b5b7565007bcd57ac5ef8b302、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR036 87bb8edf873c645c7e7228f365e78d6f0ea9ad1be7ca7a4679cbda73fb50087c。独立只读核真实授权、原T12/SPEC/C9/C14、原预算控制器及39份SHA/每身份RSS与对象数据，原始报告已保存，作者未代宣CLEAR。
+- 限制与下一步：原s6/f9/g0，第七未消费，第八未授权；对象稳定仍不证明RSS合格或缓存泄漏根因。紧邻严格最早/current/next/旧身份/两锁/clean/source/protected计数后唯一原drive --once --max-sessions7，原50/51aggregate/十窗RSS门和全部安全资源权限时限保持，实质门测法变化另需真实决定，T13paused及后卡等待。
