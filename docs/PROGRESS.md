@@ -1671,3 +1671,10 @@
 - 验收 A1：NOT RUN（第四源）；完整verify/done/受验完成提交/独立完成巡检均NOT RUN。现T13-all仍第三源失败，旧50/51和后续未跑事实不代第四源。诊断预检失败后未同源重跑UI/A1。
 - 需要用户决定：是否仅本卡再追加一次4→5，原CLI补真实失败状态/提交顺序诊断、确认最小修历史完成重播或正确夹具前提、相关旧写/旧身份/新重播正负例及真WK，再完整原A1/directverify/完成门；原14cases/50切51RSS十窗/20矩阵4DPI五首帧/安全资源权限期限保持，不以进度阈值/合成ended/跳门/同源筛选获得通过，不rebaseline或改范围外源。未批准只读证据与Git，不新开发。
 - 证据：`evidence/drive/t13-fourth-validation-20261103T093814Z/history-replay-preflight-failure/manifest.json`104份原始副本SHA；原第三90/第二29份、125未封存与所有WIP计数历史沿baseline.previous_validation保持。全部原创建身份结束及两锁实得已核，准确handoff已存，后卡严格等待。
+
+## T0.13 唯一第五会话真实批准 2026-11-03T10:29:51.027440+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天仅T13追加一次4→5、区分结束事件/保存时序/验收前提并最小修历史完成重播、补回归完整复验、原模型权限及全部门资源时限保持的明确回复“仅批准 T0.13 追加一次（4→5）”；按ADR040唯一一次，原s4/f6/gen3，第五尚未消费，未授权第六。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：`evidence/drive/t13-fourth-validation-20261103T093814Z/history-replay-preflight-failure/manifest.json`104份实际SHA，原13oracle136行为/类型格式native及主UI10过1败/自然退出正负探针/20矩阵保持；第四源完整A1/fullverify NOT RUN，旧第三失败和全部WIP/125未封存历史保持。失败当时正式controller/HistoryEntry快照不足，不预认根因。
+- 执行与完成：固定独立round39 CLEAR原文保存提交后紧邻strict顺序/旧创建身份/两锁实得/clean source protected原s4核对，唯一原drive once maxsessions5；原14cases/完整50与51RSS十窗/20矩阵4DPI五首帧/真实ended与一次查询恢复安全资源权限时限全保持，新源准确A1成功direct完整verify/done/受验提交/新固定独立CLEAR/clean才完整完成，不rebaseline，后卡等待。
