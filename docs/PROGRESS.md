@@ -1590,3 +1590,14 @@
 - 实质预检：原state/Api/player/PlaybackView/Host/UiProvider/i18n/SettingsQueue/history及公共lib入口已存在；老WIP16份产品测试文件已原样另存SHA，见`evidence/drive/t13-resume-preflight-20261103T071547Z/manifest.json`与saved-wip.patch，原Git历史不改写。state/App/Api/lib已由T05..T12演进，恢复由原CLI在本卡范围读取旧WIP并适配到当前源码，不盲目覆写或重建第二AppState，不撤销已验Host/播放器/诊断保留修复。
 - 验收边界：原T13单AppState/Route/PlaybackContext/Resolution/Session跨绑定负例、快切/返回/主客epoch与取消/源选择、首页全量单栏分页按index及图像裁剪、英文缺省与中文/五色系×明暗×双语390px/首帧及系统动态/持久化失败、会话内History交互/公共lib桌面cfg检查保持；SQLite真实持久化T18/移动业务阶段与真实CS/DASH/产品耐久原边界保持。旧WIP行为/A1/fullverify全NOT RUN，不当完成证据。
 - 接续顺序：先整体改写监管提示移除T12已完成操作，再原next/start/handoff/普通drive --once（不加额）消耗原第2会话，核实际gpt-6.1-sol/workspace-write身份；原ADR010最小权限/已知sysctl sccache Git限制不重探绕过/4096MiB RSS jobs2 thread1和全部期限、真实GUI锁定等解锁、准确A1成功directverify/done受验提交新固定独立CLEARclean与严格后卡等待保持。无冻结内容变化、不rebaseline。
+
+
+## T0.13 模型容量中断后的原额度验收与明确缺口 2026-11-03T08:08:04.411481+00:00
+- 结果：BLOCKED
+- 事实：原第2开发CLI因Selected model is at capacity两次终止exit1，未完成正常交接；sessions2/default2用尽，原失败4/generation3/pausedfalse和全部rebaseline/segments/第1会话历史保持，无第三许可。WIPf5cd88e source=ca41e6a49dc3edb08e1a77421fa41cdf64ed596645b1070b38ba19611b0a94a9，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，scope通过，外层未代写产品或测试源。
+- 已有受限证据：原verify-t13-check125/早登记payload/raw_exit tests未知在CLI退出后核创建身份全结束/原run_aliveFalse及两锁实得，经原recover归档，未封存副本保存于`evidence/drive/t13-second-validation-20261103T080023Z/interrupted-source/manifest.json`，原失败保持。
+- 相关实测：134前端行为全过，automation alltargets nativecheck/Clippy通过；类型原run `evidence/runs/20261103T080024269425-t13-outer-frontend-check/output.log` exit2四处错误（App genre键两处/Close词典键/CatalogView app.value），nativefmt原run080625418893 exit1（lib.rs链式格式）。
+- 验收入口缺口：tests/acceptance/test_t13.py未创建，A1要求至少4独立反例不得删弱；validate_ui将主套件中的history-refresh-reset-and-preferences误判firstframe专用，合成正例报告11case/20矩阵/4DPI原run `evidence/runs/20261103T080500822762-t13-outer-ui-oracle-positive/output.log` exit1 KeyError first。该诊断未执行原生UI，非准确A1。
+- 验收 A1：NOT RUN；源码编译及验收前提尚缺，GUI当前locked，真实WK/精确冻结A1/完整verify/完成提交独立巡检均NOT RUN，不用134行为代替。
+- 需要用户决定：是否仅T13追加一次2→3，原CLI补上述中断实现类型/格式/独立oracle与验收分类分支，保持134既有行为及原全卡功能/14冻结cases/真实矩阵首帧/Host播放器安全/资源权限时限，完整复验；原模型/权限不变、不重置历史或复用别卡许可。未经真实批准不重启开发或改源。
+- 证据：`evidence/drive/t13-second-validation-20261103T080023Z/first-validation-failure/manifest.json`归档真实源码/日志收据/容量stderr SHA；原旧b5f979e/ead5af1及16份preflight快照和所有WIP/失败历史保持，准确handoff已保存，后卡等待。
