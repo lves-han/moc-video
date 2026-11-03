@@ -1498,3 +1498,11 @@
 - 未验证：本轮在RSS门停止，新nativeHLS/controls/expire/图片/errors/auto unknown/EOS/layout/正常stop-dispose/Host finish/fullverify NOT RUN。新EOS动作/回归虽通过相关测试，真实EOS效果尚未执行；nativefinally-15/lingering=[]，旧第五已有后门成功只保留历史。
 - 需要用户决定：是否仅本卡再追加一次6→7，沿原范围补renderer/GPU持有诊断、修证据确认原因并完整复验，原50/51/十窗资源门/每轮PCM帧/全部安全权限资源时限保持；实质指标门测法变化另取真实决定，未批准不得开发/改额度。
 - 证据：`evidence/drive/t12-sixth-validation-20261103T054643Z/rss-recurrence-failure/manifest.json`保存原报告/每身份进程和资源对象/逐轮CPU RSS/Host native/源码/收据日志SHA，旧43/42/41/18/35/39及125未封存副本和所有WIP历史保持，准确handoff已保存，后卡等待。
+
+
+## T0.12 唯一第七会话真实批准 2026-11-03T05:55:59.835267+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T12再追加一次6→7，继续原范围资源持有诊断/最小修复/完整复验，原50规模/RSS门/安全权限时限保持”明确回复“批准 T0.12 再追加一次（6→7）”；按ADR036唯一一次，原s6/f9/g0，第七尚未消费，实际s7即消费，未授权第八，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：第六源50帧PCM通过但51样本十窗RSS严格递增失败，renderer/GPU RSS增加而DOM轨道监听会话HTTP等稳定，原因未确认；新EOS及后门/fullverify NOT RUN。原39份SHA副本`evidence/drive/t12-sixth-validation-20261103T054643Z/rss-recurrence-failure/manifest.json`和所有旧失败保持，原status存`evidence/drive/t12-sixth-validation-20261103T054643Z/seventh-authorization/original-status.json`。
+- 执行与完成门：固定授权文档独立round35 CLEAR后紧邻顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions7，原50/51/十窗RSS门/单位阈值/安全资源权限时限保持，不warmup强制GC/删门抽样或筛选重跑；实质指标门测法变化另需决定。新源准确A1成功direct完整verify/原done/受验提交/新固定独立CLEAR/clean全闭环才完整完成，不rebaseline，T13paused及后卡等待。
