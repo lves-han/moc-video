@@ -1347,3 +1347,9 @@
 - 决定：用户针对仅本卡一次2→3、原CLI修ASS注释/连续换行及原生/独立oracle/真实WK文本时间轴回归后完整复验，明确回复“批准 T0.11 追加一次”，按ADR031执行。
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 原sessions2/失败3/gen0、source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0及所有原成功/失败/旧done/CLEAR/缺口SHA副本保持；第三许可尚未消费。固定文档独立round30 CLEAR后唯一原drive --once --max-sessions 3，实际计数3即消费，其他卡default2/T13paused/原权限资源时限不变。完成勾选仍撤回，新ASS边界实际WK复验仍NOT RUN，新源完整原质量门闭环后才完整完成，T12等待。冻结不变，无rebaseline。
+
+
+## T0.11 第三会话授权独立文档CLEAR 2026-11-03T01:13:48.842386+00:00
+
+- 原独立只读round30：CLEAR；原报告docs/reviews/doc-review/round-30.md，固定HEAD4eb16cb981fb8d7f7fbe33de9b88e150b0fcfebf/source2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0/protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，实际文档SHA/ADR031分段匹配，8份缺口副本SHA保持。
+- 原s2/f3/g0保持，第三许可尚未消费；紧邻顺序/身份/两锁/clean核对后唯一原drive --once --max-sessions 3，实际计数3即消费，其他卡default2/原权限资源时限/T13paused及历史保持。真实WK新ASS边界仍NOT RUN，新源完整原质量门重验，T12等待。
