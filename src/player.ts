@@ -1,9 +1,17 @@
 import Hls from "hls.js";
+import type { Bridge_ApiError, PlaybackViewSession, PlayerEvent as ProtocolEvent } from "./models.ts";
 
 export type PlayerState = "preparing" | "ready" | "playing" | "paused" | "buffering" | "position" | "ended" | "failed" | "stopped";
 export type PlayerEvent = { state: PlayerState; epoch: number; position_ms: number; duration_ms: number | null; error?: string };
 export type SubtitleSource = { id: string; label: string; language: string | null; url: string };
 export type PlaybackSource = { url: string; kind: "mp4" | "hls"; subtitle?: string; subtitles?: readonly SubtitleSource[] };
+export type PlayerBinding = { playback_epoch: number; engine_epoch: string | null; session_id: string | null };
+export class UnsupportedMedia extends Error {}
+
+export function sessionSource(session: PlaybackViewSession): PlaybackSource {
+  if (session.stream_kind !== "progressive" && session.stream_kind !== "hls") throw new UnsupportedMedia(`MEDIA_UNSUPPORTED: ${session.stream_kind}`);
+  return { url: session.media_url, kind: session.stream_kind === "progressive" ? "mp4" : "hls", subtitles: session.subtitles };
+}
 
 declare global {
   interface Window {
@@ -26,17 +34,34 @@ export function capabilities(video: HTMLVideoElement) {
 }
 
 /** One controller owns one video element. stop() releases its whole loading attempt. */
-export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent) => void) {
+export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent) => void,
+  protocol?: (event: ProtocolEvent) => void) {
   let hls: Hls | undefined;
   let listeners: AbortController | undefined;
   let epoch = 0;
   let lastPosition = 0;
   let engine: "native" | "hls.js" = "native";
-  const notify = (state: PlayerState, error?: string) => emit({
-    state, epoch, position_ms: Math.round(video.currentTime * 1000),
-    duration_ms: Number.isFinite(video.duration) ? Math.round(video.duration * 1000) : null,
-    ...(error ? { error } : {}),
-  });
+  let binding: PlayerBinding = { playback_epoch: 0, engine_epoch: null, session_id: null };
+  const duration = () => Number.isFinite(video.duration) && video.duration >= 0 ? Math.round(video.duration * 1000) : null;
+  const position = () => Number.isFinite(video.currentTime) ? Math.max(0, Math.round(video.currentTime * 1000)) : 0;
+  function notify(state: PlayerState, message?: string, error?: Bridge_ApiError) {
+    emit({ state, epoch, position_ms: position(), duration_ms: duration(), ...(message ? { error: message } : {}) });
+    if (state === "ready") protocol?.({ ...binding, type: state, duration_ms: duration() });
+    else if (state === "position") protocol?.({ ...binding, type: state, position_ms: position() });
+    else if (state === "buffering") protocol?.({ ...binding, type: state, percent: null });
+    else if (state === "failed") protocol?.({ ...binding, type: state, error: error ?? { code: "MEDIA_UNSUPPORTED", message: message!, retryable: false } });
+    else protocol?.({ ...binding, type: state });
+  }
+
+  function mediaFailure(resource: string, message: string, code?: number, httpStatus?: number) {
+    notify("failed", message, {
+      code: code === 3 || code === 4 ? "MEDIA_UNSUPPORTED" : httpStatus === 401 ? "UNAUTHORIZED"
+        : httpStatus === 410 ? "SESSION_EXPIRED" : httpStatus === 504 ? "UPSTREAM_TIMEOUT" : "UPSTREAM_FAILED",
+      message, retryable: code !== 3 && code !== 4,
+      details: { resource_kind: resource === "video" ? "media" : "subtitle", resource_key: resource, media_code: code ?? null,
+        ...(httpStatus !== undefined ? { http_status: httpStatus } : {}) },
+    });
+  }
 
   function stop() {
     epoch++;
@@ -52,29 +77,33 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     notify("stopped");
   }
 
-  function open(source: PlaybackSource) {
+  function open(source: PlaybackSource, identity?: PlayerBinding) {
     stop();
+    binding = identity ? { ...identity } : { playback_epoch: epoch, engine_epoch: null, session_id: null };
     const current = epoch;
+    const openedAt = performance.now();
     const active = new AbortController();
     listeners = active;
-    lastPosition = 0;
+    lastPosition = -Infinity;
     notify("preparing");
-    const on = (name: string, state: PlayerState) => video.addEventListener(name, () => {
-      if (epoch === current) notify(state);
+    const fresh = (event: Event) => epoch === current && event.timeStamp >= openedAt;
+    const on = (name: string, state: PlayerState, valid: () => boolean = () => true) => video.addEventListener(name, event => {
+      if (fresh(event) && valid()) notify(state);
     }, { signal: active.signal });
-    on("loadedmetadata", "ready");
-    on("playing", "playing");
-    on("pause", "paused");
+    on("loadedmetadata", "ready", () => video.readyState >= 1);
+    on("durationchange", "ready", () => video.readyState >= 1);
+    on("playing", "playing", () => !video.paused);
+    on("pause", "paused", () => video.paused);
     on("waiting", "buffering");
-    on("ended", "ended");
-    video.addEventListener("timeupdate", () => {
-      if (epoch === current && performance.now() - lastPosition >= 250) {
+    on("ended", "ended", () => video.ended);
+    video.addEventListener("timeupdate", event => {
+      if (fresh(event) && performance.now() - lastPosition >= 250) {
         lastPosition = performance.now();
         notify("position");
       }
     }, { signal: active.signal });
-    video.addEventListener("error", () => {
-      if (epoch === current) notify("failed", `MediaError ${video.error?.code}: ${video.error?.message ?? "load failed"}`);
+    video.addEventListener("error", event => {
+      if (fresh(event) && video.error) mediaFailure("video", `MediaError ${video.error.code}: ${video.error.message ?? "load failed"}`, video.error.code);
     }, { signal: active.signal });
     video.crossOrigin = "anonymous";
     video.preload = "auto";
@@ -87,20 +116,21 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       track.srclang = subtitle.language || "und";
       track.src = subtitle.url;
       track.default = index === 0;
-      track.addEventListener("error", () => {
-        if (epoch === current) notify("failed", `SUBTITLE_LOAD_FAILED: ${subtitle.id}`);
+      track.addEventListener("error", event => {
+        if (fresh(event)) mediaFailure(subtitle.id, `SUBTITLE_LOAD_FAILED: ${subtitle.id}`);
       }, { signal: active.signal });
       video.append(track);
     }
     if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
       if (!Hls.isSupported()) {
         notify("failed", "MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
-        throw new Error("MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
+        throw new UnsupportedMedia("MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
       }
       engine = "hls.js";
       hls = new Hls({ enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (current === epoch && data.fatal) notify("failed", `HLS ${data.type}: ${data.details}`);
+        if (current === epoch && data.fatal) mediaFailure("video", `HLS ${data.type}: ${data.details}`,
+          data.type === Hls.ErrorTypes.MEDIA_ERROR ? 3 : 2, data.response?.code);
       });
       hls.attachMedia(video);
       hls.loadSource(source.url);
@@ -115,10 +145,14 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
   return {
     open, stop,
     async play() {
+      const current = epoch;
       try { await video.play(); }
       catch (error) {
-        notify("failed", error instanceof Error && error.name === "NotAllowedError"
-          ? "AUTOPLAY_BLOCKED: 请点击继续播放" : String(error));
+        if (current !== epoch) return;
+        const blocked = typeof error === "object" && error !== null && "name" in error && error.name === "NotAllowedError";
+        const message = blocked ? "AUTOPLAY_BLOCKED: 请点击继续播放" : String(error);
+        if (!blocked && video.error) mediaFailure("video", `MediaError ${video.error.code}: ${video.error.message ?? message}`, video.error.code);
+        else notify("failed", message, { code: "UPSTREAM_FAILED", message, retryable: true, details: { reason: blocked ? "AUTOPLAY_BLOCKED" : "PLAY_FAILED" } });
         throw error;
       }
     },

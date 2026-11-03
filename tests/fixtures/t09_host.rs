@@ -3,6 +3,8 @@ use super::*;
 use std::net::TcpStream;
 #[path = "t11_host.rs"]
 mod t11;
+#[path = "t12_host.rs"]
+mod t12;
 
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());

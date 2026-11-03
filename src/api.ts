@@ -53,7 +53,7 @@ export class Api {
     return operations.default_metadata.total_ms;
   }
 
-  async call<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID()): Promise<CommandData<C>> {
+  async call<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID(), expectedHostEpoch?: string): Promise<CommandData<C>> {
     if (!commands.includes(command)) throw new Error("Unknown business command");
     if (!uuid.test(requestId)) throw new Error("request_id must be UUID");
     let handle: unknown;
@@ -65,6 +65,7 @@ export class Api {
       if (!record(response) || response.request_id !== requestId || !(response.engine_epoch === null || (typeof response.engine_epoch === "string" && uuid.test(response.engine_epoch)))) {
         throw new UnknownCommit(requestId, "Invalid response identity");
       }
+      if (expectedHostEpoch !== undefined && response.engine_epoch !== expectedHostEpoch) throw new UnknownCommit(requestId, "Host epoch changed; reconnect required");
       const success = Object.hasOwn(response, "data");
       if (success === Object.hasOwn(response, "error") || Object.keys(response).sort().join() !== (success ? "data,engine_epoch,request_id" : "engine_epoch,error,request_id")) {
         throw new UnknownCommit(requestId, "Invalid response envelope");

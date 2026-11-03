@@ -41,8 +41,9 @@ def byte_range(value, size):
 
 
 class Fixture:
-    def __init__(self, media):
+    def __init__(self, media, invoke=None):
         self.media = Path(media)
+        self.invoke = invoke
         self.cap = secrets.token_hex(32)
         self.commands = queue.Queue()
         self.results = queue.Queue()
@@ -111,7 +112,7 @@ class Fixture:
                 if not self.allowed():
                     return
                 path = urlsplit(self.path).path
-                if path not in {"/control/result", "/control/sample"}:
+                if path not in {"/control/result", "/control/sample"} and not (path == "/control/invoke" and fixture.invoke):
                     self.response(405)
                     return
                 length = self.headers.get("Content-Length", "")
@@ -124,6 +125,13 @@ class Fixture:
                         raise ValueError("object required")
                 except (ValueError, UnicodeError):
                     self.response(400)
+                    return
+                if path == "/control/invoke":
+                    try:
+                        result = fixture.invoke(value)
+                        self.response(200, json.dumps(result).encode(), {"Content-Type": "application/json"})
+                    except Exception:
+                        self.response(500, b'{}', {"Content-Type": "application/json"})
                     return
                 (fixture.results if path.endswith("result") else fixture.samples).put(value)
                 self.response(204)

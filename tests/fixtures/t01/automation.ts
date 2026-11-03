@@ -5,7 +5,7 @@ declare global {
   interface Window { __T01_BOOTSTRAP__?: { base: string; cap: string } }
 }
 type Command = { id: number; op: string; kind?: "mp4" | "hls"; seconds?: number; value?: number;
-  view?: { media_url: string; subtitles: SubtitleSource[] }; episode?: "first" | "second" };
+  view?: { media_url: string; subtitles: SubtitleSource[] }; episode?: "first" | "second"; action?: string; payload?: unknown };
 type NativeVisibility = { visible: boolean; focused: boolean; minimized: boolean };
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 function assertCondition(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
@@ -144,6 +144,11 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   };
   async function execute(command: Command): Promise<unknown> {
     switch (command.op) {
+      case "t12": {
+        const { formalPlayback } = await import("../t12_webview");
+        await foreground();
+        return formalPlayback(command, { video, player, base, cap });
+      }
       case "identity": return { foreground: await foreground(), origin: location.origin, secure_context: isSecureContext,
         user_agent: navigator.userAgent, capabilities: capabilities(video), native: await nativeInvoke("t01_control", { action: "identity" }), layout: layout() };
       case "open": {

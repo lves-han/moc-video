@@ -1,0 +1,289 @@
+// Test-mode only. Runs the production App/PlaybackView/state/Api against a real Host.
+import { createApp, h, nextTick, ref, type App as VueApp } from "vue";
+import App from "../../src/App.vue";
+import UiProvider from "../../src/ui/UiProvider.vue";
+import { appState, navigatePlayback, type PlaybackController } from "../../src/state.ts";
+import { nativeInvoke, type Player } from "../../src/player.ts";
+import { locale } from "../../src/i18n";
+import { api } from "../../src/api.ts";
+import type { PlaybackContext, PlaybackMatchInput, DetailsViewData, AppSourceList } from "../../src/models.ts";
+
+type Command = { action?: string; payload?: unknown };
+type Bootstrap = { initial_context: PlaybackContext; match_inputs: PlaybackMatchInput[]; details: DetailsViewData; sources: AppSourceList };
+type Harness = {
+  app: VueApp; container: HTMLElement; video: HTMLVideoElement; controller: PlaybackController; matches: PlaybackMatchInput[];
+  rpc: (value: unknown) => Promise<any>; audio: AudioContext; source: MediaElementAudioSourceNode; analyser: AnalyserNode;
+  frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
+  errors: string[]; stopErrors: () => void;
+  initialLocale: typeof locale.value;
+};
+const diagnostic = (value: unknown) => String(value).replace(/([?&](?:cap|token|capability)=)[^\s"'<>]*/gi, "$1<redacted>");
+let harness: Harness | undefined;
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+function check(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
+async function until(predicate: () => boolean, message: string, timeout = 20000) {
+  const end = performance.now() + timeout;
+  while (!predicate()) { check(performance.now() < end, message); await delay(20); }
+}
+function sample(current: Harness) {
+  const video = current.video;
+  const bins = new Float32Array(current.analyser.fftSize);
+  current.analyser.getFloatTimeDomainData(bins);
+  const spectrum = new Float32Array(current.analyser.frequencyBinCount);
+  current.analyser.getFloatFrequencyData(spectrum);
+  let peak = 0;
+  for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+  const drawing = canvas.getContext("2d")!;
+  if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
+  return { position: video.currentTime, paused: video.paused, ready_state: video.readyState, network_state: video.networkState,
+    source_present: video.hasAttribute("src"), tracks: video.querySelectorAll("track").length,
+    video_count: document.querySelectorAll("video").length, frames: current.frames, width: video.videoWidth, height: video.videoHeight,
+    audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length), audio_peak_hz: peak * current.audio.sampleRate / current.analyser.fftSize,
+    pixel: [...drawing.getImageData(0, 0, 1, 1).data], media_error: video.error?.code ?? null,
+    phase: appState.playback.phase, epoch: appState.playback.playback_epoch, diagnostics: current.controller.diagnostics() };
+}
+async function gesture(current: Harness) {
+  const button = current.container.querySelector<HTMLButtonElement>('[data-action="continue"]') ?? current.container.querySelector<HTMLButtonElement>('[data-action="play"]');
+  check(button && !button.disabled, "Actual playback button is missing/disabled");
+  button.click();
+  await current.audio.resume();
+}
+async function playing(current: Harness) {
+  await until(() => current.video.readyState >= 2 || Boolean(current.video.error), "Formal media metadata missing");
+  check(!current.video.error, "Formal video failed before playback");
+  if (current.video.paused) await gesture(current);
+  await until(() => !current.video.paused && current.video.currentTime > .1, "Formal playback did not advance");
+  await current.audio.resume();
+}
+
+export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string }) {
+  const started = performance.now();
+  if (command.action === "start") {
+    check(!harness, "Formal App already mounted");
+    const payload = command.payload as Bootstrap;
+    check(payload.match_inputs.length === 52 && payload.initial_context.match_id && payload.details.metadata_ref, "Actual Host context/DTO inventory missing");
+    prototype.player.stop();
+    const initialLocale = locale.value;
+    locale.value = "en";
+    const container = document.getElementById("app") as HTMLElement & { __vue_app__?: VueApp };
+    check(container.__vue_app__, "Original native fixture root is missing");
+    container.__vue_app__.unmount();
+    const rpc = async (value: unknown) => {
+      const response = await fetch(`${prototype.base}control/invoke?cap=${prototype.cap}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
+      });
+      check(response.ok, "Real Host test transport failed");
+      return response.json();
+    };
+    check(window.__TAURI__, "Native Tauri invoke is required");
+    const originalCore = window.__TAURI__.core;
+    // The fixture changes only transport; every envelope and DTO is generated by Host.
+    window.__TAURI__.core = { ...originalCore, invoke: <T>(name: string, args?: Record<string, unknown>): Promise<T> =>
+      name === "t01_control" || name === "player_fullscreen" ? originalCore.invoke<T>(name, args) : rpc({ command: name, args }) };
+    const errors: string[] = [];
+    const onError = (event: ErrorEvent) => errors.push(diagnostic(event.message));
+    const onRejection = (event: PromiseRejectionEvent) => errors.push(diagnostic(event.reason));
+    const oldError = console.error, oldWarn = console.warn;
+    console.error = (...args) => { errors.push(`console.error: ${args.map(diagnostic).join(" ")}`); oldError(...args); };
+    console.warn = (...args) => { errors.push(`console.warn: ${args.map(diagnostic).join(" ")}`); oldWarn(...args); };
+    window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
+    appState.details.data = payload.details; appState.details.request_epoch++;
+    appState.sources.data = payload.sources;
+    navigatePlayback(payload.initial_context);
+    const component = ref<InstanceType<typeof App>>();
+    const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App, { ref: component }) }) });
+    app.mount(container); await nextTick();
+    const controller = component.value?.playbackController();
+    check(controller, "Actual App/PlaybackView public controller missing");
+    const video = container.querySelector("video")!;
+    check(video && document.querySelectorAll("video").length === 1, "Formal App must own exactly one video");
+    const audio = new AudioContext(); const source = audio.createMediaElementSource(video); const analyser = audio.createAnalyser();
+    analyser.fftSize = 4096; source.connect(analyser); analyser.connect(audio.destination);
+    const current: Harness = { app, container, video, controller, matches: payload.match_inputs, rpc, audio, source, analyser,
+      frames: 0, callback: 0, originalCore, initialLocale, errors, stopErrors: () => {
+        window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
+        console.error = oldError; console.warn = oldWarn;
+      } };
+    harness = current;
+    const onFrame: VideoFrameRequestCallback = () => { current.frames++; current.callback = video.requestVideoFrameCallback(onFrame); };
+    current.callback = video.requestVideoFrameCallback(onFrame);
+    await until(() => Boolean(appState.playback.session) || appState.playback.phase === "failed", "Formal session was not opened");
+    await playing(current);
+    current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+    await until(() => video.querySelector("track")!.readyState === 2, "Formal native subtitle did not load");
+  }
+  const current = harness;
+  check(current, "Formal App must be started first");
+  const video = current.video;
+  let result: Record<string, unknown> = {};
+  switch (command.action) {
+    case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
+      framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
+    case "switch": {
+      const index = Number(command.payload);
+      check(index >= 1 && index <= 51, "Episode index outside fixture");
+      const oldTracks = [...video.querySelectorAll("track")]; const oldSession = appState.playback.session!.session_id;
+      const before = current.frames;
+      // The production state action and App route feed the same mounted PlaybackView.
+      const matched = await api.call("match_playback", current.matches[index]!);
+      check(matched.status === "matched" && matched.context, "Next episode must be matched again before playing");
+      navigatePlayback(matched.context); await nextTick();
+      await until(() => appState.playback.session?.session_id !== oldSession && Boolean(appState.playback.session), "New episode session not opened");
+      await playing(current);
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(() => video.querySelector("track")?.readyState === 2, "New episode subtitle failed");
+      await until(() => current.frames > before + 1, "New episode did not present frames");
+      await delay(150);
+      result = { index, old_tracks_disabled: oldTracks.every(t => !t.isConnected && t.track.mode === "disabled"),
+        session_changed: appState.playback.session!.session_id !== oldSession, new_frames: current.frames - before,
+        actual_gateway: video.currentSrc === appState.playback.session!.media_url,
+        host: await current.rpc({ operation: "observe" }) };
+      break;
+    }
+    case "controls": {
+      current.container.querySelector<HTMLButtonElement>('[data-action="play"]')!.click();
+      await until(() => video.paused, "Formal pause control failed");
+      const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
+      const seek = current.container.querySelector<HTMLInputElement>('input[type="range"]')!;
+      seek.value = ".5"; seek.dispatchEvent(new Event("input", { bubbles: true }));
+      await until(() => !video.seeking && Math.abs(video.currentTime - .5) < .05, "Formal seek control failed");
+      const res = appState.playback.resolution!.id; const session = appState.playback.session!.session_id;
+      await current.controller.selectStream(appState.playback.resolution!.streams[1]!.id);
+      await until(() => video.readyState >= 2, "Alternate line metadata missing");
+      check(video.paused && Math.abs(video.currentTime - .5) < .05, "Line switch lost paused resume snapshot");
+      result = { paused: video.paused, seek: video.currentTime, resolution_retained: res === appState.playback.resolution!.id,
+        session_changed: session !== appState.playback.session!.session_id };
+      break;
+    }
+    case "expire": {
+      const old = appState.playback.session!.session_id;
+      const position = video.currentTime;
+      await current.rpc({ operation: "expire-session", session_id: old });
+      video.load();
+      await until(() => appState.playback.session?.session_id !== old && Boolean(appState.playback.session), "Expired session did not recover");
+      await until(() => video.readyState >= 2 && !video.seeking, "Recovered metadata/seek missing");
+      result = { session_changed: old !== appState.playback.session!.session_id, restored: Math.abs(video.currentTime - position) < .1, paused: video.paused };
+      // Automatic recovery is bounded for the same user action.
+      const recovered = appState.playback.session!.session_id;
+      await current.rpc({ operation: "expire-session", session_id: recovered }); video.load();
+      await until(() => appState.playback.error?.code === "SESSION_EXPIRED", "Second expiry must expose retry");
+      result.recovered_once = appState.playback.session?.session_id === recovered;
+      await nextTick();
+      const retry = current.container.querySelector<HTMLButtonElement>('[data-action="retry"]');
+      check(retry && !retry.disabled, "Expired session must expose its actual Retry button");
+      retry.click();
+      await until(() => Boolean(appState.playback.session) && appState.playback.session!.session_id !== recovered, "Manual expiry retry did not open a new session");
+      await playing(current);
+      break;
+    }
+    case "image-expire": {
+      const dto = appState.details.data!;
+      await current.rpc({ operation: "evict-images" });
+      const image = current.container.querySelector<HTMLImageElement>(".playback-title img")!;
+      const original = image.src;
+      // A fresh native request to the expired capability triggers the real img error handler.
+      image.removeAttribute("src"); image.src = original;
+      await until(() => appState.details.data !== dto || Boolean(current.controller.ui.imageError), "Image error did not query/refresh its DTO");
+      await until(() => Boolean(current.container.querySelector<HTMLImageElement>(".playback-title img")?.naturalWidth), "Refreshed image did not decode");
+      result = { dto_refreshed: appState.details.data !== dto, decoded: image.naturalWidth > 0 || current.container.querySelector<HTMLImageElement>(".playback-title img")!.naturalWidth > 0 };
+      break;
+    }
+    case "errors": {
+      const outcomes = [];
+      for (const mode of [1, 2, 3]) {
+        await current.rpc({ operation: "mode", value: mode });
+        await current.controller.retry();
+        await until(() => appState.playback.phase === "failed" && Boolean(appState.playback.error), "Native resource failure not mapped");
+        await until(() => current.controller.diagnostics().pending_requests === 0, "Native error query still pending");
+        const code = appState.playback.error!.code;
+        check(code === (mode === 3 ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED"), "Browser error was misclassified as an HTTP status");
+        outcomes.push({ mode, code, media_error: video.error?.code ?? null });
+      }
+      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+      await current.rpc({ operation: "mode", value: 4 });
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(() => current.container.querySelector("track")?.readyState === 3, "Native track error not raised");
+      await until(() => appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Native track status query did not finish");
+      check(appState.playback.error?.code === "UPSTREAM_FAILED", "Native track error lost gateway diagnosis");
+      const trackError = appState.playback.error.code;
+      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+      const beforePrepare = (await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0;
+      const beforeEpoch = appState.playback.playback_epoch;
+      await current.rpc({ operation: "unauthorized-query" });
+      await current.rpc({ operation: "mode", value: 2 });
+      await current.controller.retry();
+      await until(() => appState.playback.playback_epoch >= beforeEpoch + 2 && appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Unauthorized query did not reconnect and finish its bounded attempt");
+      const reconnects = ((await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0) - beforePrepare;
+      check(reconnects === 1, "Unauthorized must reconnect exactly once");
+      await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+      result = { outcomes, track_error: trackError, reconnects }; break;
+    }
+    case "eos": {
+      const events: Event[] = [];
+      const onEnded = (event: Event) => events.push(event);
+      video.addEventListener("ended", onEnded, { once: true });
+      current.controller.seek(video.duration - .25); await gesture(current);
+      await until(() => appState.playback.phase === "ended", "Formal EOS event missing");
+      video.removeEventListener("ended", onEnded);
+      result = { ended: true, dom_events: events.length };
+      break;
+    }
+    case "autoplay": {
+      current.controller.pause();
+      const original = video.play;
+      try {
+        video.play = () => Promise.reject(new DOMException("Injected system autoplay denial", "NotAllowedError"));
+        await current.controller.play(); await nextTick();
+        check(Boolean(current.container.querySelector('[data-action="continue"]')), "Continue button did not render for autoplay denial");
+      } finally { video.play = original; }
+      await gesture(current); await playing(current); await nextTick();
+      result = { continue_button: true, resumed: !current.container.querySelector('[data-action="continue"]'), stimulus: "injected NotAllowedError; actual component/button and native playback" };
+      break;
+    }
+    case "unknown-duration": {
+      const descriptor = Object.getOwnPropertyDescriptor(video, "duration");
+      try {
+        Object.defineProperty(video, "duration", { configurable: true, get: () => Infinity });
+        video.dispatchEvent(new Event("durationchange")); await nextTick();
+        const seek = current.container.querySelector<HTMLInputElement>('input[type="range"]')!;
+        result = { disabled: seek.disabled, unknown_text: current.container.textContent!.includes("Unknown duration"), stimulus: "injected nonfinite DOM duration; actual rendered state" };
+      } finally {
+        if (descriptor) Object.defineProperty(video, "duration", descriptor); else Reflect.deleteProperty(video, "duration");
+        video.dispatchEvent(new Event("durationchange")); await nextTick();
+      }
+      break;
+    }
+    case "layout": {
+      const width = Number(command.payload);
+      await nativeInvoke("t01_control", { action: "width", value: width }); await delay(200);
+      const controls = [...current.container.querySelectorAll<HTMLElement>("button,input,select")];
+      const rects = controls.filter(el => el.getClientRects().length).map(el => el.getBoundingClientRect());
+      check(document.documentElement.scrollWidth <= innerWidth + 1 && rects.every(r => r.width > 0 && r.left >= 0 && r.right <= innerWidth + 1), "Formal controls overflow or clip");
+      result = { width: innerWidth, controls: rects.length, no_overflow: true };
+      break;
+    }
+    case "stop": {
+      await current.controller.stop(); await delay(300); const before = current.frames; await delay(500);
+      const value = sample(current);
+      check(video.paused && !video.hasAttribute("src") && video.readyState === 0 && video.networkState === 0 && video.buffered.length === 0 && video.videoWidth === 0 && video.querySelectorAll("track").length === 0, "Formal media not released");
+      check(current.frames <= before + 1 && value.audio_rms < .001, "Old frames/audio remain after stop");
+      check(!value.diagnostics.listening && value.diagnostics.hls_instances === 0 && value.diagnostics.retiring === 0, "Formal controller retains transport/listeners/handles");
+      result = { source_removed: true, frames_after_stop: current.frames - before, host: await current.rpc({ operation: "observe" }) };
+      break;
+    }
+    case "dispose": {
+      await current.controller.stop(); current.app.unmount(); await current.controller.settled();
+      video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect(); await current.audio.close();
+      current.container.remove(); current.stopErrors();
+      window.__TAURI__!.core = current.originalCore;
+      locale.value = current.initialLocale;
+      result = { audio_closed: current.audio.state === "closed", errors: current.errors, videos: document.querySelectorAll("video").length };
+      harness = undefined;
+      return { ...result, native: await nativeInvoke("t01_control", { action: "identity" }) };
+    }
+    default: throw new Error(`Unknown formal action ${command.action}`);
+  }
+  return { ...result, sample: sample(current), errors: [...current.errors], ui_ms: performance.now() - started,
+    native: await nativeInvoke("t01_control", { action: "identity" }) };
+}

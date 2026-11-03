@@ -68,6 +68,7 @@ struct Fixture {
     requests: Arc<Mutex<Vec<Request>>>,
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
+    active: Arc<AtomicUsize>,
 }
 
 impl Fixture {
@@ -77,6 +78,8 @@ impl Fixture {
         let port = listener.local_addr().unwrap().port();
         let stop = Arc::new(AtomicBool::new(false));
         let requests = Arc::new(Mutex::new(vec![]));
+        let active = Arc::new(AtomicUsize::new(0));
+        let active_worker = active.clone();
         let (stop_worker, observed, handler) = (stop.clone(), requests.clone(), Arc::new(handler));
         let worker = thread::spawn(move || {
             let mut clients = Vec::new();
@@ -85,8 +88,11 @@ impl Fixture {
                     Ok((stream, _)) => {
                         let (stop, observed, handler) =
                             (stop_worker.clone(), observed.clone(), handler.clone());
+                        let active = active_worker.clone();
                         clients.push(thread::spawn(move || {
-                            serve(stream, port, &stop, &observed, &*handler)
+                            active.fetch_add(1, Ordering::SeqCst);
+                            serve(stream, port, &stop, &observed, &*handler);
+                            active.fetch_sub(1, Ordering::SeqCst);
                         }));
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -104,6 +110,7 @@ impl Fixture {
             requests,
             stop,
             worker: Some(worker),
+            active,
         }
     }
     fn url(&self, path: &str) -> String {

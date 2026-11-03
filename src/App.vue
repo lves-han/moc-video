@@ -13,6 +13,8 @@ import HistoryView from "./views/HistoryView.vue";
 import { historyRepository } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import SourcesView from "./views/SourcesView.vue";
+import PlaybackView from "./views/PlaybackView.vue";
+import { appState } from "./state.ts";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import {
@@ -52,6 +54,10 @@ function readRoute(): {
   return { page: "home", id: "", kind: "", episode: 1, resume: false };
 }
 const route = ref(readRoute());
+const formalPlayback = ref(window.location.hash.replace(/^#\/?/, "").split("?")[0] === "playback");
+const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
+const playbackView = ref<InstanceType<typeof PlaybackView>>();
+defineExpose({ playbackController: () => playbackView.value?.playback });
 const sources = ref<Source[]>(initialSources.map((source) => ({ ...source })));
 const sourceId = ref(sources.value[0]!.id);
 const source = computed(
@@ -185,6 +191,10 @@ function focusMain() {
   document.getElementById("main-content")?.focus({ preventScroll: true });
 }
 function updateDocumentTitle() {
+  if (formalPlayback.value) {
+    document.title = `${t("Now playing")} · ${t("Yingxiang Video")}`;
+    return;
+  }
   document.title = `${route.value.page === "film" || route.value.page === "watch" ? selectedFilm.value.title : title.value} · ${t("Yingxiang Video")}`;
 }
 
@@ -435,6 +445,7 @@ function reloadVideo() {
   void startMedia();
 }
 function onHashChange() {
+  formalPlayback.value = window.location.hash.replace(/^#\/?/, "").split("?")[0] === "playback";
   void flushHistory();
   historyContext = null;
   playbackSequence++;
@@ -515,6 +526,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" />
+  <template v-else>
   <a class="skip-link" href="#main-content" @click.prevent="focusMain">{{
     t("Skip to content")
   }}</a>
@@ -1268,4 +1281,5 @@ onBeforeUnmount(() => {
       }}</NButton>
     </NModal>
   </div>
+  </template>
 </template>
