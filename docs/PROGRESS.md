@@ -1465,3 +1465,13 @@
 ## T0.12 第五会话授权固定文档独立CLEAR 2026-11-03T04:26:42.060440+00:00
 - 独立文档复审：CLEAR；原始报告`docs/reviews/doc-review/round-33.md`，固定6b67e7576ccf2903b2b56006127f820f0ccd7b85、protected97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、ADR034 37b10ad4e7301e28c2f69ad98212780deb59cdee2f991d205edb215fa7265d95。独立只读核真实授权、T12/SPEC/C9/C14、预算与控制器、原失败和42份SHA副本，原始报告已保存，作者未代宣CLEAR。
 - 限制与下一步：原s4/f7/g0，第五未消费，第六未授权；errors失败mode/code/query未保存、根因待确认，新诊断/修复/完整复验均NOT RUN。紧邻严格最早/current/next/旧身份/两锁实得/clean/source/protected与计数后唯一原drive --once --max-sessions5，实际s5即消费；原50/51/十窗资源门与安全恢复/权限资源时限保持，T13paused及后卡等待。
+
+
+## T0.12 第五源分类门通过后EOS夹具动作前提失败 2026-11-03T05:33:28.264227+00:00
+- 结果：BLOCKED
+- 事实：原s5/f8/g0，ADR034唯一第五已消费，无第六许可；WIP1f502df，source=10e446036a8615ed005b6f7c6a54f46c6591dac472b44d340a70f8005f828f38，protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原20oracle/56相关前端/类型/automation check与Clippy通过，用户真实解锁后原准确A1复验。
+- 验收 A1：FAIL；日志：`evidence/runs/20261103T052933874346-A1/output.log`；actualexit1/5必需4pass1fail/JUnit4pass8fail。新源50实际切集帧PCM及绑定资源/51RSS十窗原门、nativeHLS controls expire与图片真实原生恢复链路通过；errors实际mode1/2=UPSTREAM_FAILED、mode3=MEDIA_UNSUPPORTED，trusted video/track错误、query身份次数预算及track上游分类、控制UNAUTHORIZED仅1次runtime_prepare重连证据齐。autoplay拒绝注入后实际继续按钮和原生恢复、未知duration注入后实际UI断言通过。
+- 独立证据核验：原run `evidence/runs/20261103T053234967840-t12-fifth-saved-evidence-diagnostic/output.log` exit0，现原errors/image/50cycle/RSS和autoplay/unknown断言对已存真实观测全过；该诊断不替代失败准确A1。
+- 当前失败：EOS超时Formal EOS event missing。前一unknown样本phase=playing/paused=false；EOS夹具seek末尾后无条件gesture点击播放暂停切换按钮，正式toggle在playing/buffering下pause，静态动作与已播放前提冲突明确；EOS后正式视频状态未保存，需最小补实测确认，未据超时宣称生产EOS缺陷。EOS/layout/正常stop-dispose/Host finish/fullverify仍未通过/未运行，nativefinally-15/lingering=[]。
+- 需要用户决定：是否仅本卡再追加一次5→6，由原CLI仅最小修EOS夹具已播放/已暂停动作前提、补正负例和失败状态诊断并完整复验，保持真实结束事件/epoch/一次DOM ended及全部50/51/十窗/帧PCM/安全权限资源时限，不直接synthetic ended或放宽跳门。未经真实批准不开发，不重置历史或复用许可。
+- 证据：`evidence/drive/t12-fifth-validation-20261103T044639Z/eos-fixture-failure/manifest.json`保存原报告/逐模式与图片/每轮结果/CPU RSS/Host native/源码/收据日志SHA；所有旧42/41/18/35/39份、125未封存副本及全部WIP历史保持，准确handoff已保存，后卡严格等待。
