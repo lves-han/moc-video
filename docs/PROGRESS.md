@@ -1339,3 +1339,11 @@
 - 最小修复：仅现subtitle.rs的ASS覆盖块/注释处理及安全cue序列化，相关tests内原生、独立oracle和真实打包WK边界断言；保留原基础文本、字面转义、单/连续换行、非空前后文本与原时间轴，不以删注释外正文、折叠换行或只比较前缀通过。补普通/混合注释及连续换行正负例，真实WK读回完整文本和时间范围；原8原生/13观测/两集六轨/开关切换/清理/源HTTP上下文/安全大小/30s等全部原门保持，允许准确增加边界观测计数。
 - 已撤回T11完成勾选；原done、成功A1/完整verify/受验提交/CLEAR、原两集六轨成功及所有失败/WIP全部保持历史，`evidence/drive/t11-second-validation-20261029T112048Z/ass-boundaries-gap/manifest.json`保存实际原件副本SHA，未改写报告或状态。source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持，原sessions2/失败3/gen0，default2已用尽。
 - 请求仅本卡一次2→3追加开发，由原CLI最小修复及相关自验证、外层原run构建/类型/行为/真实WK准确A1、直接完整verify/原done/新受验提交/新固定独立CLEAR/干净树；其他卡default2、权限资源时限/阈值/所有历史与T13paused保持。当前无第三许可，不开发或接续后卡，按预算耗尽规则暂停监管等待真实回复。
+
+
+## T0.11 第三ASS边界修复会话真实批准 2026-11-03T01:11:55.184302+00:00
+
+- 结果：RESOLVED
+- 决定：用户针对仅本卡一次2→3、原CLI修ASS注释/连续换行及原生/独立oracle/真实WK文本时间轴回归后完整复验，明确回复“批准 T0.11 追加一次”，按ADR031执行。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 原sessions2/失败3/gen0、source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0及所有原成功/失败/旧done/CLEAR/缺口SHA副本保持；第三许可尚未消费。固定文档独立round30 CLEAR后唯一原drive --once --max-sessions 3，实际计数3即消费，其他卡default2/T13paused/原权限资源时限不变。完成勾选仍撤回，新ASS边界实际WK复验仍NOT RUN，新源完整原质量门闭环后才完整完成，T12等待。冻结不变，无rebaseline。

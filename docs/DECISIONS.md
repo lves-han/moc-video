@@ -242,3 +242,11 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 决定：仅本卡累计开发上限2→3，唯一第三会话仅修tests内真实隐式IV素材生成及前置/独立oracle校验。按每个分片的非零媒体序列号大端128位IV独立AES128CBC加密，原清单不含IV属性；不只删除显式属性却复用固定IV密文。原本地HLS与原网关均须完整24视频帧逐帧hash等于原源、非零音频；显式/真实隐式/fMP4三模式、同cap/源上下文/全部子资源请求/序列及原8行为17观测3需求和全部安全/负载门保持，补素材前提及篡改反证，不改生产DTO/鉴权或降低断言。可复用已在用ffmpeg/openssl，不增加全局配置或控制器。
 实施：固定实际文档独立round29 CLEAR后，紧邻严格最早/current/next=T0.10、原s2/f2/g0、旧身份退出/两锁空闲/clean/source/protected核对，唯一一次原drive --once --max-sessions 3。实际计数3即消费，仅本卡一次；其他卡default2、原权限/4096MiB RSS采样/jobs2/线程1/全部时限保持，T13paused/s1/gen3和所有历史不变。
 复验：原CLI真实相关自验证读回，已确认sandbox sysctl/sccache/Git限制不重复探测或绕过原执行器；真实受限按ADR010稳定WIP退出边界交外层原run构建/Clippy/相关回归/准确A1，成功直接完整verify、原done/Git/新固定独立CLEAR/干净树齐备才完整完成，T11严格等待。原成功A1/完整verify/受验提交/独立CLEAR均保持历史，缺口修复后新源重新全验，不accept-review或覆盖历史。当前source=84a54c2242a250278993421cdcf8c4c4523d0340d516391304ded9aa33e7f2f1、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结定义保持，仅本卡预算和范围内测试修复授权，不调用rebaseline。
+
+
+## ADR-031 2026-11-03T01:11:55.184302+00:00 — 已采纳：仅T0.11追加一次ASS基础文本边界修复会话
+
+来源：当前聊天询问“原两次开发会话已用完，是否仅追加一次2→3，由原CLI最小修复ASS注释处理和连续换行截断，补原生、独立校验及真实WKWebView文本/时间轴回归，再完整复验；原六轨、安全门、权限、资源、时限与全部历史保持，T12等待”，用户明确回复“批准 T0.11 追加一次”。
+决定：仅本卡累计开发上限2→3，唯一第三会话最小修subtitle.rs的ASS覆盖块/注释处理及安全cue序列化，相关tests原生/独立oracle/真实打包WK完整文本和起止时间正负例。按ASS格式忽略覆盖块内注释，保留非注释正文/合法字面转义；连续换行不得变成WebVTT cue分界、丢后半文本或折叠为单换行。实际WebView读回完整文本与原时间范围，不能只比前缀、只测parser或把旧单换行六轨替代新边界。原8原生/13观测/两集六轨/开关切换seek/旧轨与Session清理/Resolution回收后加载/原源HTTP上下文/安全/大小/30s及负载资源门保持，新增边界计数准确记录，ASS高级特效原边界不变。
+实施：固定实际文档独立round30 CLEAR后，紧邻严格最早/current/next=T0.11、原s2/f3/g0、旧身份退出/两锁空闲/clean/source/protected核对，唯一一次原drive --once --max-sessions 3。实际计数3即消费，仅本卡一次；其他卡default2，原workspace-write开发/read-only巡检、4096MiB RSS采样/jobs2/线程1/全部时限、T13paused/s1/gen3及全部历史保持。
+复验：原CLI真实相关自验证读回，已确认sysctl/sccache/Git限制不重复探测或绕过原执行器；真实受限稳定WIP退出按ADR010交外层原run构建/类型/行为/真实WK准确A1，成功直接完整verify/原done/新受验提交/新固定独立CLEAR/干净树，齐备才完整完成，T12严格等待。真实GUI锁定时准确等待解锁，不放宽30s或跳过真实WK。原done/A1/verify/受验提交/CLEAR及缺口副本全部保持历史，不accept-review或改写收据。当前source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，冻结定义不变，本次仅单卡预算及原范围内修复授权，不调用rebaseline。
