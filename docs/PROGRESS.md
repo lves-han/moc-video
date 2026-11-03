@@ -1328,3 +1328,14 @@
 - 基线source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b、gen0、sessions2/失败3及首失败/125恢复前副本/旧WK超时/WIP与全部历史保持；default2已用尽，无第三开发许可。用户真实确认解锁，原Yes锁屏标志消失（None未伪称False）后准确验收成功，不追认历史超时根因。当前成功副本`evidence/drive/t11-second-validation-20261029T112048Z/completion-evidence/manifest.json`；源码/冻结scope稳定，原身份结束/两锁空闲已核，源码不再修改。
 - 归档事实：通用NativeSession报告登记samples-1.jsonl路径，但本次短时字幕命令未生成该周期采样文件；原始report保持，manifest明确列missing_optional_references，未补造空文件或宣称周期采样。实际两集逐步cue/帧/媒体错误/诊断样本在原JSON及results-1.jsonl均存在，功能门已据该实际结果验证，长耐久仍后卡。
 - Remaining：原done/受验提交/固定独立CLEAR及clean全闭环后才完整完成，T12等待。真实CS/N02、原DASH条件补查、产品耐久及其他平台未验证边界保持，T13paused/s1/gen3和原权限资源时限不变。
+
+
+## T0.11 ASS基础文本与连续换行准确验收缺口 2026-11-03T01:09:07.658321+00:00
+
+- 结果：BLOCKED
+- 原独立巡检20261029T114818828995-T0.11已真实ended/exit0/CLEAR，固定b40e80a9b5dab18620154b92008176ea428cd868，报告/状态保持原样。外层复核同source/protected/gen/原done/完成树/clean、旧身份退出/两锁实际空闲。报告仍确认两项P2直接涉及SPEC9.4/C8/T11基础文本/换行保留，因此严格准确验收先补齐，不能仅凭CLEAR推进。T12尚未start，T13原paused保持。
+- 已确认注释问题：旧实际ASS观测输出含可见{literal}，原生期望与Python oracle也固化。Aegisub格式说明 https://aegisub.org/docs/latest/ass_tags/#override-tags 明确花括号覆盖块未识别文本忽略，可作行内注释；当前仅含反斜杠才移除覆盖块，基础文本语义不准确。
+- 连续换行问题：源将ASS连续\N转换为LF并直接写cue正文，甲\N\N乙会形成正文空行；W3C WebVTT解析算法 https://www.w3.org/TR/webvtt1/#webvtt-parser-algorithm 在空行结束cue。该路径静态确认，真实WK此边界尚NOT RUN，现有六轨实际交互只覆盖单换行；后半文本/起止时间须补真实TextTrack反例，不推定已验证。
+- 最小修复：仅现subtitle.rs的ASS覆盖块/注释处理及安全cue序列化，相关tests内原生、独立oracle和真实打包WK边界断言；保留原基础文本、字面转义、单/连续换行、非空前后文本与原时间轴，不以删注释外正文、折叠换行或只比较前缀通过。补普通/混合注释及连续换行正负例，真实WK读回完整文本和时间范围；原8原生/13观测/两集六轨/开关切换/清理/源HTTP上下文/安全大小/30s等全部原门保持，允许准确增加边界观测计数。
+- 已撤回T11完成勾选；原done、成功A1/完整verify/受验提交/CLEAR、原两集六轨成功及所有失败/WIP全部保持历史，`evidence/drive/t11-second-validation-20261029T112048Z/ass-boundaries-gap/manifest.json`保存实际原件副本SHA，未改写报告或状态。source=2941c9b105e342212b3fed693e5538491daca43ea34c43ed2ac2f83d883a57b0/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b保持，原sessions2/失败3/gen0，default2已用尽。
+- 请求仅本卡一次2→3追加开发，由原CLI最小修复及相关自验证、外层原run构建/类型/行为/真实WK准确A1、直接完整verify/原done/新受验提交/新固定独立CLEAR/干净树；其他卡default2、权限资源时限/阈值/所有历史与T13paused保持。当前无第三许可，不开发或接续后卡，按预算耗尽规则暂停监管等待真实回复。
