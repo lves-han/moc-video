@@ -106,6 +106,40 @@ export function requireCodecMedia(session: PlaybackViewSession | null, currentSr
   check(currentSrc === session.media_url, "Codec stimulus must use the current session media URL");
 }
 
+export async function observeNativeEos(current: Pick<Harness, "video" | "controller">, resume: () => Promise<void>) {
+  const video = current.video;
+  const snapshot = () => ({ position: video.currentTime, duration: video.duration, paused: video.paused,
+    ended: video.ended, seeking: video.seeking, ready_state: video.readyState, network_state: video.networkState,
+    media_error: video.error ? { code: video.error.code, message: diagnostic(video.error.message) } : null,
+    phase: appState.playback.phase, epoch: appState.playback.playback_epoch,
+    session_id: appState.playback.session?.session_id, diagnostics: current.controller.diagnostics() });
+  const before = snapshot();
+  const deadline = performance.now() + 20000;
+  const stages: { stage: string; state: ReturnType<typeof snapshot> }[] = [];
+  const events: { trusted: boolean; state: ReturnType<typeof snapshot> }[] = [];
+  const onEnded = (event: Event) => events.push({ trusted: event.isTrusted, state: snapshot() });
+  video.addEventListener("ended", onEnded);
+  try {
+    check(before.session_id, "EOS requires the current playback session");
+    check(Number.isFinite(video.duration) && video.duration > .25, "EOS requires a known playable duration");
+    // The real button toggles: clicking while playing would pause at the end.
+    // Resume before the seek so an already-ended video cannot restart at zero.
+    if (video.paused) { await resume(); stages.push({ stage: "resume", state: snapshot() }); }
+    await until(() => !video.paused, "EOS playback did not resume", Math.max(0, deadline - performance.now()));
+    current.controller.seek(video.duration - .25);
+    stages.push({ stage: "seek", state: snapshot() });
+    await until(() => appState.playback.phase === "ended", "Formal EOS event missing", Math.max(0, deadline - performance.now()));
+    const final = snapshot();
+    check(final.ended && final.epoch === before.epoch && final.session_id === before.session_id
+      && events.length === 1 && events[0]!.trusted && events[0]!.state.ended
+      && events[0]!.state.epoch === before.epoch && events[0]!.state.session_id === before.session_id,
+    "EOS requires one trusted native ended event from the current epoch/session");
+    return { ended: true, dom_events: events.length, before, stages, events, final };
+  } catch (cause) {
+    throw new Error(`Native EOS chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ before, stages, events, current: snapshot() }))}`);
+  } finally { video.removeEventListener("ended", onEnded); }
+}
+
 export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string }) {
   const started = performance.now();
   if (command.action === "start") {
@@ -404,13 +438,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "eos": {
-      const events: Event[] = [];
-      const onEnded = (event: Event) => events.push(event);
-      video.addEventListener("ended", onEnded, { once: true });
-      current.controller.seek(video.duration - .25); await gesture(current);
-      await until(() => appState.playback.phase === "ended", "Formal EOS event missing");
-      video.removeEventListener("ended", onEnded);
-      result = { ended: true, dom_events: events.length };
+      result = await observeNativeEos(current, () => gesture(current));
       break;
     }
     case "autoplay": {

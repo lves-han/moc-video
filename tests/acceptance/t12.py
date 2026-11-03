@@ -202,6 +202,18 @@ def validate_stop(value):
             "Stop retained old audio/frames/HTTP/session/listener/media resources")
 
 
+def validate_eos(value):
+    require(value["ended"] is True and value["dom_events"] == 1 and len(value["events"]) == 1, "Native EOS missing or duplicated")
+    before, final = value["before"], value["final"]
+    event = value["events"][0]
+    require(before["session_id"] and event["trusted"] is True and event["state"]["ended"] is True
+            and final["ended"] is True and final["phase"] == "ended"
+            and all(state["epoch"] == before["epoch"] and state["session_id"] == before["session_id"]
+                    for state in (event["state"], final)), "EOS must belong to the current epoch/session and trusted native event")
+    require([stage["stage"] for stage in value["stages"]] == (["resume", "seek"] if before["paused"] else ["seek"]),
+            "EOS playback/seek actions differ from the initial paused state")
+
+
 def validate_image_expiry(value):
     require(value["expired_http_status"] == 410 and value["dto_refreshed"] is True and value["decoded"] is True
             and value["owning_ref"] == value["refreshed_ref"] and value["image_error"] == ""
@@ -392,7 +404,7 @@ def webview(run):
                 validate_errors(run.observed["errors"])
                 require(run.observed["autoplay"]["continue_button"] is True and run.observed["autoplay"]["resumed"] is True, "Actual continue button did not recover autoplay")
                 require(run.observed["unknown-duration"]["disabled"] is True and run.observed["unknown-duration"]["unknown_text"] is True, "Unknown duration UI/seek differs")
-                require(run.observed["eos"]["ended"] is True and run.observed["eos"]["dom_events"] == 1, "Native EOS missing")
+                validate_eos(run.observed["eos"])
                 for width in (1200, 390):
                     run.observed[f"layout-{width}"] = session.command("t12", action="layout", payload=width)
                 stop = session.command("t12", action="stop")

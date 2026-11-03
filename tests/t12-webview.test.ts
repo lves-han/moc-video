@@ -18,9 +18,70 @@ function fixture(globals: Record<string, unknown> = {}) {
     setTimeout(callback: () => void, milliseconds: number) { now += milliseconds; queueMicrotask(callback); },
     ...globals,
   });
-  return { wait: exports.waitForEpisodeSample, sampler: exports.createMediaSampler, codec: exports.requireCodecMedia, now: () => now };
+  return { wait: exports.waitForEpisodeSample, sampler: exports.createMediaSampler, codec: exports.requireCodecMedia,
+    eos: exports.observeNativeEos, now: () => now };
 }
 const red = () => ({ audio_state: "running", audio_rms: .1, audio_peak_hz: 440, pixel: [254, 0, 0, 255], session_bound: true });
+
+function eosFixture(paused: boolean, ending = "native") {
+  const playback = { phase: paused ? "paused" : "playing", playback_epoch: 7, session: { session_id: "current" } };
+  const listeners = new Set<(event: { isTrusted: boolean }) => void>();
+  const actions: (string | number)[][] = [];
+  const video = { paused, ended: false, currentTime: .5, duration: 2, seeking: false, readyState: 4, networkState: 1, error: null,
+    addEventListener(name: string, listener: (event: { isTrusted: boolean }) => void) { assert.equal(name, "ended"); listeners.add(listener); },
+    removeEventListener(name: string, listener: (event: { isTrusted: boolean }) => void) { assert.equal(name, "ended"); listeners.delete(listener); } };
+  const controller = { diagnostics: () => ({ listening: true }), seek(position: number) {
+    actions.push(["seek", position]); video.currentTime = position;
+    if (ending === "missing" || video.paused) return;
+    if (ending === "old-epoch") playback.playback_epoch++;
+    if (ending === "old-session") playback.session = { session_id: "old" };
+    playback.phase = "ended"; video.ended = true; video.paused = true; video.currentTime = video.duration;
+    if (ending !== "state-only") for (const listener of listeners) listener({ isTrusted: ending !== "synthetic" });
+    if (ending === "duplicate") for (const listener of listeners) listener({ isTrusted: true });
+  } };
+  const f = fixture({ require: () => ({ appState: { playback } }) });
+  const resume = async () => { actions.push(["resume"]); video.paused = !video.paused; playback.phase = video.paused ? "paused" : "playing"; };
+  return { f, video, playback, listeners, actions, run: () => f.eos({ video, controller }, resume) };
+}
+
+for (const paused of [false, true]) {
+  test(`T12 EOS ${paused ? "resumes before seeking a paused video" : "seeks a playing video without toggling it"}`, async () => {
+    const f = eosFixture(paused);
+    const result = await f.run();
+    assert.deepEqual(f.actions, paused ? [["resume"], ["seek", 1.75]] : [["seek", 1.75]]);
+    assert.equal(result.before.paused, paused);
+    assert.equal(result.ended, true); assert.equal(result.dom_events, 1);
+    assert.equal(result.events[0].trusted, true); assert.equal(result.final.epoch, 7);
+    assert.equal(f.listeners.size, 0);
+  });
+}
+
+for (const ending of ["synthetic", "state-only", "duplicate", "old-epoch", "old-session"]) {
+  test(`T12 EOS rejects ${ending} completion and retains video/controller evidence`, async () => {
+    const f = eosFixture(false, ending);
+    await assert.rejects(f.run(), (error: Error) => {
+      assert.match(error.message, /one trusted native ended event/);
+      const evidence = JSON.parse(error.message.split("; evidence=")[1]!);
+      assert.equal(evidence.before.phase, "playing"); assert.equal(evidence.before.paused, false);
+      assert.equal(evidence.current.phase, "ended"); assert.equal(evidence.current.diagnostics.listening, true);
+      assert.equal(evidence.stages[0].stage, "seek");
+      return true;
+    });
+    assert.equal(f.listeners.size, 0);
+  });
+}
+
+test("T12 missing EOS keeps the original 20s deadline and removes its observer on failure", async () => {
+  const f = eosFixture(false, "missing");
+  await assert.rejects(f.run(), (error: Error) => {
+    assert.match(error.message, /Formal EOS event missing/);
+    const evidence = JSON.parse(error.message.split("; evidence=")[1]!);
+    assert.equal(evidence.current.paused, false); assert.equal(evidence.current.position, 1.75);
+    assert.equal(evidence.current.ended, false); assert.deepEqual(evidence.events, []);
+    return true;
+  });
+  assert.equal(f.f.now(), 20000); assert.equal(f.listeners.size, 0);
+});
 
 test("T12 codec stimulus accepts only the current progressive media, rejecting the preceding HLS case", () => {
   const f = fixture();

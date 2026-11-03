@@ -27,6 +27,14 @@ def stopped():
                             tracks=0, audio_rms=0, diagnostics=dict(listening=False, hls_instances=0, retiring=0)))
 
 
+def eos(paused=False):
+    before = dict(epoch=7, session_id="current", phase="paused" if paused else "playing", paused=paused, ended=False)
+    final = dict(epoch=7, session_id="current", phase="ended", paused=True, ended=True)
+    return dict(ended=True, dom_events=1, before=before, final=final,
+                events=[dict(trusted=True, state=final.copy())],
+                stages=[dict(stage=stage) for stage in (["resume", "seek"] if paused else ["seek"])])
+
+
 def image_expiry():
     host = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     reference = dict(source_id="metadata", source_revision="revision", data="show")
@@ -133,6 +141,39 @@ class NativeOracleTests(unittest.TestCase):
         row = native_errors(); row["events"] = []
         with self.assertRaises(ValueError):
             t12.validate_errors(row)
+
+    def test_eos_accepts_native_current_epoch_for_playing_and_paused_actions(self):
+        for paused in (False, True):
+            with self.subTest(paused=paused):
+                t12.validate_eos(eos(paused))
+
+    def test_eos_rejects_synthetic_missing_duplicate_or_unmapped_events(self):
+        for change in (dict(ended=False), dict(dom_events=0), dict(dom_events=2), dict(events=[])):
+            row = eos(); row.update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                t12.validate_eos(row)
+        row = eos(); row["events"].append(copy.deepcopy(row["events"][0]))
+        with self.assertRaises(ValueError):
+            t12.validate_eos(row)
+        for target, field, value in [("event", "trusted", False), ("event-state", "ended", False),
+                                      ("final", "ended", False), ("final", "phase", "playing")]:
+            row = eos()
+            state = row["events"][0] if target == "event" else row["events"][0]["state"] if target == "event-state" else row["final"]
+            state[field] = value
+            with self.subTest(target=target, field=field), self.assertRaises(ValueError):
+                t12.validate_eos(row)
+
+    def test_eos_rejects_old_epoch_or_session_and_wrong_toggle_order(self):
+        for target in ("event", "final"):
+            for field, value in [("epoch", 6), ("session_id", "old")]:
+                row = eos()
+                (row["events"][0]["state"] if target == "event" else row["final"])[field] = value
+                with self.subTest(target=target, field=field), self.assertRaises(ValueError):
+                    t12.validate_eos(row)
+        for paused, stages in [(False, ["resume", "seek"]), (True, ["seek", "resume"]), (True, ["seek"])]:
+            row = eos(paused); row["stages"] = [dict(stage=stage) for stage in stages]
+            with self.subTest(paused=paused, stages=stages), self.assertRaises(ValueError):
+                t12.validate_eos(row)
 
     def test_rss_windows_keep_all_fifty_switches_and_original_five_sample_medians(self):
         samples = [dict(owned_rss_bytes=n) for n in range(51)]
