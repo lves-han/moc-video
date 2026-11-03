@@ -1541,3 +1541,11 @@
 - 反例验证：原run `evidence/runs/20261103T063038571417-t12-post-query-repeat-error/output.log` actualexit1，首次查询后UPSTREAM_FAILED/actionretry，再次同资源MediaError4后MEDIA_UNSUPPORTED/action空，明确丢失已确认诊断及重试；真实WK此query完成后重复时序NOT RUN。
 - 当前基线：source=83f9e7c1d6184e73aba11485402a33fa6ce77cec07108a1c735cfeecd26b0f1c/protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b/g0，原sessions7/失败10，第七许可已消费，无第八；原done/五必需A1/JUnit12/完整verify六门/受验提交/固定CLEAR和全部旧失败保留。12份缺口SHA副本`evidence/drive/t12-seventh-validation-20261103T061101Z/repeat-diagnosis-gap/manifest.json`含旧done/A1/verify/review/source/反例，原50份成功归档和可选缺周期samples准确事实保持。
 - 最小需要用户决定：仅本卡追加一次7→8，原CLI最小修同加载尝试/资源/epoch/session的已完成诊断保留，避免query完成后重复原生错误覆盖分类与动作；保持每加载一次3s只读查询/同资源成功清错/其他资源独立/旧epoch与新load身份，补正负例及真实WK相关回归，再完整原50/51RSS十窗/图片errors EOS清理准确A1/directverify/新受验提交/新固定CLEAR/clean。原401502codec/鉴权/规模/安全/权限资源时限保持，未批准不得开发，纯验收Git继续。
+
+
+## T0.12 唯一第八会话真实批准 2026-11-03T06:36:53.996798+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天“仅T12追加一次7→8，最小保留已完成诊断与重试动作、补回归/真实页面验证并完整复验，一次查询及所有原门保持”明确回复“批准 T0.12 再追加一次（7→8）”；按ADR037唯一一次，原s7/f10/g0，第八尚未消费，实际s8即消费，未授权第九，其他卡default2。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：原固定review CLEAR同时确认C9 P2，原run `evidence/runs/20261103T063038571417-t12-post-query-repeat-error/output.log` exit1已复现query完成后UPSTREAM_FAILED/retry被重复MediaError4覆成MEDIA_UNSUPPORTED/无动作，真实WK该时序NOT RUN。原done/A1/verify/受验提交/CLEAR和12份SHA缺口副本/全部旧历史保持，完成勾选已撤，不能复用旧固定CLEAR补新源。原status存`evidence/drive/t12-seventh-validation-20261103T061101Z/eighth-authorization/original-status.json`。
+- 执行：固定文档独立round36 CLEAR后紧邻原顺序/身份/锁/clean/source/protected计数核对，唯一原drive once maxsessions8。原同加载尝试/资源/epoch/session诊断保留、一次3s只读status/成功清错/其他资源独立/旧身份和新load门、50/51RSS十窗/所有安全权限资源时限保持；新准确A1成功direct完整verify/原done/新受验提交/新固定独立CLEAR/clean全闭环才完整完成，不rebaseline，T13paused及后卡等待。
