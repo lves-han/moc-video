@@ -1683,3 +1683,14 @@
 - 固定授权提交：`583bda91502517ac63b5caa704a6a99222ce648c`；ADR040分段摘要`2ab090ca8a1dc75d76515a25327906211bb4aede86574904728215312e14b171`。
 - 原始独立只读报告：`docs/reviews/doc-review/round-39.md`；DOC-REVIEW-VERDICT CLEAR，104份SHA/真实预检失败和根因不确定性已核，全部原门与完成要求保持。
 - 原s4/f6/gen3/pausedfalse，第五尚未消费，无第六许可；新源诊断修复及完整A1/fullverify均NOT RUN。紧邻strict顺序/旧创建身份/两锁实得/clean source protected后仅一次原drive once maxsessions5。
+
+## T0.13 第五会话历史事件链诊断受限交接 2026-11-04T01:14:19.850749+00:00
+- 实施状态：WIP；ADR040唯一第五许可已消费，实际sessions5/failures7/generation3；原失败、收据、范围与授权历史保持。TASKS未勾选，未done/rebaseline，未新增RESOLVED/AUTHORIZED。本次由ADR010外层接续身份核对、验收及Git，未增加第六许可。
+- 调查与最小方案：已读AGENTS、当前卡、C1/C3/C8/C9/C10/C11/C12/C14/C15/C16、SPEC11.4、ADR010/038/039/040、App的onEnded/watch/flushHistory/onHashChange、player事件映射、正式PlaybackController.receive、HistoryRepository/HistoryView及原T13失败夹具。现有真实证据只证明video.ended属性后页面仍显示Continue watching；可信ended是否送达正式controller、完成写是否被覆盖尚未确认，保持待验证假设。
+- Changed/Why：仅tests/fixtures/t13/browser.js新增测试诊断。在历史交互中捕获原生loadedmetadata/durationchange/playing/pause/seeking/seeked/ended的isTrusted、时间、DOM位置及结束标记；每次捕获及事件后微任务记录正式AppState的phase/playback epoch/host epoch/Session/Resolution/match/video/source/route。观察原historyRepository.save/list调用与Promise完成顺序，保存HistoryEntry输入和列表实际结果的副本，至多保留100条。失败报告actual.history与成功报告均携带事件链。保持原video.ended属性后的立即导航、Play again、从零重播、删除/清空/焦点断言；未新增等待、合成ended或进度完成阈值。生产代码未修改，根因仍未确认。
+- Verified：task.py check/start/show/scope实际exit0；git diff --check实际exit0。只有一个已跟踪夹具文件修改，范围检查通过。新增诊断尚未取得JS执行或真实WK行为结果；本轮行为测试数0，旧13oracle/136行为和20矩阵通过只保留为历史。
+- 自验：原run verify-t13-session5-ui-preflight实际exit125；日志：`evidence/runs/20261104T011219998886-verify-t13-session5-ui-preflight/output.log`；收据status=cleanup_failed、raw_exit=null、tests=null、scope_started=false；sysctl进程身份/边界清理EPERM。预检报告不存在，未生成有效UI结果。本会话已note，停止重任务且未重复启动、recover或绕过原执行器。
+- 现场身份：原执行器PID38134/created:1793754740.005211，payload PID38139/created:1793754740.157949；这些仅为原收据登记身份，实际存活/退出及两锁尚须外层核对。backend=process-watchdog/memory_enforcement=rss-sampled，4096MiB/jobs2/thread1保持；未声称硬内存隔离。
+- 验收 A1：NOT RUN（第五源）；完整verify、done、受验完成提交和独立完成巡检均NOT RUN。第三源失败T13-all和全部旧成功/失败报告保持原样。
+- 稳定源码：d63da9cc42fc9e831636797d0bb2eea1d102864d6aadec574d5aa72136ef7358；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原run后未再改夹具源码。外层准确argv清单`evidence/acceptance/T13-session-5-outer-argv.json`含9条；A1沿冻结payload并保留{python}字面，完整verify仅在准确A1成功后直接执行。原尝试argv另存T13-session-5-diagnostic-argv.json。
+- Remaining：按ADR010本CLI稳定退出后，外层先确认上述身份及本流程所有后代退出、两锁实得，保留125现场后按原task recover，再通过原run复验当前源。读取失败actual.history中native-ended/delivered-ended、phase/epoch/session及save/list顺序，确认实际原因；本次观察包装会记录Promise完成，不以诊断本身充当行为通过。Git WIP按原分工外层代办，建议`WIP T0.13: capture native completion and history commit timeline`。如仍需实现，保留真实证据并报告最小决定后暂停，无第六许可；准确A1/direct完整verify/done/受验提交/新固定独立CLEAR/clean齐备才完成。后卡等待，SQLite T18/T20与移动等原安排保持。

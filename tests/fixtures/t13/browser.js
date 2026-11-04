@@ -1,5 +1,6 @@
 void (async () => {
-  const cases = [], screenshots = [];
+  const cases = [], screenshots = [], historyTrace = [];
+  let historyDiagnostic = () => null;
   const native = (action, options = {}) => window.webkit.messageHandlers.t13.postMessage({ action, ...options });
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const wait = async (condition, description, ms = 12000) => {
@@ -17,7 +18,7 @@ void (async () => {
     await frame();
   };
   const failure = error => ({ name: error?.name, message: String(error?.message ?? error), stack: String(error?.stack ?? ""),
-    measurement: error?.measurement ?? null, hash: location.hash,
+    measurement: error?.measurement ?? null, hash: location.hash, history: historyDiagnostic(),
     dialogs: Array.from(document.querySelectorAll('.n-modal[role], .history-confirmation')).map(element => ({
       role: element.getAttribute("role"), modal: element.getAttribute("aria-modal"), label: element.getAttribute("aria-label"),
       containsFocus: element.contains(document.activeElement), text: element.textContent.slice(0, 160) })) });
@@ -34,6 +35,46 @@ void (async () => {
     const { appController: app } = await import("/src/state.ts");
     const { locale } = await import("/src/i18n.ts");
     const { paletteOptions } = await import("/src/ui/theme.ts");
+    const { historyRepository } = await import("/src/data/history.ts");
+    let traceHistory = false, historyOrder = 0;
+    const playbackSnapshot = () => {
+      const state = app.state.playback;
+      return { phase: state.phase, epoch: state.playback_epoch, engineEpoch: state.engine_epoch,
+        session: state.session?.session_id ?? null, resolution: state.resolution?.id ?? null,
+        match: state.context?.match_id ?? null, video: state.context?.metadata_video_id ?? null,
+        source: state.context?.episode_ref.source_id ?? null, position: state.position_ms, duration: state.duration_ms,
+        route: app.state.route.name, hash: location.hash };
+    };
+    const recordHistory = (stage, detail = {}) => {
+      if (!traceHistory) return;
+      historyTrace.push({ order: ++historyOrder, at: performance.now(), stage, playback: playbackSnapshot(), ...detail });
+      if (historyTrace.length > 100) historyTrace.shift();
+    };
+    historyDiagnostic = () => ({ current: playbackSnapshot(), trace: historyTrace.slice() });
+    // Observe the real repository calls without adding a wait to the failing
+    // interaction. Copies keep later playback/navigation from rewriting evidence.
+    for (const method of ["save", "list"]) {
+      const original = historyRepository[method];
+      historyRepository[method] = async (...args) => {
+        const input = JSON.parse(JSON.stringify(args));
+        recordHistory(`${method}-called`, { input });
+        try {
+          const result = await original(...args);
+          recordHistory(`${method}-committed`, { input, result: result === undefined ? null : JSON.parse(JSON.stringify(result)) });
+          return result;
+        } catch (error) { recordHistory(`${method}-failed`, { input, error: String(error) }); throw error; }
+      };
+    }
+    for (const type of ["loadedmetadata", "durationchange", "playing", "pause", "seeking", "seeked", "ended"]) {
+      document.addEventListener(type, event => {
+        const video = event.target;
+        if (!(video instanceof HTMLVideoElement) || !traceHistory) return;
+        const media = { trusted: event.isTrusted, timestamp: event.timeStamp, position: video.currentTime,
+          duration: Number.isFinite(video.duration) ? video.duration : null, ended: video.ended, paused: video.paused };
+        recordHistory(`native-${type}`, { media });
+        queueMicrotask(() => recordHistory(`delivered-${type}`, { media }));
+      }, true);
+    }
     const navigate = async (hash, selector) => {
       location.hash = hash;
       const [page, id, episode = "1"] = hash.replace(/^#\//, "").split("?")[0].split("/");
@@ -222,6 +263,8 @@ void (async () => {
       return { videoWidth: video.videoWidth, duration: video.duration, position: video.currentTime, identity, epoch, mobile };
     });
     await run("history-resume-merge-delete-clear-focus", ["U09", "R01", "R08", "R20", "R31", "R40", "REQ-T13"], async () => {
+      traceHistory = true;
+      recordHistory("history-flow-started");
       await language("en");
       const video = document.querySelector("video"); assert(video && video.currentTime > 0, "No actual playback progress"); video.pause();
       await navigate("#/history", ".history-card");
@@ -243,7 +286,9 @@ void (async () => {
       await navigate("#/watch/midnight/3", "video"); await wait(() => document.querySelector("video")?.readyState >= 1, "completion metadata");
       const finishing = document.querySelector("video"); seekMedia(finishing.duration - 0.2); await finishing.play();
       await wait(() => finishing.ended, "actual end of clip");
+      recordHistory("ended-property-observed", { media: { ended: finishing.ended, position: finishing.currentTime, duration: finishing.duration } });
       await navigate("#/history", ".history-card");
+      recordHistory("replay-action-read", { action: document.querySelector(".history-actions button").textContent.trim() });
       assert(document.querySelector(".history-actions button").textContent.trim() === "Play again", "Completed record has no replay action");
       click(".history-actions button:first-child");
       await wait(() => document.querySelector("video")?.readyState >= 1 && document.querySelector("video").currentTime < 2, "replay starts at zero");
@@ -272,8 +317,9 @@ void (async () => {
       await shot("history-clear-confirmation");
       Array.from(document.querySelectorAll('.history-confirmation button')).find(button => button.textContent.trim() === "Clear history").click();
       await wait(() => !document.querySelector(".history-card"), "clear history");
+      traceHistory = false;
       return { resumedPosition: resumed, replayedPosition: replayed, mergedTitles: 1, latestEpisode: 3, cancelledDeletionPreservedData: true,
-        dialogRole: modal.getAttribute("role"), focusRestored: true, removed: true, cleared: true };
+        dialogRole: modal.getAttribute("role"), focusRestored: true, removed: true, cleared: true, history: historyDiagnostic() };
     });
     await run("error-and-poster-contrast", ["U07", "R20", "R40", "R67", "REQ-T13"], async () => {
       await navigate("#/watch/midnight/1", "video");
