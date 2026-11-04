@@ -1887,3 +1887,8 @@
 - 实施状态：WIP；撤回勾选，巡检evidence/reviews/20261104T094937049453-T0.16 BLOCKING原样保留，未accept-review。
 - 已改：原生历史content_id改用Host的details.id，即H(metadata,namespace,type,canonical_id)，修复跨扩展同ID覆盖（P1）。
 - 待做：音量300ms内离页丢失（P2）的回归已写入t16场景，待桌面解锁后先复现再修；diag-t16-before-fix因桌面锁定未执行场景。A1与verify NOT RUN。
+
+## T0.16 音量离页修复 2026-11-04T10:18:24+00:00
+- 实施状态：WIP。
+- 复现：调到0.61后立即离页，设置仍为0.37，evidence/runs/20261104T101658599859-diag-t16-before-fix-2/output.log。
+- 修改：PlaybackView卸载时提交未保存的音量与静音。

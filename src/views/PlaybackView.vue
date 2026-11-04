@@ -47,14 +47,12 @@ const panelOpen = ref(false);
 const isFullscreen = ref(false);
 // Dragging the slider only saves its settled value.
 let volumeTimer: ReturnType<typeof setTimeout> | undefined;
-function savePlaybackAudio() {
-  clearTimeout(volumeTimer);
-  volumeTimer = setTimeout(() => {
-    const volume = state.volume, muted = state.muted;
-    if (appState.settings.volume === volume && appState.settings.muted === muted) return;
-    appController.updateSettings(settings => ({ ...settings, volume, muted })).catch(cause => { ui.diagnostic = String(cause); });
-  }, 300);
+function commitPlaybackAudio() {
+  const volume = state.volume, muted = state.muted;
+  if (appState.settings.volume === volume && appState.settings.muted === muted) return;
+  appController.updateSettings(settings => ({ ...settings, volume, muted })).catch(cause => { ui.diagnostic = String(cause); });
 }
+function savePlaybackAudio() { clearTimeout(volumeTimer); volumeTimer = setTimeout(commitPlaybackAudio, 300); }
 function setVolume(value: number) { playback.setVolume(Math.min(1, Math.max(0, Math.round(value * 100) / 100))); savePlaybackAudio(); }
 function setMuted(value: boolean) { playback.setMuted(value); savePlaybackAudio(); }
 function seekTo(seconds: number) { playback.seek(seconds); emit("seek"); }
@@ -110,6 +108,7 @@ onBeforeUnmount(() => {
   mounted = false;
   clearTimeout(hideTimer);
   clearTimeout(volumeTimer);
+  commitPlaybackAudio();
   if (state.context || state.session || state.resolution || state.phase !== "idle") void playback.stop();
   if (priorFocus?.isConnected) priorFocus.focus({ preventScroll: true });
 });
