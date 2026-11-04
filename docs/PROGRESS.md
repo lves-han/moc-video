@@ -1830,3 +1830,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261104T082042878136-A1/output.log`；断言：exit0，5 required全过，JUnit 12项0失败；内容宽830至1800及700、764扫描均4至7列、海报151至180px，1200宽5列、960宽5列。
 - 完整verify：PASS；`evidence/verify/20261104T082123149859.json`，六门exit0。
 - Remaining：列数扫描通过设置容器宽度实测，约1000px真实窗口未实测，自动化宽度档位在范围外；空/整页失败用注入响应；真实公开Stremio扩展留T0.24。
+
+## T0.15 详情页实现交接 2026-11-04T08:40:22+00:00
+- 实施状态：WIP；用户指示“接着做 T15”，在当前Claude对话内开发，未经drive.py启动。
+- Changed：新增DetailsView及确认弹层；AppController图片恢复扩展到details、matching.pending；App.vue详情改用DetailsView；t14.py拆出共用的packaged与Acceptance参数。
+- 更正：BACKLOG所写“CatalogView留待T0.15清理”不成立，该文件不在T0.15范围，残留分支继续保留。
+- 验收 A1：NOT RUN。诊断evidence/runs/20261104T083836556595-diag-t15-details/output.log卡在“Pending match state missing”，原因未定；复跑时桌面锁定，未执行场景。

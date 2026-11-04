@@ -481,12 +481,12 @@ export class AppController {
   readonly sections = reactive<Record<string, LocalRequest>>({});
   readonly diagnostics = reactive<Bridge_ApiError[]>([]);
   readonly homeImage = reactive({ error: "" });
+  readonly detailsImage = reactive({ error: "" });
   readonly matching = reactive({ result: null as PlaybackMatchResult | null, details: null as DetailsViewData | null,
-    loading: false, error: null as Bridge_ApiError | null });
+    loading: false, pending: null as string | null, error: null as Bridge_ApiError | null });
   private requests = new Map<string, Ticket>();
-  private homeImageAttempt: HomeViewData | null = null;
-  private queriedHomeImages = new Set<string>();
-  private homeRefreshed = false;
+  private imageAttempts = { home: { data: null as object | null, queried: new Set<string>(), refreshed: false },
+    details: { data: null as object | null, queried: new Set<string>(), refreshed: false } };
   private runtimeSequence = 0;
   private sourceSequence = 0;
   private confirmation: PlaybackMatchResult | null = null;
@@ -679,7 +679,7 @@ export class AppController {
     const full = sectionRef === null && pageNumber === 1;
     requireBinding(sectionRef !== null || full, "Pagination requires a section reference");
     if (full) {
-      this.homeRefreshed = false; this.homeImage.error = "";
+      this.imageAttempts.home.refreshed = false; this.homeImage.error = "";
       for (const scope of [...this.requests.keys()]) if (scope.startsWith("section:")) this.cancel(scope);
       for (const key of Object.keys(this.sections)) delete this.sections[key];
       this.state.home.request_epoch++;
@@ -710,28 +710,33 @@ export class AppController {
       }
     } finally { if (this.requests.get(scope) === ticket) { this.requests.delete(scope); if (full) this.state.home.request_id = null; } }
   }
-  // SPEC 11.3: only confirmed expiry refreshes the owning home DTO, once, by replacing it with page 1.
-  async homeImageError(resourceId: string) {
-    const data = this.state.home.data, host = this.state.runtime.engine_epoch, epoch = this.state.home.request_epoch;
-    const active = () => this.state.home.data === data && this.state.home.request_epoch === epoch && this.state.runtime.engine_epoch === host;
+  homeImageError(resourceId: string) { return this.imageError("home", resourceId); }
+  detailsImageError(resourceId: string) { return this.imageError("details", resourceId); }
+  // SPEC 11.3: only confirmed expiry refreshes the owning DTO, once; home replaces it with page 1.
+  private async imageError(owner: "home" | "details", resourceId: string) {
+    const page = owner === "home" ? this.state.home : this.state.details, attempt = this.imageAttempts[owner];
+    const output = owner === "home" ? this.homeImage : this.detailsImage;
+    const data = page.data as HomeViewData | DetailsViewData | null, host = this.state.runtime.engine_epoch, epoch = page.request_epoch;
+    const active = () => page.data === data && page.request_epoch === epoch && this.state.runtime.engine_epoch === host;
     if (!data?.images[resourceId] || !host) return;
-    if (this.homeImageAttempt !== data) { this.homeImageAttempt = data; this.queriedHomeImages.clear(); }
-    if (this.queriedHomeImages.has(resourceId)) return;
-    this.queriedHomeImages.add(resourceId);
+    if (attempt.data !== data) { attempt.data = data; attempt.queried.clear(); }
+    if (attempt.queried.has(resourceId)) return;
+    attempt.queried.add(resourceId);
     try {
       const status = await this.api.call("get_resource_status", { kind: "image", target_id: resourceId }, crypto.randomUUID(), host);
       if (!active()) return;
       requireBinding(status.kind === "image" && status.target_id === resourceId, "Image status target differs");
-      if (status.error?.code === "SESSION_EXPIRED" && !this.homeRefreshed) {
-        const refresh = this.loadHome();
-        this.homeRefreshed = true;
+      if (status.error?.code === "SESSION_EXPIRED" && !attempt.refreshed) {
+        const refresh = owner === "home" ? this.loadHome() : this.loadDetails((data as DetailsViewData).details.ref);
+        attempt.refreshed = true;
         await refresh;
-      } else this.homeImage.error = status.error?.message ?? "Image failed to load";
-    } catch (cause) { if (active()) this.homeImage.error = failure(cause).message; }
+      } else output.error = status.error?.message ?? "Image failed to load";
+    } catch (cause) { if (active()) output.error = failure(cause).message; }
   }
   async loadDetails(ref: Bridge_MediaRef) {
     requireBinding(sameSource(ref, this.state.selected_metadata_source), "Details must belong to selected metadata source");
     const target = this.state.details;
+    this.imageAttempts.details.refreshed = false; this.detailsImage.error = "";
     const ticket = this.ticket("details", ref, ++target.request_epoch);
     target.phase = "loading"; target.request_id = ticket.id; target.error = null;
     try {
@@ -747,7 +752,7 @@ export class AppController {
   }
   invalidatePlayback() {
     this.confirmation = null;
-    this.matching.result = null; this.matching.details = null; this.matching.error = null; this.matching.loading = false;
+    this.matching.result = null; this.matching.details = null; this.matching.error = null; this.matching.loading = false; this.matching.pending = null;
     this.cancel("match"); this.cancel("candidate");
     // The existing media controller owns Session/Resolution retirement and cancellation.
     // Keep the reactive playback object stable for mounted views and event listeners.
@@ -788,6 +793,7 @@ export class AppController {
     this.invalidatePlayback();
     const target = this.state.playback;
     const ticket = this.ticket("match", source, target.playback_epoch);
+    this.matching.pending = videoId;
     try {
       await this.cleanup;
       if (!this.current("match", ticket)) return null;
@@ -815,7 +821,7 @@ export class AppController {
       this.matching.result = clone(result);
       return result;
     } catch (error) { if (this.current("match", ticket)) { target.phase = "failed"; target.error = failure(error); } return null; }
-    finally { if (this.requests.get("match") === ticket) this.requests.delete("match"); }
+    finally { if (this.requests.get("match") === ticket) { this.requests.delete("match"); this.matching.pending = null; } }
   }
   async loadCandidate(ref: Bridge_MediaRef) {
     requireBinding(this.confirmation?.status === "needs_confirmation" && this.confirmation.candidates.some(candidate => sameRef(candidate.content_ref, ref)), "Candidate is absent from the current confirmation result");

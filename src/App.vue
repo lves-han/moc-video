@@ -7,6 +7,7 @@ import SourcesView from "./views/SourcesView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
 import CatalogView from "./views/CatalogView.vue";
 import HomeView from "./views/HomeView.vue";
+import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController } from "./state.ts";
@@ -379,7 +380,8 @@ onBeforeUnmount(() => {
 
       <main id="main-content" tabindex="-1">
         <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" />
-        <CatalogView v-else-if="native && ['film', 'sources'].includes(route.page)" @open="openDetails" @play="playEpisode" @select="selectNativeSource" />
+        <DetailsView v-else-if="native && route.page === 'film'" @open="openDetails" @play="playEpisode" />
+        <CatalogView v-else-if="native && route.page === 'sources'" @open="openDetails" @play="playEpisode" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
           <div class="page-heading">
             <div>

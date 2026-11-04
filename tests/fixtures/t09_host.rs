@@ -7,6 +7,8 @@ mod t11;
 mod t12;
 #[path = "t14_host.rs"]
 mod t14;
+#[path = "t15_host.rs"]
+mod t15;
 
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());

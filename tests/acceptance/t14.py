@@ -65,12 +65,16 @@ def validate_home(e):
 
 
 def webview(run):
+    return packaged(run, LIVE_TEST, "t14", validate_home, "home", lambda e: dict(cards=e["pagination"]["cards"], layouts=e["layouts"]))
+
+
+def packaged(run, live_test, op, validate, key, summary):
     require(t01.native_gui_session()["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
     t01.DATA = run.folder / "packaged"
     t01.DATA.mkdir()
     t01.BUILD = t01.DATA / "build.json"
-    t12.LIVE_TEST = LIVE_TEST
+    t12.LIVE_TEST = live_test
     session, bridge = None, None
     try:
         t01.check_media()
@@ -87,13 +91,13 @@ def webview(run):
                 with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                     session = t01.NativeSession(run, fixture, executable, 1)
                     session.wait(0, 30)
-                    evidence = session.command("t14", timeout=240)
-                    run.observed["home"] = evidence
-                    validate_home(evidence)
+                    evidence = session.command(op, timeout=240)
+                    run.observed[key] = evidence
+                    validate(evidence)
                     session.close()
                     require(fixture.active == 0, "Owned fixture HTTP remains")
                 bridge.finish()
-                return dict(cards=evidence["pagination"]["cards"], layouts=evidence["layouts"], frontend="production App/HomeView/state/Api", native="actual Host invoke/gateway and packaged WKWebView")
+                return dict(summary(evidence), native="actual Host invoke/gateway and packaged WKWebView")
             finally:
                 try:
                     if session is not None and not session.closed:
@@ -120,36 +124,38 @@ class Bridge(t12.Bridge):
 
 
 class Acceptance(BaseAcceptance):
+    CARD, ORIGINAL, REQUIREMENTS = "T0.14", "T14", IDS
+
     def __init__(self, report, junit):
         self.report_path, self.junit_path = report, junit
         self.started = dt.datetime.now(dt.timezone.utc).isoformat()
-        self.folder = ROOT / "evidence/acceptance" / ("T14-" + uuid.uuid4().hex)
+        self.folder = ROOT / "evidence/acceptance" / (f"{self.ORIGINAL}-{uuid.uuid4().hex}")
         self.folder.mkdir(parents=True)
         self.source = workflow.snapshot()
         self.cases, self.commands, self.observed = [], [], {}
 
     def save(self):
         current = workflow.snapshot()
-        self.case("stable-tested-source", ["REQ-T14"], "unchanged source throughout A1", lambda: require(current == self.source, "source changed during A1"))
+        self.case("stable-tested-source", [f"REQ-{self.ORIGINAL}"], "unchanged source throughout A1", lambda: require(current == self.source, "source changed during A1"))
         summaries = []
-        for identifier in IDS:
+        for identifier in self.REQUIREMENTS:
             children = [case for case in self.cases if identifier in case["requirements"]]
             summaries.append(dict(id=identifier, result="PASS" if children and all(case["result"] == "PASS" for case in children) else "FAIL", children=[case["id"] for case in children]))
         counts = dict(required=len(self.cases), ran=len(self.cases), passed=sum(case["result"] == "PASS" for case in self.cases),
                       failed=sum(case["result"] != "PASS" for case in self.cases), skipped=0)
-        write_json(self.report_path, dict(card="T0.14", original_card="T14", suite="all", utc_started=self.started,
+        write_json(self.report_path, dict(card=self.CARD, original_card=self.ORIGINAL, suite="all", utc_started=self.started,
             utc_finished=dt.datetime.now(dt.timezone.utc).isoformat(), source_before=self.source, tested_source_digest=current,
             protected=workflow.protected_hash(), platform=sys.platform, arch=platform.machine(), os=platform.platform(),
             observed=self.observed, commands=self.commands, cases=self.cases, summaries=summaries, counts=counts,
             deployment="packaged Tauri WKWebView with real Host/gateway and a controlled Stremio addon; no cluster or Android",
             deferred=[dict(target="real public Stremio addons/other platforms", status="NOT RUN", reason="T0.24 product end-to-end; ADR-005/006 local macOS arm64")]))
         rows = self.cases + summaries
-        xml = ET.Element("testsuite", name="T14-all", tests=str(len(rows)), errors="0", skipped="0",
+        xml = ET.Element("testsuite", name=f"{self.ORIGINAL}-all", tests=str(len(rows)), errors="0", skipped="0",
                          failures=str(sum(row["result"] != "PASS" for row in rows)), timestamp=self.started)
         for row in rows:
-            case = ET.SubElement(xml, "testcase", classname="T14", name=row["id"])
+            case = ET.SubElement(xml, "testcase", classname=self.ORIGINAL, name=row["id"])
             if row["result"] != "PASS":
-                ET.SubElement(case, "failure", message="T14 behavior assertion failed").text = json.dumps(row, ensure_ascii=False)[:20000]
+                ET.SubElement(case, "failure", message=f"{self.ORIGINAL} behavior assertion failed").text = json.dumps(row, ensure_ascii=False)[:20000]
         self.junit_path.parent.mkdir(parents=True, exist_ok=True)
         ET.ElementTree(xml).write(self.junit_path, encoding="utf-8", xml_declaration=True)
         print(json.dumps(counts))
