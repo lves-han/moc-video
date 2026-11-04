@@ -1726,3 +1726,13 @@
 - 验收 A1：NOT RUN（第六源）；真实WK、全部Node/Python行为、类型/构建、完整verify、done、受验提交及独立完成巡检均NOT RUN。本会话行为测试运行数0；ADR010/041已确认同环境sysctl/sccache/Git限制，本次未再启动原run探测，亦未直接执行行为测试绕过执行器。旧第三失败T13-all、第五真实UI失败和全部历史保持。
 - 稳定源码：198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。准确外层argv清单evidence/acceptance/T13-session-6-outer-argv.json已生成读回，共9条；A1 payload逐项等于冻结卡并保留首项{python}字面，完整verify只在准确A1成功后直接执行。资源4096MiB macOS RSS采样/jobs2/thread1及全部安全权限期限保持；本CLI未新建重任务，未产生新的资源运行收据。
 - Remaining：本CLI自然退出后，外层核对PID创建身份、两锁及稳定source/scope，代办WIP T0.13: wait for trusted current EOS and committed history；按清单原run执行17oracle/类型/全部前端行为、真实WK成功0与故意失败1自然退出探针/完整11UI含重播删除清空焦点/20矩阵4DPI五首帧及相关原生检查，随后准确完整A1含原50切集/51aggregate RSS十窗/每轮帧PCM/绑定和回收/全部恢复错误EOS门，成功才direct完整verify。全部通过再原done/受验完成提交/新固定独立CLEAR/clean；后卡等待。如第六源仍需实现，准确留证报告最小真实决定并暂停，无第七许可。已知执行分工由外层继续，未据未运行行为宣称修正生效；SQLite T18/T20及移动阶段等安排保持。
+
+## T0.13 第六源完整UI通过但内存趋势验收失败 2026-11-04T05:36:24.003110+00:00
+- 结果：BLOCKED
+- 当前：ADR041唯一第六已消费，s6/f9/gen3/pausedfalse，无第七许可，source `198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72`，WIP `5f51cbb`稳定；生产未改，原全部会话/失败/WIP历史保持。
+- 必要验证：按最新真人限制复用语法、7历史/17oracle原run过后，直接本轮一次准确A1，未额外全量前置检查或完整UI预检；失败后只读原报告及诊断，未重复测试。
+- 验收 A1：FAIL；日志：`evidence/runs/20261104T052925074681-A1/output.log`；finishedexit1，128required127pass1fail/JUnit137pass5fail0skip，同source/protected/gen。A1内104行为/20named状态/7schema真实快照及公共lib过；当前真实history结束可信事件/正式ended/HistoryEntry提交693ms<12s、续播11/重播0/删除取消焦点/清空确认、主UI11case/20矩阵4DPI五startup全部过，原生退出正负探针过。
+- 唯一失败：50次当前1080p红蓝帧440880PCM/SessionURL/单video轨道监听/旧410HTTP0过，51aggregate齐，但十个五切RSS中位数bytes297041920,300122112,302415872,305856512,309592064,314064896,319832064,323928064,327532544,331481088严格增长原门拒绝。owned首289914880末340115456；renderer增51937280/application降4980736/GPU增2408448/network增835584，treepeak2050703360未超4096MiB。
+- 现有诊断：DOM84/track1/监听9/Session1/HTTP0/scratch24576bytes1canvas稳定，weak旧轨末alive5 connected/enabled0；live→stop→observer-release→dispose的RSS340115456→335724544→335396864→335380480，8份renderer/GPU vmmap原摘要CAPTURED，footprint与RSS指标不互代，浏览器缓存/解码/真实持有根因未定。诊断stop/dispose清Session/HTTP/轨道监听、video0且finally native-15/lingering=[]、Host-15；后续HLScontrols/expire/image/errors/auto unknown EOS/layout正常stopdispose Hostfinish原门NOT RUN，未冒充完成。
+- 完整verify/done/受验完成提交独立巡检NOT RUN。需要真实最小决定：是否仅本卡追加一次6→7，由原CLI原前端/tests范围先用已存证据定位确认资源持有，再最小修及必要局部回归、完整准确A1/verify；原50/51十窗RSS门/单位阈值及所有14cases/UI历史/安全权限资源时限保持，实质指标测法或范围变化另取决定。未批准只读证据/Git，不改源/新开发或同源筛选重跑。
+- 证据：`evidence/drive/t13-sixth-validation-20261104T035656Z/rss-failure-ui-complete/manifest.json`167份实际SHA，optional周期samples缺1准确列明、51逐命令和UI RSS齐；全部旧107/受限10/104/90/29/125未封存及WIP历史沿baseline.previous_validation保持。原创建身份全退出/两锁实得和准确handoff齐，clean后后卡继续等待。
