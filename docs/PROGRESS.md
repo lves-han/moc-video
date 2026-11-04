@@ -1748,3 +1748,9 @@
 - 固定授权提交：`8d75427a4a6ab03a452228e7703037cebb79ded0`；ADR042分段摘要`f65e8d98ede2c94d2b1f1af780a87d11dfe674ad39a32966d0e23ed563d20c3e`。
 - 原始独立只读报告：`docs/reviews/doc-review/round-41.md`；DOC-REVIEW-VERDICT CLEAR，167份SHA/51原样本及8原vmmap/真实UI历史完成已核。仅原前端范围利用已有诊断确认后最小修复，原RSS门与最新必要测试限制及全部质量门保持，不改Rust/冻结/测法或阶段。
 - 原s6/f9/gen3/pausedfalse，第七尚未消费，无第八许可；根因未定，新源实现/A1/fullverify均NOT RUN。紧邻strict顺序/旧创建身份/两锁实得/clean source protected后仅一次原drive once maxsessions7；本次仅记录文档，不跑业务或控制器测试。
+
+## T0.13 第七会话只读资源调查交接 2026-11-04T06:17:58.803990+00:00
+- 实施状态：WIP；ADR042唯一第七已消费，原s7/f9/gen3/pausedfalse，无第八许可。第七仅只读分析和ignored evidence，源码仍`198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72`/protected`97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b`，未作无因果修复、未新增业务测试/构建/A1/verify，原同源RSS失败保持。
+- 读回：最终`evidence/acceptance/T13-session-7-rss-readback.json` SHA`afbab0c4acdee7e89578831150bf5b706003ca7110bbc41a247e2455d47193c9`；167份SHA相符，7个实际归档阅读源相符、另3项manifest无源条目准确NOT VERIFIED，10项全部与HEAD字节相符。原KeyError src/api.ts的静态归档覆盖假设错误已note纠正并保留日志，不计业务测试失败。
+- 结论：当前renderer增加51937280bytes且十窗严格增长；历史已完成T12 renderer也增加29409280bytes且其renderer十窗严格增、仅aggregate有下降。比较不能覆盖当前失败或证明门无效/新增泄漏。8原vmmap都在失败后，无匹配切前类别或持有链；现有player/Session/Resolution/请求清理与buffer/观察计数有界。初始prototype被transport持有至shutdown但历史同样存在，增长贡献未测，不能据此选修复。
+- 交接证据：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/manifest.json`封存8份当前原只读报告/CLI原日志结果/handoff/state SHA。所有旧创建身份退出和两锁实得已核，先保存本WIP交接再记阻塞，不伪造代码提交或完成。
