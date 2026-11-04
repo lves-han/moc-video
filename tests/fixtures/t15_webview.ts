@@ -9,9 +9,10 @@ import type { Bridge_MediaRef } from "../../src/models.ts";
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const check = (value: unknown, message: string) => { if (!value) throw new Error(message); };
+let describe = () => "";
 async function until(condition: () => unknown, message: string, ms = 20000) {
   const end = performance.now() + ms;
-  while (!condition()) { check(performance.now() < end, `Timed out: ${message}`); await delay(20); }
+  while (!condition()) { check(performance.now() < end, `Timed out: ${message}; state=${describe()}`); await delay(20); }
 }
 const all = <T extends HTMLElement>(selector: string) => [...document.querySelectorAll<T>(selector)];
 const one = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector);
@@ -46,6 +47,9 @@ export async function detailsScenario(prototype: { player: Player; base: string;
   window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
   const hold = (key: string) => { let open!: () => void; gates.set(key, new Promise(resolve => { open = () => { gates.delete(key); resolve(); }; })); return open; };
   const evidence: Record<string, any> = {};
+  describe = () => JSON.stringify({ hash: location.hash, route: appState.route.name, h1: one("h1")?.textContent, phase: appState.details.phase, error: appState.details.error,
+    title: appState.details.data?.details.title, pending: appController.matching.pending, match: appController.matching.result?.status, playback_error: appState.playback.error,
+    source: appState.selected_playback_source?.source_id, sources: appState.sources.phase, calls: calls.slice(-6).map(call => call.command), errors });
   location.hash = "#/home";
   await appController.initialize();
   const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App) }) });
@@ -100,7 +104,6 @@ export async function detailsScenario(prototype: { player: Player; base: string;
 
     related = { id: "related-card", title: "Related title", kind: "series", ref: refOf("Sparse series") };
     await open("Long movie");
-    await until(() => one(".details-related-card"), "Related card did not render", 200).catch(async () => { location.hash = "#/home"; await delay(100); await open("Long movie"); });
     await until(() => one(".details-related-card"), "Related card did not render");
     evidence.related = { cards: all(".details-related-card").length, text: one(".details-related-card")!.textContent };
     one<HTMLAnchorElement>(".details-related-card")!.click();
@@ -111,9 +114,7 @@ export async function detailsScenario(prototype: { player: Player; base: string;
     await open("Two hundred episodes");
     const chosen = all(".details-episode")[6]!, video = chosen.dataset.videoId!, matchGate = hold("match_playback"), matchesBefore = calls.filter(call => call.command === "match_playback").length;
     chosen.click();
-    await until(() => chosen.classList.contains("n-button--loading"), "Pending match state missing").catch(cause => {
-      throw new Error(`${cause}: ${JSON.stringify({ disabled: (chosen as unknown as HTMLButtonElement).disabled, connected: chosen.isConnected, classes: chosen.className, pending: appController.matching.pending, video, source: appState.selected_playback_source, phase: appState.details.phase, calls: calls.slice(-3).map(call => call.command), errors, error: appState.playback.error })}`);
-    });
+    await until(() => chosen.classList.contains("n-button--loading"), "Pending match state missing");
     const pending = { loading: true, disabled: all<HTMLButtonElement>(".details-episode").filter(button => button !== chosen).every(button => button.disabled) };
     matchGate();
     await until(() => one('[role="dialog"]'), "Confirmation did not render");

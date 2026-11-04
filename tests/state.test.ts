@@ -18,7 +18,7 @@ const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve()
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes; }); return { promise, resolve }; }
 const error = { code: "UPSTREAM_FAILED" as const, message: "fixture upstream failed", retryable: true };
 const ref = (id: string, source: SourceKey = META): Bridge_MediaRef => ({ ...source, data: JSON.stringify({ id }) });
-const episodeRef = (id: string, video: string, source: SourceKey = META): Bridge_MediaRef => ({ ...source, data: JSON.stringify({ id, video_id: video }) });
+const episodeRef = (id: string, video: string, source: SourceKey = META): Bridge_MediaRef => ({ ...source, data: JSON.stringify(["stremio_video", "addon", "series", id, video]) });
 function metadata(id = "show"): MetadataRef {
   return { content_ref: ref(id), identity: { config_id: CONFIG, addon_key: "a".repeat(64), namespace: "addon:" + "a".repeat(64),
     type: "series", meta_id: id, canonical_id: id } };

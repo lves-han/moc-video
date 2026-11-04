@@ -1836,3 +1836,9 @@
 - Changed：新增DetailsView及确认弹层；AppController图片恢复扩展到details、matching.pending；App.vue详情改用DetailsView；t14.py拆出共用的packaged与Acceptance参数。
 - 更正：BACKLOG所写“CatalogView留待T0.15清理”不成立，该文件不在T0.15范围，残留分支继续保留。
 - 验收 A1：NOT RUN。诊断evidence/runs/20261104T083836556595-diag-t15-details/output.log卡在“Pending match state missing”，原因未定；复跑时桌面锁定，未执行场景。
+
+## T0.15 真实选集引用缺陷修复 2026-11-04T08:45:22+00:00
+- 实施状态：WIP。
+- 根因：Host的剧集ref.data是["stremio_video",addon_key,type,meta_id,video_id]，前端按对象读取video_id，真实环境所有选集按钮禁用、match前绑定校验也失败。T0.13模拟数据用了对象形式，掩盖了该问题。
+- 修改：src/state.ts新增metadataVideoId统一解析；单测与t12夹具改用真实格式。复现evidence/runs/20261104T084249098301-diag-t15-details-4/output.log，修复后evidence/runs/20261104T084423565754-diag-t15-details-5/output.log通过（诊断，不代替A1）。
+- 残留：CatalogView的详情分支仍是旧解析，T0.15起已无入口且不在本卡范围。

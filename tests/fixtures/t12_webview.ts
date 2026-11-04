@@ -622,7 +622,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       const page = clone(current.details), metadata = clone(input.metadata_ref);
       page.metadata_ref = metadata; page.details.ref = metadata.content_ref;
       page.details.groups = [{ ...page.details.groups[0]!, episodes: [{ ...page.details.groups[0]!.episodes[0]!,
-        ref: { ...metadata.content_ref, data: JSON.stringify({ video_id: input.video_id }) } }] }];
+        ref: { ...metadata.content_ref, data: JSON.stringify(["stremio_video", "addon", "series", "meta", input.video_id]) } }] }];
       appState.details.data = page; appState.details.phase = "ready";
       const stages: string[] = [];
       const play = async () => {

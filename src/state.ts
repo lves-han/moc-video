@@ -387,6 +387,14 @@ function requireBinding(condition: unknown, message: string): asserts condition 
   if (!condition) throw new ApiFailure({ code: "BAD_REQUEST", message, retryable: false });
 }
 
+// Host's Stremio video reference: ["stremio_video", addon_key, type, meta_id, video_id].
+export function metadataVideoId(reference: Bridge_MediaRef) {
+  try {
+    const fields: unknown = JSON.parse(reference.data);
+    return Array.isArray(fields) && fields.length === 5 && fields[0] === "stremio_video" && typeof fields[4] === "string" ? fields[4] : "";
+  } catch { return ""; }
+}
+
 export function assertContext(state: AppState, context: PlaybackContext) {
   const metadata = state.sources.data?.providers.find(source => source.id === state.selected_metadata_source?.source_id);
   const provider = state.sources.data?.providers.find(source => source.id === state.selected_playback_source?.source_id);
@@ -404,8 +412,7 @@ export function assertContext(state: AppState, context: PlaybackContext) {
     && sameRef(details.details.ref, context.metadata_ref.content_ref), "Current details and playback metadata differ");
   if (state.route.name === "details") requireBinding(sameRef(state.route.ref, details.details.ref), "Route and details differ");
   requireBinding(details.details.groups.some(group => group.episodes.some(episode => {
-    try { return sameSource(episode.ref, context.metadata_ref.content_ref) && JSON.parse(episode.ref.data).video_id === context.metadata_video_id; }
-    catch { return false; }
+    return sameSource(episode.ref, context.metadata_ref.content_ref) && metadataVideoId(episode.ref) === context.metadata_video_id;
   })), "Video is absent from current metadata details");
 }
 
@@ -779,8 +786,7 @@ export class AppController {
     const metadata = this.state.details.data?.metadata_ref, source = this.state.selected_playback_source;
     requireBinding(metadata && source && this.state.details.phase === "ready", "Match requires ready metadata details and playback source");
     requireBinding(this.state.details.data!.details.groups.some(group => group.episodes.some(episode => {
-      try { return sameSource(episode.ref, metadata.content_ref) && JSON.parse(episode.ref.data).video_id === videoId; }
-      catch { return false; }
+      return sameSource(episode.ref, metadata.content_ref) && metadataVideoId(episode.ref) === videoId;
     })), "Video is absent from current metadata details");
     requireBinding(!selection || sameSource(selection.content_ref, source), "Candidate belongs to another playback source");
     if (selection) requireBinding(this.confirmation?.status === "needs_confirmation"

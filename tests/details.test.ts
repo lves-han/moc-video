@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AppController, createAppState, defaultSettings } from "../src/state.ts";
+import { AppController, createAppState, defaultSettings, metadataVideoId } from "../src/state.ts";
 
 const HOST = "11111111-1111-4111-8111-111111111111", SOURCE = { source_id: "meta", source_revision: "1" };
 const REF = { ...SOURCE, data: "show" };
@@ -33,4 +33,10 @@ test("R22/REQ-T15: other poster failures show their error and reloading details 
   await f.app.detailsImageError("a");
   assert.equal(f.app.detailsImage.error, "bad gateway"); assert.equal(f.count("get_details"), before);
   await f.app.loadDetails(REF); assert.equal(f.app.detailsImage.error, "");
+});
+
+test("R22/REQ-T15: the metadata video id comes from Host's exact video reference", () => {
+  const read = (data: string) => metadataVideoId({ ...SOURCE, data });
+  assert.equal(read(JSON.stringify(["stremio_video", "addon", "series", "meta", "video:1"])), "video:1");
+  for (const data of [JSON.stringify({ video_id: "video:1" }), JSON.stringify(["maccms", "addon", "series", "meta", "video:1"]), JSON.stringify(["stremio_video", "video:1"]), "not json"]) assert.equal(read(data), "");
 });

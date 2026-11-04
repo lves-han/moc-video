@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { NAlert, NButton, NEmpty, NModal } from "naive-ui";
-import { appState as state, appController as app } from "../state";
+import { appState as state, appController as app, metadataVideoId as videoId } from "../state";
 import { locale, t } from "../i18n";
 import type { Bridge_Episode, Bridge_ImageRef, Bridge_MediaCard, Bridge_MediaRef, PlaybackMatchSelection } from "../models";
 
@@ -20,10 +20,6 @@ const chosenGroup = ref<string | null>(null);
 const groups = computed(() => details.value?.groups ?? []);
 const group = computed(() => groups.value.find(item => item.id === chosenGroup.value) ?? groups.value[0] ?? null);
 const episodes = computed(() => groups.value.flatMap(item => item.episodes));
-function videoId(reference: Bridge_MediaRef) {
-  try { const value = JSON.parse(reference.data).video_id; return typeof value === "string" ? value : ""; }
-  catch { return ""; }
-}
 const single = computed(() => episodes.value.length === 1 ? episodes.value[0]! : null);
 const canPlay = (episode: Bridge_Episode) => Boolean(videoId(episode.ref) && state.selected_playback_source && !app.matching.pending);
 const label = (episode: Bridge_Episode) => episode.number != null && !episode.label.includes(String(episode.number)) ? `${episode.number}. ${episode.label}` : episode.label;
