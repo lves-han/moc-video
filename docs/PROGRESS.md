@@ -1694,3 +1694,13 @@
 - 验收 A1：NOT RUN（第五源）；完整verify、done、受验完成提交和独立完成巡检均NOT RUN。第三源失败T13-all和全部旧成功/失败报告保持原样。
 - 稳定源码：d63da9cc42fc9e831636797d0bb2eea1d102864d6aadec574d5aa72136ef7358；protected：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b。原run后未再改夹具源码。外层准确argv清单`evidence/acceptance/T13-session-5-outer-argv.json`含9条；A1沿冻结payload并保留{python}字面，完整verify仅在准确A1成功后直接执行。原尝试argv另存T13-session-5-diagnostic-argv.json。
 - Remaining：按ADR010本CLI稳定退出后，外层先确认上述身份及本流程所有后代退出、两锁实得，保留125现场后按原task recover，再通过原run复验当前源。读取失败actual.history中native-ended/delivered-ended、phase/epoch/session及save/list顺序，确认实际原因；本次观察包装会记录Promise完成，不以诊断本身充当行为通过。Git WIP按原分工外层代办，建议`WIP T0.13: capture native completion and history commit timeline`。如仍需实现，保留真实证据并报告最小决定后暂停，无第六许可；准确A1/direct完整verify/done/受验提交/新固定独立CLEAR/clean齐备才完成。后卡等待，SQLite T18/T20与移动等原安排保持。
+
+## T0.13 第五源历史结束前提诊断失败 2026-11-04T03:38:50.362115+00:00
+- 结果：BLOCKED
+- 当前：ADR040唯一第五已消费，原s5/f8/gen3/pausedfalse，无第六许可；WIP `2baa0fa`/source `d63da9cc42fc9e831636797d0bb2eea1d102864d6aadec574d5aa72136ef7358`。第五仅夹具诊断生产未变，原driver/result/launch证明会话实际执行，外层中断前未完成live CLI身份核对事实保留。
+- 受限现场：原CLI自验125曾早登记payload，raw_exit/tests未知/无报告；先保存restricted-source10份未封存SHA，稳定退出后核全部旧登记身份/原run_aliveFalse/两锁实得再原recover归档finished125，失败不重置，沿ADR010外层原run复验。
+- 实测：新源13oracle/136行为/类型/fmt/automation alltargets check Clippy全过；UI预检`evidence/runs/20261104T033431221872-verify-t13-session5-ui-preflight/output.log` finishedexit1，diagnostic_only3项2pass1fail，主UI24.789秒自然exit1/remaining=[]、11case10pass1fail，成功0/故意失败1探针及20矩阵/4DPI等过。
+- 真实因果：完整55条order1..55未截断、无native-ended/delivered-ended记录；order50 video.endedtrue/currentTime30但正式epoch120/session仍playing/position29800；order51/52紧接导航只save completedfalse(29800/30000)，order54列表同false、order55 Continue watching。没有已完成true写被覆盖的证据。观察指向夹具仅等属性便在可信ended/正式完成与提交前导航，生产真实EOS处理无新确认缺陷；delivered仅微任务观察不冒充controller回调，最小修正效果须新源实测。
+- 验收 A1：NOT RUN（第五源）；后续重播/单删清空焦点、五startup、完整打包50/51与恢复安全后门、fullverify/done/受验提交巡检均NOT RUN，旧T13-all仍第三源失败，未同源筛选重跑。
+- 需要用户决定：是否仅本卡再追加一次5→6，由原CLI仅tests最小修EOS夹具，在原期限内等当前身份真实trusted ended/正式完成与HistoryEntry提交再导航，补错身份旧epoch/合成state-only及仅ended属性等正负例，保留原重播从0/删除清空焦点与全部原14cases/50与51RSS十窗/20矩阵4DPI五首帧/安全资源权限时限；不降低原门或改生产EOS迎合夹具。未批准仅只读证据与Git，不新开发或重跑A1。
+- 证据：`evidence/drive/t13-fifth-validation-20261104T033248Z/history-ended-timing-failure/manifest.json`107份原始副本SHA及causal-readback；受限10/第四104/第三90/第二29及125未封存/容量stderr/所有WIP旧历史沿baseline.previous_validation保持。原身份退出及两锁实得已核，准确handoff保存，后卡等待。
