@@ -1812,3 +1812,10 @@
 - 实施状态：WIP；用户指示“接着做 T14”，在当前Claude对话内开发，未经drive.py启动。
 - Changed：新增HomeView（骨架、栏目原位失败与单栏重试、分页尾部加载、无图占位、长标题、4至7列）；AppController.homeImageError实现SPEC 11.3过期后只刷新第1页一次；App.vue原生首页改用HomeView。
 - 验证入口：tests/acceptance/t14.py，真实Host+打包WKWebView+受控Stremio；空/失败两种整页状态因Host缓存目录页而用注入响应。
+
+## T0.14 T14 推荐首页界面 2026-11-04T08:08:39+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T080442948451-A1/output.log`；断言：exit0，5 required全过，JUnit 12项0失败；真实Host+打包WKWebView：305卡无重复、第2页去重后增100、栏目失败原位与单栏重试、1200与960宽4列、海报180px、返回滚动700恢复且0次重取、换播放源保留首页、过期图片查询1次且刷新第1页1次。
+- 完整verify：PASS；`evidence/verify/20261104T080517718203.json`，六门exit0。
+- 此前失败保留：A1两次验收脚本错误（evidence/runs/20261104T080242678954-A1、原因是输出解析及复用T12生命周期校验）和一次窗口未获焦点（evidence/runs/20261104T080336936499-A1，源码未变，未确认抢焦点者）。
+- Remaining：独立巡检待完成；7列上限只由CSS保证，自动化窗口宽度最大1200未实测；空/整页失败状态用注入响应；真实公开Stremio扩展留T0.24；CatalogView残留首页分支见BACKLOG。本卡在Claude对话内开发，未经drive.py。
