@@ -62,8 +62,11 @@ def validate_playback(e):
     require(l["next_disabled"] is True and l["matches"] == 0 and l["video"] == l["expected"], "The last episode must disable next and stay at EOS")
     a = e["ambiguous"]
     require(a["dialog"] is True and a["opens"] == 0 and a["session"] is None, "An ambiguous next video must wait for confirmation with nothing playing")
+    require(e["leave_volume"]["saved"] == .61, "A volume changed just before leaving must persist")
     saved = e["history"]["saved"]
     require(len(saved) == 1 and saved[0]["episode_total"] == 4 and saved[0]["source_id"] and saved[0]["title"], "History must keep one identified entry per title")
+    # Host's content id already hashes namespace, type and canonical id, isolating addons (SPEC 18.6).
+    require(saved[0]["content_id"] == e["identity"]["content_id"], "History must use Host's stable content id")
     require(e["errors"] == [], "Playback raised page errors: " + str(e["errors"]))
 
 

@@ -187,7 +187,7 @@ function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   if (index < 0 || !provider) return null;
   const kind = data.details.kind === "other" ? "series" : data.details.kind;
   const poster = data.details.poster ? data.images[data.details.poster.resource_id]?.url : undefined;
-  return { content_id: historyContentId(kind, context.metadata_ref.identity.meta_id), title: data.details.title, poster: poster ?? "/mark.svg", kind,
+  return { content_id: data.details.id, title: data.details.title, poster: poster ?? "/mark.svg", kind,
     episode: index + 1, episode_total: episodes.length, source_id: provider.id, source_name: provider.name,
     position_ms: Math.round(state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms), duration_ms: state.duration_ms,
     completed: finished || state.phase === "ended", updated_at: Date.now() };

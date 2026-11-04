@@ -1882,3 +1882,8 @@
 - 完整verify：PASS；`evidence/verify/20261104T094608049172.json`，六门exit0。
 - 回归：T12打包场景与T13预览界面诊断通过，evidence/runs/20261104T093905839030-diag-t16-regress/output.log（诊断，不代替各卡验收）。
 - Remaining：独立巡检待完成；自动下一集成功路径用Host已确认selection，MacCMS无验证身份时真实匹配总需确认；约5秒周期只有单测，媒体仅2秒；网络错误不前进由代码路径保证，原生未单独测；原生续播入口和SQLite属T0.18；DPI缩放、缓冲状态未测。本卡在Claude对话内开发，未经drive.py。
+
+## T0.16 巡检阻塞处理交接 2026-11-04T09:56:33+00:00
+- 实施状态：WIP；撤回勾选，巡检evidence/reviews/20261104T094937049453-T0.16 BLOCKING原样保留，未accept-review。
+- 已改：原生历史content_id改用Host的details.id，即H(metadata,namespace,type,canonical_id)，修复跨扩展同ID覆盖（P1）。
+- 待做：音量300ms内离页丢失（P2）的回归已写入t16场景，待桌面解锁后先复现再修；diag-t16-before-fix因桌面锁定未执行场景。A1与verify NOT RUN。

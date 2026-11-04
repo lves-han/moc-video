@@ -932,7 +932,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 验证：Movie/Series/Anime、多源语义分组、200集、重复集名、空可播列表。
 
 ### T0.16 T16 内嵌播放界面
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.8, T0.12, T0.13
 - 需求：U03, U09, R23, R25, R32, R42, R67, REQ-T16 → A1（覆盖表含精确对应）
 - 范围：`src/views/PlaybackView.vue`, `src/player.ts`, `src/App.vue`, `src/data/history.ts`, `src/style.css`, `tests/`, `docs/PROGRESS.md`, `src/api.ts`, `src/state.ts`

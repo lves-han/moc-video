@@ -229,6 +229,16 @@ export async function playbackUiScenario(payload: Bootstrap, prototype: { player
     await delay(600);
     // Poster URLs carry capabilities, so only identity and progress enter the report.
     evidence.history = { saved: (await historyRepository.list()).map(({ poster: _poster, ...entry }) => entry) };
+    // Leaving right after a volume change must still save it.
+    confirmed = true;
+    check(await appController.match(videos[0]!), "Rematch before leaving failed");
+    await until(() => session() && video()?.readyState >= 2, "Episode did not reopen before leaving");
+    slide(labelled<HTMLInputElement>("Volume"), .61);
+    location.hash = "#/home";
+    await until(() => !one("video"), "Player did not close on leaving", 3000);
+    await delay(800);
+    evidence.leave_volume = { saved: appState.settings.volume };
+    evidence.identity = { content_id: page.details.id };
     evidence.errors = errors;
     return evidence;
   } finally {
