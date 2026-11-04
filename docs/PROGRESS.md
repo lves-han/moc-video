@@ -1704,3 +1704,10 @@
 - 验收 A1：NOT RUN（第五源）；后续重播/单删清空焦点、五startup、完整打包50/51与恢复安全后门、fullverify/done/受验提交巡检均NOT RUN，旧T13-all仍第三源失败，未同源筛选重跑。
 - 需要用户决定：是否仅本卡再追加一次5→6，由原CLI仅tests最小修EOS夹具，在原期限内等当前身份真实trusted ended/正式完成与HistoryEntry提交再导航，补错身份旧epoch/合成state-only及仅ended属性等正负例，保留原重播从0/删除清空焦点与全部原14cases/50与51RSS十窗/20矩阵4DPI五首帧/安全资源权限时限；不降低原门或改生产EOS迎合夹具。未批准仅只读证据与Git，不新开发或重跑A1。
 - 证据：`evidence/drive/t13-fifth-validation-20261104T033248Z/history-ended-timing-failure/manifest.json`107份原始副本SHA及causal-readback；受限10/第四104/第三90/第二29及125未封存/容量stderr/所有WIP旧历史沿baseline.previous_validation保持。原身份退出及两锁实得已核，准确handoff保存，后卡等待。
+
+## T0.13 唯一第六会话真实批准 2026-11-04T03:40:59.431021+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天仅T13追加一次5→6、仅tests最小修真实结束前提/补正负例完整复验、原时限全部门与生产EOS语义保持的明确回复“仅批准 T0.13 追加一次（5→6）”；按ADR041唯一一次，原s5/f8/gen3，第六尚未消费，未授权第七。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 真实依据：当前107份SHA/causal-readback完整55条无截断，video.endedtrue时正式仍playing且尚无可信ended，立即导航只保存未完成记录；未见completedtrue被覆盖，不预认生产EOS缺陷。原第五13oracle136行为/类型格式native及UI10pass1fail/自然退出探针与全部旧成功失败保持，新源准确A1/fullverify NOT RUN。
+- 实施与完成：固定独立round40 CLEAR原文保存提交后，紧邻strict首卡current next/旧创建身份/两锁实得/clean source protected原s5核对，唯一原drive once maxsessions6。仅tests修复真实当前ended/正式完成及历史提交前提，在原共享12秒内补身份旧epoch/合成state-only等拒绝反例，原14cases/50与51RSS十窗/20矩阵4DPI五首帧和安全资源权限期限保持；新源准确A1成功direct完整verify/done/受验提交/新固定独立CLEAR/clean才完成，不rebaseline，后卡等待。
