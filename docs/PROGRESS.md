@@ -1842,3 +1842,9 @@
 - 根因：Host的剧集ref.data是["stremio_video",addon_key,type,meta_id,video_id]，前端按对象读取video_id，真实环境所有选集按钮禁用、match前绑定校验也失败。T0.13模拟数据用了对象形式，掩盖了该问题。
 - 修改：src/state.ts新增metadataVideoId统一解析；单测与t12夹具改用真实格式。复现evidence/runs/20261104T084249098301-diag-t15-details-4/output.log，修复后evidence/runs/20261104T084423565754-diag-t15-details-5/output.log通过（诊断，不代替A1）。
 - 残留：CatalogView的详情分支仍是旧解析，T0.15起已无入口且不在本卡范围。
+
+## T0.15 T15 详情与选集界面 2026-11-04T08:49:08+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T084523019093-A1/output.log`；断言：exit0，5 required全过，JUnit 8项0失败；真实Host+打包WKWebView：单片播放入口、200个同名集各自可选、3组切换只显示本组、缺海报年份简介自然呈现、长简介纯文本折叠、空剧集提示、旧详情响应不覆盖新页、点击第7集经确认后context等于所选真实引用。
+- 完整verify：PASS；`evidence/verify/20261104T084542598791.json`，六门exit0。
+- Remaining：独立巡检待完成；相关内容用注入卡片验证，Host的Stremio适配器当前恒返回空列表；Stremio无anime类型fixture，只测movie与series；确认后真实播放由T0.16验证；CatalogView残留分支见记录。本卡在Claude对话内开发，未经drive.py。
