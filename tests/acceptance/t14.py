@@ -78,7 +78,7 @@ def webview(run):
             media = folder / "media"
             media.mkdir()
             try:
-                bridge = t12.Bridge(run, folder, media)
+                bridge = Bridge(run, folder, media)
                 bridge.wait(folder / "ready.json", timeout=180)
                 with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                     session = t01.NativeSession(run, fixture, executable, 1)
@@ -99,6 +99,20 @@ def webview(run):
                         bridge.close()
     finally:
         t01.DATA, t01.BUILD, t12.LIVE_TEST = previous
+
+
+class Bridge(t12.Bridge):
+    def finish(self):
+        self.invoke(dict(operation="finish"))
+        self.process.wait(timeout=30)
+        self.reader.join(timeout=5)
+        self.record["exit"] = self.process.returncode
+        require(self.process.returncode == 0 and not self.reader.is_alive(), "Real Host bridge did not finish cleanly")
+        vectors = [json.loads(line.split("T14_VECTOR:", 1)[1]) for line in self.lines if "T14_VECTOR:" in line]
+        require(len(vectors) == 1 and vectors[0]["get_home"] > 0 and vectors[0]["active_requests"] == 0, "Real Host home evidence missing")
+        require("test result: ok. 1 passed; 0 failed; 0 ignored;" in "".join(self.lines), "Actual named native test did not pass")
+        require(not self.run.observed.get("host_log_sanitized"), "Native output contained credentials; stored log was sanitized")
+        self.run.observed["host"] = vectors[0]
 
 
 class Acceptance(BaseAcceptance):
@@ -139,7 +153,8 @@ class Acceptance(BaseAcceptance):
 
 
 def frontend(run):
-    output = run.command(["npm", "test"], timeout=600)
+    output = run.command(["node", "--experimental-strip-types", "--test", "--test-concurrency=1", "--test-reporter=tap", "tests/home.test.ts", "tests/state.test.ts"], timeout=180)
+    require("REQ-T14" in output, "Home image recovery tests did not run")
     count = re.search(r"# pass (\d+)", output)
     fail = re.search(r"# fail (\d+)", output)
     require(count and int(count[1]) > 0 and fail and int(fail[1]) == 0, "Frontend tests must run nonzero with no failures")

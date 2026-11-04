@@ -112,6 +112,7 @@ fn t14_host_home_webview_bridge() {
     publish(&directory.join("ready.json"), &json!({"ok":true}));
     let started = Instant::now();
     let mut sequence = 0;
+    let mut get_home = 0;
     loop {
         sequence += 1;
         let path = directory.join(format!("request-{sequence}.json"));
@@ -157,6 +158,7 @@ fn t14_host_home_webview_bridge() {
             }
             "invoke" => {
                 let command = request["command"].as_str().unwrap();
+                get_home += usize::from(command == "get_home");
                 assert!(crate::contracts::COMMANDS.contains(&command));
                 let result = host.invoke(command, request["args"].clone(), true);
                 Contracts::get()
@@ -171,4 +173,8 @@ fn t14_host_home_webview_bridge() {
             &result,
         );
     }
+    println!(
+        "T14_VECTOR:{}",
+        json!({"get_home":get_home,"active_requests":host.requests.active_count()})
+    );
 }
