@@ -1875,3 +1875,10 @@
 - 实施状态：WIP；用户指示“接着做 T16”，在当前Claude对话内开发，未经drive.py启动。
 - Changed：PlaybackView补倍速1.25、上下键音量、Esc、下一集与末集禁用、自动下一集开关、选集浮层、当前影片/分组/集名、音量经Settings保存；App实现原生EOS自动下一集与原生历史快照（周期、暂停、seek、切集、结束）；history.ts提供写入判定。
 - 限制：MacCMS无已验证身份，真实匹配总需确认，验收中自动下一集用Host已确认的selection；原生续播入口及SQLite属T0.18。
+
+## T0.16 T16 内嵌播放界面 2026-11-04T09:49:30+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T094459943519-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；真实Host+媒体+打包WKWebView覆盖播放暂停、seek、音量及持久化、五档倍速、快捷键、原生全屏与Esc、字幕、线路、3秒隐藏与恢复、metadata后续播、选集、自动下一集开关、手动停止不前进、末集禁用、歧义待确认。
+- 完整verify：PASS；`evidence/verify/20261104T094608049172.json`，六门exit0。
+- 回归：T12打包场景与T13预览界面诊断通过，evidence/runs/20261104T093905839030-diag-t16-regress/output.log（诊断，不代替各卡验收）。
+- Remaining：独立巡检待完成；自动下一集成功路径用Host已确认selection，MacCMS无验证身份时真实匹配总需确认；约5秒周期只有单测，媒体仅2秒；网络错误不前进由代码路径保证，原生未单独测；原生续播入口和SQLite属T0.18；DPI缩放、缓冲状态未测。本卡在Claude对话内开发，未经drive.py。
