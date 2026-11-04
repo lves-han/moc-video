@@ -52,7 +52,7 @@ def validate_playback(e):
     require(e["seek_saved"] is True, "A seek must write a history snapshot")
     c = e["select_episode"]
     require(c["panelOpen"] is True and c["panelClosed"] is True and c["current"] and c["video"] == c["expected"] and c["opens"] == 1 and "Episode 3" in c["title"], "Episode selection must open exactly the chosen video")
-    require(c["old_saved"] is True and c["old_position"] >= 1400 and c["new_first_position"] < 1000, "Switching must save the old episode without writing its progress to the new one")
+    require(c["old_saved"] is True and c["old_position"] >= 1400 and all(position < 1000 for position in c["new_rows_at_open"]), "Switching must save the old episode without writing its progress to the new one")
     o = e["auto_off"]
     require(o["video"] == o["expected"] and o["matches"] == 0 and o["completed"] is True, "EOS with auto_next off must stay and record completion")
     require(e["stop"]["matches"] == 0 and e["stop"]["context"] is None, "A manual stop must not advance")

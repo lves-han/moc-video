@@ -179,7 +179,7 @@ export async function playbackUiScenario(payload: Bootstrap, prototype: { player
     const opensBefore = count("open_playback"), positionBefore = appState.playback.position_ms;
     one<HTMLButtonElement>(`.playback-episode[data-video-id="${videos[2]}"]`)!.click();
     await until(() => appState.playback.context?.metadata_video_id === videos[2] && session() && video().readyState >= 2, "Episode selection did not open");
-    evidence.select_episode = { panelOpen, panelClosed, current, video: appState.playback.context!.metadata_video_id, expected: videos[2], opens: count("open_playback") - opensBefore, title: one(".playback-now")!.textContent, old_saved: saves.some(row => row.episode === 1 && Math.abs(row.position_ms - positionBefore) < 600), old_position: positionBefore, new_first_position: saves.find(row => row.episode === 3)?.position_ms ?? 0 };
+    evidence.select_episode = { panelOpen, panelClosed, current, video: appState.playback.context!.metadata_video_id, expected: videos[2], opens: count("open_playback") - opensBefore, title: one(".playback-now")!.textContent, old_saved: saves.some(row => row.episode === 1 && Math.abs(row.position_ms - positionBefore) < 600), old_position: positionBefore, new_rows_at_open: saves.filter(row => row.episode === 3).map(row => row.position_ms) };
     control("episodes").click();
 
     // EOS with auto_next off keeps this episode.

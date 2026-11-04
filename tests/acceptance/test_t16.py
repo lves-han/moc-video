@@ -10,7 +10,7 @@ def good():
                 keys=dict(space_plays=True, space_pauses=True, right_delta=.5, left_delta=-.5, up_delta=.05, down_delta=0, muted=True, unmuted=True, input_keeps_keys=True, at=1),
                 fullscreen=dict(on=True, off=True, esc_off=True), subtitles=dict(shown="showing", off=True), stream=dict(session_changed=True, same_resolution=True, selected=True),
                 hide=dict(concealed=True, restored=True, restored_by_focus=True), resume=dict(position=1.3, paused=True), seek_saved=True,
-                select_episode=dict(panelOpen=True, panelClosed=True, current="v1", video="v3", expected="v3", opens=1, title="Show · Season 1 · Episode 3", old_saved=True, old_position=1500, new_first_position=100),
+                select_episode=dict(panelOpen=True, panelClosed=True, current="v1", video="v3", expected="v3", opens=1, title="Show · Season 1 · Episode 3", old_saved=True, old_position=1500, new_rows_at_open=[]),
                 auto_off=dict(video="v3", expected="v3", matches=0, completed=True), stop=dict(matches=0, context=None),
                 auto_next=dict(video="v4", expected="v4", playing=True, session_bound=True, title="Show · Season 1 · Episode 4"),
                 last=dict(next_disabled=True, matches=0, video="v4", expected="v4"), ambiguous=dict(dialog=True, opens=0, session=None, video_elements=1),
@@ -48,7 +48,7 @@ class PlaybackEvidence(unittest.TestCase):
         self.rejects(lambda e: e["ambiguous"].update(opens=1))
 
     def test_history_cannot_cross_episodes(self):
-        self.rejects(lambda e: e["select_episode"].update(new_first_position=1500))
+        self.rejects(lambda e: e["select_episode"].update(new_rows_at_open=[1500]))
         self.rejects(lambda e: e["select_episode"].update(old_saved=False))
         self.rejects(lambda e: e.update(seek_saved=False))
         self.rejects(lambda e: e["history"].update(saved=[]))
