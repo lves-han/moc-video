@@ -480,9 +480,13 @@ export class AppController {
   readonly state: AppState;
   readonly sections = reactive<Record<string, LocalRequest>>({});
   readonly diagnostics = reactive<Bridge_ApiError[]>([]);
+  readonly homeImage = reactive({ error: "" });
   readonly matching = reactive({ result: null as PlaybackMatchResult | null, details: null as DetailsViewData | null,
     loading: false, error: null as Bridge_ApiError | null });
   private requests = new Map<string, Ticket>();
+  private homeImageAttempt: HomeViewData | null = null;
+  private queriedHomeImages = new Set<string>();
+  private homeRefreshed = false;
   private runtimeSequence = 0;
   private sourceSequence = 0;
   private confirmation: PlaybackMatchResult | null = null;
@@ -675,6 +679,7 @@ export class AppController {
     const full = sectionRef === null && pageNumber === 1;
     requireBinding(sectionRef !== null || full, "Pagination requires a section reference");
     if (full) {
+      this.homeRefreshed = false; this.homeImage.error = "";
       for (const scope of [...this.requests.keys()]) if (scope.startsWith("section:")) this.cancel(scope);
       for (const key of Object.keys(this.sections)) delete this.sections[key];
       this.state.home.request_epoch++;
@@ -704,6 +709,25 @@ export class AppController {
         else this.sections[sectionRef!] = { request_id: null, phase: "failed", error: failure(error) };
       }
     } finally { if (this.requests.get(scope) === ticket) { this.requests.delete(scope); if (full) this.state.home.request_id = null; } }
+  }
+  // SPEC 11.3: only confirmed expiry refreshes the owning home DTO, once, by replacing it with page 1.
+  async homeImageError(resourceId: string) {
+    const data = this.state.home.data, host = this.state.runtime.engine_epoch, epoch = this.state.home.request_epoch;
+    const active = () => this.state.home.data === data && this.state.home.request_epoch === epoch && this.state.runtime.engine_epoch === host;
+    if (!data?.images[resourceId] || !host) return;
+    if (this.homeImageAttempt !== data) { this.homeImageAttempt = data; this.queriedHomeImages.clear(); }
+    if (this.queriedHomeImages.has(resourceId)) return;
+    this.queriedHomeImages.add(resourceId);
+    try {
+      const status = await this.api.call("get_resource_status", { kind: "image", target_id: resourceId }, crypto.randomUUID(), host);
+      if (!active()) return;
+      requireBinding(status.kind === "image" && status.target_id === resourceId, "Image status target differs");
+      if (status.error?.code === "SESSION_EXPIRED" && !this.homeRefreshed) {
+        const refresh = this.loadHome();
+        this.homeRefreshed = true;
+        await refresh;
+      } else this.homeImage.error = status.error?.message ?? "Image failed to load";
+    } catch (cause) { if (active()) this.homeImage.error = failure(cause).message; }
   }
   async loadDetails(ref: Bridge_MediaRef) {
     requireBinding(sameSource(ref, this.state.selected_metadata_source), "Details must belong to selected metadata source");

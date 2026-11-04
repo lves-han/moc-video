@@ -32,3 +32,6 @@ ADR027最小4文件修复及原T06/T13迁移经128回归、入口校验、固定
 
 ## 未复现：T09网关测试偶发超时 2026-11-04T06:45:13+00:00
 T0.13完整verify（evidence/verify/20261104T063504851866.json）中gateway::tests::t09_slow_timeout_truncation_disconnect_and_close_cancel一次失败：fixture wait_for超过5秒，日志无行号。同源单独20次（含16个满载CPU进程）、完整cargo test 3轮、其后完整verify均通过；原因未确认。当时另一项目的容量测试在同机运行，影响未验证。未验证线索：该用例/stall夹具停顿5秒，与quiet的5秒等待上限相同。再次出现时开RUST_BACKTRACE=1取行号。
+
+## CatalogView首页分支已无入口 2026-11-04T08:02:42+00:00
+T0.14起原生首页由HomeView渲染，src/views/CatalogView.vue的home分支和源选择器（route为home时）不再可达。该文件不在T0.14范围，留待T0.15修改详情界面时清理。

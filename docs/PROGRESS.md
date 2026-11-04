@@ -1807,3 +1807,8 @@
 - 完整verify：PASS；`evidence/verify/20261104T070020970077.json`，六门exit0。
 - Changed：App.vue、PlaybackView.vue修复播放中换源确认；t12夹具与验收新增source-rematch及正反例。
 - Remaining：等待对新提交的独立复巡；T09偶发超时未复现、慢泄漏未覆盖、首轮A1较快增长未复现，见前述记录和BACKLOG。
+
+## T0.14 首页实现交接 2026-11-04T08:02:42+00:00
+- 实施状态：WIP；用户指示“接着做 T14”，在当前Claude对话内开发，未经drive.py启动。
+- Changed：新增HomeView（骨架、栏目原位失败与单栏重试、分页尾部加载、无图占位、长标题、4至7列）；AppController.homeImageError实现SPEC 11.3过期后只刷新第1页一次；App.vue原生首页改用HomeView。
+- 验证入口：tests/acceptance/t14.py，真实Host+打包WKWebView+受控Stremio；空/失败两种整页状态因Host缓存目录页而用注入响应。

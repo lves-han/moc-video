@@ -149,6 +149,11 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await foreground();
         return formalPlayback(command, { video, player, base, cap });
       }
+      case "t14": {
+        const { homeScenario } = await import("../t14_webview");
+        await foreground();
+        return homeScenario({ player, base, cap });
+      }
       case "identity": return { foreground: await foreground(), origin: location.origin, secure_context: isSecureContext,
         user_agent: navigator.userAgent, capabilities: capabilities(video), native: await nativeInvoke("t01_control", { action: "identity" }), layout: layout() };
       case "open": {
