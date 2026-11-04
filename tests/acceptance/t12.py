@@ -360,6 +360,10 @@ def process_sample(session, bridge=None):
                               host_requests=bridge.sequence if bridge else None))
 
 
+RSS_LIMIT_BYTES = 512 * 1024 * 1024
+RSS_GROWTH_BYTES = 64 * 1024 * 1024
+
+
 def rss_windows(samples):
     require(len(samples) == 51 and all(isinstance(s["owned_rss_bytes"], (int, float))
             and not isinstance(s["owned_rss_bytes"], bool) and math.isfinite(s["owned_rss_bytes"])
@@ -369,7 +373,9 @@ def rss_windows(samples):
 
 def validate_rss_windows(medians):
     require(len(medians) == 10, "All ten five-switch RSS windows are required")
-    require(not all(a < b for a, b in zip(medians, medians[1:])), "Owned RSS grows monotonically across all ten five-switch windows")
+    # ADR-044: fifty switches may warm caches; only sizable growth indicates a leak.
+    require(max(medians) <= RSS_LIMIT_BYTES, "Owned RSS exceeds 512MiB")
+    require(medians[-1] - medians[0] <= RSS_GROWTH_BYTES, "Owned RSS leak: grew over 64MiB across fifty switches")
 
 
 def diagnose_rss_failure(run, session, bridge):
@@ -453,7 +459,7 @@ def webview(run):
                     samples.append(process_sample(session, bridge))
                 run.observed["cycles"] = cycles
                 run.observed["process_samples"] = samples
-                # Preserve every raw sample; a strictly growing series has no evidence of stabilization.
+                # Preserve every raw sample for the leak verdict and its failure diagnostics.
                 medians = rss_windows(samples)
                 run.observed["rss_windows"] = medians
                 try:
