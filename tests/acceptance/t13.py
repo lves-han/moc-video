@@ -47,6 +47,34 @@ def validate_frame(row):
         require(row["id"] == "first-frame-" + expected["color_palette"], "first-frame palette case differs")
 
 
+def validate_history_completion(evidence):
+    expected = evidence.get("expected", {})
+    current, event, commit = (evidence.get(key) or {} for key in ("current", "nativeEnded", "committed"))
+    keys = ("element", "epoch", "engineEpoch", "session", "resolution", "match", "video", "source", "metadata")
+    same = lambda row: all(key in expected and row.get(key) == expected[key] for key in keys)
+    require(type(expected.get("element")) is int and expected["element"] > 0
+            and type(expected.get("epoch")) is int and expected["epoch"] >= 0
+            and all(isinstance(expected.get(key), str) and expected[key] for key in
+                    (*keys[2:], "contentId", "historySource"))
+            and type(expected.get("episode")) is int and expected["episode"] > 0,
+            "history completion expected identity missing")
+    started, deadline, now = (expected.get("started"), expected.get("deadline"), evidence.get("observedAt"))
+    times = (started, deadline, now, event.get("timestamp"), event.get("at"), commit.get("at"))
+    require(all(type(value) in (int, float) and math.isfinite(value) for value in times)
+            and deadline == started + 12000 and started <= now <= deadline
+            and started <= event["timestamp"] <= event["at"] <= commit["at"] <= now,
+            "history completion event/commit exceeded shared deadline or preceded current attempt")
+    require(same(current) and current.get("route") == "playback" and current.get("phase") == "ended" and current.get("ended") is True
+            and event.get("type") == "ended" and event.get("trusted") is True and event.get("ended") is True
+            and same(event.get("playback", {})) and same(commit.get("playback", {}))
+            and commit.get("playback", {}).get("phase") == "ended",
+            "history completion requires current trusted native ended and controller handling")
+    entry = commit.get("entry", {})
+    require(entry.get("completed") is True and entry.get("content_id") == expected["contentId"]
+            and entry.get("episode") == expected["episode"] and entry.get("source_id") == expected["historySource"],
+            "history completion corresponding entry was not committed")
+
+
 def validate_ui(result):
     """Require the observed interaction matrix, beyond screenshot existence."""
     require(result.get("ok") is True and result.get("cases"), "native UI failed or did not run")
@@ -82,6 +110,7 @@ def validate_ui(result):
             and history["latestEpisode"] == 3 and history.get("dialogRole") == "dialog"
             and all(history.get(key) is True for key in ("focusRestored", "cancelledDeletionPreservedData", "removed", "cleared")),
             "history resume/replay/merge/confirmation evidence differs")
+    validate_history_completion(history.get("historyCompletion", {}))
     require(rows["console-and-overlay-health"]["actual"]["logs"] == [], "native UI console errors")
     require(rows["history-reload-precondition"]["actual"].get("visibleTitlesBeforeReload", 0) > 0, "history reload precondition missing")
     validate_frame(rows["history-refresh-reset-and-preferences"])

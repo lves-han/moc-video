@@ -29,7 +29,8 @@ def main_report():
     rows["playback-locale-palette-and-shortcuts"]["actual"] = dict(videoWidth=1920, duration=30, position=6)
     rows["history-resume-merge-delete-clear-focus"]["actual"] = dict(
         resumedPosition=6, replayedPosition=0, mergedTitles=1, latestEpisode=3,
-        cancelledDeletionPreservedData=True, removed=True, cleared=True, dialogRole="dialog", focusRestored=True)
+        cancelledDeletionPreservedData=True, removed=True, cleared=True, dialogRole="dialog", focusRestored=True,
+        historyCompletion=completion_evidence())
     rows["console-and-overlay-health"]["actual"] = dict(logs=[])
     rows["history-reload-precondition"]["actual"] = dict(visibleTitlesBeforeReload=1)
     rows["history-refresh-reset-and-preferences"] = frame(reload=True)
@@ -40,7 +41,67 @@ def actual(report, identifier):
     return next(row["actual"] for row in report["cases"] if row["id"] == identifier)
 
 
+def completion_evidence():
+    binding = dict(element=3, epoch=120, engineEpoch="host-current", session="session-current",
+                   resolution="resolution-current", match="match-current", video="midnight:3",
+                   source="playback-source", metadata="metadata-current")
+    return dict(expected=dict(binding, contentId="demo:series:midnight", episode=3,
+                              historySource="demo-cloudstream", started=100, deadline=12100),
+                current=dict(binding, route="playback", phase="ended", ended=True),
+                nativeEnded=dict(type="ended", trusted=True, ended=True, timestamp=200, at=201, playback=dict(binding)),
+                committed=dict(at=202, playback=dict(binding, phase="ended"), entry=dict(
+                    content_id="demo:series:midnight", episode=3, source_id="demo-cloudstream", completed=True)),
+                observedAt=203)
+
+
 class UiOracleTests(unittest.TestCase):
+    def test_current_native_ended_controller_and_committed_history_are_accepted(self):
+        t13.validate_history_completion(completion_evidence())
+
+    def test_completion_wrong_video_epoch_session_and_other_identities_are_rejected(self):
+        for stage in ("current", "nativeEnded", "committed"):
+            for key in ("element", "epoch", "engineEpoch", "session", "resolution", "match", "video", "source", "metadata"):
+                evidence = completion_evidence()
+                row = evidence[stage] if stage == "current" else evidence[stage]["playback"]
+                row[key] = -1 if isinstance(row[key], int) else "old-identity"
+                with self.subTest(stage=stage, key=key), self.assertRaises(ValueError):
+                    t13.validate_history_completion(evidence)
+
+    def test_property_only_synthetic_state_only_or_uncommitted_completion_is_rejected(self):
+        mutations = [("nativeEnded", "trusted", False), ("nativeEnded", "type", "timeupdate"),
+                     ("nativeEnded", "ended", False), ("current", "phase", "playing"),
+                     ("current", "ended", False), ("current", "route", "history"),
+                     ("entry", "completed", False), ("entry", "content_id", "other-title"),
+                     ("entry", "episode", 2), ("entry", "source_id", "other-source"),
+                     ("commitPlayback", "phase", "playing")]
+        for stage, key, value in mutations:
+            evidence = completion_evidence()
+            row = evidence["committed"]["entry" if stage == "entry" else "playback"] if stage in ("entry", "commitPlayback") else evidence[stage]
+            row[key] = value
+            with self.subTest(stage=stage, key=key), self.assertRaises(ValueError):
+                t13.validate_history_completion(evidence)
+        for key in ("nativeEnded", "committed", "current", "expected"):
+            evidence = completion_evidence()
+            del evidence[key]
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                t13.validate_history_completion(evidence)
+        report = main_report()
+        del actual(report, "history-resume-merge-delete-clear-focus")["historyCompletion"]
+        with self.assertRaises(ValueError):
+            t13.validate_ui(report)
+
+    def test_completion_shared_deadline_and_event_commit_order_are_required(self):
+        for stage, key, value in (("expected", "deadline", 24100), ("nativeEnded", "timestamp", 99),
+                                  ("nativeEnded", "timestamp", float("inf")), ("nativeEnded", "at", 99),
+                                  ("committed", "at", 200), ("committed", "at", 204), (None, "observedAt", 12101)):
+            evidence = completion_evidence()
+            (evidence[stage] if stage else evidence)[key] = value
+            with self.subTest(stage=stage, key=key, value=value), self.assertRaises(ValueError):
+                t13.validate_history_completion(evidence)
+        evidence = completion_evidence()
+        evidence["observedAt"] = evidence["expected"]["deadline"]
+        t13.validate_history_completion(evidence)
+
     def test_complete_main_report_with_history_reload_is_accepted(self):
         # Regression: history reset used to send every main-suite row through
         # the standalone frame branch, raising KeyError on the first row.

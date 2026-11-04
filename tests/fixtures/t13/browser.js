@@ -36,12 +36,21 @@ void (async () => {
     const { locale } = await import("/src/i18n.ts");
     const { paletteOptions } = await import("/src/ui/theme.ts");
     const { historyRepository } = await import("/src/data/history.ts");
+    const { historyContentId } = await import("/src/data/history-model.ts");
+    const { previewSourceId } = await import("/src/data/preview.ts");
+    const { historyCompletionReady } = await import("/tests/fixtures/t13/history-completion.js");
     let traceHistory = false, historyOrder = 0;
+    const videoElements = new WeakMap();
+    let videoSequence = 0, completionAttempt = null;
     const playbackSnapshot = () => {
       const state = app.state.playback;
+      const element = document.querySelector("video");
+      if (element && !videoElements.has(element)) videoElements.set(element, ++videoSequence);
       return { phase: state.phase, epoch: state.playback_epoch, engineEpoch: state.engine_epoch,
+        element: element ? videoElements.get(element) : null, ended: element?.ended === true,
         session: state.session?.session_id ?? null, resolution: state.resolution?.id ?? null,
         match: state.context?.match_id ?? null, video: state.context?.metadata_video_id ?? null,
+        metadata: state.context ? JSON.stringify(state.context.metadata_ref) : null,
         source: state.context?.episode_ref.source_id ?? null, position: state.position_ms, duration: state.duration_ms,
         route: app.state.route.name, hash: location.hash };
     };
@@ -50,16 +59,19 @@ void (async () => {
       historyTrace.push({ order: ++historyOrder, at: performance.now(), stage, playback: playbackSnapshot(), ...detail });
       if (historyTrace.length > 100) historyTrace.shift();
     };
-    historyDiagnostic = () => ({ current: playbackSnapshot(), trace: historyTrace.slice() });
-    // Observe the real repository calls without adding a wait to the failing
-    // interaction. Copies keep later playback/navigation from rewriting evidence.
+    historyDiagnostic = () => ({ current: playbackSnapshot(), completionAttempt, trace: historyTrace.slice() });
+    // Copies keep later playback/navigation from rewriting the real call and
+    // commit evidence used by the completion precondition.
     for (const method of ["save", "list"]) {
       const original = historyRepository[method];
       historyRepository[method] = async (...args) => {
         const input = JSON.parse(JSON.stringify(args));
+        const captured = playbackSnapshot();
         recordHistory(`${method}-called`, { input });
         try {
           const result = await original(...args);
+          if (method === "save" && completionAttempt) completionAttempt.committed = {
+            at: performance.now(), playback: captured, entry: input[0] };
           recordHistory(`${method}-committed`, { input, result: result === undefined ? null : JSON.parse(JSON.stringify(result)) });
           return result;
         } catch (error) { recordHistory(`${method}-failed`, { input, error: String(error) }); throw error; }
@@ -72,6 +84,9 @@ void (async () => {
         const media = { trusted: event.isTrusted, timestamp: event.timeStamp, position: video.currentTime,
           duration: Number.isFinite(video.duration) ? video.duration : null, ended: video.ended, paused: video.paused };
         recordHistory(`native-${type}`, { media });
+        if (type === "ended" && completionAttempt) completionAttempt.nativeEnded = {
+          type, ...media, at: performance.now(), playback: {
+            ...playbackSnapshot(), element: videoElements.get(video) ?? null } };
         queueMicrotask(() => recordHistory(`delivered-${type}`, { media }));
       }, true);
     }
@@ -284,9 +299,26 @@ void (async () => {
       if (autoNext.getAttribute("aria-checked") === "true") autoNext.click();
       await wait(() => app.state.settings.auto_next === false, "disable automatic next episode");
       await navigate("#/watch/midnight/3", "video"); await wait(() => document.querySelector("video")?.readyState >= 1, "completion metadata");
-      const finishing = document.querySelector("video"); seekMedia(finishing.duration - 0.2); await finishing.play();
-      await wait(() => finishing.ended, "actual end of clip");
-      recordHistory("ended-property-observed", { media: { ended: finishing.ended, position: finishing.currentTime, duration: finishing.duration } });
+      const finishing = document.querySelector("video");
+      const context = app.state.playback.context;
+      assert(context?.metadata_video_id === "midnight:3" && app.state.playback.session, "Completion requires the current episode/session");
+      const started = performance.now();
+      const expected = { ...playbackSnapshot(), contentId: historyContentId(context.metadata_ref.identity.type, context.metadata_ref.identity.meta_id),
+        episode: Number(context.metadata_video_id.split(":").at(-1)), historySource: previewSourceId(app.state.selected_playback_source),
+        started, deadline: started + 12000 };
+      completionAttempt = { expected, nativeEnded: null, committed: null };
+      let historyCompletion;
+      seekMedia(finishing.duration - 0.2); await finishing.play();
+      // WebKit may expose ended before dispatching the trusted event. Keep the
+      // original single 12s budget through controller handling and save commit.
+      await wait(() => {
+        const current = playbackSnapshot(), observedAt = performance.now();
+        if (!historyCompletionReady(expected, current, completionAttempt.nativeEnded, completionAttempt.committed, observedAt)) return false;
+        historyCompletion = { expected, current, ...completionAttempt, observedAt };
+        return true;
+      }, "current trusted ended, controller completion and history commit", Math.max(0, expected.deadline - performance.now()));
+      completionAttempt = null;
+      recordHistory("completion-precondition-met", { completion: historyCompletion });
       await navigate("#/history", ".history-card");
       recordHistory("replay-action-read", { action: document.querySelector(".history-actions button").textContent.trim() });
       assert(document.querySelector(".history-actions button").textContent.trim() === "Play again", "Completed record has no replay action");
@@ -319,7 +351,7 @@ void (async () => {
       await wait(() => !document.querySelector(".history-card"), "clear history");
       traceHistory = false;
       return { resumedPosition: resumed, replayedPosition: replayed, mergedTitles: 1, latestEpisode: 3, cancelledDeletionPreservedData: true,
-        dialogRole: modal.getAttribute("role"), focusRestored: true, removed: true, cleared: true, history: historyDiagnostic() };
+        dialogRole: modal.getAttribute("role"), focusRestored: true, removed: true, cleared: true, historyCompletion, history: historyDiagnostic() };
     });
     await run("error-and-poster-contrast", ["U07", "R20", "R40", "R67", "REQ-T13"], async () => {
       await navigate("#/watch/midnight/1", "video");
