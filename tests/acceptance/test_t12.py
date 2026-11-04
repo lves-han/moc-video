@@ -216,6 +216,15 @@ class NativeOracleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds 512MiB"):
             t12.validate_rss_windows([513 * mib] * 10)
 
+    def test_source_rematch_requires_visible_confirmation_and_resumed_playback(self):
+        good = dict(stages=["playing", "confirmation-visible", "cancelled", "playing-again"], recovered=True, host=dict(live_sessions=0),
+                    during_confirmation=dict(session=None, videos=0, route="details"))
+        t12.validate_source_rematch(good)
+        for bad in (dict(good, stages=["playing"]), dict(good, recovered=False), dict(good, host=dict(live_sessions=1)),
+                    dict(good, during_confirmation=dict(session=None, videos=1, route="details"))):
+            with self.assertRaises(ValueError):
+                t12.validate_source_rematch(bad)
+
     def test_rss_windows_reject_missing_samples_windows_and_invalid_bytes(self):
         for count in (0, 1, 50, 52):
             with self.subTest(count=count), self.assertRaisesRegex(ValueError, "51 raw"):

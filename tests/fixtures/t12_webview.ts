@@ -2,7 +2,7 @@
 import { createApp, h, nextTick, ref, type App as VueApp } from "vue";
 import App from "../../src/App.vue";
 import UiProvider from "../../src/ui/UiProvider.vue";
-import { appState, navigatePlayback, type PlaybackController } from "../../src/state.ts";
+import { appController, appState, navigatePlayback, type PlaybackController } from "../../src/state.ts";
 import { nativeInvoke, type Player } from "../../src/player.ts";
 import { locale } from "../../src/i18n";
 import { api } from "../../src/api.ts";
@@ -608,6 +608,62 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       check(current.frames <= before + 1 && value.audio_rms < .001, "Old frames/audio remain after stop");
       check(!value.diagnostics.listening && value.diagnostics.hls_instances === 0 && value.diagnostics.retiring === 0, "Formal controller retains transport/listeners/handles");
       result = { source_removed: true, frames_after_stop: current.frames - before, host: await current.rpc({ operation: "observe" }) };
+      break;
+    }
+    case "source-rematch": {
+      // Native playback keeps hash #/playback; a source change must still reach its confirmation UI.
+      const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+      const input = current.matches[1]!, sources = appState.sources.data!;
+      const original = sources.providers.find(source => source.id === input.playback_source.source_id)!;
+      const otherId = `${original.id}-t13-other`, core = window.__TAURI__!.core;
+      appState.selected_metadata_source = { source_id: input.metadata_ref.content_ref.source_id, source_revision: input.metadata_ref.content_ref.source_revision };
+      appState.selected_playback_source = clone(input.playback_source);
+      // Host confirmed this video through its selection; the current details page must list it too.
+      const page = clone(current.details), metadata = clone(input.metadata_ref);
+      page.metadata_ref = metadata; page.details.ref = metadata.content_ref;
+      page.details.groups = [{ ...page.details.groups[0]!, episodes: [{ ...page.details.groups[0]!.episodes[0]!,
+        ref: { ...metadata.content_ref, data: JSON.stringify({ video_id: input.video_id }) } }] }];
+      appState.details.data = page; appState.details.phase = "ready";
+      const stages: string[] = [];
+      const play = async () => {
+        check(await appController.match(input.video_id), "Real match did not return");
+        await until(() => Boolean(appState.playback.session) && appState.playback.phase !== "resolving", "Real session did not open after match");
+        const element = current.container.querySelector("video")!;
+        await until(() => !element.paused && element.currentSrc === appState.playback.session?.media_url, "Real playback did not start");
+      };
+      sources.providers.push({ ...clone(original), id: otherId, name: "T13 other source" });
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
+        if (name === "match_playback" && args?.input?.playback_source?.source_id === original.id) return core.invoke<T>(name, { ...args, input }); // Host-confirmed selection
+        if (name !== "match_playback" || args?.input?.playback_source?.source_id !== otherId) return core.invoke<T>(name, args);
+        return { request_id: args.request_id, engine_epoch: appState.runtime.engine_epoch, data: { status: "needs_confirmation", metadata_ref: args.input.metadata_ref, video_id: args.input.video_id, context: null,
+          candidates: [{ title: "T13 candidate", content_ref: { source_id: otherId, source_revision: original.source_revision, data: "{}" } }] } } as T;
+      } };
+      const pick = async (id: string) => {
+        const element = document.querySelector<HTMLSelectElement>(".playback-source");
+        check(element, "Playback source picker missing");
+        element.value = id; element.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      try {
+        await play(); stages.push("playing");
+        await pick(otherId);
+        await until(() => Boolean(document.querySelector('[role="dialog"]')?.textContent?.includes("T13 candidate")), "Source change confirmation did not render");
+        stages.push("confirmation-visible");
+        const paused = { session: appState.playback.session, videos: document.querySelectorAll("video").length, route: appState.route.name };
+        [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button => button.textContent?.includes("Cancel"))!.click();
+        await until(() => !document.querySelector('[role="dialog"]') && document.querySelectorAll("video").length === 1, "Cancel did not return to the player");
+        stages.push("cancelled");
+        await appController.selectSource(original.id, "playback");
+        await play(); stages.push("playing-again");
+        const session = appState.playback.session!.session_id;
+        result = { stages, during_confirmation: paused, session, recovered: current.container.querySelector("video")!.currentSrc === appState.playback.session!.media_url };
+        appController.invalidatePlayback();
+        await until(() => !appState.playback.session && !appState.playback.resolution, "Playback did not stop");
+        await delay(500); // Host close/release run in the retiring queue.
+        result.host = await current.rpc({ operation: "observe" });
+      } finally {
+        window.__TAURI__!.core = core;
+        sources.providers = sources.providers.filter(source => source.id !== otherId);
+      }
       break;
     }
     case "dispose": {

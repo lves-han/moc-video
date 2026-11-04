@@ -360,6 +360,13 @@ def process_sample(session, bridge=None):
                               host_requests=bridge.sequence if bridge else None))
 
 
+def validate_source_rematch(value):
+    require(value["stages"] == ["playing", "confirmation-visible", "cancelled", "playing-again"], "Source change confirmation flow differs")
+    during = value["during_confirmation"]
+    require(during["session"] is None and during["videos"] == 0 and during["route"] == "details", "Old playback remained during source confirmation")
+    require(value["recovered"] is True and value["host"]["live_sessions"] == 0, "Playback did not resume or release after source confirmation")
+
+
 RSS_LIMIT_BYTES = 512 * 1024 * 1024
 RSS_GROWTH_BYTES = 64 * 1024 * 1024
 
@@ -490,6 +497,9 @@ def webview(run):
                 validate_stop(stop)
                 run.observed["stop"] = stop
                 run.observed["idle_process_sample"] = process_sample(session, bridge)
+                rematch = session.command("t12", action="source-rematch", timeout=60)
+                validate_source_rematch(rematch)
+                run.observed["source-rematch"] = rematch
                 disposed = session.command("t12", action="dispose")
                 require(disposed["audio_closed"] is True and disposed["videos"] == 0 and not disposed["errors"], "Unmount retains native media/AudioContext or errors")
                 run.observed["disposed"] = disposed

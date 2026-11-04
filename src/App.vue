@@ -36,7 +36,9 @@ const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   return { page,
     id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
 });
-const formalPlayback = computed(() => appState.route.name === "playback" || readHash().name === "playback");
+// A rematch that needs the user keeps hash #/playback; its confirmation/result UI lives in CatalogView.
+const matchNeedsUser = computed(() => ["needs_confirmation", "not_found"].includes(appController.matching.result?.status ?? ""));
+const formalPlayback = computed(() => appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value));
 const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
 const playbackView = ref<InstanceType<typeof PlaybackView>>();
 defineExpose({ playbackController: () => playbackView.value?.playback });

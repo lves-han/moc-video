@@ -59,7 +59,9 @@ async function fullscreen() {
 }
 watch(() => props.context, context => {
   if (!mounted) return;
-  if (context) void playback.load(context, { resume: props.resume }); else void playback.stop();
+  if (context) void playback.load(context, { resume: props.resume });
+  // Already stopped by the controller: another stop would bump the epoch and discard its pending rematch.
+  else if (state.context || state.session || state.resolution || state.phase !== "idle") void playback.stop();
 });
 watch(playing, showControls);
 onMounted(async () => {

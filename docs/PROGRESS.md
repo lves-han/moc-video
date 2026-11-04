@@ -1793,3 +1793,10 @@
 - 此前失败保留：同源首次完整verify `evidence/verify/20261104T063504851866.json` 因T09网关测试一次超时FAIL，未复现且原因未确认，详见BACKLOG，非本卡修复。
 - Changed：tests/acceptance/t12.py的RSS判定及test_t12.py正反例；TASKS/ARCHITECTURE按ADR-044放宽T22/T24性能耐久标准；产品代码本轮未改。
 - Remaining：独立巡检待完成；首轮A1的较快增长（末值约324MiB）未复现，原因未确认；约1.3MiB/次以下的慢泄漏不在此门覆盖内。本卡经ADR-043在Claude对话内完成，sessions计数保持7。
+
+## T0.13 独立巡检P1：播放中换源无法确认 2026-11-04T06:58:36+00:00
+- 实施状态：WIP；撤回勾选，巡检BLOCKING原样保留：evidence/reviews/20261104T064525058837-T0.13/output.log，未accept-review。
+- 根因：原生播放hash保持#/playback。换源时invalidatePlayback已停止媒体并改路由，formalPlayback仍为true，CatalogView的候选弹层不渲染；PlaybackView的watcher又调用stop递增epoch，使进行中的匹配被丢弃。
+- 复现：tests/fixtures/t12_webview.ts新增真实打包场景source-rematch；修复前evidence/runs/20261104T065509650039-diag-rematch-before-fix-2/output.log报“Source change confirmation did not render”，修复后evidence/runs/20261104T065652097273-diag-rematch-after-fix/output.log通过（诊断，跳过内存门，不代替A1）。此前一次evidence/runs/20261104T065334906736-diag-rematch-before-fix/output.log失败属夹具前提错误。
+- 修改：App.vue在匹配需要用户处理时让位CatalogView；PlaybackView.vue的watcher在控制器已空闲时不重复stop。
+- 限制：场景的候选为夹具注入，覆盖确认弹层、取消和真实重新匹配播放；选定候选后继续播放由既有控制器测试覆盖。取消后停留在“请从影片详情选择”页。
