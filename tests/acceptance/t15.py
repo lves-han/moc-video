@@ -34,6 +34,7 @@ def validate_details(e):
     t = e["stale"]
     require(t["title"] == "Sparse series" and t["data_title"] == "Sparse series", "A late details response must not overwrite the newer page")
     r = e["related"]
+    require(r["reopened_plot_chars"] < 300, "A newly opened title must start with its plot collapsed")
     require(r["cards"] == 1 and "Related title" in r["text"] and r["opened"] == "Sparse series", "Related content must render and open")
     f = e["flow"]
     require(f["sent_video"] == f["video"] and f["first_selection"] is None and f["pending"]["loading"] is True and f["pending"]["disabled"] is True,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { NAlert, NButton, NEmpty, NModal } from "naive-ui";
 import { appState as state, appController as app, metadataVideoId as videoId } from "../state";
 import { locale, t } from "../i18n";
@@ -17,6 +17,8 @@ const longPlot = computed(() => (details.value?.plot?.length ?? 0) > PLOT_LIMIT)
 const plot = computed(() => !longPlot.value || expanded.value ? details.value?.plot ?? "" : `${details.value!.plot!.slice(0, PLOT_LIMIT)}…`);
 
 const chosenGroup = ref<string | null>(null);
+// App reuses this view between titles; refreshing the same title keeps its state.
+watch(() => details.value?.ref.data, () => { expanded.value = false; chosenGroup.value = null; });
 const groups = computed(() => details.value?.groups ?? []);
 const group = computed(() => groups.value.find(item => item.id === chosenGroup.value) ?? groups.value[0] ?? null);
 const episodes = computed(() => groups.value.flatMap(item => item.episodes));

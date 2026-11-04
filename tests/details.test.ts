@@ -38,5 +38,27 @@ test("R22/REQ-T15: other poster failures show their error and reloading details 
 test("R22/REQ-T15: the metadata video id comes from Host's exact video reference", () => {
   const read = (data: string) => metadataVideoId({ ...SOURCE, data });
   assert.equal(read(JSON.stringify(["stremio_video", "addon", "series", "meta", "video:1"])), "video:1");
-  for (const data of [JSON.stringify({ video_id: "video:1" }), JSON.stringify(["maccms", "addon", "series", "meta", "video:1"]), JSON.stringify(["stremio_video", "video:1"]), "not json"]) assert.equal(read(data), "");
+  for (const data of [JSON.stringify(["maccms", "addon", "series", "meta", "video:1"]), JSON.stringify(["stremio_video", "video:1"]), "not json"]) assert.equal(read(data), "");
+});
+
+test("R22/REQ-T15: browser preview episode references keep a usable metadata video id", () => {
+  // The shape src/data/preview.ts publishes; the T13 WebKit UI test exercises it end to end.
+  assert.equal(metadataVideoId({ ...SOURCE, data: JSON.stringify({ id: "film", video_id: "film:2" }) }), "film:2");
+});
+
+test("R22/REQ-T15: an old poster failing while newer details load cannot take over the page", async () => {
+  const f = fixture(expired), OTHER = { ...SOURCE, data: "other" }; await f.app.loadDetails(REF);
+  const client = (f.app as unknown as { api: { call: (command: string, input: any) => Promise<any> } }).api, call = client.call;
+  let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
+  client.call = async (command, input) => {
+    const response = await call(command, input);
+    if (command !== "get_details" || input.ref.data !== "other") return response;
+    await gate;
+    return { ...response, metadata_ref: { ...metadata, content_ref: OTHER }, details: { ...response.details, ref: OTHER, title: "Other" } };
+  };
+  const newer = f.app.loadDetails(OTHER), before = f.count("get_details");
+  await f.app.detailsImageError("a");
+  assert.equal(f.count("get_details"), before); assert.equal(f.count("get_resource_status"), 0);
+  release(); await newer;
+  assert.equal(f.state.details.data!.details.title, "Other");
 });

@@ -1848,3 +1848,7 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261104T084523019093-A1/output.log`；断言：exit0，5 required全过，JUnit 8项0失败；真实Host+打包WKWebView：单片播放入口、200个同名集各自可选、3组切换只显示本组、缺海报年份简介自然呈现、长简介纯文本折叠、空剧集提示、旧详情响应不覆盖新页、点击第7集经确认后context等于所选真实引用。
 - 完整verify：PASS；`evidence/verify/20261104T084542598791.json`，六门exit0。
 - Remaining：独立巡检待完成；相关内容用注入卡片验证，Host的Stremio适配器当前恒返回空列表；Stremio无anime类型fixture，只测movie与series；确认后真实播放由T0.16验证；CatalogView残留分支见记录。本卡在Claude对话内开发，未经drive.py。
+
+## T0.15 巡检P2修复 2026-11-04T08:56:46+00:00
+- 实施状态：WIP；撤回勾选，巡检evidence/reviews/20261104T084914351136-T0.15 CLEAR及其发现原样保留。
+- 修复：metadataVideoId同时接受预览引用（上一次修复造成的回归）；DetailsView切换影片时重置简介展开与所选分组；页面加载中旧海报不再触发旧详情刷新。修复前details单测失败2项（预览、竞态）。

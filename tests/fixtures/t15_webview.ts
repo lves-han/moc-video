@@ -105,7 +105,9 @@ export async function detailsScenario(prototype: { player: Player; base: string;
     related = { id: "related-card", title: "Related title", kind: "series", ref: refOf("Sparse series") };
     await open("Long movie");
     await until(() => one(".details-related-card"), "Related card did not render");
-    evidence.related = { cards: all(".details-related-card").length, text: one(".details-related-card")!.textContent };
+    // The plot expanded earlier belongs to its previous visit; any newly opened title starts collapsed.
+    const reopened = one(".details-plot")!.textContent!.length;
+    evidence.related = { reopened_plot_chars: reopened, cards: all(".details-related-card").length, text: one(".details-related-card")!.textContent };
     one<HTMLAnchorElement>(".details-related-card")!.click();
     await until(() => one("h1")?.textContent === "Sparse series", "Related card did not open its details");
     evidence.related.opened = one("h1")!.textContent;

@@ -387,11 +387,13 @@ function requireBinding(condition: unknown, message: string): asserts condition 
   if (!condition) throw new ApiFailure({ code: "BAD_REQUEST", message, retryable: false });
 }
 
-// Host's Stremio video reference: ["stremio_video", addon_key, type, meta_id, video_id].
+// Host's Stremio video reference is ["stremio_video", addon_key, type, meta_id, video_id];
+// the session-only browser preview publishes { id, video_id }.
 export function metadataVideoId(reference: Bridge_MediaRef) {
   try {
-    const fields: unknown = JSON.parse(reference.data);
-    return Array.isArray(fields) && fields.length === 5 && fields[0] === "stremio_video" && typeof fields[4] === "string" ? fields[4] : "";
+    const fields = JSON.parse(reference.data);
+    const value = Array.isArray(fields) ? fields.length === 5 && fields[0] === "stremio_video" && fields[4] : fields?.video_id;
+    return typeof value === "string" ? value : "";
   } catch { return ""; }
 }
 
@@ -725,7 +727,8 @@ export class AppController {
     const output = owner === "home" ? this.homeImage : this.detailsImage;
     const data = page.data as HomeViewData | DetailsViewData | null, host = this.state.runtime.engine_epoch, epoch = page.request_epoch;
     const active = () => page.data === data && page.request_epoch === epoch && this.state.runtime.engine_epoch === host;
-    if (!data?.images[resourceId] || !host) return;
+    // A page already loading replaces this DTO; its old images must not reload the old page over it.
+    if (!data?.images[resourceId] || !host || page.phase === "loading") return;
     if (attempt.data !== data) { attempt.data = data; attempt.queried.clear(); }
     if (attempt.queried.has(resourceId)) return;
     attempt.queried.add(resourceId);

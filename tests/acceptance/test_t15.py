@@ -14,7 +14,7 @@ def good():
                 layouts=[dict(width=960, overflow=False), dict(width=390, overflow=False)],
                 sparse=dict(groups=3, poster_placeholder=True, plot=False, meta="Series", switched=[dict(pressed=True, others=1, shown=["a"], expected=["a"])]),
                 empty=dict(message=True, play=False, buttons=0), stale=dict(title="Sparse series", data_title="Sparse series"),
-                related=dict(cards=1, text="Related title", opened="Sparse series"), errors=[],
+                related=dict(reopened_plot_chars=281, cards=1, text="Related title", opened="Sparse series"), errors=[],
                 flow=dict(video="v", sent_video="v", first_selection=None, pending=dict(loading=True, disabled=True), cancelled=dict(route="details", title="T", context=None), expected=expected,
                           selection=dict(content_ref=CONTENT, group_id="g", episode_id="e"), confirmed_video="v", context_episode_ref=REF, context_group="g", context_episode="e", context_video="v", hash="#/playback"))
 
@@ -44,6 +44,7 @@ class DetailsEvidence(unittest.TestCase):
         self.rejects(lambda e: e["stale"].update(data_title="Long movie"))
         self.rejects(lambda e: e["movie"].update(plain_text=False))
         self.rejects(lambda e: e["movie"].update(collapsed_chars=1000))
+        self.rejects(lambda e: e["related"].update(reopened_plot_chars=1000))
 
     def test_sparse_empty_and_errors(self):
         self.rejects(lambda e: e["sparse"].update(poster_placeholder=False))
