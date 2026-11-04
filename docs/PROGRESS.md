@@ -1711,3 +1711,8 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 真实依据：当前107份SHA/causal-readback完整55条无截断，video.endedtrue时正式仍playing且尚无可信ended，立即导航只保存未完成记录；未见completedtrue被覆盖，不预认生产EOS缺陷。原第五13oracle136行为/类型格式native及UI10pass1fail/自然退出探针与全部旧成功失败保持，新源准确A1/fullverify NOT RUN。
 - 实施与完成：固定独立round40 CLEAR原文保存提交后，紧邻strict首卡current next/旧创建身份/两锁实得/clean source protected原s5核对，唯一原drive once maxsessions6。仅tests修复真实当前ended/正式完成及历史提交前提，在原共享12秒内补身份旧epoch/合成state-only等拒绝反例，原14cases/50与51RSS十窗/20矩阵4DPI五首帧和安全资源权限期限保持；新源准确A1成功direct完整verify/done/受验提交/新固定独立CLEAR/clean才完成，不rebaseline，后卡等待。
+
+## T0.13 第六会话授权固定文档独立复审 2026-11-04T03:45:11.406929+00:00
+- 固定授权提交：`14c269b0dab7b6f4a7fc4ff34e41019132716901`；ADR041分段摘要`1b351c8fe55bdb85ae2dfa9971f49d97127bd1e61fdfadf28bc194c0028d373d`。
+- 原始独立只读报告：`docs/reviews/doc-review/round-40.md`；DOC-REVIEW-VERDICT CLEAR，107份当前及10份受限SHA/55条因果trace已核，授权仅tests/原12秒共享预算/所有原门与完成要求保持。
+- 原s5/f8/gen3/pausedfalse，第六尚未消费，无第七许可；新源夹具修复/准确A1/fullverify均NOT RUN。紧邻strict顺序/旧创建身份/两锁实得/clean source protected后仅一次原drive once maxsessions6。
