@@ -29,3 +29,6 @@ ADR027最小4文件修复及原T06/T13迁移经128回归、入口校验、固定
 
 - 来源：固定da14d4d原巡检20261029T080606981755-T0.9（CLEAR）。已确认HTML分支及正文探测MEDIA_UNSUPPORTED与SPEC9.2要求UPSTREAM_FAILED不符；只转发Range/If-Range遗漏If-None-Match。待验证gzip自动解压后强ETag与实体是否一致，当前fixture无ETag，未作运行确认。
 - T10网关清单/响应头范围内补上述相关最小行为及HTTP反例；保留源上下文/源鉴权隔离，If-None-Match实际响应处理，HTML诊断分类和修改后Length/Encoding/ETag一致。原T09成功/失败与CLEAR不回写。
+
+## 未复现：T09网关测试偶发超时 2026-11-04T06:45:13+00:00
+T0.13完整verify（evidence/verify/20261104T063504851866.json）中gateway::tests::t09_slow_timeout_truncation_disconnect_and_close_cancel一次失败：fixture wait_for超过5秒，日志无行号。同源单独20次（含16个满载CPU进程）、完整cargo test 3轮、其后完整verify均通过；原因未确认。当时另一项目的容量测试在同机运行，影响未验证。未验证线索：该用例/stall夹具停顿5秒，与quiet的5秒等待上限相同。再次出现时开RUST_BACKTRACE=1取行号。

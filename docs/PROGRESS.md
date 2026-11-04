@@ -1785,3 +1785,11 @@
 - 结果：RESOLVED
 - 决定：用户明确指示“基本上都维持在300MB附近，没有出现内存泄露即可……无需要太过于严格的验收标准，有的话帮我改了”；按ADR-044放宽内存判定及T22/T24时长次数，安全、数据、功能门保留。
 - 批准摘要：034b3b6a7baaa956956d0e29fe6a3b3c859ff2671fdb85df8d5ee310ebc7d129
+
+## T0.13 T13 应用状态与导航 2026-11-04T06:45:13+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T063307733654-A1/output.log`；断言：exit0，128 required全过，JUnit 142项0失败，新内存门下真实50切集RSS窗口283033600→298303488 bytes（增长14.6MiB，峰值289.2MiB），门后HLS/过期/错误/EOS/退出全过。
+- 完整verify：PASS；`evidence/verify/20261104T064154636884.json`，六门exit0；workflow 121过7平台skip，Rust 108+16过。
+- 此前失败保留：同源首次完整verify `evidence/verify/20261104T063504851866.json` 因T09网关测试一次超时FAIL，未复现且原因未确认，详见BACKLOG，非本卡修复。
+- Changed：tests/acceptance/t12.py的RSS判定及test_t12.py正反例；TASKS/ARCHITECTURE按ADR-044放宽T22/T24性能耐久标准；产品代码本轮未改。
+- Remaining：独立巡检待完成；首轮A1的较快增长（末值约324MiB）未复现，原因未确认；约1.3MiB/次以下的慢泄漏不在此门覆盖内。本卡经ADR-043在Claude对话内完成，sessions计数保持7。
