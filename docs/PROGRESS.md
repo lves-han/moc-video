@@ -1736,3 +1736,10 @@
 - 现有诊断：DOM84/track1/监听9/Session1/HTTP0/scratch24576bytes1canvas稳定，weak旧轨末alive5 connected/enabled0；live→stop→observer-release→dispose的RSS340115456→335724544→335396864→335380480，8份renderer/GPU vmmap原摘要CAPTURED，footprint与RSS指标不互代，浏览器缓存/解码/真实持有根因未定。诊断stop/dispose清Session/HTTP/轨道监听、video0且finally native-15/lingering=[]、Host-15；后续HLScontrols/expire/image/errors/auto unknown EOS/layout正常stopdispose Hostfinish原门NOT RUN，未冒充完成。
 - 完整verify/done/受验完成提交独立巡检NOT RUN。需要真实最小决定：是否仅本卡追加一次6→7，由原CLI原前端/tests范围先用已存证据定位确认资源持有，再最小修及必要局部回归、完整准确A1/verify；原50/51十窗RSS门/单位阈值及所有14cases/UI历史/安全权限资源时限保持，实质指标测法或范围变化另取决定。未批准只读证据/Git，不改源/新开发或同源筛选重跑。
 - 证据：`evidence/drive/t13-sixth-validation-20261104T035656Z/rss-failure-ui-complete/manifest.json`167份实际SHA，optional周期samples缺1准确列明、51逐命令和UI RSS齐；全部旧107/受限10/104/90/29/125未封存及WIP历史沿baseline.previous_validation保持。原创建身份全退出/两锁实得和准确handoff齐，clean后后卡继续等待。
+
+## T0.13 唯一第七会话真实批准 2026-11-04T05:52:05.944776+00:00
+- 结果：RESOLVED
+- 决定：用户对当前聊天内存门失败后下一步明确选择“仅批准 T0.13 追加一次（6→7），沿原前端范围用已有诊断定位最小修复，原门不变”；按ADR042唯一一次，原s6/f9/gen3，第七尚未消费，未授权第八，非选择修改内存门或测法。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 事实与证据：`evidence/drive/t13-sixth-validation-20261104T035656Z/rss-failure-ui-complete/manifest.json`167份SHA，当前完整UI历史/693ms结束及重播删除焦点/20矩阵五startup过，但准确A1 RSS趋势门exit1原样保持；逐身份RSS/生命周期/8原vmmap已有、缓存/持有根因未定，预算未超不代趋势门通过。原所有旧成功失败/WIP/125未封存历史保持。
+- 执行与完成：固定独立round41 CLEAR原文保存提交后紧邻strict首卡current next/旧创建身份/两锁实得/clean source protected原s6核对，唯一原drive once maxsessions7；仅原前端src/tests/PROGRESS用已有证据定位确认后最小修，不改Rust/依赖/冻结控制或测法、不rebaseline。最新必要测试限制生效，原14cases/50与51aggregate十窗RSS原门/UI历史及全部安全权限资源时限保持，新源一次准确A1成功direct完整verify/done/受验提交/新固定独立CLEAR/clean才完成，后卡等待。
