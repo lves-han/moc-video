@@ -1800,3 +1800,10 @@
 - 复现：tests/fixtures/t12_webview.ts新增真实打包场景source-rematch；修复前evidence/runs/20261104T065509650039-diag-rematch-before-fix-2/output.log报“Source change confirmation did not render”，修复后evidence/runs/20261104T065652097273-diag-rematch-after-fix/output.log通过（诊断，跳过内存门，不代替A1）。此前一次evidence/runs/20261104T065334906736-diag-rematch-before-fix/output.log失败属夹具前提错误。
 - 修改：App.vue在匹配需要用户处理时让位CatalogView；PlaybackView.vue的watcher在控制器已空闲时不重复stop。
 - 限制：场景的候选为夹具注入，覆盖确认弹层、取消和真实重新匹配播放；选定候选后继续播放由既有控制器测试覆盖。取消后停留在“请从影片详情选择”页。
+
+## T0.13 T13 应用状态与导航（巡检修复后）2026-11-04T07:03:33+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T065838052323-A1/output.log`；断言：exit0，128 required全过，JUnit 142项0失败，含真实打包source-rematch；RSS窗口281804800→304283648 bytes（增长21.4MiB，峰值290.2MiB）。
+- 完整verify：PASS；`evidence/verify/20261104T070020970077.json`，六门exit0。
+- Changed：App.vue、PlaybackView.vue修复播放中换源确认；t12夹具与验收新增source-rematch及正反例。
+- Remaining：等待对新提交的独立复巡；T09偶发超时未复现、慢泄漏未覆盖、首轮A1较快增长未复现，见前述记录和BACKLOG。
