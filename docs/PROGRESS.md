@@ -1754,3 +1754,10 @@
 - 读回：最终`evidence/acceptance/T13-session-7-rss-readback.json` SHA`afbab0c4acdee7e89578831150bf5b706003ca7110bbc41a247e2455d47193c9`；167份SHA相符，7个实际归档阅读源相符、另3项manifest无源条目准确NOT VERIFIED，10项全部与HEAD字节相符。原KeyError src/api.ts的静态归档覆盖假设错误已note纠正并保留日志，不计业务测试失败。
 - 结论：当前renderer增加51937280bytes且十窗严格增长；历史已完成T12 renderer也增加29409280bytes且其renderer十窗严格增、仅aggregate有下降。比较不能覆盖当前失败或证明门无效/新增泄漏。8原vmmap都在失败后，无匹配切前类别或持有链；现有player/Session/Resolution/请求清理与buffer/观察计数有界。初始prototype被transport持有至shutdown但历史同样存在，增长贡献未测，不能据此选修复。
 - 交接证据：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/manifest.json`封存8份当前原只读报告/CLI原日志结果/handoff/state SHA。所有旧创建身份退出和两锁实得已核，先保存本WIP交接再记阻塞，不伪造代码提交或完成。
+
+## T0.13 第七会话结果与第八次开发批准 2026-11-04T06:18:24+00:00
+- 结果：RESOLVED
+- 决定：用户明确回复“批准，在这里做”；按ADR-043仅本卡追加一次，在当前Claude对话内开发，原门不变，未授权更多次。
+- 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
+- 第七会话事实：ADR042唯一第七已消费，s7/f9/g3，agent exit0，仅只读调查，source保持198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72，根因未确认；证据evidence/acceptance/T13-session-7-rss-readback.json。A1/verify NOT RUN。
+- 新增只读分析：同一份逐轮样本中，renderer每次切集增长中位数T12为0.12MiB、T13为0.68MiB，各仅一轮数据。player.ts、t12.py和夹具切集路径自T12后未变，增长来源待诊断确认。

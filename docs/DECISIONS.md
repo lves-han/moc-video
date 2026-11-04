@@ -363,3 +363,10 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 播放与阶段：新源准确A1须完整nativeHLS controls同Resolution换线/第四新Resolution清旧stream句柄、一次3s只读status身份查询/一次过期恢复第二拒绝manualretry、4096LRU图片410原生一次所属DTO恢复、完整errors完成后重复诊断401502codec track与控制401重连、autoplay unknown真实trusted EOS/布局正常stopdispose Hostfinish，原C9修复和捕获旧handle回收/prototype正式PlaybackView/真实WK/Origin CSP单窗口不回退。History会话预览/SQLite T18/T20、公共lib仅结构范围和移动业务另授权/真实CS条件DASH N02/产品耐久其他平台边界保持。
 分工与完成门：原CLI实际相关自验读回，已知限制真实受限准确WIP稳定退出按ADR010外层原run代验Git/只读巡检，不重复开发侧权限失败。新源准确A1冻结{python}字面成功direct完整verify/原done/受验提交/新固定独立CLEAR/clean全齐才完整完成，后卡等待。第七后若需新实现，真实留证报告最小决定并暂停，无第八许可，纯验收Git继续。原范围外Rust/模型依赖/冻结契约/控制全局配置不改。
 当前基线：source=198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72、protected=97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b，generation3/4096MiB macOS RSS采样/jobs2/thread1/session10800/idle2700/command7200/review1800及全部权限时限安全强度保持；GUI锁定只读等真实解锁，不改系统锁屏设置。
+
+## ADR-043 2026-11-04T06:18:24+00:00 — 已采纳：T0.13第八次开发在当前Claude对话内进行
+
+来源：用户中止外层sessions后要求“从T13的任务卡开始接着做”，在收到“第七后无第八许可、原门不变、本对话或原CLI二选一”的说明后明确回复“批准，在这里做”。
+决定：仅T0.13追加一次开发，由当前Claude Code对话（claude-opus-5-5）直接执行，取代ADR-042“无第八许可”及“不切模型”对这一次的限制。未经drive.py启动，task-state的sessions保持实际值7，不手写状态、不rebaseline，失败历史全部保留。
+范围与门：范围沿T0.13原卡。原14 cases、50次切集、51份aggregate样本、十个五切窗口判定、单位阈值和全部安全资源门不变；不做同源筛选重跑、人为warmup或强制GC。诊断单列，不代替A1。若只有修改内存门或测法才能通过，停止并再次询问用户。
+完成门：新源一次准确A1成功后直接完整verify、原task.py done、受验完成提交、drive.py --review-only独立巡检CLEAR。
