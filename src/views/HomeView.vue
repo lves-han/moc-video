@@ -63,8 +63,10 @@ async function refresh() {
 .catalog-sources { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 24px; }
 label { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 select { min-height: 44px; max-width: min(100%, 340px); padding: 8px; color: var(--text); background: var(--surface); border: 1px solid var(--border); }
-/* 4..7 cards per row: posters stay 150..180px wide, capped at seven columns. */
-.film-grid.home-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 180px)); justify-content: start; max-width: calc(7 * 180px + 6 * 18px); gap: 25px 18px; }
+/* 4..7 cards per row: columns are counted at the 150px minimum (a fixed 180px maximum would leave three
+   at 764px), cards stop at 180px, and 1325px is the widest grid before an eighth column fits. */
+.film-grid.home-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); max-width: 1325px; gap: 25px 18px; }
+.home-card { max-width: 180px; }
 .home-card-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-poster-missing { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 12px; text-align: center; overflow-wrap: anywhere; overflow: hidden; }
 .home-load-more { margin-top: 20px; }

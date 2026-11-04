@@ -12,6 +12,7 @@ def good():
                 pagination=dict(cards=305, unique=305, peers_unchanged=True), images=dict(lazy=True, posters=270, unique_urls=270, placeholders=30),
                 long_title=dict(title_chars=200, width=160, card_width=165, height=20),
                 layouts=[desktop, dict(desktop, columns=4), dict(desktop, columns=3), dict(columns=2, poster_width=170, ratio=1.5, overflow=False)],
+                column_sweep=[dict(content_width=width, columns=min(7, max(4, (width + 18) // 168)), poster_width=170) for width in (660, 700, 764, 800, 830, 900, 1000, 1100, 1250, 1400, 1800)],
                 retry=dict(recovered=2, still_second=True, featured_kept=True, requests=1, error_cleared=True),
                 playback_source=dict(kept_home=True, requests=0, persisted=True),
                 expiry=dict(status_queries=1, home_requests=1, page_one_snapshot=True, cards_after=100, error=False),
@@ -44,6 +45,10 @@ class HomeEvidence(unittest.TestCase):
         self.rejects(lambda e: e["layouts"][1].update(columns=3))
         self.rejects(lambda e: e["layouts"][1].update(poster_width=200))
         self.rejects(lambda e: e["layouts"][3].update(overflow=True))
+        self.rejects(lambda e: e["column_sweep"][2].update(columns=3))
+        self.rejects(lambda e: e["column_sweep"][-1].update(columns=8))
+        self.rejects(lambda e: e["column_sweep"][0].update(poster_width=190))
+        self.rejects(lambda e: e.update(column_sweep=e["column_sweep"][:3]))
 
     def test_return_must_restore_without_refetch(self):
         self.rejects(lambda e: e["return"].update(restored=0))

@@ -844,7 +844,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 历史补充：增加#/history导航与HistoryView，按影片合并、最近时间分组、当前集进度与来源、续播/重播、单条删除和清空确认；预览使用会话内数据，明确刷新重置。正式SQLite持久化由T18接入，按开发规格11.4恢复稳定内容/video身份。
 
 ### T0.14 T14 推荐首页界面
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.6, T0.13
 - 需求：U03, R01, R21, R34, R35, R37, REQ-T14 → A1（覆盖表含精确对应）
 - 范围：`src/views/HomeView.vue`, `src/components/FilmCard.vue`, `src/App.vue`, `src/style.css`, `tests/`, `docs/PROGRESS.md`, `src/api.ts`, `src/state.ts`

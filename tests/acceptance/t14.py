@@ -44,6 +44,10 @@ def validate_home(e):
     for row in layouts[:2]:
         require(4 <= row["columns"] <= 7 and 149 <= row["poster_width"] <= 181 and abs(row["ratio"] - 1.5) < .02,
                 f"Desktop grid must show 4..7 cards of 150..180px at 2:3: {row}")
+    sweep = e["column_sweep"]
+    require(len(sweep) >= 8 and min(row["content_width"] for row in sweep) >= 640 and max(row["content_width"] for row in sweep) >= 1400, "Column sweep must span desktop content widths")
+    for row in sweep:
+        require(4 <= row["columns"] <= 7 and 149 <= row["poster_width"] <= 181, f"Every desktop width must show 4..7 cards of 150..180px: {row}")
     r = e["retry"]
     require(r["recovered"] > 0 and r["still_second"] is True and r["featured_kept"] is True and r["requests"] == 1 and r["error_cleared"] is True,
             "Section retry must recover only that section in place")

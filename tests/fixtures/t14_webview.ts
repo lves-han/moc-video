@@ -91,7 +91,18 @@ export async function homeScenario(prototype: { player: Player; base: string; ca
       layouts.push({ width: innerWidth, columns: rows.filter(card => Math.abs(card.getBoundingClientRect().top - top) < 2).length, poster_width: link.width, ratio: link.height / link.width, overflow: document.documentElement.scrollWidth > innerWidth + 1 });
     }
     evidence.layouts = layouts;
+    await nativeInvoke("t01_control", { action: "width", value: 960 }); await delay(250);
+    const minimum = section(0)!.getBoundingClientRect().width;
     await nativeInvoke("t01_control", { action: "width", value: 1200 }); await delay(250);
+    // Window sizes the automation cannot select (for example 1000px) are measured by their real content width.
+    const sweep: Record<string, unknown>[] = [];
+    for (const width of [minimum, 700, 764, 800, 830, 900, 1000, 1100, 1250, 1400, 1800]) {
+      section(0)!.style.width = `${width}px`; await delay(30);
+      const rows = all<HTMLElement>(".home-card", section(0)!), top = rows[0]!.getBoundingClientRect().top;
+      sweep.push({ content_width: width, columns: rows.filter(card => Math.abs(card.getBoundingClientRect().top - top) < 2).length, poster_width: rows[0]!.querySelector(".poster-link")!.getBoundingClientRect().width });
+    }
+    section(0)!.style.width = "";
+    evidence.column_sweep = sweep;
 
     await rpc({ operation: "mode", value: 1 });
     const beforeRetry = { featured: cards(0), homes: count("get_home") };
