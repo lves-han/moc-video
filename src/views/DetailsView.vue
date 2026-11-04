@@ -23,7 +23,7 @@ const groups = computed(() => details.value?.groups ?? []);
 const group = computed(() => groups.value.find(item => item.id === chosenGroup.value) ?? groups.value[0] ?? null);
 const episodes = computed(() => groups.value.flatMap(item => item.episodes));
 const single = computed(() => episodes.value.length === 1 ? episodes.value[0]! : null);
-const canPlay = (episode: Bridge_Episode) => Boolean(videoId(episode.ref) && state.selected_playback_source && !app.matching.pending);
+const canPlay = (episode: Bridge_Episode) => Boolean(videoId(episode.ref) && state.selected_playback_source && !app.matching.pending && state.details.phase === "ready");
 const label = (episode: Bridge_Episode) => episode.number != null && !episode.label.includes(String(episode.number)) ? `${episode.number}. ${episode.label}` : episode.label;
 
 const broken = reactive(new Set<string>());

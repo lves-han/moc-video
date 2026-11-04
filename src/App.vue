@@ -123,8 +123,10 @@ function addSource(value: Source) { previewSources.value.push(value); notify(t("
 function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
 function openDetails(ref: Bridge_MediaRef) { location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`; }
 async function playEpisode(videoId: string) {
-  const result = await appController.match(videoId);
-  if (result?.status === "matched") { location.hash = "#/playback"; }
+  try {
+    const result = await appController.match(videoId);
+    if (result?.status === "matched") location.hash = "#/playback";
+  } catch (error) { preferenceError.value = String(error); }
 }
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;

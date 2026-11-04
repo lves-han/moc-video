@@ -1859,3 +1859,8 @@
 - 完整verify：PASS；`evidence/verify/20261104T085806981062.json`，六门exit0；前端149项。
 - 预览回归核对：T13 WebKit界面诊断通过，evidence/runs/20261104T085646784875-diag-t13-preview-ui/output.log（诊断，不代替T13验收）。
 - Remaining：等待独立复巡；相关内容为注入卡片，anime未测，确认后真实播放由T0.16验证；旧海报竞态只有单测，未在原生窗口复现。
+
+## T0.15 加载期间选集按钮状态修复 2026-11-04T09:15:48+00:00
+- 实施状态：WIP；用户指示“先修按钮状态”，撤回勾选，巡检evidence/reviews/20261104T090131644355-T0.15 CLEAR及其P2原样保留。
+- 复现：新详情加载时200个旧选集按钮均未禁用，evidence/runs/20261104T091446640082-diag-t15-loading-before/output.log。
+- 修改：DetailsView的canPlay要求详情ready；App.vue的playEpisode接住匹配前提错误并显示。t15新增loading_controls正反例。

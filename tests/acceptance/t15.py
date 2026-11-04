@@ -33,6 +33,8 @@ def validate_details(e):
     require(q["message"] is True and q["play"] is False and q["buttons"] == 0, "A title without episodes must say so without play controls")
     t = e["stale"]
     require(t["title"] == "Sparse series" and t["data_title"] == "Sparse series", "A late details response must not overwrite the newer page")
+    c = e["loading_controls"]
+    require(c["buttons"] > 0 and c["disabled"] == c["buttons"] and c["matches"] == 0, "Old episode controls must be disabled while newer details load")
     r = e["related"]
     require(r["reopened_plot_chars"] < 300, "A newly opened title must start with its plot collapsed")
     require(r["cards"] == 1 and "Related title" in r["text"] and r["opened"] == "Sparse series", "Related content must render and open")

@@ -102,6 +102,18 @@ export async function detailsScenario(prototype: { player: Player; base: string;
     release(); await delay(300);
     evidence.stale = { title: one("h1")!.textContent, data_title: appState.details.data!.details.title };
 
+    // While newer details load, the old page stays visible but none of its controls may start a match.
+    await open("Two hundred episodes");
+    const target = refOf("Sparse series"), reopen = hold(JSON.stringify(target));
+    location.hash = `#/details/${encodeURIComponent(JSON.stringify(target))}`;
+    await until(() => appState.details.phase === "loading", "Newer details did not start loading");
+    await nextTick();
+    const stale = all<HTMLButtonElement>(".details-episode"), matchesWhileLoading = calls.filter(call => call.command === "match_playback").length;
+    stale[0]!.click(); await delay(50);
+    evidence.loading_controls = { buttons: stale.length, disabled: stale.filter(button => button.disabled).length, matches: calls.filter(call => call.command === "match_playback").length - matchesWhileLoading };
+    reopen();
+    await until(() => one("h1")?.textContent === "Sparse series" && appState.details.phase === "ready", "Newer details did not open");
+
     related = { id: "related-card", title: "Related title", kind: "series", ref: refOf("Sparse series") };
     await open("Long movie");
     await until(() => one(".details-related-card"), "Related card did not render");
