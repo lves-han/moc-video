@@ -743,6 +743,12 @@ export class AppController {
       } else output.error = status.error?.message ?? "Image failed to load";
     } catch (cause) { if (active()) output.error = failure(cause).message; }
   }
+  // The metadata video after this one in the current details order; null at the last episode.
+  nextVideo(videoId: string) {
+    const videos = (this.state.details.data?.details.groups ?? []).flatMap(group => group.episodes).map(episode => metadataVideoId(episode.ref));
+    const index = videos.indexOf(videoId);
+    return index >= 0 ? videos[index + 1] ?? null : null;
+  }
   async loadDetails(ref: Bridge_MediaRef) {
     requireBinding(sameSource(ref, this.state.selected_metadata_source), "Details must belong to selected metadata source");
     const target = this.state.details;

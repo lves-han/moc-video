@@ -1,5 +1,11 @@
 import { parseHistoryEntry, type HistoryEntry } from './history-model.ts';
 
+// About 5s between periodic snapshots; pause and end write immediately, as does an explicit seek (SPEC 11.4).
+export const HISTORY_INTERVAL_MS = 5000;
+export function historyWriteDue(phase: string, lastWrite: number, now: number) {
+  return ["paused", "ended"].includes(phase) || now - lastWrite >= HISTORY_INTERVAL_MS;
+}
+
 // Session-only preview. The native implementation will persist through Rust/SQLite.
 const entries = new Map<string, HistoryEntry>();
 async function save(entry: HistoryEntry): Promise<void> {

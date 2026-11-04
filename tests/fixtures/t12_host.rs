@@ -288,7 +288,9 @@ fn t12_host_formal_webview_bridge() {
             };
             publish(&dir.join(format!("response-{sequence}.json")), &result);
         }
-        assert!(opened.len() >= 51);
+        // T16 reuses this bridge for its shorter UI scenario.
+        let minimum = std::env::var("T12_MIN_OPENS").map_or(51, |value| value.parse().unwrap());
+        assert!(opened.len() >= minimum);
         assert!(
             opened
                 .iter()

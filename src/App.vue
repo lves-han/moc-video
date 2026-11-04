@@ -10,8 +10,8 @@ import HomeView from "./views/HomeView.vue";
 import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
-import { appState, appController } from "./state.ts";
-import { historyRepository } from "./data/history";
+import { appState, appController, metadataVideoId } from "./state.ts";
+import { historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
@@ -178,8 +178,22 @@ async function onHashChange() {
 }
 let lastWrite = 0;
 let lastHistory: HistoryEntry | null = null;
+function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
+  const state = appState.playback, context = state.context, data = appState.details.data;
+  if (!context || !data || state.position_ms <= 0 || state.phase === "failed") return null;
+  const episodes = data.details.groups.flatMap(group => group.episodes);
+  const index = episodes.findIndex(episode => metadataVideoId(episode.ref) === context.metadata_video_id);
+  const provider = appState.sources.data?.providers.find(item => item.id === context.episode_ref.source_id);
+  if (index < 0 || !provider) return null;
+  const kind = data.details.kind === "other" ? "series" : data.details.kind;
+  const poster = data.details.poster ? data.images[data.details.poster.resource_id]?.url : undefined;
+  return { content_id: historyContentId(kind, context.metadata_ref.identity.meta_id), title: data.details.title, poster: poster ?? "/mark.svg", kind,
+    episode: index + 1, episode_total: episodes.length, source_id: provider.id, source_name: provider.name,
+    position_ms: Math.round(state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms), duration_ms: state.duration_ms,
+    completed: finished || state.phase === "ended", updated_at: Date.now() };
+}
 function historySnapshot(finished = false): HistoryEntry | null {
-  if (native) return null;
+  if (native) return nativeHistorySnapshot(finished);
   const state = appState.playback, context = state.context;
   const film = baseFilms.find(film => film.id === context?.metadata_ref.identity.meta_id);
   if (!context || !film || state.position_ms <= 0 || state.phase === "failed") return null;
@@ -208,14 +222,28 @@ function continueHistory(entry: HistoryEntry) {
 function onEnded(context: PlaybackContext, epoch: number) {
   if (epoch !== appState.playback.playback_epoch) return;
   void flushHistory(true);
+  latestHistory = null;
+  // Only a real EOS of the current session reaches here, so errors and manual stops keep the episode.
+  if (native && appState.settings.auto_next) {
+    const next = appController.nextVideo(context.metadata_video_id);
+    if (next) void playEpisode(next);
+  }
   if (!native && appState.settings.auto_next) {
     const film = baseFilms.find(film => film.id === context.metadata_ref.identity.meta_id);
     const episode = Number(context.metadata_video_id.split(":").at(-1));
     if (film && episode < film.episodes) location.hash = `#/watch/${film.id}/${episode + 1}`;
   }
 }
+// load/stop reset position with the epoch, so the old episode's last snapshot is kept to commit on switch.
+let latestHistory: HistoryEntry | null = null;
 watch(() => [appState.playback.position_ms, appState.playback.phase], () => {
-  if (["paused", "ended"].includes(appState.playback.phase) || Date.now() - lastWrite >= 5000) void flushHistory();
+  latestHistory = historySnapshot() ?? latestHistory;
+  if (historyWriteDue(appState.playback.phase, lastWrite, Date.now())) void flushHistory();
+});
+watch(() => appState.playback.playback_epoch, () => {
+  const snapshot = latestHistory;
+  latestHistory = null;
+  if (snapshot && snapshot !== lastHistory) { lastWrite = Date.now(); lastHistory = snapshot; void persistHistory(snapshot); }
 });
 function onPageHide() { void flushHistory(); }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
@@ -241,7 +269,7 @@ onBeforeUnmount(() => {
     <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
     <select class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
   </div>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" @ended="onEnded" />
+  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @seek="flushHistory()" @update:auto-next="autoNext = $event" />
   <template v-else>
   <a class="skip-link" href="#main-content" @click.prevent="focusMain">{{
     t("Skip to content")

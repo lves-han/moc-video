@@ -68,7 +68,7 @@ def webview(run):
     return packaged(run, LIVE_TEST, "t14", validate_home, "home", lambda e: dict(cards=e["pagination"]["cards"], layouts=e["layouts"]))
 
 
-def packaged(run, live_test, op, validate, key, summary):
+def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None):
     require(t01.native_gui_session()["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
     t01.DATA = run.folder / "packaged"
@@ -86,12 +86,15 @@ def packaged(run, live_test, op, validate, key, summary):
             media = folder / "media"
             media.mkdir()
             try:
-                bridge = Bridge(run, folder, media)
-                bridge.wait(folder / "ready.json", timeout=180)
+                if prepare_media:
+                    prepare_media(run, media)
+                bridge = (bridge_class or Bridge)(run, folder, media)
+                ready = bridge.wait(folder / "ready.json", timeout=180)
                 with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                     session = t01.NativeSession(run, fixture, executable, 1)
                     session.wait(0, 30)
-                    evidence = session.command(op, timeout=240)
+                    evidence = session.command(op, timeout=240, payload=ready)
+                    session.record["commands"][-1]["args"] = dict(payload="actual Host bridge payload; capability URLs redacted")
                     run.observed[key] = evidence
                     validate(evidence)
                     session.close()

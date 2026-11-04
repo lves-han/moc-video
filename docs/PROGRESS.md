@@ -1870,3 +1870,8 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261104T091548959795-A1/output.log`；断言：exit0，5 required全过，JUnit 8项0失败；新详情加载期间旧选集200个全部禁用、0次匹配、0个页面错误。
 - 完整verify：PASS；`evidence/verify/20261104T091631243477.json`，六门exit0。
 - Remaining：等待独立复巡；相关内容为注入卡片，anime及360、768宽度未测，确认后真实播放由T0.16验证。
+
+## T0.16 播放界面实现交接 2026-11-04T09:39:05+00:00
+- 实施状态：WIP；用户指示“接着做 T16”，在当前Claude对话内开发，未经drive.py启动。
+- Changed：PlaybackView补倍速1.25、上下键音量、Esc、下一集与末集禁用、自动下一集开关、选集浮层、当前影片/分组/集名、音量经Settings保存；App实现原生EOS自动下一集与原生历史快照（周期、暂停、seek、切集、结束）；history.ts提供写入判定。
+- 限制：MacCMS无已验证身份，真实匹配总需确认，验收中自动下一集用Host已确认的selection；原生续播入口及SQLite属T0.18。
