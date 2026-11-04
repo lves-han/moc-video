@@ -1864,3 +1864,9 @@
 - 实施状态：WIP；用户指示“先修按钮状态”，撤回勾选，巡检evidence/reviews/20261104T090131644355-T0.15 CLEAR及其P2原样保留。
 - 复现：新详情加载时200个旧选集按钮均未禁用，evidence/runs/20261104T091446640082-diag-t15-loading-before/output.log。
 - 修改：DetailsView的canPlay要求详情ready；App.vue的playEpisode接住匹配前提错误并显示。t15新增loading_controls正反例。
+
+## T0.15 T15 详情与选集界面（按钮状态修复后）2026-11-04T09:19:45+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T091548959795-A1/output.log`；断言：exit0，5 required全过，JUnit 8项0失败；新详情加载期间旧选集200个全部禁用、0次匹配、0个页面错误。
+- 完整verify：PASS；`evidence/verify/20261104T091631243477.json`，六门exit0。
+- Remaining：等待独立复巡；相关内容为注入卡片，anime及360、768宽度未测，确认后真实播放由T0.16验证。
