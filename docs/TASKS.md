@@ -890,7 +890,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 验证：多栏目、数百卡片、重复项、失败重试、过期图片资源、窗口宽度变化。
 
 ### T0.15 T15 详情与选集界面
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.7, T0.13
 - 需求：U03, R22, REQ-T15 → A1（覆盖表含精确对应）
 - 范围：`src/views/DetailsView.vue`, `src/App.vue`, `src/style.css`, `tests/`, `docs/PROGRESS.md`, `src/api.ts`, `src/state.ts`

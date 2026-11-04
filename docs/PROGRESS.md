@@ -1852,3 +1852,10 @@
 ## T0.15 巡检P2修复 2026-11-04T08:56:46+00:00
 - 实施状态：WIP；撤回勾选，巡检evidence/reviews/20261104T084914351136-T0.15 CLEAR及其发现原样保留。
 - 修复：metadataVideoId同时接受预览引用（上一次修复造成的回归）；DetailsView切换影片时重置简介展开与所选分组；页面加载中旧海报不再触发旧详情刷新。修复前details单测失败2项（预览、竞态）。
+
+## T0.15 T15 详情与选集界面（巡检修复后）2026-11-04T09:01:26+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T085722243566-A1/output.log`；断言：exit0，5 required全过，JUnit 8项0失败，含重新打开影片时简介折叠。
+- 完整verify：PASS；`evidence/verify/20261104T085806981062.json`，六门exit0；前端149项。
+- 预览回归核对：T13 WebKit界面诊断通过，evidence/runs/20261104T085646784875-diag-t13-preview-ui/output.log（诊断，不代替T13验收）。
+- Remaining：等待独立复巡；相关内容为注入卡片，anime未测，确认后真实播放由T0.16验证；旧海报竞态只有单测，未在原生窗口复现。
