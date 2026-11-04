@@ -1761,3 +1761,11 @@
 - 批准摘要：97a7e1c6b4841e756b3f9c7a5749895fb0b41a58c6a86c2eb92aa38bc0f9f10b
 - 第七会话事实：ADR042唯一第七已消费，s7/f9/g3，agent exit0，仅只读调查，source保持198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72，根因未确认；证据evidence/acceptance/T13-session-7-rss-readback.json。A1/verify NOT RUN。
 - 新增只读分析：同一份逐轮样本中，renderer每次切集增长中位数T12为0.12MiB、T13为0.68MiB，各仅一轮数据。player.ts、t12.py和夹具切集路径自T12后未变，增长来源待诊断确认。
+
+## T0.13 第七调查证据缺口与独立分配诊断待决定 2026-11-04T06:19:33.878154+00:00
+- 结果：BLOCKED
+- 当前：已先WIP `655a79c`保存调查交接；s7/f9/gen3/pausedfalse，第七已消费，无第八许可。源码仍`198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72`，0新业务测试/构建/A1/verify，未无因果修复或同源筛选。
+- 证据缺口：8原vmmap都在失败后的四阶段，没有匹配的切前分类基线/分配来源/对象持有链。当前与历史完成T12的renderer十窗均增长而aggregate表现不同，不替代当前失败或认定门失效。原清理/弱引用计数不能确认RSS持有根因；原detached prototype常量持有贡献未测，未擅自修改。
+- 最小独立诊断提案：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/diagnostic-proposal.md`；需真实批准外层仅通过原run复用当前打包产物，在原完整50场景切前/后按同创建身份比较分配类型与可用持有链，不改生产/测试/控制脚本或验收门、不新增开发会话、不跑全UI或重复A1。工具只读采样会影响时序，diagnostic_only单列不代正式51aggregate/十窗门，原失败保持。heap/leaks帮助参数可用仅静态核对，目标访问/解释性未验证；缺权限/超时不支持停分支，拟单工具10s首败不重试/无提权签名变更/4096MiB含工具和XPC/原身份清理与全部限制保持。
+- 当前原source198准确A1仍RSS趋势FAIL，后续播放安全门/完整verify/done/受验提交独立完成巡检NOT RUN；当前已过UI历史693ms/重播删除焦点/20矩阵五startup等按旧证据保持，不重测。需要用户决定是否授权这一轮独立分配诊断；未批准只读原证据与Git，无第八开发或改门授权，后卡等待。
+- 保存：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/manifest.json`8份第七原始日志结果/readback SHA及原167资料、3项非归档阅读源准确覆盖说明、静态KeyError与纠正记录齐；原所有历史计数和125未封存副本保持。原身份退出/两锁实得、准确handoff及clean核对。
