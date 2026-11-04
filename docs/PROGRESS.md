@@ -1769,3 +1769,14 @@
 - 最小独立诊断提案：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/diagnostic-proposal.md`；需真实批准外层仅通过原run复用当前打包产物，在原完整50场景切前/后按同创建身份比较分配类型与可用持有链，不改生产/测试/控制脚本或验收门、不新增开发会话、不跑全UI或重复A1。工具只读采样会影响时序，diagnostic_only单列不代正式51aggregate/十窗门，原失败保持。heap/leaks帮助参数可用仅静态核对，目标访问/解释性未验证；缺权限/超时不支持停分支，拟单工具10s首败不重试/无提权签名变更/4096MiB含工具和XPC/原身份清理与全部限制保持。
 - 当前原source198准确A1仍RSS趋势FAIL，后续播放安全门/完整verify/done/受验提交独立完成巡检NOT RUN；当前已过UI历史693ms/重播删除焦点/20矩阵五startup等按旧证据保持，不重测。需要用户决定是否授权这一轮独立分配诊断；未批准只读原证据与Git，无第八开发或改门授权，后卡等待。
 - 保存：`evidence/drive/t13-sixth-validation-20261104T035656Z/seventh-investigation/manifest.json`8份第七原始日志结果/readback SHA及原167资料、3项非归档阅读源准确覆盖说明、静态KeyError与纠正记录齐；原所有历史计数和125未封存副本保持。原身份退出/两锁实得、准确handoff及clean核对。
+
+## T0.13 第八次开发诊断：50切RSS上升有界，原门判定不稳定 2026-11-04T06:27:49+00:00
+- 结果：BLOCKED
+- 更正：上一条记录的“renderer每次切集T12 0.12MiB、T13 0.68MiB”差异属单轮波动，同源诊断为0.1至0.6MiB，不构成T13回归证据，增长来源的相应推测撤回。
+- 事实：source未改，198ec737482ec9a703d79bbd9c0429196af25d450de478e236a77b68dc580d72的产品与测试代码保持；诊断脚本和结果在evidence/drive/t13-eighth-diagnostic，均为诊断，全部exit0且不代替A1。
+- 同源十窗原判定：无vmmap时control2、control3严格增长（门失败），rest-control出现回落（门通过）；带vmmap的baseline、control1出现回落。同源结果不一致，T12的通过也依赖一次GPU尖峰。因此不以重跑A1取得通过。
+- 200切延长（long-control，仅一轮）：owned RSS第50切约293MiB，峰值约309MiB，第180切附近回落约30MiB，末值275.5MiB，与第10切约276MiB相当；未见持续增长。首轮A1的更快增长（末值约324MiB）未复现，原因未确认。
+- 门后检查（rest-control，仅该诊断跳过门）：原生HLS、controls、expire、image-expire、errors、autoplay、unknown-duration、eos、layout、stop、dispose及Host finish全部通过，无残留进程。
+- 已尝试：只读代码核查未见无界持有；未确认可修复的持有根因，因此未改生产代码，不为通过而制造资源下降。
+- 需要用户决定：是否将t12.py的RSS判定改为“十窗严格增长时同场景延长并判定是否回落”，SPEC“无单调资源增长”要求不变；或保持原门，T13继续阻塞。依ADR-043，改门或测法须用户另行批准。
+- 验收 A1：NOT RUN（第八次）；完整verify、done、完成提交、独立巡检NOT RUN。
