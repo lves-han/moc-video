@@ -1892,3 +1892,9 @@
 - 实施状态：WIP。
 - 复现：调到0.61后立即离页，设置仍为0.37，evidence/runs/20261104T101658599859-diag-t16-before-fix-2/output.log。
 - 修改：PlaybackView卸载时提交未保存的音量与静音。
+
+## T0.16 T16 内嵌播放界面（巡检修复后）2026-11-04T10:22:50+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261104T101824794474-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；离页后音量保存0.61，历史键等于Host content id，其余见前一DONE记录。
+- 完整verify：PASS；`evidence/verify/20261104T101927283341.json`，六门exit0。
+- Remaining：等待独立复巡；自动下一集成功路径用Host已确认selection；约5秒周期只有单测；网络错误、缓冲和DPI未在原生单独测；原生续播入口与SQLite属T0.18。
