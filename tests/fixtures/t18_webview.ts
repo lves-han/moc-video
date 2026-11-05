@@ -35,6 +35,9 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     if (name === "app_close_ready") return undefined as T;
     return await rpc({ command: name, args });
   } };
+  let seekedAt: number | null = null;
+  const onSeeked = (event: Event) => { seekedAt = (event.target as HTMLVideoElement).currentTime; };
+  document.addEventListener("seeked", onSeeked, true);
   const onError = (event: ErrorEvent) => errors.push(event.message);
   const onRejection = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
   window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
@@ -97,6 +100,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     evidence.failed_write = { notice: /could not be saved/.test(notice), row_kept: rowText.includes("Same title"), same_sequence: (() => { const sequences = calls.filter(call => call.command === "save_history").map(call => call.input.write_sequence); return sequences.slice(0, -1).includes(sequences.at(-1)); })(), preview_note: Boolean(one(".history-preview-note")) };
 
     // Removing asks first; afterwards the row stays gone even after a later list.
+    await until(() => one(".history-actions") && !one(".history-loading"), "History did not reload after the retry");
     const removeButton = one(".history-actions")!.querySelectorAll<HTMLButtonElement>("button");
     removeButton[removeButton.length - 1]!.click();
     await until(() => one(".history-confirmation"), "Remove confirmation missing");
@@ -125,10 +129,13 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     location.hash = "#/history";
     await until(() => all(".history-card").length === 1, "Row did not survive the restart");
     evidence.restart = { new_epoch: appState.runtime.engine_epoch !== epoch, rows: all(".history-card").length, write_sequence: (await list()).write_sequence };
+    await until(() => one(".history-actions") && !one(".history-loading"), "History did not finish loading");
+    seekedAt = null;
     one(".history-actions")!.querySelector<HTMLButtonElement>("button")!.click();
     await confirmFirst();
-    await until(() => Math.abs(video()!.currentTime - saved.position_ms / 1000) < .6, "Resume did not reach the saved position");
-    evidence.resumed = { saved_ms: saved.position_ms, at: video()!.currentTime, video: appState.playback.context!.metadata_video_id === saved.video_id };
+    // Only a real seek counts; playing up from zero would pass through the same time.
+    await until(() => seekedAt !== null, "Resume did not seek to the saved position");
+    evidence.resumed = { saved_ms: saved.position_ms, at: seekedAt, video: appState.playback.context!.metadata_video_id === saved.video_id };
 
     // Closing saves first, then lets the window go, in that order.
     await video()!.play().catch(() => {});
@@ -143,7 +150,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await nextTick();
     location.hash = "#/history";
     await until(() => one(".history-card"), "History did not reopen");
-    await until(() => one(".page-heading button"), "Clear button missing");
+    await until(() => one<HTMLButtonElement>(".page-heading button") && !one<HTMLButtonElement>(".page-heading button")!.disabled && !one(".history-loading"), "Clear button missing");
     one<HTMLButtonElement>(".page-heading button")!.click();
     await until(() => one(".history-confirmation"), "Clear confirmation missing");
     const clearConfirm = one(".history-confirmation")!.querySelectorAll<HTMLButtonElement>("button");
@@ -155,6 +162,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     return evidence;
   } finally {
     app.unmount();
+    document.removeEventListener("seeked", onSeeked, true);
     window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
     window.__TAURI__!.core = original;
   }
