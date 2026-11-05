@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "card": "T0.19",
-  "status": "WIP",
-  "updated_utc": "2026-11-05T03:55:22.149260+00:00",
+  "status": "ACCEPTED_FOR_T0.19",
+  "updated_utc": "2026-11-05T05:35:27.577195+00:00",
   "implementation_basis": "Independent public HTTP responses; existing MacCMS adapter. Plugin source was used only for scope/risk investigation (C4, ADR-048).",
   "aes": {
     "basis": "C4 / ADR-048 static investigation of commit 25cdd2119be03f62ae6a5a2cf46b16f9484224a2",
@@ -18,11 +18,11 @@
       "android-engine/packages/"
     ],
     "exclusion_basis": "src-tauri/tauri.conf.json has an empty bundle.resources; Cargo has no Android/DEX runtime dependency. Packaged artifact exclusion still requires A1.",
-    "packaged_exclusion": "NOT RUN"
+    "packaged_exclusion": "PASS: production and automation bundles exclude android-engine artifacts"
   },
   "network": {
-    "current_native_probe": "PUBLIC_JSON_CAPTURED_MEDIA_UNVERIFIED",
-    "reason": "Original public-DNS diagnostic completed; protocol and media results are separate. Current session adds fixtures/A1 but execution requires outer original run.py due the known sandbox sysctl restriction.",
+    "current_native_probe": "ONE_SOURCE_LIVE_PASS; others stopped or NOT RUN",
+    "reason": "A1 stops at the first candidate with direct media; 优质 returned 403 and 量子 failed before that, so both remain stopped without retry. Remaining candidates were not tested and stay unpromoted.",
     "receipt": "evidence/runs/20261105T034400521107-diag-t02-public/receipt.json",
     "privacy": "Public API endpoints only; signed media URLs, headers, capabilities and raw response bodies remain in native memory. Capture output replaces every media/image URL and omits unknown fields.",
     "capture": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
@@ -115,7 +115,11 @@
         }
       ],
       "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint."
+      }
     },
     {
       "name": "量子",
@@ -193,7 +197,11 @@
         }
       ],
       "reason": "STOPPED: first media resolution returned unsuccessful HTTP status before capture could record its numeric status; access-control outcome remains uncertain. Preserve stop pending explicit review.",
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "STOPPED: first media resolution returned unsuccessful HTTP status before capture could record its numeric status; access-control outcome remains uncertain. Preserve stop pending explicit review."
+      }
     },
     {
       "name": "红牛",
@@ -207,7 +215,7 @@
         "http_status": null,
         "reason": "first declared group only; later direct media group remains NOT RUN"
       },
-      "supported": false,
+      "supported": true,
       "observation_utc": "2026-11-05T03:44:42.390829Z",
       "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
       "http_observations": [
@@ -268,7 +276,11 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "SHORT_PLAY_PASS",
+        "chain": "public JSON/list/detail/full episodes/Host resolve/Rust gateway/packaged WKWebView"
+      }
     },
     {
       "name": "无尽",
@@ -353,7 +365,11 @@
         }
       ],
       "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     },
     {
       "name": "光速",
@@ -428,7 +444,11 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     },
     {
       "name": "极速",
@@ -503,7 +523,11 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     },
     {
       "name": "豪华",
@@ -577,7 +601,11 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     },
     {
       "name": "淘片",
@@ -668,7 +696,11 @@
         }
       ],
       "reason": "Protocol rejected: captured public list/detail omit required success code. No promotion or production special case.",
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     },
     {
       "name": "卧龙",
@@ -685,22 +717,28 @@
       "observation_utc": null,
       "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
       "http_observations": [],
-      "real_gateway_webview": "NOT RUN"
+      "real_gateway_webview": "NOT RUN",
+      "acceptance_live": {
+        "status": "NOT RUN",
+        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
+      }
     }
   ],
-  "supported_sources": [],
+  "supported_sources": [
+    "红牛"
+  ],
   "required_acceptance": {
-    "public_response_fixtures": "IMPLEMENTED; NOT RUN",
-    "negative_fixtures_and_cap_isolation": "IMPLEMENTED; NOT RUN",
-    "public_list_detail_episode_resolve_gateway_packaged_webview": "NOT RUN",
-    "A1": "NOT RUN",
-    "verify_all": "NOT RUN"
+    "public_response_fixtures": "PASS in evidence/acceptance/T02-all.json",
+    "negative_fixtures_and_cap_isolation": "PASS in evidence/acceptance/T02-all.json",
+    "public_list_detail_episode_resolve_gateway_packaged_webview": "PASS in evidence/acceptance/T02-all.json",
+    "A1": "PASS in evidence/acceptance/T02-all.json",
+    "verify_all": "PASS in evidence/acceptance/T02-all.json"
   },
   "fixture": {
     "path": "tests/fixtures/t02/public-responses.json",
     "basis": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
     "sources": 8,
-    "execution": "NOT RUN for current source",
+    "execution": "PASS in T0.19 A1",
     "privacy": "Projected response fields and full group order; media/image URLs replaced; no upstream signatures"
   }
 }
