@@ -5,7 +5,7 @@ import SettingsView from "./views/SettingsView.vue";
 import HistoryView from "./views/HistoryView.vue";
 import SourcesView from "./views/SourcesView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
-import CatalogView from "./views/CatalogView.vue";
+import NativeSourcesView from "./views/NativeSourcesView.vue";
 import HomeView from "./views/HomeView.vue";
 import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
@@ -164,7 +164,8 @@ async function onHashChange() {
         if (result?.context) pendingResume.value = { context: result.context, position_ms: saved && !saved.completed ? saved.position_ms : 0, was_playing: true };
       }
     } else {
-      const name = ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
+      // The first-run setup entry and the source manager are one native page.
+      const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
       appController.navigate({ name });
       if (name === "home" && !appState.home.data && appState.selected_metadata_source) await appController.loadHome();
     }
@@ -411,7 +412,7 @@ onBeforeUnmount(() => {
       <main id="main-content" tabindex="-1">
         <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" />
         <DetailsView v-else-if="native && route.page === 'film'" @open="openDetails" @play="playEpisode" />
-        <CatalogView v-else-if="native && route.page === 'sources'" @open="openDetails" @play="playEpisode" @select="selectNativeSource" />
+        <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
           <div class="page-heading">
             <div>

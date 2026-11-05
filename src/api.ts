@@ -1,3 +1,4 @@
+import { reactive } from "vue";
 import type { Bridge_ApiError, Command, CommandData, CommandInput, Settings } from "./models.ts";
 import { REQUEST_BUDGETS } from "./models.ts";
 
@@ -34,7 +35,10 @@ const nativeInvoke: Invoke = async (command, args) => {
   return tauri.core.invoke(command, args);
 };
 
+export type ApiFailureRecord = { command: Command; request_id: string; source_id: string | null; code: string; message: string };
 export class Api {
+  // Recent failures with their correlation request IDs, for the diagnostics page.
+  readonly failures = reactive<ApiFailureRecord[]>([]);
   private sourceKinds = new Map<string, string>();
   private readonly invoke: Invoke;
   private readonly timer: Timer;
@@ -77,6 +81,11 @@ export class Api {
       if (!success) {
         const error = response.error;
         if (!record(error) || typeof error.code !== "string" || typeof error.message !== "string" || typeof error.retryable !== "boolean") throw new UnknownCommit(requestId, "Invalid API error");
+        const target = input as { source_id?: unknown; ref?: { source_id?: unknown }; playback_source?: { source_id?: unknown } };
+        const owner = target.source_id ?? target.ref?.source_id ?? target.playback_source?.source_id;
+        const source = typeof owner === "string" ? owner : null;
+        this.failures.push({ command, request_id: requestId, source_id: source, code: error.code, message: error.message });
+        if (this.failures.length > 20) this.failures.shift();
         throw new ApiFailure(error as Bridge_ApiError);
       }
       if ((command === "runtime_status" || command === "runtime_prepare") && (!record(response.data) || typeof response.data.phase !== "string")) {

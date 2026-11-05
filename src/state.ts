@@ -1,7 +1,7 @@
 import { reactive } from "vue";
 import { api, Api, ApiFailure, settingsQueue, SettingsQueue } from "./api.ts";
 import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
-import type { AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
+import type { Bridge_Interaction, HttpSourceConfig, AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
   Command, CommandInput, PlaybackContext, PlaybackViewSession, PlayerEvent, ResumeSnapshot,
   AppSource, Bridge_HomeRequest, HomeViewData, MetadataRef, PlaybackMatchResult,
   PlaybackMatchSelection, Route, RuntimeStatus, Settings, SourceKey } from "./models.ts";
@@ -387,6 +387,30 @@ function requireBinding(condition: unknown, message: string): asserts condition 
   if (!condition) throw new ApiFailure({ code: "BAD_REQUEST", message, retryable: false });
 }
 
+export type SourceDraft = { kind: "maccms" | "stremio"; name: string; urls: string };
+const draftUrls = (draft: SourceDraft) => draft.urls.split("\n").map(url => url.trim()).filter(Boolean);
+// SPEC 18.1: at most 32 configurations and 16 manifests, anonymous http(s) URLs only.
+export function validateSourceDraft(draft: SourceDraft, others: number) {
+  const errors: string[] = [], urls = draftUrls(draft);
+  if (others >= 32) errors.push("At most 32 source configurations are allowed.");
+  if (!draft.name.trim()) errors.push("Enter a name for this source.");
+  if (!urls.length) errors.push("Enter a URL.");
+  if (draft.kind === "maccms" && urls.length > 1) errors.push("MacCMS takes exactly one API URL.");
+  if (urls.length > 16) errors.push("At most 16 manifest URLs are allowed.");
+  for (const url of urls) {
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { errors.push(`Not a full URL: ${redactDiagnostics(url)}`); continue; }
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) errors.push(`Use http(s) without credentials or a fragment: ${redactDiagnostics(url)}`);
+    else if (draft.kind === "stremio" && !parsed.pathname.endsWith("/manifest.json")) errors.push(`A Stremio URL must end in /manifest.json: ${redactDiagnostics(url)}`);
+  }
+  return errors;
+}
+// Diagnostics leave the app: URLs keep only origin and path, and credential-shaped values are removed.
+export function redactDiagnostics(text: string) {
+  return text.replace(/\b(https?:\/\/)(?:[^\s/@]*@)?([^\s/?#]+)([^\s?#]*)[^\s]*/gi, "$1$2$3")
+    .replace(/\b(cap|token|capability|authorization|bearer|cookie|password|secret)(["'=:\s]+)[^\s&"',;]+/gi, "$1$2<redacted>");
+}
+
 // Host's Stremio video reference is ["stremio_video", addon_key, type, meta_id, video_id];
 // the session-only browser preview publishes { id, video_id }.
 export function metadataVideoId(reference: Bridge_MediaRef) {
@@ -491,6 +515,7 @@ export class AppController {
   readonly diagnostics = reactive<Bridge_ApiError[]>([]);
   readonly homeImage = reactive({ error: "" });
   readonly detailsImage = reactive({ error: "" });
+  readonly interaction = reactive({ active: null as Bridge_Interaction | null, last: null as Bridge_Interaction | null });
   readonly matching = reactive({ result: null as PlaybackMatchResult | null, details: null as DetailsViewData | null,
     loading: false, pending: null as string | null, error: null as Bridge_ApiError | null });
   private requests = new Map<string, Ticket>();
@@ -748,6 +773,60 @@ export class AppController {
     const videos = (this.state.details.data?.details.groups ?? []).flatMap(group => group.episodes).map(episode => metadataVideoId(episode.ref));
     const index = videos.indexOf(videoId);
     return index >= 0 ? videos[index + 1] ?? null : null;
+  }
+  lastSourceFailure(sourceId: string) { return [...this.api.failures].reverse().find(row => row.source_id === sourceId) ?? null; }
+  private async syncConfig(kind: "maccms" | "stremio", configId: string) {
+    await this.api.call("sync_catalog", { kind, config_id: configId });
+  }
+  async saveSourceConfig(draft: SourceDraft & { config_id: string | null; enabled: boolean }) {
+    const urls = draftUrls(draft), id = draft.config_id ?? crypto.randomUUID(), name = draft.name.trim();
+    const config: HttpSourceConfig = draft.kind === "maccms" ? { kind: "maccms", config_id: id, name, enabled: draft.enabled, api_url: urls[0]! }
+      : { kind: "stremio", config_id: id, name, enabled: draft.enabled, manifest_urls: urls };
+    await this.updateSettings(settings => ({ ...settings, source_configs: draft.config_id
+      ? settings.source_configs.map(row => row.config_id === id ? config : row) : [...settings.source_configs, config] }));
+    try { if (config.enabled) await this.syncConfig(config.kind, id); }
+    finally { await this.loadSources(); }
+  }
+  async setSourceEnabled(id: string, enabled: boolean) {
+    const config = this.state.settings.source_configs.find(row => row.config_id === id);
+    requireBinding(config, "Source configuration is missing");
+    await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.map(row => row.config_id === id ? { ...row, enabled } : row) }));
+    try { if (enabled) await this.syncConfig(config.kind, id); }
+    finally { await this.loadSources(); }
+  }
+  async removeSourceConfig(id: string) {
+    await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.filter(row => row.config_id !== id),
+      last_metadata_config_id: settings.last_metadata_config_id === id ? null : settings.last_metadata_config_id }));
+    await this.loadSources();
+  }
+  async prepareCloudstream() {
+    this.applyRuntime(await this.api.call("runtime_prepare", { target: "cloudstream" }));
+    await this.loadSources();
+  }
+  async startInteraction(source: AppSource) {
+    this.invalidatePlayback();
+    await this.cleanup;
+    this.interaction.active = await this.api.call("start_interaction", { source_id: source.id, source_revision: source.source_revision });
+    await this.refreshRuntime();
+    await this.loadSources();
+  }
+  async finishInteraction(action: "completed" | "cancelled") {
+    const active = this.interaction.active;
+    requireBinding(active, "No interaction is active");
+    const result = await this.api.call("finish_interaction", { interaction_id: active.id, request: { action } });
+    this.interaction.active = null;
+    this.interaction.last = result;
+    await this.loadSources();
+  }
+  diagnosticsReport() {
+    const { runtime, sources } = this.state, guest = runtime.cloudstream.health;
+    const lines = [`platform: ${runtime.platform}`, `host phase: ${runtime.phase}`, `contract: ${runtime.health?.contract_version ?? "unavailable"}`,
+      `cloudstream phase: ${runtime.cloudstream.phase} (${runtime.cloudstream.display_mode})`,
+      `engine: ${guest ? `${guest.runtime_version} / ${guest.cloudstream_revision} / registry ${guest.registry_sha256.slice(0, 12)}` : "not running"}`,
+      ...(sources.data?.plugins ?? []).map(plugin => `package ${plugin.internal_name} v${plugin.version} ${plugin.artifact_sha256.slice(0, 12)} ${plugin.status} providers=${plugin.provider_ids.length}`),
+      ...(sources.data?.providers ?? []).map(source => `source ${source.kind} ${source.name} registration=${source.runtime_status}${source.error ? ` error=${source.error.code}` : ""}`),
+      ...this.api.failures.map(row => `failure ${row.command} ${row.code} correlation=${row.request_id}: ${row.message}`)];
+    return redactDiagnostics(lines.join("\n"));
   }
   async loadDetails(ref: Bridge_MediaRef) {
     requireBinding(sameSource(ref, this.state.selected_metadata_source), "Details must belong to selected metadata source");

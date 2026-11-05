@@ -37,6 +37,7 @@ async function refresh() {
     <NButton class="home-refresh" :loading="state.sources.phase === 'loading'" @click="refresh">{{ t('Refresh catalog') }}</NButton>
   </div>
   <p v-if="state.runtime.phase !== 'ready'" role="status">{{ word('宿主准备中', 'Preparing the app engine') }}</p>
+  <p v-if="state.sources.phase !== 'loading' && !metadataSources.length" class="home-setup" role="status">{{ word('还没有可用的元数据来源。', 'No metadata source is available yet.') }} <a href="#/setup">{{ word('前往设置来源', 'Set up sources') }}</a></p>
   <NAlert v-if="state.sources.error || state.runtime.error" type="error">{{ state.sources.error?.message ?? state.runtime.error?.message }}</NAlert>
   <NAlert v-if="state.home.phase === 'failed' && state.home.error" class="home-failed" type="error">{{ state.home.error.message }}<NButton class="home-retry" size="small" @click="app.loadHome()">{{ t('Retry') }}</NButton></NAlert>
   <NAlert v-else-if="app.homeImage.error" class="home-image-error" type="error">{{ app.homeImage.error }}<NButton size="small" @click="app.loadHome()">{{ t('Retry') }}</NButton></NAlert>
