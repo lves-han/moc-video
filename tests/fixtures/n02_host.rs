@@ -110,7 +110,7 @@ fn n02_host_sources_webview_bridge() {
             "lock_history" => {
                 let connection =
                     rusqlite::Connection::open(path.with_file_name("yingxiang-video.db")).unwrap();
-                connection.execute_batch("BEGIN EXCLUSIVE;").unwrap();
+                connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
                 history_lock = Some(connection);
                 json!({"ok":true})
             }
