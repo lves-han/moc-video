@@ -35,3 +35,6 @@ T0.13完整verify（evidence/verify/20261104T063504851866.json）中gateway::tes
 
 ## CatalogView首页分支已无入口 2026-11-04T08:02:42+00:00
 T0.14起原生首页由HomeView渲染，src/views/CatalogView.vue的home分支和源选择器（route为home时）不再可达。该文件不在T0.14范围，留待T0.15修改详情界面时清理。
+
+## 中文界面来源校验提示为英文 2026-11-05T02:46:28+00:00
+validateSourceDraft直接返回英文文案，T0.17复巡evidence/reviews/20261105T023036251067-T0.17报告的P2，尚未修复。

@@ -1931,3 +1931,9 @@
 - 实施状态：WIP；用户确认按原顺序做。上游已检出到a7ac454af8fbd64574c96847a936905855911720；新增engine flavor补丁与覆盖层（BootstrapActivity、EngineSession、HealthServer、EngineLoadTest），均未编译。
 - 观测：上游要求JDK 17、Gradle 9.4.1、AGP 9.1.1、compileSdk 37；本机无JDK 17与android-34以外平台。计划先用本机android-34镜像做T02，API35专用AVD留T04。
 - 受阻：首次构建命令（下载JDK与7个cs3、运行gradlew）被自动模式权限分类器拒绝，命令未执行，等待用户决定。验收 A1：NOT RUN。
+
+## T0.19 暂停并转为Rust重写方向 2026-11-05T02:46:28+00:00
+- 结果：BLOCKED
+- 事实：用户决定放弃Android兼容层，改用Rust重写并交接Codex（ADR-047）。Android构建被主动中断，evidence/runs/20261105T024100841304-diag-t02-build-2 exit125，无成功证据；engine补丁与覆盖层未编译成功。7个原包SHA-256已核对相符。
+- 需要用户决定：许可、内容版权、首版站点范围、U02与U05的取代方式、M系列处理、验收样本方式，详见docs/HANDOFF-RUST-REWRITE.md第6节。
+- 下一步：Codex提交修订方案，用户确认后修订文档，追加本卡RESOLVED并rebaseline。验收 A1：NOT RUN。
