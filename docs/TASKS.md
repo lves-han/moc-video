@@ -1025,7 +1025,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 验证：HTTP配置行为与Cloudstream交互状态fixture、拒绝/取消、复制诊断；真实客体重启和HTTP播放持续在N02复测。
 
 ### T0.19 T02 SuperVod JSON原生来源
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.1, T0.4, T0.8, T0.9
 - 需求：U02, U05, R03, R12, R16, R45, R49, REQ-T02 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/runtime.lock.json`, `docs/ARCHITECTURE.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOFF-RUST-REWRITE.md`, `docs/HANDOFF-RUST-REWRITE-PROMPT.md`, `docs/reviews/doc-review/`, `android-engine/`
@@ -1036,7 +1036,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。遇访问控制停止该候选并报告；安全负例与cap隔离保留。",
+    "description": "公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。来源按多个视频抽样判定：单个视频或媒体域名失败只记入该样本，至少一个样本通过媒体验证才晋级，全部样本未通过记为未验证而非不支持；API被访问控制拒绝才停止该来源，媒体域名被拒只跳过该域名，均不规避并报告；安全负例与cap隔离保留。",
     "argv": [
       "{python}",
       "-B",
@@ -1067,7 +1067,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 #### 修订义务（ADR-048取代归档原卡）
 
 - 工作：记录AES用途核实结果（C4，无需新增插件AES解密）及公开响应实现依据；复用maccms.rs/source_dispatch.rs/resolution.rs/gateway.rs，以现有maccms kind和配置接入。协议候选为优质、量子、红牛、无尽、光速、极速、豪华；淘片简略JSON待详情核实、卧龙非JSON暂排除。仅完成JSON、详情及直接媒体验证的候选进入支持列表；其余逐个列明失败/NOT RUN。已读插件源码只作范围风险调查，产品代码依据公开HTTP响应独立实现，保留实现依据，全部原包及Android补丁保留历史且从运行/发行路径排除。
-- 通过与反证：公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。遇访问控制停止该候选并报告；安全负例与cap隔离保留。
+- 通过与反证：公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。来源按多个视频抽样判定：单个视频或媒体域名失败只记入该样本，至少一个样本通过媒体验证才晋级，全部样本未通过记为未验证而非不支持；API被访问控制拒绝才停止该来源，媒体域名被拒只跳过该域名，均不规避并报告；安全负例与cap隔离保留。
 - 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
 ### T0.20 T03 SuperVod JSON多源身份与协议完整性
