@@ -1071,7 +1071,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
 ### T0.20 T03 SuperVod JSON多源身份与协议完整性
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.19
 - 需求：U02, U05, R04, R15, R18, REQ-T03 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/PROGRESS.md`
