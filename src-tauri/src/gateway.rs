@@ -974,7 +974,10 @@ async fn transfer(
         .await;
     }
     if !matches!(status, 200 | 206) {
-        return Err(upstream("Resource server returned an unsuccessful status"));
+        return Err(
+            crate::host::maccms::access_status(status, response.headers())
+                .unwrap_or_else(|| upstream("Resource server returned an unsuccessful status")),
+        );
     }
     if status == 206 && (!req.headers.contains_key("range") || !valid_partial(response.headers())) {
         return Err(upstream("Invalid partial resource response"));

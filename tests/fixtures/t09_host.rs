@@ -1,6 +1,8 @@
 //! Invoke-to-resource tests reuse the established MacCMS/Stremio HTTP fixture.
 use super::*;
 use std::net::TcpStream;
+#[path = "t04_host.rs"]
+mod t04;
 #[path = "t11_host.rs"]
 mod t11;
 #[path = "t12_host.rs"]

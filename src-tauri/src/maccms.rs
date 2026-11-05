@@ -31,6 +31,46 @@ fn limit() -> ApiError {
     )
 }
 
+/// Access control is reported and stops the source; nothing retries or works around it.
+fn access_control(message: &str, signal: &str, status: u16) -> ApiError {
+    upstream(message).with_details(
+        json!({"reason":"access_control","signal":signal,"http_status":status,"stage":"public_http"}),
+    )
+}
+
+pub(crate) fn access_status(status: u16, headers: &HeaderMap) -> Option<ApiError> {
+    let challenge = headers
+        .get("cf-mitigated")
+        .is_some_and(|value| value == "challenge");
+    (challenge || matches!(status, 401 | 403 | 407 | 429 | 451)).then(|| {
+        access_control(
+            "Public HTTP server refused access",
+            if challenge { "challenge" } else { "status" },
+            status,
+        )
+    })
+}
+
+fn access_refused(error: &ApiError) -> bool {
+    error
+        .details
+        .as_ref()
+        .is_some_and(|details| details["reason"] == "access_control")
+}
+
+fn challenge_page(body: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(&body[..body.len().min(PROBE_LIMIT)]).to_lowercase();
+    [
+        "cf-chl",
+        "challenge-platform",
+        "just a moment",
+        "captcha",
+        "verify you are human",
+    ]
+    .iter()
+    .any(|marker| text.contains(marker))
+}
+
 fn unsafe_target(config: bool) -> ApiError {
     ApiError::new(
         if config {
@@ -272,9 +312,12 @@ impl Http {
             .open(url, headers, Method::GET, job.connect_timeout_ms()?, config)
             .await?;
         if !response.status().is_success() {
+            let status = response.status().as_u16();
             return Err(
-                upstream("Public HTTP server returned an unsuccessful status")
-                    .with_details(json!({"http_status": response.status().as_u16()})),
+                access_status(status, response.headers()).unwrap_or_else(|| {
+                    upstream("Public HTTP server returned an unsuccessful status")
+                        .with_details(json!({"http_status": status}))
+                }),
             );
         }
         if !probe
@@ -406,6 +449,11 @@ pub(crate) fn redirect_headers(
 fn http_error(error: reqwest::Error) -> ApiError {
     if error.is_timeout() {
         ApiError::new("UPSTREAM_TIMEOUT", "Public HTTP request timed out")
+    } else if std::iter::successors(std::error::Error::source(&error), |source| source.source())
+        .any(|source| source.to_string().to_lowercase().contains("certificate"))
+    {
+        upstream("Public HTTP certificate validation failed")
+            .with_details(json!({"reason":"tls_certificate","stage":"public_http"}))
     } else {
         upstream("Public HTTP request failed")
     }
@@ -480,8 +528,17 @@ fn identifier(value: &Value) -> Result<String, ApiError> {
 }
 
 fn decode(response: &Response) -> Result<Value, ApiError> {
-    let mut value: Value = serde_json::from_slice(&response.body)
-        .map_err(|_| upstream("MacCMS response is not JSON"))?;
+    let mut value: Value = serde_json::from_slice(&response.body).map_err(|_| {
+        if challenge_page(&response.body) {
+            access_control(
+                "MacCMS response is a challenge page, not JSON",
+                "challenge",
+                200,
+            )
+        } else {
+            upstream("MacCMS response is not JSON")
+        }
+    })?;
     // Some public interfaces omit code; a list is then the success signal.
     if value.get("code").is_none() && value["list"].is_array() {
         value["code"] = json!(1);
@@ -666,10 +723,15 @@ impl Catalog {
         let mut failed = Vec::new();
         let mut images = Vec::new();
         let mut first_error = None;
+        let mut refused: Option<ApiError> = None;
         for chunk in sections.chunks(if section_ref.is_some() { 1 } else { 4 }) {
-            if section_ref.is_none()
-                && let Some(error) = crate::home::reserve_error(job)?
-            {
+            // Once the source refuses access, later sections fail without another request.
+            let skipped = match &refused {
+                Some(error) => Some(error.clone()),
+                None if section_ref.is_none() => crate::home::reserve_error(job)?,
+                None => None,
+            };
+            if let Some(error) = skipped {
                 first_error.get_or_insert_with(|| error.clone());
                 failed.extend(chunk.iter().map(|section| {
                     crate::home::failure(&section.title, &section.handle, section.index, &error)
@@ -707,6 +769,9 @@ impl Catalog {
                             || matches!(error.code.as_str(), "CANCELLED" | "RESOURCE_LIMIT")
                         {
                             return Err(error);
+                        }
+                        if access_refused(&error) {
+                            refused.get_or_insert_with(|| error.clone());
                         }
                         first_error.get_or_insert_with(|| error.clone());
                         failed.push(crate::home::failure(
