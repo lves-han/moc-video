@@ -1903,3 +1903,10 @@
 - 实施状态：WIP；用户指示“先修这两项”，撤回勾选，巡检evidence/reviews/20261104T102254019358-T0.16 CLEAR及其发现原样保留。
 - 复现：注入保存失败后离页无提示，evidence/runs/20261105T014656632004-diag-t16-p2-before/output.log。
 - 修改：PlaybackView卸载后的保存失败进入应用级diagnostics；t14.packaged在场景前后登记WebKit进程，并要求渲染进程已登记、正常退出、无残留，T14、T15、T16共用。
+
+## T0.16 T16 内嵌播放界面（复巡P2修复后）2026-11-05T01:53:16+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T014914136022-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；注入离页保存失败有应用级提示且确认值保持0.61；WebKit三进程已登记，退出0，无残留，合并峰值约606MiB。
+- 完整verify：PASS；`evidence/verify/20261105T014950564964.json`，六门exit0。
+- 回归：T14、T15打包场景带WebKit登记诊断通过，evidence/runs/20261105T014815708899-diag-t14-t15-regress/output.log（诊断，不代替各卡验收）。
+- Remaining：等待独立复巡；自动下一集成功路径用Host已确认selection；约5秒周期只有单测；网络错误、缓冲和DPI未在原生单独测；原生续播入口与SQLite属T0.18。
