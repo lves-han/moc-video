@@ -373,12 +373,14 @@ fn program_defect(error: &ApiError) -> bool {
             .any(|state| error.message.contains(state)))
 }
 
+/// A challenge page arrives as HTTP 200 HTML, so an API answer that stops being JSON also stops the source.
 fn access_refused(error: &ApiError) -> bool {
-    error
-        .details
-        .as_ref()
-        .and_then(|details| details["http_status"].as_u64())
-        .is_some_and(|status| matches!(status, 401 | 403 | 407 | 429 | 451))
+    error.message.contains("not JSON")
+        || error
+            .details
+            .as_ref()
+            .and_then(|details| details["http_status"].as_u64())
+            .is_some_and(|status| matches!(status, 401 | 403 | 407 | 429 | 451))
 }
 
 const MEDIA_SAMPLES: usize = 8;
@@ -449,6 +451,7 @@ fn candidate(source: &Value) -> Value {
     let http = Http::default();
     let mut samples: Vec<Value> = Vec::new();
     let mut selected = Value::Null;
+    let mut refused = false;
     let result = (|| -> Result<(), ApiError> {
         let list = capture(
             &http,
@@ -519,7 +522,6 @@ fn candidate(source: &Value) -> Value {
         )?;
         let mut images = Vec::new();
         let mut adapter_recorded = false;
-        let mut refused = false;
         for item in details["list"].as_array().into_iter().flatten() {
             if refused || samples.len() >= MEDIA_SAMPLES {
                 break;
@@ -535,7 +537,7 @@ fn candidate(source: &Value) -> Value {
             let mapped = match catalog.details(&http, &reference, &job(&host, "default_metadata")) {
                 Ok(mapped) => mapped,
                 Err(error) => {
-                    let refused = access_refused(&error);
+                    refused = access_refused(&error);
                     records.push(json!({"stage":"adapter_details","status":if refused {"ACCESS_CONTROL_STOP"} else {"ITEM_FAILED"},
                         "program_defect":program_defect(&error),"error":{"code":error.code,"message":error.message}}));
                     // The API itself refused: stop this source without further requests.
@@ -618,6 +620,10 @@ fn candidate(source: &Value) -> Value {
         }
         Ok(())
     })();
+    // A refusing source gets no further requests, including the later short play.
+    if refused {
+        selected = Value::Null;
+    }
     let summary = media_summary(&samples);
     records.extend(samples);
     let outer_defect = result.as_ref().err().is_some_and(program_defect);
@@ -840,6 +846,44 @@ fn t02_refused_api_stops_requests_to_that_source() {
         "{requested:?}"
     );
     assert_eq!(observation["compatibility"], "COMPATIBLE", "{observation}");
+    assert!(observation["selected"].is_null(), "{observation}");
+}
+
+#[test]
+fn t02_challenge_page_after_details_stops_the_source() {
+    let requested = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = requested.clone();
+    let fixture = Fixture::new(move |request, port| {
+        let items: Vec<Value> = (1..=4)
+            .map(|id| sample_item(id, format!("http://maccms.fixture.test:{port}/ok/{id}.mp4")))
+            .collect();
+        if request.target.starts_with("/ok/") {
+            return Reply::raw(vec![0; 64], "video/mp4");
+        }
+        let Some(id) = request.query.get("ids") else {
+            return Reply::json(response(json!(items), json!([])));
+        };
+        seen.lock().unwrap().push(id.clone());
+        if id == "2" {
+            return Reply::raw("<html>verify you are human</html>", "text/html");
+        }
+        Reply::json(response(
+            json!([items[id.parse::<usize>().unwrap() - 1]]),
+            json!([]),
+        ))
+    });
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    let requested = requested.lock().unwrap().clone();
+    assert_eq!(
+        requested.iter().filter(|id| *id == "2").count(),
+        1,
+        "{requested:?}"
+    );
+    assert!(
+        !requested.iter().any(|id| id == "3" || id == "4"),
+        "{requested:?}"
+    );
+    assert!(observation["selected"].is_null(), "{observation}");
 }
 
 #[test]

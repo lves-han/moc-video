@@ -33,6 +33,7 @@ NATIVE = {
     "t02_html_response_is_a_source_state",
     "t02_unusable_poster_is_treated_as_no_poster",
     "t02_refused_api_stops_requests_to_that_source",
+    "t02_challenge_page_after_details_stops_the_source",
     "t02_refused_media_host_is_requested_once_and_other_hosts_continue",
     "t02_dns_two_servers_failover_and_both_families",
     "t02_dns_one_silent_server_keeps_other_available",

@@ -1,9 +1,9 @@
 //! Replays projected public HTTP responses. Real media remains a separate gate.
 use super::*;
 
-const RESPONSES: &str = include_str!("t02/public-responses.json");
+pub(super) const RESPONSES: &str = include_str!("t02/public-responses.json");
 
-fn record<'a>(source: &'a Value, stage: &str) -> &'a Value {
+pub(super) fn record<'a>(source: &'a Value, stage: &str) -> &'a Value {
     source["records"]
         .as_array()
         .unwrap()
@@ -12,31 +12,36 @@ fn record<'a>(source: &'a Value, stage: &str) -> &'a Value {
         .unwrap()
 }
 
+pub(super) fn stage(request: &Request) -> &'static str {
+    if request.query.contains_key("ids") {
+        "detail_id"
+    } else if request.query.contains_key("wd") {
+        if request.query["wd"] == "captured-zero-query" {
+            "zero_search"
+        } else {
+            "search"
+        }
+    } else if request.query.contains_key("t") {
+        if request.query.get("pg").is_some_and(|page| page == "2") {
+            "category_page_2"
+        } else {
+            "category_page_1"
+        }
+    } else if request.query.get("ac").is_some_and(|ac| ac == "detail") {
+        "detail_page"
+    } else {
+        "list"
+    }
+}
+
 fn serve_public(source: Value) -> Fixture {
     Fixture::new(move |request, port| {
-        let stage = if request.query.contains_key("ids") {
-            "detail_id"
-        } else if request.query.contains_key("wd") {
-            if request.query["wd"] == "captured-zero-query" {
-                "zero_search"
-            } else {
-                "search"
-            }
-        } else if request.query.contains_key("t") {
-            if request.query.get("pg").is_some_and(|page| page == "2") {
-                "category_page_2"
-            } else {
-                "category_page_1"
-            }
-        } else if request.query.get("ac").is_some_and(|ac| ac == "detail") {
-            "detail_page"
-        } else {
-            "list"
-        };
-        let body = record(&source, stage)["response"].to_string().replace(
-            "maccms.fixture.test:0",
-            &format!("maccms.fixture.test:{port}"),
-        );
+        let body = record(&source, stage(request))["response"]
+            .to_string()
+            .replace(
+                "maccms.fixture.test:0",
+                &format!("maccms.fixture.test:{port}"),
+            );
         Reply::raw(body, "application/json")
     })
 }

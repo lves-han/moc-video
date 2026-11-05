@@ -6,6 +6,8 @@ mod t02;
 mod t02_dns;
 #[path = "t02_json.rs"]
 mod t02_json;
+#[path = "t03_maccms.rs"]
+mod t03;
 #[path = "t06_maccms.rs"]
 mod t06;
 #[path = "t07_maccms.rs"]
