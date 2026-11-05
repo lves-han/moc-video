@@ -2080,3 +2080,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T084034046894-A1/output.log`；断言：无Android工具环境下Host与网关播放通过；单源失败/取消时另一来源和Stremio继续；401/403/407/429/451及挑战响应报access_control且不重试，后续栏目不再请求；自签证书报tls_certificate；退出回收且外部进程与监听保留
 - 完整verify：PASS；`evidence/verify/20261105T084042798948.json`，六门exit0。
 - Remaining：本卡仅fixture，在线闭环NOT RUN；访问控制提示的中文文案和界面展示归T0.22；docs/runtime.lock.json的android段为T0.1历史观测，未改动。
+
+## T0.22 N02 完成 2026-11-05T09:33:30+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T092921254522-A1/output.log`；断言：8个预设经正式按钮可发现/显式添加/防重复且本次全部注册成功；无Android入口，旧偏好保留并有说明，可确认当前来源；重启恢复；Stremio推荐→详情→指定集→人工确认→解析→播放→切集，无人值守下一集停在确认；失败与拒绝来源提示准确；合成与公开实测分开统计
+- 完整verify：PASS；`evidence/verify/20261105T093018737941.json`，六门exit0。
+- Remaining：公开实测只验证到注册，真实媒体闭环归T0.24；演示模式数据仍含一个Cloudstream示例条目；T17验收脚本中与已移除入口相关的部分已同步删除。

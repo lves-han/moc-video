@@ -1162,7 +1162,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
 ### T0.22 N02 Rust来源接入宿主与来源管理
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.20, T0.21, T0.3, T0.9, T0.17
 - 需求：U02, U05, U08, R03, R05, R06, R10, R13, R15, R16, R24, R26, R27, R29, R36, R49, R50, R63, R66, REQ-N02 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `src/`, `protocol/`, `docs/compatibility-report.json`, `tests/`, `docs/PROGRESS.md`
