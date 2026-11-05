@@ -2034,3 +2034,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T055403125482-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；9候选实测：8个COMPATIBLE（含淘片），卧龙SOURCE_UNAVAILABLE；真实公开JSON→详情→选集→Host解析→Rust网关→打包WKWebView短播通过；SERVFAIL转移、Fake-IP与重绑定拒绝；Android产物不在打包内容。
 - 完整verify：PASS；`evidence/verify/20261105T060126601585.json`，六门exit0。
 - Remaining：媒体可用性属来源状态（2026-11-05：优质、无尽样本0/8，量子1/8，其余8/8），随时间变化；卧龙接口返回HTML未规避；其他六个插件站点按ADR-048暂缓；内容版权与公开发行未授权，仅个人使用。
+
+## T0.19 T02 完成 2026-11-05T07:16:01+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T070353749842-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；9候选实测并分层记录兼容性与来源可用性，详情与解析适配错误判程序缺陷，被拒媒体域名不再请求；真实公开JSON→详情→选集→Host解析→Rust网关→打包WKWebView短播通过；SERVFAIL转移、Fake-IP与重绑定拒绝；Android产物不在打包内容。
+- 完整verify：PASS；`evidence/verify/20261105T071305494394.json`，六门exit0。
+- Remaining：媒体可用性属来源状态并随时间变化，见compatibility-report；卧龙域名已挂牌出售，接口不可用，建议不做预设；其他六个插件站点按ADR-048暂缓；内容版权与公开发行未授权，仅个人使用。
