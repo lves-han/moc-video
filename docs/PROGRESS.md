@@ -1926,3 +1926,8 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T022641566443-A1/output.log`；断言：exit0，真实Host+打包WKWebView覆盖HTTP来源增改禁用删、独立选择、真实首页与最近请求更新、失败隔离、真实准备拒绝；Cloudstream状态与交互为合成含失败说明，脱敏诊断无机密。
 - 完整verify：PASS；`evidence/verify/20261105T022716541616.json`，六门exit0。
 - Remaining：真实客体重启、人机验证判定与SuperVod全集由N02验收；合成交互未代表真实能力；原始RSS采样文件仍缺；一次A1因表单离场超时失败，原因见note。
+
+## T0.19 T02 引擎起步交接 2026-11-05T02:39:34+00:00
+- 实施状态：WIP；用户确认按原顺序做。上游已检出到a7ac454af8fbd64574c96847a936905855911720；新增engine flavor补丁与覆盖层（BootstrapActivity、EngineSession、HealthServer、EngineLoadTest），均未编译。
+- 观测：上游要求JDK 17、Gradle 9.4.1、AGP 9.1.1、compileSdk 37；本机无JDK 17与android-34以外平台。计划先用本机android-34镜像做T02，API35专用AVD留T04。
+- 受阻：首次构建命令（下载JDK与7个cs3、运行gradlew）被自动模式权限分类器拒绝，命令未执行，等待用户决定。验收 A1：NOT RUN。

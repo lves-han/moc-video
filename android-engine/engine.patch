@@ -1,0 +1,17 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index c714368..f52f7ea 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -167,6 +167,12 @@ android {
+         create("stable") {
+             dimension = "state"
+         }
++        // Headless guest for the desktop host; entered only through BootstrapActivity.
++        create("engine") {
++            dimension = "state"
++            applicationIdSuffix = ".engine"
++            versionNameSuffix = "-ENGINE"
++        }
+         create("prerelease") {
+             dimension = "state"
+             applicationIdSuffix = ".prerelease"
