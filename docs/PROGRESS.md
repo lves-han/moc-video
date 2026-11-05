@@ -1992,3 +1992,9 @@
 - 实施状态：WIP；公共HTTP入口固定1.1.1.1/8.8.8.8，禁用hosts和系统配置读取，原公网全集/peer/TLS保持。
 - 局部验证：原run diag-t02-public-dns 17项通过，日志evidence/runs/20261105T034345876280-diag-t02-public-dns/output.log；固定DNS实际诊断exit0/1项，日志evidence/runs/20261105T034400521107-diag-t02-public/output.log，报告evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json。多个来源取得JSON及adapter_details PASS；媒体前缀出现访问拒绝/不支持，全部仍未晋级，遇访问控制已停止相关来源。
 - 格式检查首次发现新增模块/导入排序，原日志保留，随后cargo fmt按既有规则修正。专项双DNS故障转移回归、A1、完整verify及独立代码巡检NOT RUN；接续剩余第2会话补齐。
+
+## T0.19 首次A1失败及会话额度 2026-11-05T04:09:24.237545+00:00
+- 结果：BLOCKED
+- 事实：原CLI第2会话稳定WIP退出，sessions2/2。外层格式化修正、Clippy exit0；准确A1 evidence/runs/20261105T040420540558-A1/output.log exit1，5组断言3过2失败。5个独立Python反例通过，新原生测试10项8过2失败：双DNS失败转移DNS lookup failed，公开分类分页范围/排序校验失败。日志evidence/acceptance/T02-6effd096751f4eb9a70f62f5b5d2eefc/command-2.log。
+- 后续：先定位两失败原因并最小修复，重新准确A1/完整verify/受验提交/独立巡检。真实打包播放NOT RUN；完整verify及独立巡检NOT RUN。未用旧成功冒充本次通过。
+- 需要用户决定：workflow.json原max_sessions=2已使用，申请仅T0.19追加一次原预算内开发会话（原drive --once --max-sessions 3），不修改全局预算/权限、不清计数、不rebaseline。
