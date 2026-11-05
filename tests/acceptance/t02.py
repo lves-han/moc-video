@@ -30,6 +30,7 @@ NATIVE = {
     "t02_one_failing_detail_marks_the_program_incompatible",
     "t02_one_failing_card_marks_the_program_incompatible",
     "t02_media_host_comes_from_the_first_separator",
+    "t02_html_response_is_a_source_state",
     "t02_unusable_poster_is_treated_as_no_poster",
     "t02_refused_api_stops_requests_to_that_source",
     "t02_refused_media_host_is_requested_once_and_other_hosts_continue",

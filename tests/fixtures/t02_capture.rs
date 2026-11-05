@@ -362,6 +362,7 @@ fn program_defect(error: &ApiError) -> bool {
         "unsafe_target",
         "closed",
         "not JSON",
+        "Public capture",
         "detail is missing",
         "changed or is missing",
     ];
@@ -839,6 +840,22 @@ fn t02_refused_api_stops_requests_to_that_source() {
         "{requested:?}"
     );
     assert_eq!(observation["compatibility"], "COMPATIBLE", "{observation}");
+}
+
+#[test]
+fn t02_html_response_is_a_source_state() {
+    let fixture = Fixture::new(|_, _| {
+        Reply::raw(
+            "<!DOCTYPE html><h1>This domain is for sale</h1>",
+            "text/html",
+        )
+    });
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    assert_eq!(
+        observation["compatibility"], "SOURCE_UNAVAILABLE",
+        "{observation}"
+    );
+    assert_eq!(observation["supported"], false);
 }
 
 #[test]
