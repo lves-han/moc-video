@@ -29,12 +29,10 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     return response.json();
   };
   const original = window.__TAURI__!.core, calls: { command: string; input: any }[] = [], errors: string[] = [];
-  let failSaves = 0;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     if (name === "app_close_ready") return undefined as T;
-    if (name === "save_history" && failSaves > 0) { failSaves--; return { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "INTERNAL_ERROR", message: "History database operation failed", retryable: true } } as T; }
     return await rpc({ command: name, args });
   } };
   const onError = (event: ErrorEvent) => errors.push(event.message);
@@ -83,7 +81,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
       runtime_fields: /https?:|capability|session_id|match_id/.test(JSON.stringify(stored).replace(/"title":"[^"]*"/, "")) };
 
     // A failed write is reported, keeps the row, and the retry button repeats it.
-    failSaves = 1;
+    await rpc({ operation: "lock_history" });
     const beforeFail = count("save_history");
     await video()!.play().catch(() => {});
     await delay(300);
@@ -94,6 +92,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await until(() => one(".history-alert"), "Unsaved history notice missing");
     const notice = one(".history-alert")!.textContent!, rowText = one(".history-card")!.textContent!;
     const retried = calls.filter(call => call.command === "save_history").at(-1)!.input.write_sequence;
+    await rpc({ operation: "unlock_history" });
     one<HTMLButtonElement>(".history-alert button")!.click();
     await until(() => !one(".history-alert"), "Retry did not clear the notice");
     evidence.failed_write = { notice: /could not be saved/.test(notice), row_kept: rowText.includes("Same title"), same_sequence: calls.filter(call => call.command === "save_history").at(-1)!.input.write_sequence === retried, preview_note: Boolean(one(".history-preview-note")) };

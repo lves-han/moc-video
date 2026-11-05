@@ -12,6 +12,7 @@ import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
 import { historyRepository, historyWriteDue } from "./data/history";
+import { ApiFailure } from "./api";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
@@ -215,9 +216,15 @@ function historySnapshot(finished = false): HistoryEntry | null {
     position_ms: state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms,
     duration_ms: state.duration_ms, completed: finished || state.phase === "ended", updated_at: Date.now() };
 }
+function describeHistoryError(error: unknown) { return error instanceof Error ? error.message : String(error); }
 async function persistHistory(snapshot: HistoryEntry) {
   try { await historyRepository.save(snapshot); historySaveError.value = null; }
-  catch (error) { historySaveError.value = String(error); }
+  catch (error) {
+    // The Host refused a snapshot that can never be saved (its Session ended or a newer change won); retrying cannot help.
+    const refused = error instanceof ApiFailure && ["SESSION_EXPIRED", "CANCELLED"].includes(error.error.code);
+    historySaveError.value = refused ? null : describeHistoryError(error);
+    if (refused && lastHistory === snapshot) lastHistory = null;
+  }
 }
 async function flushHistory(finished = false) {
   const snapshot = historySnapshot(finished);

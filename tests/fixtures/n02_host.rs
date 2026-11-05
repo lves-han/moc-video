@@ -86,6 +86,7 @@ fn n02_host_sources_webview_bridge() {
     );
     let started = Instant::now();
     let (mut sequence, mut get_home, mut restarts) = (0, 0, 0);
+    let mut history_lock: Option<rusqlite::Connection> = None;
     loop {
         sequence += 1;
         let request_path = directory.join(format!("request-{sequence}.json"));
@@ -104,6 +105,22 @@ fn n02_host_sources_webview_bridge() {
                     &json!({"ok":true}),
                 );
                 break;
+            }
+            // A real write failure: another connection holds the database file.
+            "lock_history" => {
+                let connection =
+                    rusqlite::Connection::open(path.with_file_name("yingxiang-video.db")).unwrap();
+                connection.execute_batch("BEGIN EXCLUSIVE;").unwrap();
+                history_lock = Some(connection);
+                json!({"ok":true})
+            }
+            "unlock_history" => {
+                history_lock
+                    .take()
+                    .unwrap()
+                    .execute_batch("COMMIT;")
+                    .unwrap();
+                json!({"ok":true})
             }
             "restart" => {
                 assert_eq!(host.requests.active_count(), 0);
