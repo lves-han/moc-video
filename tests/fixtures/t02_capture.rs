@@ -371,7 +371,7 @@ fn candidate(source: &Value) -> Value {
         )?;
         let mut images = Vec::new();
         let reference = catalog.card(first, &mut images)?["ref"].clone();
-        let mapped = catalog.details(&http, &reference, &job(&host, "get_details"))?;
+        let mapped = catalog.details(&http, &reference, &job(&host, "default_metadata"))?;
         let groups = mapped.value["details"]["groups"].as_array().unwrap();
         records.push(json!({"stage":"adapter_details","status":"PASS","groups":groups.len(),
             "episodes":groups.iter().map(|g| g["episodes"].as_array().unwrap().len()).sum::<usize>()}));
@@ -380,7 +380,7 @@ fn candidate(source: &Value) -> Value {
             .flat_map(|g| g["episodes"].as_array().unwrap())
             .next()
             .ok_or_else(|| upstream("Public sample has no episodes"))?;
-        let link = catalog.resolve(&http, &episode["ref"], &job(&host, "resolve_episode"))?;
+        let link = catalog.resolve(&http, &episode["ref"], &job(&host, "resolve"))?;
         let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","kind":link.kind,"playable":link.playable});
         if !link.playable {
             record["status"] = json!("UNSUPPORTED");
@@ -390,7 +390,7 @@ fn candidate(source: &Value) -> Value {
         let response = fetch(
             &http,
             http_url(&link.url, false)?,
-            &job(&host, "resolve_episode"),
+            &job(&host, "resolve"),
             PROBE_LIMIT,
             true,
             &mut record,
