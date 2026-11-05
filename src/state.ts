@@ -677,15 +677,18 @@ export class AppController {
   async selectSource(sourceId: string, role: "metadata" | "playback") {
     const source = this.state.sources.data?.providers.find(source => source.id === sourceId);
     requireBinding(source?.runtime_status === "ready" && (role === "metadata" ? source.kind === "stremio" && source.capabilities.home && source.capabilities.details : source.kind !== "stremio" && source.capabilities.resolve), "Source is unavailable for this role");
-    if (sameSource(role === "metadata" ? this.state.selected_metadata_source : this.state.selected_playback_source,
-      { source_id: source.id, source_revision: source.source_revision })) return;
     const configId = source.kind === "stremio" ? source.origin.config_id : null;
+    const unchanged = sameSource(role === "metadata" ? this.state.selected_metadata_source : this.state.selected_playback_source,
+      { source_id: source.id, source_revision: source.source_revision });
+    // A fallback selection can differ from the saved choice; confirming it only saves the choice.
+    if (unchanged && (role === "metadata" ? this.state.settings.last_metadata_config_id === configId : this.state.settings.last_playback_source_key === source.id)) return;
     const host = this.state.runtime.engine_epoch;
     await this.updateSettings(settings => role === "metadata"
       ? { ...settings, last_metadata_config_id: configId }
       : { ...settings, last_playback_source_key: source.id });
     requireBinding(host === this.state.runtime.engine_epoch && this.state.sources.data?.providers.some(current =>
       current.id === source.id && current.source_revision === source.source_revision && current.runtime_status === "ready"), "Source changed while saving its preference");
+    if (unchanged) return;
     const context = this.state.playback.context && clone(this.state.playback.context);
     this.invalidatePlayback();
     const key = { source_id: source.id, source_revision: source.source_revision };

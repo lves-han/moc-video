@@ -20,7 +20,7 @@ const set = (selector: string, value: string, event = "input") => { const elemen
 const row = (name: string) => all(".sources-row").find(item => item.querySelector("h3")?.textContent === name)!;
 const preset = (name: string) => one(`.sources-preset[data-preset="${name}"]`)!.querySelector<HTMLButtonElement>(".sources-preset-add")!;
 const providers = () => appState.sources.data?.providers ?? [];
-const quiet = () => !all<HTMLButtonElement>(".sources-delete").some(button => button.disabled);
+const quiet = () => !one(".sources-add.n-button--loading") && !all<HTMLButtonElement>(".sources-delete").some(button => button.disabled);
 
 export async function sourcesToPlaybackScenario(ready: Ready, prototype: { player: Player; base: string; cap: string }) {
   prototype.player.stop();
@@ -44,7 +44,7 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
   window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
   const count = (command: string) => calls.filter(call => call.command === command).length;
   const evidence: Record<string, any> = {};
-  describe = () => JSON.stringify({ hash: location.hash, route: appState.route.name, failure: one(".sources-failure")?.textContent, errors_ui: one(".sources-errors")?.textContent, playback: appState.playback.phase, dialog: Boolean(one('[role="dialog"]')), match: appState.playback.error?.message, details: appState.details.phase, home: appState.home.phase, video: one<HTMLVideoElement>("video")?.readyState, errors });
+  describe = () => JSON.stringify({ hash: location.hash, route: appState.route.name, failure: one(".sources-failure")?.textContent, errors_ui: one(".sources-errors")?.textContent, done: Object.keys(evidence), playback: appState.playback.phase, dialog: Boolean(one('[role="dialog"]')), match: appState.playback.error?.message, details: appState.details.phase, home: appState.home.phase, video: one<HTMLVideoElement>("video")?.readyState, errors });
   location.hash = "#/sources";
   await appController.initialize();
   await appController.updateSettings(settings => ({ ...settings, ui_locale: "zh-CN" }));
@@ -100,12 +100,17 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
     await until(() => appState.selected_playback_source, "Playback source was not selected");
     const metadataId = appState.selected_metadata_source!.source_id;
     evidence.legacy_after_fallback = { note: Boolean(one(".sources-legacy")), key: appState.settings.last_playback_source_key };
+    const first = appState.selected_playback_source!.source_id;
+    one<HTMLButtonElement>(".sources-legacy-adopt")!.click();
+    await until(() => appState.settings.last_playback_source_key === first && !one(".sources-legacy"), "The current source could not replace the old preference");
+    evidence.selection = { metadata_kept: appState.selected_metadata_source?.source_id === metadataId, legacy_cleared: true };
     await add("maccms", "第二播放源", ready.second); await settled("第二播放源");
-    const second = providers().find(item => item.name === "第二播放源")!.id, first = providers().find(item => item.name === "第一播放源")!.id;
+    const second = providers().find(item => item.name === "第二播放源")!.id;
+    set(".sources-playback", second, "change");
+    await until(() => appState.settings.last_playback_source_key === second, "Playback selection did not persist");
     set(".sources-playback", first, "change");
-    await until(() => appState.settings.last_playback_source_key === first, "Playback selection did not persist");
-    await nextTick();
-    evidence.selection = { metadata_kept: appState.selected_metadata_source?.source_id === metadataId, legacy_cleared: !one(".sources-legacy") };
+    await until(() => appState.settings.last_playback_source_key === first && appState.selected_playback_source?.source_id === first, "Playback selection did not return");
+    evidence.selection.switched = true;
 
     const id = appState.settings.source_configs.find(config => config.name === "第二播放源")!.config_id;
     row("第二播放源").querySelector<HTMLButtonElement>(".sources-edit")!.click();
@@ -162,8 +167,8 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
 
     // Recommendation -> details -> chosen video -> manual confirmation -> resolve -> playback -> next episode.
     location.hash = "#/home";
-    await until(() => one(".home-card"), "Recommendation did not render");
-    one<HTMLElement>(".home-card")!.click();
+    await until(() => one(".home-card-title"), "Recommendation did not render");
+    one<HTMLElement>(".home-card-title")!.click();
     await until(() => appState.details.phase === "ready" && one(".details-episode"), "Details did not open");
     const video = () => one<HTMLVideoElement>("video")!, session = () => appState.playback.session?.session_id;
     const confirmEpisode = async (index: number) => {
@@ -179,7 +184,7 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
     chosen.click();
     const confirmed = await confirmEpisode(0);
     await until(() => appState.route.name === "playback" && session() && video()?.readyState >= 2, "Confirmed episode did not play");
-    await video().play();
+    await video().play().catch(() => {});
     const start = video().currentTime;
     await until(() => video().currentTime > start + .3, "Playback did not advance");
     evidence.flow = { video_id: videoId, context_video: appState.playback.context!.metadata_video_id, opens_before_confirm: confirmed.opened - opensBeforeConfirm, candidates: confirmed.shown, source: appState.playback.context!.episode_ref.source_id === first, advanced: true, gateway: video().currentSrc === appState.playback.session?.media_url };
@@ -193,7 +198,7 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
     // Unattended next stops at the same confirmation with nothing playing.
     await appController.updateSettings(settings => ({ ...settings, auto_next: true }));
     const opensBefore = count("open_playback");
-    await video().play();
+    await video().play().catch(() => {});
     video().currentTime = Math.max(0, video().duration - .2);
     await until(() => one('[role="dialog"]'), "Unattended next did not stop for confirmation", 30000);
     await nextTick();

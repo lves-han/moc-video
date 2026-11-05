@@ -65,7 +65,7 @@ def validate(e):
     require(e["public_cleanup"]["after"] == 0, "Deleting the presets must leave no configuration")
     require(e["legacy_after_fallback"]["note"] is True and e["legacy_after_fallback"]["key"] is not None, "A fallback must not silently replace the preference")
     s = e["selection"]
-    require(s["metadata_kept"] is True and s["legacy_cleared"] is True, "An explicit choice updates the preference and leaves metadata alone")
+    require(s["metadata_kept"] is True and s["legacy_cleared"] is True and s["switched"] is True, "An explicit choice updates the preference and leaves metadata alone")
     require(e["edit"]["same_id"] is True and e["edit"]["same_source"] is True, "Editing must keep the identity")
     require(e["disabled"]["option"] is False and e["disabled"]["selected_kept"] is True, "Disabling must withdraw only that source")
     g = e["failing"]
