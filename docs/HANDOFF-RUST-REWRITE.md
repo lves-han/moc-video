@@ -2,6 +2,20 @@
 
 写于 2026-11-05。接手方：Codex。配套提示词见 [HANDOFF-RUST-REWRITE-PROMPT.md](HANDOFF-RUST-REWRITE-PROMPT.md)。
 
+## 当前接续更新（2026-11-05，ADR-048）
+
+用户已明确批准：“许可选择依据站点公开行为独立实现，暂时仅供个人使用，首版先做可用的 SuperVod JSON 来源，其余按你的建议。批准修订文档和迁移基线，独立审查通过后按任务顺序开始开发，先核实 AES 用途。”
+
+- 文档当前已修订为T0.19 JSON适配→T0.20身份/完整性→T0.21上下文/隔离→T0.22整合→T0.18→其余桌面卡；当前迁移/独立审查/实现状态以PROGRESS、task status和原收据为准。此处不预填rebaseline或CLEAR成功。
+- 许可：依据公开HTTP行为独立实现，未见许可证的插件源码只作范围风险识别。个人使用范围已确认；源码翻译许可、内容版权授权和公开发行授权未由本次决定授予。其他六站、XML、特殊播放器API暂缓；移动沿本地Rust路线但阶段门保持。
+- AES静态核实：固定提交SuperVod 15个kt中aesDecrypt仅Utils.kt定义，无调用；BaseVodProvider直接输出媒体，encrypt1/2转义/Base64；Haiwaikan/JiangNan注册注释。普通JSON无需新增插件AES解密；HLS标准AES-128保留现有网关验收。实现以公开响应独立完成。
+- 公开普通GET：优质、量子、红牛、无尽、光速、极速、豪华`ac=list&pg=1`及`ac=detail&pg=1`返回code1、list20，detail有播放字段；无尽/光速/极速/豪华page为字符串。淘片简略JSON待详情核实；卧龙返回非JSON暂排除。全部仅为协议候选，真实媒体闭环NOT RUN，逐个晋级支持。
+- 本机普通请求的其余结果：百度/天空/U酷/iKun/樱花/金鹰/闪电/非凡/暴风/速播/新浪/索尼/魔都/神马聚合/影图/p2100为403；快车/inmi证书校验失败；飞速/八戒/快看/394tv为TLS握手异常；海外看吧405；Haiwaikan连接关闭、江南TLS异常。Mxplayer首页200/API根403，Libvio403，Ddys/Yjys握手异常，Dramacool/Zxzj证书失败。遇失败即停止该候选，未规避访问控制、未关闭TLS校验；结果仅说明本机当次情况，永久关闭尚未证实。
+- 状态核对：初始Git工作树干净，T0.19/sessions0/protected摘要与下方旧快照一致；check通过35卡。无存活driver、heavy任务或未完成收据。当前聊天已建立每5分钟监管，旧暂停任务保持；记录于evidence/drive/supervision.md。首次核实屏幕锁定值unknown，打包验收前再核对，锁定时请用户解锁。
+- 磁盘更新：本次约106GiB可用、已用89%，下方旧快照20GB/98%已过时；历史证据保持，未清缓存。
+
+以下第1至10节为迁移前交接快照，涉及“待决定”“尚未修订”“Android卡”的状态由上述授权、ADR-048及当前TASKS/ARCHITECTURE取代；保留原决策和失败依据。
+
 ## 1. 一句话现状
 
 桌面前端和 Rust 宿主已做到来源管理（T0.1 至 T0.17 共 17 张卡完成，每张都有准确 A1、完整 verify 和独立巡检）。用户决定放弃 Android 兼容层，改用 Rust 重写播放源。**重写尚未开始，规格和任务卡尚未修订。** 第一步是修订文档并取得用户确认。

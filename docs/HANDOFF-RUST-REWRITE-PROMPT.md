@@ -1,5 +1,7 @@
 # 交接提示词
 
+当前接续：2026-11-05用户已批准独立公开行为实现、个人使用、可用SuperVod JSON首版及文档/基线迁移；先读HANDOFF“当前接续更新”、ADR-048和最新PROGRESS/task status。下面为迁移前原提示词，首次方案确认门已获用户答复；当前仍须完成原rebaseline和新基线独立文档CLEAR后开发，逐卡验收/verify/提交/独立巡检保持。AES已静态核实普通JSON无需新增插件解密，实际媒体闭环NOT RUN。
+
 把下面分隔线之间的内容完整发给 Codex。工作目录设为 `/Users/eason/jp/application`。
 
 ---

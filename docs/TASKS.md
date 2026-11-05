@@ -1,18 +1,18 @@
 # 映象视频任务路线
 
-状态：文档规划；35张卡均待开发/业务验收NOT RUN。29张桌面、6张后续移动，保持原卡全部工作、验证、通过和停止条件。控制器仅接受T数字.数字，所以用下表一对一映射；原名称作为来源主键。T12依赖T11用于必需字幕；T18补N02依赖并移到其后，使真实AVD/forward清理前提已交付；M00增加桌面T25依赖落实原SPEC桌面后移动顺序。
+状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。29张桌面、6张后续移动沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
 
 平台范围（ADR-005/ADR-006，macOS first）：桌面必需验收目标只有macOS arm64（本机）。各卡“原始义务”及覆盖表中的macOS x86_64、Windows、Ubuntu X11/Wayland运行、安装、性能与签名要求降为非阻断记录项：代码保持cfg可移植，验收报告列为NOT RUN并给出复现命令，后续另行授权；本机macOS arm64缺测、失败或伪称其他平台通过时验收失败。
 
 ## 路线与执行前提
 
-先T00/T01/T05→N00/N01→HTTP共用DTO/匹配/网关/页面，原包T02/T03/T04→N02→T18设置/SQLite与真实退出清理→T19，与T20..T25最终交付。保持每卡一个内聚行为；原脚本按下面拓扑顺序选卡。T01技术门按ADR-005只在本机macOS arm64实跑；其他平台写NOT RUN与复现命令，不形成BLOCKED。当前没有开发会话、已完成卡和定时监管。
+当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.29桌面验收交付。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
 
-M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交付移动待办；M00执行前须明确移动授权。验收入口只做当卡行为断言，任务状态、冻结与完成资格沿原脚本。卡脚本是未来交付物，当前不存在且均NOT RUN；运行缺入口必然失败。
+M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌面T25完成后外层监管停止并交付移动待办；M00执行前须明确移动授权。验收入口只做当卡行为断言，任务状态、冻结与完成资格沿原脚本。未完成卡脚本由当卡交付，当前业务验收NOT RUN；已有验收入口及完成证据保持，运行缺入口必然失败。
 
-每卡验收公共前提/JSON报告/失败规则见ARCHITECTURE“验收与证据契约”。`all`覆盖下方完整原卡义务及所有关联需求；依赖卡已实现后只调其真实公开入口。测试构建可使用合成/可控网络；真实原包、在线来源、WebView、macOS arm64安装和移动真机按卡明确实跑。macOS以外平台及缺失的发行签名凭据只在报告中列为NOT RUN/发行待办并给出准确argv，本卡其余必需项照常判定。拒绝用旧报告、零用例或缺目标通过。
+每卡验收公共前提/JSON报告/失败规则见ARCHITECTURE“验收与证据契约”。`all`覆盖下方当前义务及所有关联需求；依赖卡已实现后只调其真实公开入口。测试构建使用脱敏公开响应fixture和受控自有媒体；在线来源、WebView、macOS arm64安装和移动真机按卡明确实跑。首版仅个人使用，可用SuperVod JSON来源；其他六站及XML/特殊播放器解析暂缓。来源以公开行为独立实现，停止于验证码、Cloudflare或访问控制；TLS校验保持开启。macOS以外平台及缺失的发行签名凭据只在报告中列为NOT RUN/发行待办并给出准确argv，本卡其余必需项照常判定。拒绝用旧报告、零用例或缺目标通过。
 
-验收脚本只创建并清理自己的fixture、随机端口、容器/AVD/forward；同步/取消/异常均finally清理，deadline由卡定义。构建子进程复用父run.py资源范围、CARGO_BUILD_JOBS=2、测试线程1，不嵌套控制包装器。大验收跨会话累计且保留完整验收边界，开发前确认默认3小时×2会话能覆盖该卡，额度调整遵守人类授权和重审。
+验收脚本只创建并清理自己的fixture、随机端口、容器；同步/取消/异常均finally清理，deadline由卡定义。构建子进程复用父run.py资源范围、CARGO_BUILD_JOBS=2、测试线程1，不嵌套控制包装器。大验收跨会话累计且保留完整验收边界，开发前确认默认3小时×2会话能覆盖该卡，额度调整遵守人类授权和重审。
 
 ## 原卡号映射
 
@@ -36,57 +36,57 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 | T16 | T0.16 | 内嵌播放界面 | 桌面 |
 | T17 | T0.17 | 源选择 引擎设置与受控交互 | 桌面 |
 | T18 | T0.18 | 设置与全生命周期清理 | 桌面 |
-| T02 | T0.19 | Android 引擎基础与原始 DEX ABI | 桌面 |
-| T03 | T0.20 | 全部 provider 枚举与身份 | 桌面 |
-| T04 | T0.21 | RuntimeManager 与专用 AVD | 桌面 |
-| N02 | T0.22 | Cloudstream接入统一宿主 | 桌面 |
-| T19 | T0.23 | 索引刷新与制品事务 | 桌面 |
-| T20 | T0.24 | 原包兼容与产品端到端 | 桌面 |
+| T02 | T0.19 | SuperVod JSON原生来源 | 桌面 |
+| T03 | T0.20 | SuperVod JSON多源身份与协议完整性 | 桌面 |
+| T04 | T0.21 | Rust来源请求上下文与故障隔离 | 桌面 |
+| N02 | T0.22 | Rust来源接入宿主与来源管理 | 桌面 |
+| T19 | T0.23 | 来源配置刷新与事务 | 桌面 |
+| T20 | T0.24 | Rust来源与产品端到端 | 桌面 |
 | T21 | T0.25 | 媒体网关与鉴权回归 | 桌面 |
 | T22 | T0.26 | 三平台性能与故障注入 | 桌面 |
 | T23 | T0.27 | 发行安装包 | 桌面 |
 | T24 | T0.28 | 独立验收与问题修复 | 桌面 |
 | T25 | T0.29 | 开发交付与最终说明 | 桌面 |
 | M00 | T1.1 | Android / iOS 真机可行性与版本基线 | 后续移动 |
-| M01 | T1.2 | Android 同机引擎与 Kotlin 接入 | 后续移动 |
+| M01 | T1.2 | Android本地Rust来源接入 | 后续移动 |
 | M02 | T1.3 | 移动页面与播放器适配 | 后续移动 |
 | M03 | T1.4 | Android 安装与发行验收 | 后续移动 |
-| M04 | T1.5 | iOS 配对远程兼容引擎 | 后续移动 |
+| M04 | T1.5 | iOS本地Rust来源接入 | 后续移动 |
 | M05 | T1.6 | iOS 真机闭环与移动最终交付 | 后续移动 |
 
 ## 需求覆盖
 
-每行保留准确原文位置（章节取docs/SPEC.md，字典指replica-spec/DATA_STRUCTURES.md）；卡内反向需求字段指向这里。原卡完整义务另有REQ-原卡号行，保证原验证/停止条件逐项保留。原SPEC §1.3明确的后续候选及范围外功能沿原决定；M系列只是后续阶段，所有移动要求继续保留。
+每行保留原文位置（章节取docs/SPEC.md，字典指replica-spec/DATA_STRUCTURES.md）；卡内反向需求指向这里。ADR-048逐项取代Android/原包义务；原文继续留在SPEC与replica-spec，REQ原卡号作为迁移主键。已完成卡保留其原验收语义，后续卡按本表及ADR-048验收。
 
 | 需求 ID / 原文位置 | 可观察要求 | 卡 / 验收 ID | 范围或待决定 |
 | --- | --- | --- | --- |
 | U01 / §1.1 | Tauri/Rust、WebView、原生持久化 | T0.2/A1, T0.3/A1, T0.18/A1, T0.28/A1 | 按原规格完整保留 |
-| U02 / §1.1,2.1 | 给定索引、原provider完整能力 | T0.1/A1, T0.20/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
+| U02 / §1.1,2.1 | 首版可用SuperVod JSON来源的搜索、详情、选集及解析 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代给定索引与全部provider义务 |
 | U03 / §1.1,8 | 推荐/详情/选集/播放完整真实闭环 | T0.14/A1, T0.15/A1, T0.16/A1, T0.24/A1 | 按原规格完整保留 |
 | U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.28/A1 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
-| U05 / §1.1,2.2,6.3 | 7/7原字节ART与全集/原interceptor | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
+| U05 / §1.1,2.2,6.3 | 依据公开行为独立实现的Rust来源，实际媒体闭环 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代原7包ART/DEX兼容；其余六站暂缓 |
 | U06 / §1.1,15 | 准确契约/依赖/错误与可复现交付 | T0.1/A1, T0.3/A1, T0.28/A1, T0.29/A1 | 按原规格完整保留 |
 | U07 / §1.1,16 | 桌面公共入口/cfg/响应式、后续移动真机MG | T0.13/A1, T0.28/A1, T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1, T1.5/A1, T1.6/A1 | 按原规格完整保留 |
-| U08 / §1.1,18 | Stremio元数据/Cloudstream主播放/MacCMS可选与跨源匹配 | T0.4/A1, T0.5/A1, T0.8/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
+| U08 / §1.1,18 | Stremio元数据与Rust MacCMS播放来源独立选择、跨源匹配 | T0.4/A1, T0.5/A1, T0.8/A1, T0.22/A1, T0.24/A1 | ADR-048取代Cloudstream主播放 |
 | U09 / §1.1,11.4 | 历史及SQLite跨重启/续播/失败完整性 | T0.13/A1, T0.16/A1, T0.18/A1, T0.24/A1 | 按原规格完整保留 |
-| R01 / §1.2,1.3 | 独立恢复默认元数据/播放源、初版页面与明确后续范围 | T0.3/A1, T0.13/A1, T0.14/A1, T0.17/A1, T0.28/A1 | 按原规格完整保留 |
-| R02 / §2.1 | 索引SHA/固定commit、7包长度/未知可选字段与锁 | T0.1/A1, T0.23/A1 | 按原规格完整保留 |
-| R03 / §2.2 | 固定运行时候选、原Application、禁用非引擎启动流程 | T0.19/A1, T0.22/A1 | 按原规格完整保留 |
-| R04 / §2.3 | 一包多实例、稳定ID与独立revision | T0.20/A1, T0.23/A1 | 按原规格完整保留 |
-| R05 / §2.4 | opaque原串、原interceptor/headers与Cookie | T0.7/A1, T0.8/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
-| R06 / §2.5,3,3.1 | HTTP原生/Android按需、单crate/类型分发/流媒体路径 | T0.3/A1, T0.4/A1, T0.5/A1, T0.9/A1, T0.22/A1 | 按原规格完整保留 |
-| R07 / §3.2 | 真实原包/全部实例/内嵌视频/macOS arm64/真实数据交付 | T0.24/A1, T0.28/A1 | ADR-005：其余平台非阻断 |
+| R01 / §1.2,1.3 | 独立恢复元数据/播放偏好，初版页面；来源可用后由用户选择 | T0.3/A1, T0.13/A1, T0.14/A1, T0.17/A1, T0.22/A1, T0.28/A1 | ADR-048移除准备Android默认流程 |
+| R02 / §2.1 | 旧索引/制品只留历史；首版候选列表及实际支持状态可追溯 | T0.1/A1（历史）, T0.19/A1, T0.23/A1 | ADR-048移除插件下载/锁更新 |
+| R03 / §2.2 | Rust宿主/公开JSON适配器运行，无Android环境前提 | T0.19/A1, T0.22/A1 | ADR-048取代原Application/加载器 |
+| R04 / §2.3 | 每个核准JSON来源独立身份/revision、配置UUID稳定 | T0.20/A1, T0.23/A1 | ADR-048取代包→provider全集 |
+| R05 / §2.4 | 原生媒体请求头/Referer与来源上下文保持、敏感字段留Rust | T0.7/A1, T0.8/A1, T0.21/A1, T0.25/A1 | ADR-048移除原插件interceptor语义 |
+| R06 / §2.5,3,3.1 | 单Rust crate、类型分发、原生HTTP与共用媒体路径 | T0.3/A1, T0.4/A1, T0.5/A1, T0.9/A1, T0.22/A1 | ADR-048移除Android执行分支 |
+| R07 / §3.2 | 核准Rust来源、内嵌视频、macOS arm64及真实数据交付 | T0.24/A1, T0.28/A1 | ADR-005/048；原包7/7与全集义务取代 |
 | R08 / §4 | 复用已有前端、api/models/player单入口、模块/cfg及协议权威 | T0.1/A1, T0.3/A1, T0.12/A1, T0.13/A1 | 按原规格完整保留 |
-| R09 / §5.1 | 系统/架构/虚拟化、工具镜像锁、AVD2核3072MB预算起点 | T0.1/A1, T0.21/A1, T0.26/A1, T0.26/A2 | 按原规格完整保留 |
-| R10 / §5.2 | HTTP先就绪、Android按需启动且失败隔离 | T0.3/A1, T0.21/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
-| R11 / §5.3 | serial/forward/AVD自身所有权与退出清理 | T0.21/A1, T0.18/A1 | 按原规格完整保留 |
-| R12 / §5.4 | 256位Bearer/cap分离、stdin bootstrap、查询串脱敏 | T0.19/A1, T0.21/A1, T0.9/A1, T0.25/A1 | 按原规格完整保留 |
-| R13 / §5.5 | 真实challenge信号、显式windowed切换、新guest保留HTTP/host与Cookie | T0.17/A1, T0.22/A1, T0.21/A1 | 按原规格完整保留 |
-| R14 / §6.1 | 暂存/停止受影响会话/原子注册revision/失败回滚/其他来源保持 | T0.23/A1 | 按原规格完整保留 |
-| R15 / §6.2 | 真实API能力、provider串行/4全局槽、全量与单栏失败/index | T0.6/A1, T0.22/A1 | 按原规格完整保留 |
-| R16 / §6.3 | 全部实例声明能力、在线失败固定同包参考环境复核 | T0.22/A1, T0.24/A1 | 按原规格完整保留 |
+| R09 / §5.1 | 目标系统/工具链与Rust来源实际资源测量 | T0.1/A1（历史）, T0.21/A1, T0.26/A1, T0.26/A2 | ADR-048移除AVD镜像及其预算 |
+| R10 / §5.2 | Rust宿主先就绪，单来源失败与Stremio/其他来源隔离 | T0.3/A1, T0.21/A1, T0.22/A1, T0.24/A1 | ADR-048取代Android按需启动 |
+| R11 / §5.3 | 仅清理本应用请求/会话/网关进程，保留外部资源 | T0.21/A1, T0.18/A1 | ADR-048移除serial/forward/AVD操作 |
+| R12 / §5.4 | 网关cap独立随机鉴权、查询串脱敏、本地凭据留宿主 | T0.19/A1, T0.21/A1, T0.9/A1, T0.25/A1 | ADR-048移除ADB bootstrap，保留鉴权隔离 |
+| R13 / §5.5 | 访问控制失败准确报告并停止，无规避/自动交互 | T0.21/A1, T0.22/A1 | ADR-048取代windowed引擎及Cookie同步 |
+| R14 / §6.1 | 配置探测/发布事务，受影响来源失效、失败保持确认状态 | T0.23/A1 | ADR-048取代制品更新事务 |
+| R15 / §6.2 | 实际JSON能力、四个公共网络槽、栏目index/部分失败 | T0.6/A1, T0.20/A1, T0.22/A1 | ADR-048取代原provider调用规则 |
+| R16 / §6.3 | 逐候选公开JSON实测和支持状态；失败与未测单独记录 | T0.19/A1, T0.22/A1, T0.24/A1 | ADR-048取代全部实例/同包参考环境 |
 | R17 / §7,7.1 | snake_case/可选字段/Rating与纯文本、完整DTO元数据 | T0.3/A1, T0.7/A1 | 按原规格完整保留 |
-| R18 / §7.2 | H原向量、重复条目/集数源序号和不透明引用 | T0.20/A1, T0.6/A1, T0.7/A1 | 按原规格完整保留 |
+| R18 / §7.2 | 复用HTTP H向量、重复条目/集数组序号及不透明引用 | T0.20/A1, T0.6/A1, T0.7/A1 | ADR-048移除包注册键；HTTP身份兼容 |
 | R19 / §7.3 | 所有错误code、请求deadline表、聚合提前1秒/传输2秒/4槽/连接空闲 | T0.3/A1, T0.6/A1, T0.8/A1, T0.9/A1, T0.5/A1, T0.25/A1 | 按原规格完整保留 |
 | R20 / §8.1 | 窗口1200×800/最小960×640/360,390,768/双语/五色系×明暗与持久化 | T0.13/A1, T0.24/A1 | 按原规格完整保留 |
 | R21 / §8.2 | 真实Stremio栏目/状态/4..7卡/懒图/去重/滚动/单栏失败重试 | T0.6/A1, T0.14/A1 | 按原规格完整保留 |
@@ -95,16 +95,16 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 | R24 / §8.5 | 元数据/播放源独立切换清理、诊断与健康分开且脱敏 | T0.13/A1, T0.17/A1, T0.22/A1 | 按原规格完整保留 |
 | R25 / §9.1 | 匹配→resolve→Session、close/release分别幂等、旧清理保留新句柄 | T0.8/A1, T0.9/A1, T0.16/A1 | 按原规格完整保留 |
 | R26 / §9.1,字典10 | Session独立强持LinkRecord、5分钟候选与活动/空闲租约 | T0.9/A1, T0.10/A1, T0.11/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
-| R27 / §9.2 | 原请求/拦截器保真、Range200/206/416、压缩头、64KiB流/8MiB清单 | T0.9/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
+| R27 / §9.2 | 原生来源请求上下文保真、Range200/206/416、压缩头、64KiB流/8MiB清单 | T0.9/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
 | R28 / §9.3 | HLS URI行/属性/key/map/音字幕/相对签名/序列与全部子资源 | T0.10/A1, T0.25/A1 | 按原规格完整保留 |
 | R29 / §9.4 | 字幕结构化VTT、DASH条件性全基线模板/SIDX、DRM明确拒绝 | T0.11/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
 | R30 / §10.1 | 系统WebView真实H264/AAC/HLS/MSE、平台依赖与安全传输 | T0.2/A1, T0.12/A1, T0.27/A1, T0.28/A1 | 按原规格完整保留 |
-| R31 / §10.2 | 17invoke形状/权限/主客epoch/包装DTO/递归图片与事件卸载 | T0.3/A1, T0.7/A1, T0.9/A1, T0.13/A1 | 按原规格完整保留 |
+| R31 / §10.2 | 17invoke形状/权限/host_epoch/包装DTO/递归图片与事件卸载、旧cloudstream明确未支持 | T0.3/A1, T0.7/A1, T0.9/A1, T0.13/A1, T0.22/A1 | ADR-048保留线格式兼容，移除guest执行 |
 | R32 / §10.3 | 一个video/player生命周期/250ms位置/旧epoch/自动播放提示/CORS/CSP | T0.2/A1, T0.12/A1, T0.16/A1, T0.28/A1 | 按原规格完整保留 |
 | R33 / §10.4 | 锁文件、npm ci/type/build、Rustfmt/check/clippy/test与发行依赖 | T0.1/A1, T0.27/A1, T0.29/A1 | 按原规格完整保留 |
 | R34 / §10.5 | 资源状态3秒只读/诊断序号、每尝试一次查询与一次过期恢复/失败呈现 | T0.9/A1, T0.12/A1, T0.14/A1, T0.25/A1 | 按原规格完整保留 |
 | R35 / §11.1 | AppState/完整快照vs单栏/分页合并、index唯一、局部错误与世代 | T0.6/A1, T0.13/A1, T0.14/A1 | 按原规格完整保留 |
-| R36 / §11.2 | 切元数据/播放源/集/关闭/宿主客体重启、取消UUID及父子finally | T0.3/A1, T0.13/A1, T0.18/A1, T0.22/A1 | 按原规格完整保留 |
+| R36 / §11.2 | 切来源/集/离页/宿主重启的请求取消、世代失效与清理 | T0.3/A1, T0.13/A1, T0.18/A1, T0.21/A1, T0.22/A1 | ADR-048移除guest重启分支 |
 | R37 / §11.3 | 有限缓存/图片去重稳定URL/30分钟/4096 LRU与刷新一次 | T0.9/A1, T0.14/A1, T0.25/A1 | 按原规格完整保留 |
 | R38 / §11.3 | Settingsv2/v1/原子损坏诊断/单写队列/未知提交重读/退出排空 | T0.3/A1, T0.18/A1 | 按原规格完整保留 |
 | R39 / §11.3 | generation墓碑、sync_sequence、同锁提交/资源登记与取消临界区 | T0.3/A1, T0.4/A1, T0.5/A1, T0.18/A1 | 按原规格完整保留 |
@@ -112,17 +112,17 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 | R41 / §11.4 | SQLite完整列/索引/事务迁移/参数SQL与长期身份/原来源定位 | T0.18/A1, T0.24/A1 | 按原规格完整保留 |
 | R42 / §11.4 | 5秒目标+事件写入/单调序号/删除旧快照/时钟回拨/写失败与退出 | T0.16/A1, T0.18/A1, T0.24/A1 | 按原规格完整保留 |
 | R43 / §11.4 | 重启原config/addon/video匹配→新Session/loadedmetadata seek与失败保留 | T0.18/A1, T0.24/A1 | 按原规格完整保留 |
-| R44 / §12 | loopback/鉴权/1MiB请求8MiB响应512KiB opaque/图像像素限额/ZIP/私有目录 | T0.3/A1, T0.9/A1, T0.23/A1, T0.25/A1 | 按原规格完整保留 |
-| R45 / §12 | 插件权限/独立AVD目录/无宿主共享/原锁限定及准确安全说明 | T0.19/A1, T0.21/A1, T0.27/A1 | 按原规格完整保留 |
+| R44 / §12 | loopback/鉴权/请求响应opaque及图像限额/私有目录 | T0.3/A1, T0.9/A1, T0.23/A1, T0.25/A1 | ADR-048移除ZIP解压入口，保留安全与数据完整性 |
+| R45 / §12 | 仅打包应用/依赖及核准来源配置，许可清单/个人使用说明 | T0.19/A1, T0.21/A1, T0.27/A1 | ADR-048移除插件执行/AVD隔离义务 |
 | R46 / §12.1 | 全部HTTP入口DNS/peer绑定、5跳重定向/HTTPS降级/跨Origin头/环境代理 | T0.4/A1, T0.5/A1, T0.9/A1, T0.25/A1 | 按原规格完整保留 |
-| R47 / §13 | 1.5秒壳/100ms UI/本地p95<100ms/60秒冷启为记录目标，5次冷启动样本 | T0.26/A1, T0.26/A2 | ADR-044放宽 |
+| R47 / §13 | 1.5秒壳/100ms UI/本地p95<100ms/60秒宿主冷启为记录目标，5次启动 | T0.26/A1, T0.26/A2 | ADR-044/048；无Android启动样本 |
 | R48 / §13 | 1080p30 H264AAC10分钟、20Mbps3分钟、50切集无泄漏与DPI125/150/200 | T0.2/A1（功能）, T0.12/A1, T0.25/A1（功能）, T0.26/A1, T0.26/A2（网关耐久）, T0.28/A1（播放器耐久） | ADR-044放宽 |
-| R49 / §14.1 | 合成协议/自有媒体/Android原DEX测试网络替身与正式构建隔离 | T0.2/A1, T0.4/A1, T0.5/A1, T0.22/A1, T0.25/A1, T0.28/A1 | 按原规格完整保留 |
-| R50 / §14.2,14.3 | G0-Core/CS及G1..G5、全部桌面硬条件与依次闭环 | T0.1/A1, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.27/A1, T0.28/A1 | 按原规格完整保留 |
+| R49 / §14.1 | 公开行为fixture/自有媒体，测试替身与正式构建隔离 | T0.2/A1, T0.4/A1, T0.5/A1, T0.19/A1, T0.22/A1, T0.25/A1, T0.28/A1 | ADR-048取代原DEX网络替身 |
+| R50 / §14.2,14.3 | G0-Core及Rust来源G2、G1/G3/G4/G5实际桌面闭环 | T0.1/A1（历史）, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.27/A1, T0.28/A1 | ADR-048取消G0-CS、取代原包G2 |
 | R51 / §15 | 先机器契约、真命令/日志/报告、复现/回归/数据及发布材料 | T0.3/A1, T0.28/A1, T0.29/A1 | 按原规格完整保留 |
 | R52 / §16.1,16.2 | 桌面后移动分期与Rust/DTO/页面/cfg复用 | T0.13/A1, T1.1/A1, T1.6/A1 | 按原规格完整保留 |
-| R53 / §16.3 | Android同机双组件/同签名/Service/原初始化/前后台/权限 | T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1 | 后续移动另获授权 |
-| R54 / §16.4 | iOS用户管理远程引擎/TLS配对/撤销/多客户端/联网说明 | T1.1/A1, T1.5/A1, T1.6/A1 | 后续移动另获授权 |
+| R53 / §16.3 | Android本地Rust来源、单应用、生命周期/权限隔离 | T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1 | ADR-048；移动阶段另获授权 |
+| R54 / §16.4 | iOS本地Rust来源/网关，HTTPS校验、会话隔离及断网恢复 | T1.1/A1, T1.5/A1, T1.6/A1 | ADR-048取代远程引擎/配对部署；移动另获授权 |
 | R55 / §16.5 | 44px/safearea/360,390,768/playsinline/返回/音频/后台/网络 | T1.3/A1, T1.6/A1 | 后续移动另获授权 |
 | R56 / §16.6 | MG0..MG3真机、安装签名与生命周期最终交付 | T1.1/A1, T1.4/A1, T1.6/A1 | 后续移动另获授权 |
 | R57 / §17 | 全部固定事实/工程决定/待实测追溯来源与原始证据 | T0.1/A1, T0.28/A1 | 按原规格完整保留 |
@@ -131,7 +131,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 | R60 / §18.3 | manifest完整事务/unpublished/编辑撤销/元数据资源失败warning与fallback | T0.5/A1, T0.6/A1, T0.7/A1 | 按原规格完整保留 |
 | R61 / §18.3 | catalog/meta过滤/skip/路径前缀query/原video/movie条目/resolvefalse | T0.5/A1, T0.8/A1 | 按原规格完整保留 |
 | R62 / §18.3.1 | 真实en/zh-CN扩展请求/字段覆盖回退/预算/语言缓存/乱序且播放保持 | T0.5/A1, T0.13/A1, T0.24/A1 | 按原规格完整保留 |
-| R63 / §18.4 | host/guest分离、宿主句柄/backend同名ID隔离、guest故障HTTP持续 | T0.3/A1, T0.9/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
+| R63 / §18.4 | host_epoch与来源revision/generation隔离、单源故障其他来源持续 | T0.3/A1, T0.9/A1, T0.21/A1, T0.22/A1, T0.24/A1 | ADR-048移除guest句柄映射 |
 | R64 / §18.5 | HTTP H公式/revision/源编辑删除影响范围与独立最近源迁移 | T0.4/A1, T0.5/A1, T0.3/A1, T0.18/A1 | 按原规格完整保留 |
 | R65 / §18.6 | MetadataIdentity全局映射需验证/自定义namespace/addon准确回源 | T0.8/A1, T0.5/A1, T0.18/A1 | 按原规格完整保留 |
 | R66 / §18.6 | 最多2×10候选/外部ID自动确认条件/手动组集/无search/错误vs零匹配 | T0.8/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
@@ -155,24 +155,24 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 | REQ-T15 / replica-spec/AI_TASKS.md T15 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.15/A1 | 桌面首版 |
 | REQ-T16 / replica-spec/AI_TASKS.md T16 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.16/A1 | 桌面首版 |
 | REQ-T17 / replica-spec/AI_TASKS.md T17 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.17/A1 | 桌面首版 |
-| REQ-T18 / replica-spec/AI_TASKS.md T18 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.18/A1 | 桌面首版 |
-| REQ-T02 / replica-spec/AI_TASKS.md T02 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.19/A1 | 桌面首版 |
-| REQ-T03 / replica-spec/AI_TASKS.md T03 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.20/A1 | 桌面首版 |
-| REQ-T04 / replica-spec/AI_TASKS.md T04 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.21/A1 | 桌面首版 |
-| REQ-N02 / replica-spec/AI_TASKS.md N02 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.22/A1 | 桌面首版 |
-| REQ-T19 / replica-spec/AI_TASKS.md T19 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.23/A1 | 桌面首版 |
-| REQ-T20 / replica-spec/AI_TASKS.md T20 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.24/A1 | 桌面首版 |
-| REQ-T21 / replica-spec/AI_TASKS.md T21 | 开发网关功能与产品10分钟耐久分期（ADR-044） | T0.25/A1（功能）, T0.26/A1（网关长测采样/协议准备）, T0.26/A2（完整10分钟网关耐久） | 桌面首版 |
-| REQ-T22 / replica-spec/AI_TASKS.md T22 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.26/A1, T0.26/A2 | 桌面首版 |
-| REQ-T23 / replica-spec/AI_TASKS.md T23 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.27/A1 | 桌面首版 |
-| REQ-T24 / replica-spec/AI_TASKS.md T24 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.28/A1 | 桌面首版 |
-| REQ-T25 / replica-spec/AI_TASKS.md T25 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.29/A1 | 桌面首版 |
-| REQ-M00 / replica-spec/AI_TASKS.md M00 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.1/A1 | 后续移动 |
-| REQ-M01 / replica-spec/AI_TASKS.md M01 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.2/A1 | 后续移动 |
-| REQ-M02 / replica-spec/AI_TASKS.md M02 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.3/A1 | 后续移动 |
-| REQ-M03 / replica-spec/AI_TASKS.md M03 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.4/A1 | 后续移动 |
-| REQ-M04 / replica-spec/AI_TASKS.md M04 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.5/A1 | 后续移动 |
-| REQ-M05 / replica-spec/AI_TASKS.md M05 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T1.6/A1 | 后续移动 |
+| REQ-T18 / replica-spec/AI_TASKS.md T18 | ADR-048修订后的T18工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.18/A1 | 桌面首版 |
+| REQ-T02 / replica-spec/AI_TASKS.md T02 | ADR-048修订后的SuperVod JSON原生来源工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.19/A1 | 桌面首版 |
+| REQ-T03 / replica-spec/AI_TASKS.md T03 | ADR-048修订后的SuperVod JSON多源身份与协议完整性工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.20/A1 | 桌面首版 |
+| REQ-T04 / replica-spec/AI_TASKS.md T04 | ADR-048修订后的Rust来源请求上下文与故障隔离工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.21/A1 | 桌面首版 |
+| REQ-N02 / replica-spec/AI_TASKS.md N02 | ADR-048修订后的Rust来源接入宿主与来源管理工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.22/A1 | 桌面首版 |
+| REQ-T19 / replica-spec/AI_TASKS.md T19 | ADR-048修订后的来源配置刷新与事务工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.23/A1 | 桌面首版 |
+| REQ-T20 / replica-spec/AI_TASKS.md T20 | ADR-048修订后的Rust来源与产品端到端工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.24/A1 | 桌面首版 |
+| REQ-T21 / replica-spec/AI_TASKS.md T21 | ADR-048修订后的T21工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.25/A1（功能）, T0.26/A1（网关长测采样/协议准备）, T0.26/A2（完整10分钟网关耐久） | 桌面首版 |
+| REQ-T22 / replica-spec/AI_TASKS.md T22 | ADR-048修订后的T22工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.26/A1, T0.26/A2 | 桌面首版 |
+| REQ-T23 / replica-spec/AI_TASKS.md T23 | ADR-048修订后的T23工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.27/A1 | 桌面首版 |
+| REQ-T24 / replica-spec/AI_TASKS.md T24 | ADR-048修订后的T24工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.28/A1 | 桌面首版 |
+| REQ-T25 / replica-spec/AI_TASKS.md T25 | ADR-048修订后的T25工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.29/A1 | 桌面首版 |
+| REQ-M00 / replica-spec/AI_TASKS.md M00 | ADR-048修订后的M00工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.1/A1 | 后续移动 |
+| REQ-M01 / replica-spec/AI_TASKS.md M01 | ADR-048修订后的Android本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.2/A1 | 后续移动 |
+| REQ-M02 / replica-spec/AI_TASKS.md M02 | ADR-048修订后的M02工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.3/A1 | 后续移动 |
+| REQ-M03 / replica-spec/AI_TASKS.md M03 | ADR-048修订后的M03工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.4/A1 | 后续移动 |
+| REQ-M04 / replica-spec/AI_TASKS.md M04 | ADR-048修订后的iOS本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.5/A1 | 后续移动 |
+| REQ-M05 / replica-spec/AI_TASKS.md M05 | ADR-048修订后的M05工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.6/A1 | 后续移动 |
 
 ## 任务卡
 
@@ -183,7 +183,7 @@ M系列完整保留为后续阶段。桌面T25完成后外层监管停止并交�
 T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5次；T0.25的网关播放由T0.26/A2在真实产品链路完成，按ADR-044为10分钟。T0.26为产品性能/故障测试，T0.28为产品独立验收与修复，保留原文件顺序及依赖。原始义务原文作为来源保留，执行阶段按本条及ADR-020、ADR-044解释；后续产品测试按当时稳定源码和构建重新实测。短时功能通过与长期验收待测分别记录。
 
 
-所有本卡“原始义务”是归档原文，路径按ADR-001适配；其中调用其他原卡由映射表定位。原文中的任务状态记录统一到docs/PROGRESS.md。
+已完成卡“原始义务”保留历史原文；ADR-048迁移卡以“修订义务”为当前执行要求，原文可在replica-spec/AI_TASKS.md查阅。原卡号继续用于验收脚本和报告路径，状态统一到docs/PROGRESS.md。
 
 ### T0.1 T00 版本与环境基线
 - [x] 完成
@@ -1024,18 +1024,18 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 通过：HTTP配置与真实首页可操作；Cloudstream准备、源列表与交互入口用状态fixture验证；真实SuperVod全集与可见交互由N02验收。宿主/客体状态分开，诊断脱敏。
 - 验证：HTTP配置行为与Cloudstream交互状态fixture、拒绝/取消、复制诊断；真实客体重启和HTTP播放持续在N02复测。
 
-### T0.19 T02 Android 引擎基础与原始 DEX ABI
+### T0.19 T02 SuperVod JSON原生来源
 - [ ] 完成
-- 依赖：T0.1
-- 需求：U05, R03, R12, R45, REQ-T02 → A1（覆盖表含精确对应）
-- 范围：`android-engine/`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t02.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 依赖：T0.1, T0.4, T0.8, T0.9
+- 需求：U02, U05, R03, R12, R16, R45, R49, REQ-T02 → A1（覆盖表含精确对应）
+- 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/runtime.lock.json`, `docs/ARCHITECTURE.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOFF-RUST-REWRITE.md`, `docs/HANDOFF-RUST-REWRITE-PROMPT.md`, `docs/reviews/doc-review/`, `android-engine/`
+- 交付物：记录AES用途核实结果（C4，无需新增插件AES解密）及公开响应实现依据；复用maccms.rs/source_dispatch.rs/resolution.rs/gateway.rs，以现有maccms kind和配置接入。协议候选为优质、量子、红牛、无尽、光速、极速、豪华；淘片简略JSON待详情核实、卧龙非JSON暂排除。仅完成JSON、详情及直接媒体验证的候选进入支持列表；其余逐个列明失败/NOT RUN。已读插件源码只作范围风险调查，产品代码依据公开HTTP响应独立实现，保留实现依据，全部原包及Android补丁保留历史且从运行/发行路径排除。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "instrumentation实际安装APK并在ART加载7/7原字节DEX，逐符号/方法/原Application初始化和注册事件；固定BootstrapActivity、Bearer拒绝负例及health initializing/ready/failed/new epoch实测。重编译插件、少包或仅静态ZIP时失败。",
+    "description": "公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。遇访问控制停止该候选并报告；安全负例与cap隔离保留。",
     "argv": [
       "{python}",
       "-B",
@@ -1050,38 +1050,37 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
     "kind": "test",
     "report": "junit:evidence/acceptance/T02-all.xml",
     "cases": [
+      "U02",
       "U05",
       "R03",
       "R12",
+      "R16",
       "R45",
+      "R49",
       "REQ-T02"
     ],
     "timeout_seconds": 7200
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T00；对应U05，G2基础。
-- 修改：android-engine/upstream的固定分支、Engine入口、加载测试、运行时锁。
-- 工作：复用原Application/PluginManager/网络/extractor上下文，在ART加载7个原包；记录pluginClassName、方法链接异常及注册事件。验证Android只读DEX要求由真实加载器处理。
-- 启动交付：提供可安装APK、固定BootstrapActivity和最小受Bearer鉴权的GET /v1/health；响应沿用HealthEnvelope，提供engine_epoch及initializing/ready/failed状态，供T04直接使用。
-- 通过：7/7未经修改原包成功load；整个包摘要一致；原API和依赖符号实际解析；原Context/Application初始化成立。
-- 验证：Android instrumentation、加载报告及bootstrap/health鉴权、epoch、状态测试。对版本不兼容优先换匹配的历史运行时或补兼容ABI，并记录选择依据。
-- 停止条件：NoSuchMethod/ClassNotFound等保持失败，禁止重编译原插件作为通过依据。
+- 工作：记录AES用途核实结果（C4，无需新增插件AES解密）及公开响应实现依据；复用maccms.rs/source_dispatch.rs/resolution.rs/gateway.rs，以现有maccms kind和配置接入。协议候选为优质、量子、红牛、无尽、光速、极速、豪华；淘片简略JSON待详情核实、卧龙非JSON暂排除。仅完成JSON、详情及直接媒体验证的候选进入支持列表；其余逐个列明失败/NOT RUN。已读插件源码只作范围风险调查，产品代码依据公开HTTP响应独立实现，保留实现依据，全部原包及Android补丁保留历史且从运行/发行路径排除。
+- 通过与反证：公开响应fixture验证列表/搜索/分类分页/详情/完整组选集/直接MP4或HLS解析；正常零搜索结果按空列表/匹配not_found呈现；HTML/非JSON/错误code/畸形字段/超限明确失败，解析无媒体按no_links错误呈现。复用现有来源管理手工配置入口（T0.17已交付，预设发现/添加UI留T0.22），至少一个候选通过真实公开JSON列表→详情→选集→resolve→Rust网关→打包WebView短播闭环；每个晋级支持来源有JSON协议与媒体可用证据，HTTP200单独记录。脱敏记录网络/日期/来源状态，凭据/媒体签名URL留原生内存。遇访问控制停止该候选并报告；安全负例与cap隔离保留。
+- 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
-### T0.20 T03 全部 provider 枚举与身份
+### T0.20 T03 SuperVod JSON多源身份与协议完整性
 - [ ] 完成
 - 依赖：T0.19
-- 需求：U02, U05, R04, R18, REQ-T03 → A1（覆盖表含精确对应）
-- 范围：`android-engine/`, `src-tauri/src/models.rs`, `docs/compatibility-report.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t03.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 需求：U02, U05, R04, R15, R18, REQ-T03 → A1（覆盖表含精确对应）
+- 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/PROGRESS.md`
+- 交付物：仅覆盖T0.19晋级的JSON来源，复用配置UUID/HTTP身份公式；不增加其他六站。独立来源/revision、H向量、相同影片ID跨来源隔离、重复组选集保持源序及可选性、分页/部分失败处理。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "实际每包全部注册实例，与原7包/真实SuperVod清单一一对应；H向量、同名同class不同mainUrl及重复序号、两次启动稳定ID、更新revision隔离；丢实例/身份漂移/旧修订可用时失败。",
+    "description": "对全部支持JSON来源逐个执行公开响应fixture；两次启动身份稳定，改端点/禁用/删除重加旧引用失效；同名/同ID来源及组/集重复保持独立；数字与数字字符串/空字段/长标题/200集/多组/无分类/页尾/部分栏目失败逐项断言。丢集、乱序、串源、错误静默空列表或旧revision可用时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1099,6 +1098,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
       "U02",
       "U05",
       "R04",
+      "R15",
       "R18",
       "REQ-T03"
     ],
@@ -1106,27 +1106,24 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T02；对应U02/U05。
-- 修改：Android ProviderRegistry、models.rs源DTO、compatibility-report.json。
-- 工作：枚举每包所有注册实例；SuperVod保留全部注册源；按数据字典长度前缀H公式生成稳定source_id与独立source_revision；采集能力和语言。
-- 通过：包→provider清单完整；同名实例可区分；两次相同制品启动得到稳定身份；旧revision引用可明确拒绝。
-- 验证：多源插件、同名/同class不同mainUrl、注册顺序、包更新和重启fixture；真实SuperVod注册清单。
+- 工作：仅覆盖T0.19晋级的JSON来源，复用配置UUID/HTTP身份公式；不增加其他六站。独立来源/revision、H向量、相同影片ID跨来源隔离、重复组选集保持源序及可选性、分页/部分失败处理。
+- 通过与反证：对全部支持JSON来源逐个执行公开响应fixture；两次启动身份稳定，改端点/禁用/删除重加旧引用失效；同名/同ID来源及组/集重复保持独立；数字与数字字符串/空字段/长标题/200集/多组/无分类/页尾/部分栏目失败逐项断言。丢集、乱序、串源、错误静默空列表或旧revision可用时失败。
+- 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
-### T0.21 T04 RuntimeManager 与专用 AVD
+### T0.21 T04 Rust来源请求上下文与故障隔离
 - [ ] 完成
-- 依赖：T0.1, T0.19
-- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
-- 需求：U04, R09, R10, R11, R12, R13, R45, REQ-T04 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/src/runtime.rs`, `src/views/SetupView.vue`, `src-tauri/src/lib.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t04.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 依赖：T0.20, T0.3, T0.9
+- 需求：U04, R05, R09, R10, R11, R12, R13, R36, R45, R63, REQ-T04 → A1（覆盖表含精确对应）
+- 范围：`src-tauri/`, `tests/`, `docs/runtime.lock.json`, `docs/PROGRESS.md`
+- 交付物：复用resolution.rs原生上下文与gateway.rs，按当前JSON来源实际需求处理Referer/头/来源域隔离。只实现已经观察到的必要处理，保持TLS和公共出站策略；移除运行时对AVD/ADB/APK的准备依赖。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "本机macOS arm64安装T02 APK的实际启动链、中文空格路径、独占AVD/serial/forward、stdin令牌、initializing与ready；预置其他设备、端口冲突/安装失败/崩溃/取消/超时/窗口化重启及清理，外部设备前后快照相等。清理越权/泄露令牌/顺序错误时失败。",
+    "description": "无Android工具/镜像时Rust宿主及播放工作；来源A失败/超时/取消/被拒绝时来源B与Stremio继续；来源请求头跨源隔离、跨Origin敏感头清除、本地cap不发上游；401/403/挑战响应准确失败并停止访问，证书错误保持失败；切源/改配置/宿主重启与旧请求晚到不复活资源；取消与退出回收本项目请求/流/进程，外部资源保持。",
     "argv": [
       "{python}",
       "-B",
@@ -1142,39 +1139,39 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
     "report": "junit:evidence/acceptance/T04-all.xml",
     "cases": [
       "U04",
+      "R05",
       "R09",
       "R10",
       "R11",
       "R12",
       "R13",
+      "R36",
       "R45",
+      "R63",
       "REQ-T04"
     ],
     "timeout_seconds": 7200
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T00/T02；对应U04。
-- 修改：src-tauri/src/runtime.rs、src/views/SetupView.vue、平台工具定位与进程测试。
-- 工作：检测环境、创建专用AVD并等待系统启动、安装T02的APK、选择自身serial、bootstrap令牌、动态ADB forward和退出回收；安装及bootstrap完成后检查health。
-- 通过：三平台使用T02最小health验证桥接可达、Bearer鉴权与epoch，initializing为明确的准备状态；业务ready由后续源初始化验收。空格/中文路径可用；取消/超时清理自身资源；用户其他设备/模拟器状态保持；重启生成新epoch/令牌。
-- 验证：预置其他ADB设备、端口冲突、APK安装失败、引擎崩溃、重启、取消；检查loopback监听与forward。
-- 额外：实现规格5.5的可见交互模式；普通播放与窗口切换的影响由UI说明。
+- 工作：复用resolution.rs原生上下文与gateway.rs，按当前JSON来源实际需求处理Referer/头/来源域隔离。只实现已经观察到的必要处理，保持TLS和公共出站策略；移除运行时对AVD/ADB/APK的准备依赖。
+- 通过与反证：无Android工具/镜像时Rust宿主及播放工作；来源A失败/超时/取消/被拒绝时来源B与Stremio继续；来源请求头跨源隔离、跨Origin敏感头清除、本地cap不发上游；401/403/挑战响应准确失败并停止访问，证书错误保持失败；切源/改配置/宿主重启与旧请求晚到不复活资源；取消与退出回收本项目请求/流/进程，外部资源保持。
+- 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
-### T0.22 N02 Cloudstream接入统一宿主
+### T0.22 N02 Rust来源接入宿主与来源管理
 - [ ] 完成
 - 依赖：T0.20, T0.21, T0.3, T0.9, T0.17
 - 需求：U02, U05, U08, R03, R05, R06, R10, R13, R15, R16, R24, R26, R27, R29, R36, R49, R50, R63, R66, REQ-N02 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/src/`, `src/views/`, `src/api.ts`, `src/models.ts`, `android-engine/`, `docs/compatibility-report.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/n02.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src-tauri/`, `src/`, `protocol/`, `docs/compatibility-report.json`, `tests/`, `docs/PROGRESS.md`
+- 交付物：将已验证JSON来源作为可选预设配置通过现有设置入口添加，复用maccms kind、配置上限/UUID/独立偏好；保留用户已有HTTP配置。移除页面Android准备/原包交互提示与不可用入口，过时cloudstream配置/偏好保留可诊断迁移说明，保持既有17命令线格式兼容（cloudstream准备/交互明确返回未支持错误）；protocol只随实际契约变化补正负例。修复来源校验中文提示。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "真实原7包/全部provider/实际Ddys与SuperVod/原loadLinks/Cookie/Referer/Yjys interceptor及动态栏目；host句柄与guest ID隔离、DELETE后活动Session、资源状态查询；补查T11遗留的Cloudstream基线DASH（出现则BaseURL/List/Base/SIDX/受约束模板/seek播放，未出现记录制品证据）；无Android HTTP冷启动、客体崩溃重启与可见交互后HTTP播放连续；真实challenge fixture决定INTERACTION_REQUIRED。缺实例/替写provider/错误影响HTTP时失败。",
+    "description": "真实Rust Host+打包WebView验收支持来源可发现/显式添加/独立选择/重启恢复、增改禁用删与上限重复；Stremio推荐→详情→指定video匹配JSON来源→人工确认→解析→播放切集；MacCMS无验证外部ID继续要求确认，歧义暂停自动下一集；失败来源与最近请求诊断准确，受控场景验证Session强持有/候选释放后播放继续/Range/HLS/字幕/条件DASH/取消/清理。保留用户配置、错误及旧历史；合成与公开实测分别统计，全部支持来源能力可追溯。",
     "argv": [
       "{python}",
       "-B",
@@ -1214,27 +1211,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T03/T04/T05/T09/T17。
-- 对应：U05/U08，G2；修改EngineClient、SourceDispatch后端映射、来源UI及运行状态。
-- 工作：采集真实源站人机验证响应并固化状态码/响应特征fixture，实现规格5.5判定；复用APK与原桥接；AppSource.kind=cloudstream，保留所有注册provider；将客体section/resolve/stream/session ID映射为宿主句柄；显式准备Android并接入受控可见交互。
-- 通过：7/7原包、全部注册源和真实原拦截器路径保持；guest_epoch变化只失效Cloudstream资源，HTTP来源仍可播放；start_interaction的应用结果携带host_epoch，客体新epoch在runtime.cloudstream事件中体现。
-- 验证：无Android时HTTP冷启动、客体启动/崩溃/重启、同名后端ID、过期句柄、原包更新、SuperVod全集及动态栏目、Ddys多季/原Vod JSON、七包provider代表场景、原Cookie/Referer/Yjys interceptor及loadLinks、桥接DELETE后活动会话存活、客体资源状态查询、可见交互、取消与全链退出。真实源失败按原参考环境复核。
+- 工作：将已验证JSON来源作为可选预设配置通过现有设置入口添加，复用maccms kind、配置上限/UUID/独立偏好；保留用户已有HTTP配置。移除页面Android准备/原包交互提示与不可用入口，过时cloudstream配置/偏好保留可诊断迁移说明，保持既有17命令线格式兼容（cloudstream准备/交互明确返回未支持错误）；protocol只随实际契约变化补正负例。修复来源校验中文提示。
+- 通过与反证：真实Rust Host+打包WebView验收支持来源可发现/显式添加/独立选择/重启恢复、增改禁用删与上限重复；Stremio推荐→详情→指定video匹配JSON来源→人工确认→解析→播放切集；MacCMS无验证外部ID继续要求确认，歧义暂停自动下一集；失败来源与最近请求诊断准确，受控场景验证Session强持有/候选释放后播放继续/Range/HLS/字幕/条件DASH/取消/清理。保留用户配置、错误及旧历史；合成与公开实测分别统计，全部支持来源能力可追溯。
+- 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
 ### T0.18 T18 设置与全生命周期清理
 - [ ] 完成
 - 依赖：T0.16, T0.17, T0.22
 - 需求：U01, U09, R11, R36, R38, R39, R40, R41, R42, R43, R64, R65, REQ-T18 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `src/api.ts`, `src/models.ts`, `src/data/history.ts`, `src/data/history-model.ts`, `src/views/HistoryView.vue`, `src/App.vue`, `protocol/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t18.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 交付物：落实下列修订义务；提供`tests/acceptance/t18.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 契约顺序：按ARCHITECTURE C16的四个历史命令、字段与写入序号规则补齐protocol正负样例后再进入Rust实现；这是本卡既定交付。既有17个命令、原有DTO保持兼容；偏离C16定义时才按冻结修订程序处理。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "C16四个历史IPC实际参数/结果/每命令正负例及写序号、删除屏障、Session确认身份和match/video绑定负例，工作协议纳入完整verify；合法非UUID的match_id贯通匹配/解析/Session/历史，拒绝空/超长/未知/错误归属句柄；活动播放超过5分钟强制GC匹配/候选后继续保存，切集/切源/离页/退出延迟提交已接纳快照仍保留准确影片与video进度，旧Session关闭后新发未接纳快照拒绝，删除/清空屏障拒绝已接纳旧写，写失败相同序号同载荷可重试而不同载荷拒绝；实际Settings损坏/迁移/原子失败/退出队列、50次切换与自身进程/流/forward/AVD清理；SQLite实际文件、PRAGMA版本事务回滚/参数绑定、完整历史列与索引、跨重启/磁盘权限/乱序/时钟回拨、删除清空与待写快照、旧事件/退出排空/未保存提示；历史IPC先同步protocol与正负例再接现有history入口。仅Map/localStorage、丢原文件或删后复活时失败。",
+    "description": "C16四个历史IPC实际参数/结果/每命令正负例及写序号、删除屏障、Session确认身份和match/video绑定负例，工作协议纳入完整verify；合法非UUID的match_id贯通匹配/解析/Session/历史，拒绝空/超长/未知/错误归属句柄；活动播放超过5分钟强制GC匹配/候选后继续保存，切集/切源/离页/退出延迟提交已接纳快照仍保留准确影片与video进度，旧Session关闭后新发未接纳快照拒绝，删除/清空屏障拒绝已接纳旧写，写失败相同序号同载荷可重试而不同载荷拒绝；实际Settings损坏/迁移/原子失败/退出队列、50次切换与自身进程/流/网关清理；SQLite实际文件、PRAGMA版本事务回滚/参数绑定、完整历史列与索引、跨重启/磁盘权限/乱序/时钟回拨、删除清空与待写快照、旧事件/退出排空/未保存提示；历史IPC先同步protocol与正负例再接现有history入口。仅Map/localStorage、丢原文件或删后复活时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1267,28 +1262,28 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
 - 依赖：T16/T17。
 - 修改：src-tauri/src/settings.rs、history.rs、前端卸载/关闭与崩溃恢复测试。
-- 工作：延续T05的Settings v2及v1迁移，验证source_configs和音量/auto_next/窗口/最近源；原子写入；schema_version与损坏恢复；前后台ResumeSnapshot仅驻留内存；取消全链；自身进程、forward、流与图像清理。
-- 通过：退出后无本项目残余媒体声/请求；用户其他ADB状态保留；配置异常可定位；重启状态合理。
+- 工作：延续T05的Settings v2及v1迁移，验证source_configs和音量/auto_next/窗口/最近源；原子写入；schema_version与损坏恢复；前后台ResumeSnapshot仅驻留内存；取消全链；自身进程、流与图像清理。
+- 通过：退出后无本项目残余媒体声/请求；用户其他进程和设备状态保留；配置异常可定位；重启状态合理。
 - 验证：写入中断、权限错误、中文目录、kill/relaunch、窗口关闭、连续50次切换。
 
 - SQLite补充：按11.4实现Rust本地历史仓储与迁移；先同步机器DTO、IPC和样例，再替换前端history数据入口。验证跨重启、迁移失败、磁盘/权限错误、原子更新、乱序写入、删除/清空与待写快照、退出写队列；Settings v2维持JSON兼容。
 
-### T0.23 T19 索引刷新与制品事务
+### T0.23 T19 来源配置刷新与事务
 - [ ] 完成
 - 依赖：T0.20, T0.3, T0.22
 - 需求：R02, R04, R14, R44, REQ-T19 → A1（覆盖表含精确对应）
-- 范围：`android-engine/`, `src-tauri/src/`, `src/views/SourcesView.vue`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t19.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src-tauri/src/`, `src/views/NativeSourcesView.vue`, `src/state.ts`, `src/api.ts`, `src/models.ts`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t19.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "真实原包更新事务：未知字段/缺字段/长度摘要/apiVersion、恶意路径/ZIP炸弹、断网取消；无变化暂存失败保持播放，提交前停止该包全部实例/撤销资源/拒新业务、旧结果丢弃、回滚旧表且已停会话保持停，其他包和HTTP连续播放。部分发布/回滚伪恢复旧Session时失败。",
+    "description": "公开JSON来源配置与探测快照事务：无变更/探测失败保持确认配置及播放；编辑/禁用/删除提交时停止受影响来源会话/撤销资源/拒绝旧结果；失败保留旧配置和注册表且已停会话保持停止，其他来源连续；并发sync_sequence/generation核对、取消、超限/非法URL/错误响应反例。部分发布或旧引用复活时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1313,27 +1308,23 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T03/T05/N02。
-- 修改：Android catalog同步、制品锁和回滚逻辑。
-- 工作：可选字段、未知字段、版本/摘要、ZIP防穿越、原包保存、安装事务、旧revision隔离。
-- 通过：7包基线保持原字节；刷新失败保留前一完整状态；新API版本有显式错误；所有注册源映射可追溯。
-- 验证：断网、中断包、同版本不同字节、缺字段、恶意路径/ZIP、取消、无变更/暂存失败维持播放、变更提交前停止受影响包全部会话、提交回滚后保持停止并可重新解析、其他包/HTTP播放持续。
+- 工作与验收：复用settings.rs/source_dispatch.rs与来源管理入口，测试配置探测锁外、保存同锁、配置原子替换/失败保持确认值、修订与世代失效、无变更保持播放及并发取消。删除插件索引刷新/下载/ZIP安装产品路径；旧制品仅留历史。配置刷新失败保持前一完整状态，报告保留请求失败原因。
 
-### T0.24 T20 原包兼容与产品端到端
+### T0.24 T20 Rust来源与产品端到端
 - [ ] 完成
 - 依赖：T0.14, T0.15, T0.16, T0.17, T0.18, T0.23, T0.22
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U02, U03, U04, U05, U08, U09, R07, R10, R16, R20, R40, R41, R42, R43, R50, R62, R63, R66, R67, REQ-T20 → A1（覆盖表含精确对应）
-- 范围：`android-engine/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "本机macOS arm64真实Stremio→Cloudstream推荐/详情/匹配/内嵌播放切集，受控MacCMS可选分支、HTTP-only/客体故障隔离；7包全部注册provider逐声明能力与独立interceptor、源失败固定参考环境同包复核；macOS真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px。缺macOS arm64运行/只fixture/无当前原包证据时失败。",
+    "description": "本机macOS arm64真实Stremio→核准Rust JSON来源推荐/详情/匹配确认/内嵌播放切集；受控HTTP媒体完整正负例与单源故障隔离；每个支持来源按实际能力记录公开JSON和媒体链路，在线失败与fixture结果分列；真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px。缺真实公开来源闭环、macOS运行或只复制fixture摘要时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1373,28 +1364,22 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T14/T15/T16/T17/T18/T19/N02，G2/G4。
-- 修改：Android instrumentation、tests/e2e、compatibility-report.json。
-- 工作：三平台完成Stremio元数据→Cloudstream主播放，受控MacCMS样本完成可选播放分支；HTTP-only冷启动与Cloudstream故障隔离；7包加载与注册全集；每个已注册provider声明能力的home/search/details/resolve契约，通用实现使用参数化fixture逐实例执行；各独立interceptor行为；真实可用源闭环。
-- 通过：三平台元数据/主播放匹配闭环及可选MacCMS受控验收；HTTP功能在未安装Android环境时可用，Cloudstream仍按原包基线验收；每包有正确证据；源站失败有相同参考环境复核。
-- 验证：本规格14章矩阵；记录制品、源/内容、平台、网络环境、日期、结果和关联日志。
-
-- 历史补充：macOS真实SQLite重启与续播，包含跨季video id、换源重新匹配、当前集结束与自动下一集、来源失效、明暗/双语/390px，以及失败后保留原记录。
+- 工作与验收：真实Host+打包WebView验证元数据至播放/切集、独立选择/偏好、配置更新、历史续播/失败保存与资源回收；每个支持JSON来源逐项复核能力与原始公开响应证据。补受控网络错误、歧义确认、字幕/线路及自动下一集暂停/恢复；至少一个真实公开JSON来源完整短播。来源失败保留具体日期/环境/阶段与重试入口，禁止用原插件执行结果替代独立实现。
 
 ### T0.25 T21 媒体网关与鉴权回归
 - [ ] 完成
 - 依赖：T0.10, T0.11, T0.12, T0.22
 - 需求：R05, R12, R19, R26, R27, R28, R29, R34, R37, R44, R46, R48, R49, R50, C-RESOURCE, REQ-T21 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/src/`, `android-engine/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t21.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src-tauri/src/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t21.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "macOS播放器经Rust和Android真实gateway访问同一受控自有媒体集合及权限负例、每条HLS/key/segment/header/Cookie/Range/重定向/body变换/慢流背压功能、跨Session/过期cap/图片LRU/播放租约/取消/大小/模板/CSP/CORS/Tauri权限、上游无本地凭据；真实集群若使用须Docker/硬限额合计+宿主RSS总预算/实际用量/自产清理。错子请求或资源漏账时失败。",
+    "description": "macOS播放器经Rust真实gateway访问同一受控自有媒体集合及权限负例、每条HLS/key/segment/header/Cookie/Range/重定向/body变换/慢流背压功能、跨Session/过期cap/图片LRU/播放租约/取消/大小/模板/CSP/CORS/Tauri权限、上游无本地凭据；真实集群若使用须Docker/硬限额合计+宿主RSS总预算/实际用量/自产清理。错子请求或资源漏账时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1430,10 +1415,10 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
 - 依赖：T10/T11/T12/N02。
-- 修改：tests/contract、Rust及Android两处gateway tests与共用自有媒体集合。
+- 修改：tests/contract、Rust gateway tests与共用自有媒体集合。
 - 工作：自动验证清单/Key/分片、header、Cookie、Range、重定向、body修改、取消、图片cap到期所属DTO刷新、播放滑动租约、cap到期/撤销、大小限制、跨session隔离，以及Tauri命令权限/CSP/CORS负例。
 - 通过：三平台播放器访问同一受控媒体集合；每条子请求可关联会话；任意URL/路径输入被拒绝；本地令牌不会出现在上游。
 - 验证：包络与资源权限负例，过期引用，非法模板输入，超大body/图像，慢流背压功能；网关耐久播放移交T0.26/A2真实产品验收（ADR-044为10分钟）。
@@ -1444,14 +1429,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 依赖：T0.18, T0.23, T0.24, T0.25
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：R09, R47, R48, C-RESOURCE, REQ-T21, REQ-T22 → A1, A2（覆盖表含精确对应）
-- 范围：`src/`, `src-tauri/`, `android-engine/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t22.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src/`, `src-tauri/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t22.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "按C14及ADR-044在macOS arm64保留参考机、时间起止、原始样本、5次冷启动/CPU-GPU-RSS/AVD；1.5秒窗口/100ms UI/桥接p95<100ms/冷启动60秒为记录目标，未达记差距不阻塞；自有1080p30 H264AAC10分钟、20Mbps3分钟、50次切集无旧音频旧帧悬挂会话且无内存泄漏（owned RSS五切窗口中位数首末增长≤64MiB且均≤512MiB）及DPI125/150/200；网络/引擎/文件故障注入，关键可靠性问题清零。无原始样本/伪称其他平台通过时失败。 本项suite=startup-ui：startup-ui复核采样协议与交互，并验证REQ-T21移交网关长测的采样/协议准备；10分钟网关耐久由A2实跑；macos-arm64在本机真实环境执行上述时长、5次启动和故障/清理并记录目标差距。",
+    "description": "本项suite=startup-ui：macOS arm64实际执行5次Rust宿主冷启动，记录参考机/OS/CPU/GPU/依赖、起止时间与原始RSS及响应样本；1.5秒窗口、100ms UI、本地无外网桥接p95<100ms、宿主健康60秒仅记录目标差距。验证最小窗口和125/150/200等效缩放、网络/来源/文件故障与恢复、即时资源清理；核对网关长测自有媒体1080p30/H264AAC、20Mbps负载、采样/预算/清理方案可用。REQ-T21及R48在本suite仅覆盖长测准备和UI/故障，完整时长/50切集由A2执行。零用例、缺原始样本、未解决关键可靠性问题或伪称其他平台通过时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1477,7 +1462,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   },
   {
     "id": "A2",
-    "description": "按C14及ADR-044在macOS arm64保留参考机、时间起止、原始样本、5次冷启动/CPU-GPU-RSS/AVD；1.5秒窗口/100ms UI/桥接p95<100ms/冷启动60秒为记录目标，未达记差距不阻塞；自有1080p30 H264AAC10分钟、20Mbps3分钟、50次切集无旧音频旧帧悬挂会话且无内存泄漏（owned RSS五切窗口中位数首末增长≤64MiB且均≤512MiB）及DPI125/150/200；网络/引擎/文件故障注入，关键可靠性问题清零。无原始样本/伪称其他平台通过时失败。 本项suite=macos-arm64：startup-ui复核采样协议与交互；macos-arm64在本机真实环境执行上述时长、5次启动和故障/清理并记录目标差距。",
+    "description": "本项suite=macos-arm64：通过当前真实打包播放器和Rust网关播放自有1080p30 H264AAC连续10分钟、20Mbps受控流连续3分钟；实际50次切集无旧音频/旧帧/悬挂会话，owned RSS五切窗口中位数首末增长≤64MiB且均≤512MiB。保留真实参考机/环境、起止、媒体与负载、逐样本RSS和CPU/GPU、取消/退出资源清理原始证据；沿C14预算，真实集群若使用须Docker硬限额合计+宿主RSS与自产清理。R47在本suite核对A1同源码/基线的5次启动原始收据，不重复运行启动；REQ-T21在本suite承接完整10分钟网关耐久。缺时长/样本/清理、资源漏账或关键可靠性缺陷时失败；其他平台NOT RUN。",
     "argv": [
       "{python}",
       "-B",
@@ -1503,11 +1488,11 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
 - 依赖：T18/T19/T20/T21。
 - 修改：证据与必要的局部修复。
-- 工作：测量参考机启动、AVD、代理吞吐、1080p30、切集/缩放、WebView媒体资源、CPU/RSS；注入网络/引擎/文件故障。
+- 工作：测量参考机启动、Rust来源、代理吞吐、1080p30、切集/缩放、WebView媒体资源、CPU/RSS；注入网络/来源/文件故障。
 - 通过：本规格性能目标达到或有可复现的明确差距及修复；关键可靠性问题清零。
 - 验证：每平台独立报告；先定位再优化，避免无关重构与提前引入新播放后端。
 
@@ -1516,14 +1501,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 依赖：T0.26
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U04, R30, R33, R45, R50, REQ-T23 → A1（覆盖表含精确对应）
-- 范围：`packaging/`, `src-tauri/`, `android-engine/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t23.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`packaging/`, `src-tauri/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t23.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "macOS arm64干净系统安装/SDK与镜像初始化/首播/升级/卸载、自有完整打包前端无运行CDN/开发绝对路径、mac签名公证、GPL/原插件许可与源码版本锁对应；Windows WebView2/Linux GStreamer及其签名列NOT RUN。缺Apple凭据时产出未签名包并列为发行待办，未签名冒通过或不留依赖证据时失败。",
+    "description": "macOS arm64个人使用安装包干净系统安装/初始化/首播/升级/卸载；本地前端无运行CDN/开发绝对路径、实际依赖许可/版本锁对应；安装包不含原插件、引擎APK或SDK镜像。签名公证如实记录；缺Apple凭据产出未签名包并列待办。其他平台NOT RUN，个人使用范围及第三方来源限制清楚，未签名冒通过或依赖证据缺失时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1549,28 +1534,24 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T22，G5。
-- 修改：packaging三目录、SDK初始化资源清单、版本锁、许可证/源码说明。
-- 工作：Tauri构建与本地前端资源、WebView2初始化、WebKitGTK/媒体codec依赖、引擎APK、SDK/镜像获取、macOS签名/公证、Windows签名策略、Linux依赖与入口；无运行期CDN脚本依赖。
-- 通过：干净系统按README安装运行；无开发机绝对路径依赖；普通启动保持系统安全设置；工具前提准确展示。
-- 验证：每平台干净机器安装/初始化/首播/升级/卸载；无签名凭据时准确记录发行阻塞，禁止声称已签名。
+- 工作与验收：Tauri构建、本地资源、实际依赖和版本锁/许可通知；移除Android运行时/原包发行材料要求及产物。干净机器安装/首播/升级/卸载，使用默认系统安全设置，无开发机绝对路径；缺签名凭据如实列未签名与发行待办，公开发行另获用户授权。
 
 ### T0.28 T24 独立验收与问题修复
 - [ ] 完成
 - 执行阶段：产品测试；承接T0.2两格式各600秒及5次窗口开关（ADR-044），按当前受验源码/构建重新执行；复用现有原生夹具、长播断言及资源清理，历史短测与失败只作历史证据。
 - 依赖：T0.27
 - 需求：U01, U04, R30, R32, R48, R49, REQ-T01, U06, U07, R01, R07, R50, R51, R57, REQ-T24 → A1（覆盖表含精确对应）
-- 范围：`src/`, `src-tauri/`, `android-engine/`, `packaging/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t24.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 范围：`src/`, `src-tauri/`, `packaging/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/t24.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 独立验收：本卡必须由独立只读审阅者审查固定构建及受验提交，作者按报告修复后再次复审。审阅原始报告保存于`docs/reviews/T24/round-<N>.md`（随文档提交），正文写明所审提交SHA与源码摘要，末行`ACCEPTANCE-VERDICT: CLEAR`或`ACCEPTANCE-VERDICT: BLOCKING`；t24.py只读取N数值最大的轮次，提交/摘要与本次构建不一致、末行缺失或为BLOCKING时失败。 本卡先经原run执行同源码/构建/protected/generation的t24-endurance前置实跑并保存原始样本，payload在原日志输出证据manifest SHA以由收据log_hash绑定；独立只读报告复核本批原始证据及固定WIP构建，记录文件SHA，再执行A1完整重算同批所有长播/生命周期断言并核对原收据/日志/manifest/独立报告，拒绝仅passed摘要、缺失或改写证据及旧源码/基线。报告允许先于最终A1，绑定受验构建提交与源码；其后仅docs提交保持证据绑定。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "本产品测试阶段先执行T0.2移交的真实1080p30 MP4与HLS各600秒、5次完整窗口开关及帧/UI/音频/资源清理（ADR-044），以当前源码/构建实测；缺少、失败或沿用旧源码时失败。随后独立只读验收者逐U01..U09（U07首版结构）及G0-Core/CS..G5检查当前提交，复算原包7/7/全集与平台真实运行安装媒体/数据/历史证据，行为复测高影响问题清零；作者修复后再次独立复审。缺独立结论/未解决阻断/复制旧报告时失败。",
+    "description": "本产品测试阶段先执行T0.2移交的真实1080p30 MP4与HLS各600秒、5次完整窗口开关及帧/UI/音频/资源清理（ADR-044），以当前源码/构建实测；缺少、失败或沿用旧源码时失败。随后独立只读验收者逐修订U01..U09（U07首版结构）及G0-Core/G1..G5检查当前提交，复算Rust来源支持清单与平台真实运行安装媒体/数据/历史证据，行为复测高影响问题清零；作者修复后再次独立复审。核对当前仅个人使用，公开发行未获授权；缺独立结论/未解决阻断/复制旧报告时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1606,11 +1587,11 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
 - 依赖：T23。
 - 修改：必要修复与最终证据。
-- 工作：按U01至U06及U08/U09、G0-Core/G0-CS至G5完整审查，并检查U07的移动公共入口/平台隔离/响应式布局与实施计划；核对原包摘要、注册全集、媒体代理、实际平台运行与安装包。
+- 工作：按ADR-048修订U01至U06及U08/U09、G0-Core/G1至G5完整审查，并检查U07的移动公共入口/平台隔离/响应式布局与实施计划；核对独立实现依据、核准来源清单、媒体代理、实际平台运行与安装包。
 - 通过：每个硬条件有证据；已知失败可准确归因；文档与最终实现一致；高影响问题清零。
 - 验证：按行为复测，避免仅复制实现细节；结论包含实际测试命令和结果。
 - 执行：可由独立审查步骤或明确授权的审查agent执行，避免开发者自行省略关键验收。
@@ -1622,7 +1603,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 需求：U06, R33, R51, C-PATH, REQ-T25 → A1（覆盖表含精确对应）
 - 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
 - 移动阶段：本卡完成并独立巡检CLEAR后停止桌面监管，报告移动清单；T1.1的阶段门由控制器拦截，等待人类授权（ADR-007）。
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/t25.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 交付物：落实下列修订义务；提供`tests/acceptance/t25.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
@@ -1653,28 +1634,28 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
 - 依赖：T24。
 - 修改：application/README.md、docs/progress.md、release-evidence、最终版本锁。
 - 工作：重写README围绕最终实现给出构建、运行、测试、依赖初始化、诊断及发布状态；列出实际保留限制。
-- 通过：另一开发AI可从全新目录按说明复现；任务状态与证据对应；三平台发行材料和原包基线可追溯。
+- 通过：另一开发AI可从全新目录按说明复现；任务状态与证据对应；实际平台材料和Rust来源支持清单可追溯。
 - 最终报告：Changed / Why / Verified / Remaining，附安装包、源码、版本锁和验收报告路径。
 
 ### T1.1 M00 Android / iOS 真机可行性与版本基线
 - [ ] 完成
 - 依赖：T0.29, T0.3, T0.12, T0.13
-- 阶段门：移动阶段（M00..M05）需人类明确授权，并给出真实设备、签名与引擎位置
+- 阶段门：移动阶段（M00..M05）需人类明确授权，并给出真实设备及所需签名
 - 需求：U07, R52, R53, R54, R56, REQ-M00 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/`, `android-engine/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m00.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src-tauri/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m00.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "明确授权后Android/iPhone真机壳、Stremio→MacCMS匹配/媒体、Android同机7包与iOS受信远程样机；锁OS/targets/JDK/NDK/Xcode/设备及CORS/CSP/Origin/safearea/旋转后台；缺设备/签名/媒体/实际执行位置时对应MG0失败。",
+    "description": "明确移动授权后Android/iPhone真机壳与本地Rust来源/网关、Stremio→JSON来源匹配/媒体；锁OS/targets/JDK/NDK/Xcode/真实设备及CORS/CSP/Origin/safearea/旋转/后台；两平台各有真机安装与短播证据，缺设备/签名/媒体或本地执行路径时对应MG0失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1700,28 +1681,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：T05/T12/T13；对应U07，MG0。
-- 修改：Tauri工具生成的Android/iOS目录、最小移动配置、docs/mobile-baseline.json与证据。
-- 工作：先构建真机Stremio元数据→受控MacCMS可选播放匹配闭环；HTTP与匹配复用Rust。再构建原包分支真机壳；确定最低OS、Rust targets、JDK/NDK/Xcode与设备矩阵；测video/HLS/HTTPS、Origin/CSP/CORS、safe area、旋转与暂停恢复。Android额外安装同机引擎验证原包7/7；iOS验证受信远程引擎的可达性与播放样机。
-- 通过：两平台真实设备版本与运行结果明确；Kotlin绑定服务路径、iOS远程执行位置与组件要求固定；未通过项有最小复现。
-- 验证：干净真机安装、媒体样本、7包加载证据与基础生命周期录像。
-- 停止条件：某平台工具链、运行环境或媒体路径缺失，保持该平台门未通过；先解决具体前提。
+- 工作与验收：明确移动授权后Android/iPhone真机壳与本地Rust来源/网关、Stremio→JSON来源匹配/媒体；锁OS/targets/JDK/NDK/Xcode/真实设备及CORS/CSP/Origin/safearea/旋转/后台；两平台各有真机安装与短播证据，缺设备/签名/媒体或本地执行路径时对应MG0失败。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 
-### T1.2 M01 Android 同机引擎与 Kotlin 接入
+### T1.2 M01 Android本地Rust来源接入
 - [ ] 完成
 - 依赖：T1.1, T0.19, T0.20, T0.3, T0.22
 - 需求：U07, R53, REQ-M01 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/`, `android-engine/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m01.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src-tauri/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m01.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "Android真机同签名双APK显式signature Service、双方包签名/版本校验和原Application、bootstrap token/epoch/port原生留存、原7包全部实例实际调用；缺组件/坏签名/版本/第三方伪造/回收重连负例和cfg无AVD。接受伪引擎或凭据进入页面时失败。",
+    "description": "Android真机单应用Rust来源与网关、Stremio匹配确认→播放切集；本地cap/来源头留原生、HTTPS证书/出站策略和Session隔离；进程回收重启/网络断开恢复/旧host句柄失效，cfg排除桌面专用代码。泄露凭据/串源或资源残留时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1744,27 +1722,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：M00/T02/T03/T05/N02；对应MG1基础。
-- 修改：Tauri Kotlin原生插件、引擎显式绑定Service/signature权限、Rust Android启动路径。
-- 工作：同签名主应用与独立引擎APK；绑定bootstrap令牌/epoch/端口；校验包/签名/版本；复用EngineClient与资源cap；保留上游Application初始化；cfg排除AVD/ADB代码。
-- 通过：Android本机原包7/7与全部provider可调用；第三方签名绑定被拒绝；服务断开可恢复；控制令牌停留原生层。
-- 验证：缺组件、签名错、版本错、进程回收、绑定重连、第三方伪造与原包摘要。
+- 工作与验收：Android真机单应用Rust来源与网关、Stremio匹配确认→播放切集；本地cap/来源头留原生、HTTPS证书/出站策略和Session隔离；进程回收重启/网络断开恢复/旧host句柄失效，cfg排除桌面专用代码。泄露凭据/串源或资源残留时失败。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 
 ### T1.3 M02 移动页面与播放器适配
 - [ ] 完成
 - 依赖：T1.2, T0.14, T0.15, T0.16, T0.17
 - 需求：U07, R53, R55, REQ-M02 → A1（覆盖表含精确对应）
-- 范围：`src/`, `src-tauri/`, `android-engine/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m02.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src/`, `src-tauri/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m02.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "Android真机真实推荐→详情→video匹配→播放切集，safearea/44px/360/390/768、playsinline/触控/返回优先级/旋转/来电耳机/前后台暂停恢复/弱网和Wi-Fi蜂窝/进程回收/EngineActivity取消重试；桌面公共组件回归与旧epoch清理。生命周期丢进度/泄流或布局溢出时失败。",
+    "description": "Android真机真实推荐→详情→video匹配→播放切集，safearea/44px/360/390/768、playsinline/触控/返回优先级/旋转/来电耳机/前后台暂停恢复/弱网和Wi-Fi蜂窝/进程回收；桌面公共组件回归与旧epoch清理。生命周期丢进度/泄流或布局溢出时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1788,27 +1764,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：M01/T14/T15/T16/T17。
-- 修改：共用Vue/CSS、player.ts与必要原生能力插件。
-- 工作：safe area、360/390/768布局、触控控制、playsinline、系统返回、横竖屏、音频中断、前后台暂停恢复、源站EngineActivity交互。
-- 通过：Android首页→详情→选集→播放→切集全部真实；共用桌面布局回归通过；旧epoch/资源清理准确。
-- 验证：窄屏、长标题、200集、弱网、Wi-Fi/蜂窝切换、来电/耳机、后台回收、交互取消与重试。
+- 工作与验收：Android真机真实推荐→详情→video匹配→播放切集，safearea/44px/360/390/768、playsinline/触控/返回优先级/旋转/来电耳机/前后台暂停恢复/弱网和Wi-Fi蜂窝/进程回收；桌面公共组件回归与旧epoch清理。生命周期丢进度/泄流或布局溢出时失败。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 
 ### T1.4 M03 Android 安装与发行验收
 - [ ] 完成
 - 依赖：T1.3
 - 需求：U07, R53, R56, REQ-M03 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/`, `android-engine/`, `packaging/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m03.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src-tauri/`, `packaging/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m03.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "支持矩阵内Android干净真机签名双组件安装/初始7包加载/全集/首播/升级错配/回收恢复/卸载，签名负例、发行渠道实际要求及源码/组件版本配套清单。缺渠道材料准确blocked，签名不配套时失败。",
+    "description": "支持矩阵Android干净真机单应用签名安装/核准JSON来源首播/升级/数据迁移/回收恢复/卸载，版本与实际依赖许可配套清单。个人使用包与实际签名状态明确，公开发行另获授权；缺渠道材料如实列待办，伪称发行通过时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1832,27 +1806,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：M02；对应MG1/MG3。
-- 修改：主应用/引擎APK签名构建、组件初始化说明、版本配套清单。
-- 工作：干净真机双组件安装、权限、首次加载、升级错配、卸载；记录发行渠道与原始插件动态加载相关要求的实际核对结果。
-- 通过：签名与组件版本配套可复现；7包/全部源/媒体闭环证据完整；初始化步骤向用户清楚展示。
-- 验证：支持矩阵内真机全流程、进程回收恢复与签名负例；发行材料缺项准确列为待办。
+- 工作与验收：支持矩阵Android干净真机单应用签名安装/核准JSON来源首播/升级/数据迁移/回收恢复/卸载，版本与实际依赖许可配套清单。个人使用包与实际签名状态明确，公开发行另获授权；缺渠道材料如实列待办，伪称发行通过时失败。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 
-### T1.5 M04 iOS 配对远程兼容引擎
+### T1.5 M04 iOS本地Rust来源接入
 - [ ] 完成
 - 依赖：T1.1, T0.3, T0.9, T0.10, T0.25, T0.22
 - 需求：U07, R54, C-RESOURCE, REQ-M04 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/`, `android-engine/`, `packaging/`, `src/views/`, `protocol/`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m04.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src-tauri/`, `packaging/`, `src/views/`, `protocol/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m04.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "真实iPhone配对用户管理Android原引擎、HTTPS证书/服务/版本锁/插件摘要校验，撤销/未配对/坏TLS/跨客户端Session与cap隔离、Rust原生凭据、断网恢复、HLS所有子资源/Range/字幕及有界流；真实集群Docker每容器硬限额+宿主RSS合计预算、实际用量及全路径身份清理。明文/绕证书/跨session读取或容器漏账时失败。",
+    "description": "真实iPhone本地Rust来源、Stremio匹配确认及Rust loopback媒体；源站HTTPS证书校验、来源/Session/cap隔离、凭据留原生、断网恢复、HLS所有子资源/Range/字幕及有界流，进程回收后旧句柄失效。明文降级/绕证书/跨Session读取/旧资源泄漏时失败；若引入真实集群按C14 Docker与合并预算验收。",
     "argv": [
       "{python}",
       "-B",
@@ -1876,27 +1848,25 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：M00/T05/T09/T10/T21/N02；对应MG2基础。
-- 修改：受信HTTPS网关部署、Rust配对/凭据存储、iOS连接设置、会话隔离及协议版本扩展。
-- 工作：明确用户管理的Android引擎位置；HTTPS身份校验、配对/撤销、独立客户端session、媒体base与cap重写；保留同一DEX与interceptor链。远程部署模式单独配置，桌面本地默认维持loopback。
-- 通过：iPhone通过配对引擎取得真实首页/详情/媒体；坏证书/未配对/跨会话访问被拒绝；控制凭据保持原生层；断线可恢复。
-- 验证：真实iPhone与受控网络、多客户端隔离、TLS负例、撤销、弱网、HLS全部子资源、字幕/Range与流式内存。
+- 工作与验收：真实iPhone本地Rust来源、Stremio匹配确认及Rust loopback媒体；源站HTTPS证书校验、来源/Session/cap隔离、凭据留原生、断网恢复、HLS所有子资源/Range/字幕及有界流，进程回收后旧句柄失效。明文降级/绕证书/跨Session读取/旧资源泄漏时失败；若引入真实集群按C14 Docker与合并预算验收。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 
 ### T1.6 M05 iOS 真机闭环与移动最终交付
 - [ ] 完成
 - 依赖：T1.4, T1.5, T1.3
 - 需求：U07, R52, R54, R55, R56, REQ-M05 → A1（覆盖表含精确对应）
-- 范围：`src/`, `src-tauri/`, `android-engine/`, `packaging/`, `README.md`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
-- 交付物：落实下列完整原卡义务；提供`tests/acceptance/m05.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
-- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名/引擎位置，才开始本卡。
+- 范围：`src/`, `src-tauri/`, `packaging/`, `README.md`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`
+- 交付物：落实下列修订义务；提供`tests/acceptance/m05.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
+- 阶段前提：桌面T25交付后，确认人类明确授权移动阶段及真实设备/签名，才开始本卡。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "iPhone真实推荐→详情→选集→匹配→内嵌播放切集，safearea/旋转/音频中断/后台/系统返回与远程离线恢复、TLS配对撤销/隔离，签名安装干净设备/升级卸载、MG0..MG3全证据；Android和桌面公共行为回归，设备联网前提及实际发行状态完整。缺真机或未测MG项时失败。",
+    "description": "iPhone本地Rust真实推荐→详情→选集→匹配确认→内嵌播放切集，safearea/旋转/音频中断/后台/系统返回与离线恢复、TLS/会话隔离，签名安装干净设备/升级卸载、修订MG0..MG3全证据；Android和桌面公共行为回归，实际发行状态完整。缺真机或必需MG项未测时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1922,11 +1892,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
   }
 ]
 ```
-#### 原始义务（完整原卡）
+#### 修订义务（ADR-048取代归档原卡）
 
-- 依赖：M03/M04/M02；对应MG2/MG3。
-- 修改：必要Swift插件、iOS配置/签名、移动说明与证据。
-- 工作：iPhone safe area/旋转/音频中断/前后台/系统返回；远程引擎初始化与离线恢复；复核当前发行渠道要求并形成签名安装包与发布状态清单。
-- 通过：iOS真机推荐→详情→选集→播放→切集，TLS/配对/跨客户端隔离与生命周期验收通过；文档清楚说明引擎设备和联网前提。
-- 验证：支持矩阵真实设备全流程，记录版本/命令/结果；Android与桌面公共代码回归。移动完成报告附MG0至MG3证据和实际发行状态。
+- 工作与验收：iPhone本地Rust真实推荐→详情→选集→匹配确认→内嵌播放切集，safearea/旋转/音频中断/后台/系统返回与离线恢复、TLS/会话隔离，签名安装干净设备/升级卸载、修订MG0..MG3全证据；Android和桌面公共行为回归，实际发行状态完整。缺真机或必需MG项未测时失败。
+- 复用桌面DTO/来源适配/匹配/网关/历史；按真实平台需要增加小型Kotlin/Swift能力。独立APK、原包加载、配对远程Android引擎的归档义务由本地Rust路径取代。
+- 阶段前提：桌面稳定上线后，人类另行明确移动授权，提供真实设备与所需签名；本次桌面开发授权不启用移动阶段。
 

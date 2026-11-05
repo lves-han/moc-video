@@ -1,12 +1,12 @@
 # 映象视频架构与契约
 
-状态：文档规划基线。业务实现验收均为NOT RUN。需求权威为逐字节归档的SPEC 1.5.0及replica-spec的补充机器契约。原规格中的application/前缀映射到本项目根，docs/progress.md映射到docs/PROGRESS.md（ADR-001）。
+状态：T0.1至T0.17已完成，Rust来源路线按ADR-048修订，T0.19及后卡实现验收NOT RUN。需求原文保留逐字节归档的SPEC 1.5.0及replica-spec机器契约；当前批准差异由ADR-005、ADR-044、ADR-048及以下契约定义。原规格中的application/前缀映射到本项目根，docs/progress.md映射到docs/PROGRESS.md（ADR-001）。
 
 ## 现有能力与最小修改路径
 
-已阅读现有App.vue、UiProvider、theme、i18n、HistoryView、SourcesView、SettingsView及测试入口。保留Vue 3.5.44、Naive UI 2.45.3、TypeScript 5.9.3、Vite 8.3.5与锁文件，版本事实来自package.json/package-lock.json。复用FilmCard、Icon、样式、双语词典、主题及播放事件。demo.ts与会话内history.ts在相应接线卡替换入口。当前无Rust宿主、Android引擎和真实来源调用。
+已阅读现有App.vue、UiProvider、theme、i18n、HistoryView、SourcesView、SettingsView及测试入口。保留Vue 3.5.44、Naive UI 2.45.3、TypeScript 5.9.3、Vite 8.3.5与锁文件，版本事实来自package.json/package-lock.json。复用FilmCard、Icon、样式、双语词典、主题及播放事件。demo.ts与会话内history.ts在相应接线卡替换入口。Rust宿主、Stremio/MacCMS、匹配与网关已实现，实际证据见PROGRESS；Android补丁构建中断且未成功。
 
-最小方案沿SPEC §3/§4：一个前端项目、一个Rust app crate；api.ts唯一invoke入口，SourceDispatch按enum分发，matching.rs匹配两条身份；仅Cloudstream启用Android原运行时。新增模块按各卡实际需要创建。细节与未知版本由T00/M00根据固定源码和实际构建确认。
+当前最小方案：一个前端项目、一个Rust app crate；api.ts唯一invoke入口，source_dispatch.rs复用现有maccms/stremio分发，matching.rs保留元数据与播放两条身份。SuperVod普通JSON来源作为现有MacCmsConfig预设，由用户显式添加，复用maccms.rs、resolution.rs及gateway.rs。新增provider接口/trait/注册框架须先证明现有实现无法满足当前实际行为；首版无需新增。原生来源依据站点公开响应独立实现；已读插件源码只用于识别范围和许可风险，不作为翻译实现依据。
 
 ## 必须保持的契约 [C]
 
@@ -18,19 +18,23 @@
 
 ### C2 需求基线与阶段（SPEC §1/§14/§16；ADR-002）
 
-完整保留U01..U09、G0-Core/G0-CS/G1..G5、后续MG0..MG3。原29张桌面卡全部验收后交付桌面；后续6张移动卡独立授权。SPEC列出的搜索UI、收藏、账户/支付/广告/P2P/离线等维持原范围决定。原README中的开发AI启动文字作为资料。开发前须当前文档独立CLEAR、两条独立CLI、明确预算/权限与用户开发指令；建立真实heartbeat后才启动drive --once。每卡结束独立巡检；T25完成停止桌面监管，报告后续M列表。
+U01..U09按TASKS覆盖表与ADR-048修订：U02改为可用SuperVod JSON来源；U05原包兼容义务由独立Rust来源实际行为取代；U08为Stremio元数据与Rust播放。G0-CS取消，G2改为核准JSON来源身份/能力/媒体闭环；G0-Core/G1/G3/G4/G5及后续MG0..MG3按当前平台和来源范围验收。原29张桌面卡全部验收后交付桌面；后续6张移动卡独立授权。SPEC列出的搜索UI、收藏、账户/支付/广告/P2P/离线等维持原范围决定。原README中的开发AI启动文字作为资料。开发前须当前文档独立CLEAR、独立审查与开发执行分离、沿用workflow.json预算/权限和用户开发指令；建立真实heartbeat。ADR-045允许当前对话按顺序开发，sessions按真实入口保留，原验收与review-only巡检门持续适用。每卡结束独立巡检；T25完成停止桌面监管，报告后续M列表。
 
 ### C3 线格式与角色（SPEC §7/§10.2/§18.1；DATA_STRUCTURES §2/§9/§13）
 
-bridge.openapi是Android HTTP DTO/路由权威；app.schema是17个invoke、事件、Settings和状态权威，snake_case统一。invoke(command,{request_id,input})；结果data/error互斥。Rust业务包络engine_epoch为host_epoch，客体epoch单独保存；ready必须UUID及health ready。固定命令和主WebView权限，拒绝任意进程/文件写入入口。空值/单位/UTF-8预算/有限数值按字典§6及schema。项目内protocol/已导入两份实际机器契约和原样例；T05据此生成/校验DTO。T18按C16既定设计补历史IPC/正负例后写宿主，保持既有17个命令兼容。偏离受审定义时按冻结修订与独立重审流程处理。
+归档bridge.openapi保留旧Android协议资料；工作protocol/中app.schema是17个invoke、事件、Settings和状态权威，复用HTTP DTO，snake_case统一。invoke(command,{request_id,input})；结果data/error互斥。Rust业务包络engine_epoch为host_epoch；ready必须UUID及health ready。固定命令和主WebView权限，拒绝任意进程/文件写入入口。空值/单位/UTF-8预算/有限数值按字典§6及schema。项目内protocol/已导入两份实际机器契约和原样例；T05据此生成/校验DTO。T18按C16既定设计补历史IPC/正负例后写宿主，保持既有17个命令兼容。偏离受审定义时按冻结修订与独立重审流程处理。
 
-### C4 原始插件（SPEC §2/§6；字典§5/§8）
+### C4 原生JSON来源与独立实现（ADR-048取代SPEC §2/§6原插件义务）
 
-索引commit d411c9597e16f1e12f51f563ef75cd8d00ace002、索引sha256 a514c083b372a2016a2a87ba0425d559caa8432372176ec78cdce346350643ef，7包逐字节符合清单。全部真实MainAPI注册实例含SuperVod全集均枚举并测试声明能力。Cloudstream候选commit a7ac454af8fbd64574c96847a936905855911720待T02实测，成功才成为生产锁。原Context/Application、PathClassLoader、Cookie、extractor、WebView、getVideoInterceptor保留；opaque字符串按原字节语义回传。
+首版仅个人使用，范围是可用SuperVod JSON来源。2026-11-05普通GET核实的候选：优质、量子、红牛、无尽、光速、极速、豪华的`ac=detail&pg=1`返回JSON列表且有播放字段；淘片返回简略JSON列表尚需详情核实；卧龙返回非JSON暂排除。上述属于候选，逐个通过协议/完整选集/媒体验证后才发布为支持。其余六包站点、SuperVod XML和特殊播放器API暂缓。每个候选保留日期、公开端点、请求参数、响应类型/计数、支持/失败/NOT RUN状态及脱敏依据，媒体/签名URL与凭据留原生内存。HTTP200只记录可达性。
+
+固定插件提交`25cdd2119be03f62ae6a5a2cf46b16f9484224a2`的SuperVod 15个Kotlin文件静态核实：`aesDecrypt`只在Utils.kt定义、无调用；BaseVodProvider输出已登记媒体地址，VodExtractor的encrypt=1/2是转义/Base64，Haiwaikan/JiangNan注册注释。此核实用于确定首版范围：普通JSON适配无需移植插件AES或播放器代码；HLS标准AES-128 key/IV仍沿C8完整验收。产品实现及fixture来自公开HTTP行为；原包、补丁及旧证据保留历史，运行和打包路径停止使用Android/DEX。
+
+以maccms kind表示上述来源；预设只包含公开配置且由用户确认添加，最多32配置、UUID/HTTP H身份与原配置兼容。支持状态以当前实测为准，失败来源原配置和用户数据保留。需要其他来源、账户/访问密钥、解密播放器或访问控制处理时报告具体前提，按授权范围推进独立部分。
 
 ### C5 身份、跨源匹配（SPEC §7.2/§18.5/§18.6；字典§5/§11）
 
-统一H使用tag+NUL与UTF-8 uint32长度前缀、SHA256小写hex；所有原公式直接复用归档向量。Stremio为产品元数据，Cloudstream主播放、MacCMS可选；独立来源偏好。content_id=H(metadata,namespace,type,canonical_id)，config_id/addon_key准确回源；已验证IMDb/TMDB才归一，自定义命名空间按addon_key隔离。语言保持稳定身份。
+统一H使用tag+NUL与UTF-8 uint32长度前缀、SHA256小写hex；所有原公式直接复用归档向量。Stremio为产品元数据，核准SuperVod JSON与用户已有MacCMS为Rust播放来源；独立来源偏好。content_id=H(metadata,namespace,type,canonical_id)，config_id/addon_key准确回源；已验证IMDb/TMDB才归一，自定义命名空间按addon_key隔离。语言保持稳定身份。
 
 match_playback每次一个选中provider，最多2次查询×10候选，最多20项；全部正常且零候选为not_found；失败/超时为ApiError。仅同一已验证外部ID、类型且唯一季集可自动确认，其余needs_confirmation。人工selection重新核验已登记内容/组/集/修订。无search时按原能力显示手动home/details入口。match_id最多256、空闲5分钟，绑定host/config/video/provider引用；resolve重新核验。季0、小数集、别名/重拍、乱序、旧修订与过期均有负例。Stremio媒体resolve拒绝；下一集按metadata video顺序重新匹配。
 
@@ -42,24 +46,22 @@ MacCMS匿名JSON、首个$拆条目而保留URL余串，组/集原顺序与歧�
 
 ### C7 请求预算与取消（SPEC §6.2/§7.3/§11.2）
 
-下表原样保留操作预算，排队、重试、重定向与全部子请求共享单调deadline；guest接收剩余毫秒。聚合提前1000ms取消收尾，前端传输余量2000ms后主动取消，公共元数据4槽，provider sequential串行。连接上限10000ms并裁剪剩余，流无字节空闲30000ms。UUID重复/自身取消BAD_REQUEST，取消独立控制路径，父子级联，finally清理，返回前核对取消与世代。
+下表保留原生HTTP操作预算，排队、重试、重定向与全部子请求共享单调deadline。聚合提前1000ms取消收尾，前端传输余量2000ms后主动取消，公共元数据4槽。连接上限10000ms并裁剪剩余，流无字节空闲30000ms。UUID重复/自身取消BAD_REQUEST，取消独立控制路径，父子级联，finally清理，返回前核对取消与世代。
 
 | 操作 | 总预算ms | 单子请求上限ms | 聚合并发上限 |
 |---|---:|---:|---:|
 | 默认元数据/详情/搜索/HTTP单栏请求 | 30000 | 30000 | 1 |
-| Cloudstream首页第1页 | 60000 | 15000 | 1，保持provider顺序 |
-| Cloudstream单栏请求（含首屏重试） | 30000 | 15000 | 1 |
 | MacCMS首页第1页 | 45000 | 30000 | 4 |
 | Stremio首页第1页 | 45000 | 30000 | 4 |
 | HTTP来源同步（含全部manifest） | 45000 | 15000 | 4 |
-| resolve（MacCMS/Cloudstream） | 45000 | 45000 | 1，Cloudstream保持原回调行为 |
+| resolve（MacCMS JSON） | 45000 | 45000 | 1 |
 | match_playback | 45000 | 15000 | 4 |
 | health / get_resource_status | 3000 | 3000 | 1 |
 | runtime_prepare | 120000 | 120000 | 1 |
 
 ### C8 Session所有权与资源代理（SPEC §5.4/§9；字典§10）
 
-256位随机控制Bearer和独立cap，bootstrap通过adb shell stdin，清除Intent extras，内存保管并脱敏。网关仅loopback，资源GET/HEAD限定登记ID；固定Origin CORS/必要OPTIONS与CSP。Rust与Android共用Range200/206/416、If-Range、压缩和重定向fixtures；插件原interceptor先执行，重写清单后重算头。
+资源cap由独立256位随机值鉴权，控制仅通过Tauri允许列表；保留原有控制凭据字段兼容性，真实凭据只在原生内存保管并脱敏。网关仅loopback，资源GET/HEAD限定登记ID；固定Origin CORS/必要OPTIONS与CSP。Rust执行Range200/206/416、If-Range、If-None-Match、压缩和重定向fixtures；按已验证来源上下文处理请求，重写清单后重算头。
 
 Session独立强持有LinkRecord、Cookie/interceptor与字幕/HLS上下文；Resolution释放/5分钟到期后已建Session继续。active_requests钉住、空闲5分钟释放；同集换线保留Resolution，切集/源/离页按捕获旧ID依次stop、close、release；旧清理幂等且保持新句柄。媒体初始64KiB流缓冲；清单≤8MiB，请求≤1MiB、响应≤8MiB、opaque UTF-8≤524288字节。图像/字幕大小及像素上限需T09按实际解码器明确并固化测试，保持RESOURCE_LIMIT。图片同epoch去重、30分钟滑动续租、默认4096 LRU。
 
@@ -71,7 +73,7 @@ get_resource_status只读登记状态、3秒预算，ready/expired/failed；最�
 
 ### C10 状态与界面（SPEC §8/§10.3/§11.1）
 
-单AppState使用现有Vue页面与Naive唯一UiProvider。host重启全部失效，guest重启仅Cloudstream。首页按全量/单栏重试/分页范围合并；index保留，空/错及部分失败分开；请求旧结果/旧EOS无副作用。前端原演示数据在真实接线验收时由invoke替换。
+单AppState使用现有Vue页面与Naive唯一UiProvider。host重启全部失效，来源revision/generation变更仅影响所属来源。首页按全量/单栏重试/分页范围合并；index保留，空/错及部分失败分开；请求旧结果/旧EOS无副作用。前端原演示数据在真实接线验收时由invoke替换。
 
 默认1200×800、最小960×640、360/390/768 CSS宽度、高DPI；首页4..7卡/行、海报约150..180与2:3方向，缺图/长文/200集可读。内嵌video/hls.js实际事件驱动、250ms合并位置、闲置3秒隐藏控制、焦点恢复、autoplay提示、字幕/音量百分比/seek/倍速/全屏/键盘，EOS按选项与当前epoch下一集。界面及匹配确认按原卡全部错误/取消用例验收。
 
@@ -87,28 +89,30 @@ Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事
 
 按影片合并最近一集/今天昨天更早；约5秒为成功调度写入目标，暂停/seek/切集/离页/退出/后台提交捕获快照；世代与单调写序号防乱序/时钟回拨。删除/清空确认及写队列共用串行入口，旧快照作废，写错保留可重试快照并显示未保存。续播先定位原config/addon→当前详情/video→重新匹配播放源→新会话，loadedmetadata后恢复且裁剪新时长；EOS仅当前集完成，重播0。T18/T20 macOS arm64真实SQLite跨重启与失败证据。
 
-### C13 Cloudstream生命周期与更新（SPEC §5/§6.1）
+### C13 原生来源生命周期与配置事务（ADR-048取代SPEC §5/§6.1）
 
-系统启动→安装T02 APK→固定BootstrapActivity→forward→鉴权health。RuntimeManager只操作自身AVD/serial/forward；空格/中文路径、取消、超时、崩溃、退出清理且保留用户其他设备。HTTP在Android缺失/崩溃时继续可用。INTERACTION_REQUIRED按真实fixture信号，用户明确打开交互后停止当前Cloudstream媒体、同AVD保留userdata重启为windowed，新guest令牌/epoch仅失效该分支，保持host及HTTP；同步Cookie，固定站点/Activity，用户完成后以新请求重试。
+应用启动直接准备Rust宿主和loopback媒体网关，无SDK/AVD/ADB/APK前提。单来源探测/请求失败保持Stremio及其他来源可用。访问控制、验证码、Cloudflare或证书失败准确显示阶段与原因，停止该来源请求并报告；保留重试/换源入口，无规避、TLS关闭或隐藏WebView方案。
 
-原包刷新暂存先校验，失败/无变更保持播放；提交前停止受影响包全部实例会话并撤销资源、阻止新业务，取消旧任务后发布revision；其他包/HTTP保持。失败回滚旧注册表但已停会话保持停，回滚失败包failed。清理命令在更新期间仍幂等可用。ZIP路径/解压/未知apiVersion及资源限制全部按负例验证。
+T0.19只接入实际支持的JSON；T0.20验证身份/完整性；T0.21验证请求上下文/取消/隔离；T0.22完成来源预设与UI整合。现有cloudstream枚举/请求及runtime字段保留线格式兼容，准备/交互请求返回明确未支持错误，来源状态准确；T0.22移除页面失效引擎操作并提供迁移说明，T0.18保留旧偏好/历史及诊断。旧值由用户显式选择新来源后更新，禁止静默关联、丢弃配置或伪装成功。
+
+T0.23复用设置提交锁、config_generation与sync_sequence：网络探测在锁外；失败/无变更保持已确认配置和播放。提交受影响来源变更时取消该来源请求、停止会话及撤销cap，发布新配置/修订；其他来源保持。持久化/发布失败保留原确认状态；已经关闭的会话保持停止，重新解析后方可恢复。旧结果在锁内核对世代后丢弃，清理入口幂等。远程代码/原包下载、ZIP安装和索引自动更新入口退出首版产品路径，历史材料保留。
 
 ### C14 平台、性能与资源（SPEC §5.1/§13；moc-init运行约束）
 
-必需目标为本机macOS14+ arm64（ADR-005，macOS first）；构建与真实运行分别记录。原规格的macOS x86_64、Windows11 x86_64、Ubuntu24.04 X11/Wayland降为非阻断记录项：代码保持cfg可移植，报告写NOT RUN与复现命令，后续另行授权；移动机器在M00确认。公开最低配置在发行前实测；16GB内存/12GB磁盘、AVD 2核3072MB保持资源预算起点。缓存128MiB/256MiB保持初始观察预算。
+必需目标为本机macOS14+ arm64（ADR-005，macOS first）；构建与真实运行分别记录。原规格的macOS x86_64、Windows11 x86_64、Ubuntu24.04 X11/Wayland降为非阻断记录项：代码保持cfg可移植，报告写NOT RUN与复现命令，后续另行授权；移动机器在M00确认。个人使用包记录本机真实配置、下载大小与磁盘占用；16GB内存/12GB磁盘仅沿原资料作观察起点，Android镜像预算随路线取消。缓存128MiB/256MiB保持初始观察预算。
 
-工作流当前模板值memory_mib=4096、jobs=2、command_seconds=7200、session_seconds=10800、max_sessions=2；这是保留的控制器默认配置，开发启动前核实用户预算及每卡完整长命令覆盖。宿主macOS使用RSS采样，Linux原cgroup；线程1。AVD/JVM超出可用预算时先报告所需预算与完整命令，按授权调整配置并重审后运行。
+工作流当前模板值memory_mib=4096、jobs=2、command_seconds=7200、session_seconds=10800、max_sessions=2；这是保留的控制器默认配置，开发启动前核实用户预算及每卡完整长命令覆盖。宿主macOS使用RSS采样，Linux原cgroup；线程1。资源不足时准确报告所需预算与完整命令，预算调整走明确授权与重审。
 
-真实集群测试服务成员Docker部署，逐容器硬内存上限；容器硬上限合计+宿主进程树采样RSS纳入批准总预算，运行时同时记录actual usage，成功/失败/取消仅清理带本次身份标签的自产容器/网络/卷。桌面应用与Android AVD依SPEC在目标系统运行；普通单进程fixture/真实集群部署类型在测试报告明确。当前未批准具体集群拓扑/容器预算；涉及该场景时须先明确额度并满足Docker契约，T21/M04对应验收拒绝漏项。
+真实集群测试服务成员Docker部署，逐容器硬内存上限；容器硬上限合计+宿主进程树采样RSS纳入批准总预算，运行时同时记录actual usage，成功/失败/取消仅清理带本次身份标签的自产容器/网络/卷。桌面应用在目标系统运行；普通单进程fixture/真实集群部署类型在测试报告明确。当前未批准具体集群拓扑/容器预算；涉及该场景时须先明确额度并满足Docker契约，T21/M04若引入真实集群时对应验收拒绝漏项。
 
-以下按ADR-044放宽SPEC §13：娱乐软件以无泄漏、无关键可靠性问题为门，响应类数值为记录目标，未达记差距不阻塞。T22在macOS arm64记录原始样本、测量起止、样本数/p95、CPU/GPU/OS/SDK镜像、依赖版本、分辨率/帧率/码率/RSS/AVD内存。参考机定义及本地桥接样本数在T00/T22测量方案实证后锁定；缺失时标为待验证，禁止把本机校准写成产品硬门槛。目标未达需明确差距与复现；关键可靠性问题清零后再进入发行。
+以下按ADR-044放宽SPEC §13：娱乐软件以无泄漏、无关键可靠性问题为门，响应类数值为记录目标，未达记差距不阻塞。T22在macOS arm64记录原始样本、测量起止、样本数/p95、CPU/GPU/OS、依赖版本、分辨率/帧率/码率/RSS。参考机定义及本地桥接样本数在T00/T22测量方案实证后锁定；缺失时标为待验证，禁止把本机校准写成产品硬门槛。目标未达需明确差距与复现；关键可靠性问题清零后再进入发行。
 
 | 项目 | 目标与测量条件 |
 |---|---|
 | 壳首次可见 | 参考机启动后1.5秒内呈现窗口与状态 |
 | UI动作反馈 | 常见点击100ms内显示状态变化 |
 | 本地桥接纯处理 | 无外网fixture的元数据请求p95低于100ms |
-| 引擎冷启动 | 已安装环境参考机目标60秒内健康，记录5次样本 |
+| 宿主冷启动 | 已安装环境参考机目标60秒内健康，记录5次样本；Android引擎取消 |
 | 播放 | 自有1080p30/H264+AAC样本连续10分钟，音画正常、可seek |
 | 本地代理吞吐 | 20Mbps受控流，连续3分钟且保持流式内存上界 |
 | 连续切集 | 50次切换后无旧音频、旧帧、悬挂会话或内存泄漏（owned RSS五切窗口中位数首末增长≤64MiB且均≤512MiB） |
@@ -116,13 +120,13 @@ Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事
 
 ### C15 移动复用与发行（SPEC §10.4/§14/§16）
 
-桌面lib.rs移动公共入口/cfg隔离；移动后续复用DTO/状态/页面/Rust HTTP、匹配及SQLite。Android同机双APK同签名、显式signature Service、原Context；iOS配对受信HTTPS远程原DEX引擎，TLS/撤销/多客户端隔离/断线恢复。360/390/768、44px触控目标、safe area/playsinline/系统返回、旋转、音频中断、前后台暂停及进程回收真机验收。最低OS/工具链M00实测，MG0..3逐项证据。
+桌面lib.rs移动公共入口/cfg隔离；移动后续复用DTO/状态/页面/Rust HTTP、匹配及SQLite。Android/iOS各自本地执行共用Rust来源与网关，按真机网络策略验证TLS、来源/Session/cap隔离及断线恢复；Android单应用，iOS无需远程Android设备。360/390/768、44px触控目标、safe area/playsinline/系统返回、旋转、音频中断、前后台暂停及进程回收真机验收。最低OS/工具链M00实测，MG0..3逐项证据。
 
-macOS arm64干净安装、初始化、升级/卸载、签名公证、SDK获取、GPL/原插件许可与源码对应、离线打包资源均按T23/T24；WebView2/WebKitGTK/GStreamer等其他平台项列NOT RUN。缺Apple签名凭据时产出未签名包并列为发行待办；真实源失败在同原包参考环境复核。
+macOS arm64个人使用包干净安装、初始化、升级/卸载、实际签名公证状态、实际依赖许可与版本锁、离线打包资源按T23/T24；原插件/引擎APK/SDK镜像排除打包。公开发行须另获用户授权。WebView2/WebKitGTK/GStreamer等其他平台项列NOT RUN。缺Apple签名凭据时产出未签名包并列为发行待办；真实源失败按当前公开请求记录日期/环境/阶段，访问控制停止报告，在线与fixture结果分别列明。
 
 ### C16 历史IPC的最小实现契约（SPEC §11.4/§18.6的规划细化）
 
-此处固定T18的既定交付字段，当前实际protocol/保留原17命令；T18追加以下四个命令及schema/正负例，再实现Rust/SQLite，合计21命令。Android HTTP桥接保持原样。所有命令沿用invoke(command,{request_id,input})与结果data/error互斥、host_epoch UUID及既有ApiError。
+此处固定T18的既定交付字段，当前实际protocol/保留原17命令；T18追加以下四个命令及schema/正负例，再实现Rust/SQLite，合计21命令。旧Android线格式保留归档和兼容声明。所有命令沿用invoke(command,{request_id,input})与结果data/error互斥、host_epoch UUID及既有ApiError。
 
 | 命令 | input | 成功data |
 | --- | --- | --- |
@@ -147,15 +151,15 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 
 按当前用户决定与ADR-020实施开发/产品测试分期：开发卡实际验证功能行为、构建、相关回归和必要短时集成，长时间连续播放及T0.2的窗口耐久验收集中在T0.26/T0.28产品测试；其他开发卡现有的短时功能循环、错误/边界反例及即时资源清理继续按卡执行。T0.2功能验证复用现有open/controls/stop真实短播，两格式各600秒和5次窗口开关由T0.28/A1承接；T0.25的10分钟网关播放由T0.26/A2承接（时长与次数以ADR-044为准）。C14的指标、时长、规模、原始样本及资源清理按ADR-044执行；开发阶段报告明确尚待产品测试的项目，最终交付具备当前源码/构建的完整产品测试证据。每次修改后的真实相关自验证、完整verify和独立巡检继续执行。
 
-每卡完整来源工作/通过/验证/停止条件原样纳入TASKS；覆盖表给准确验收ID。未来`tests/acceptance/<原卡号小写>.py`是该卡真实行为验收脚本，随当前卡实现，目前均NOT RUN。它调用真实前端/Rust/Android/设备入口及必要fixture，断言每个列出用例；入口不存在、用例缺失、未执行、非零失败、必需平台缺失、证据陈旧均失败。各卡scope允许相应测试。跨平台与长测可分会话累计，但每一验收完整执行并落原run.py收据。
+每卡当前工作/通过/验证/停止条件纳入TASKS；ADR-048迁移项注明原文及取代依据；覆盖表给准确验收ID。未来`tests/acceptance/<原卡号小写>.py`是该卡真实行为验收脚本，随当前卡实现，目前均NOT RUN。它调用真实前端/Rust/设备入口及必要fixture，断言每个列出用例；入口不存在、用例缺失、未执行、非零失败、必需平台缺失、证据陈旧均失败。各卡scope允许相应测试。跨平台与长测可分会话累计，但每一验收完整执行并落原run.py收据。
 
-脚本`--report evidence/acceptance/<原卡号>-<suite>.json`输出UTF-8 JSON，至少包含card、suite、utc_started/finished、tested_source_digest、platform/arch/OS/WebView/dependency版本、commands(argv/exit/log)、cases(id/输入/预期/实得/结果/证据)、required/ran/passed/failed/skipped计数、资源部署/采样/清理与NOT RUN原因。case集合以卡内“完整原卡义务”和覆盖表为要求，脚本需逐项关联；只读导入旧报告/空用例/预填passed时退出非零。同一次运行还以`--junit`写JUnit XML，控制器据此核对本次生成、非零通过与零失败；每项验收的`cases`冻结为本卡“需求”行的全部ID：脚本为每个ID输出一条同名汇总testcase（如`R27`），其下具体用例命名为`<ID>/<用例>`（如`R27/range-416`）；汇总testcase只在其全部必需子用例通过时通过，控制器要求每个汇总testcase出现且通过（ADR-007）。子用例skipped仅用于ADR-005非macOS平台项和卡内明确允许的条件项（如基线未出现DASH），并写明原因；macOS arm64必需子用例skipped时其汇总testcase失败。真实平台报告须匹配该平台真实执行环境及本次构建摘要；外部机器按原规格可由人类运行准确命令后带版本回填。长测保留时间序列、样本和清理日志。报告生成及断言由同一次当前代码运行完成；全量source摘要、完成资格与会话额度仍由原控制器判定。
+脚本`--report evidence/acceptance/<原卡号>-<suite>.json`输出UTF-8 JSON，至少包含card、suite、utc_started/finished、tested_source_digest、platform/arch/OS/WebView/dependency版本、commands(argv/exit/log)、cases(id/输入/预期/实得/结果/证据)、required/ran/passed/failed/skipped计数、资源部署/采样/清理与NOT RUN原因。case集合以卡内当前义务和覆盖表为要求，脚本需逐项关联；只读导入旧报告/空用例/预填passed时退出非零。同一次运行还以`--junit`写JUnit XML，控制器据此核对本次生成、非零通过与零失败；每项验收的`cases`冻结为本卡“需求”行的全部ID：脚本为每个ID输出一条同名汇总testcase（如`R27`），其下具体用例命名为`<ID>/<用例>`（如`R27/range-416`）；汇总testcase只在其全部必需子用例通过时通过，控制器要求每个汇总testcase出现且通过（ADR-007）。子用例skipped仅用于ADR-005非macOS平台项和卡内明确允许的条件项（如基线未出现DASH），并写明原因；macOS arm64必需子用例skipped时其汇总testcase失败。真实平台报告须匹配该平台真实执行环境及本次构建摘要；外部机器按原规格可由人类运行准确命令后带版本回填。长测保留时间序列、样本和清理日志。报告生成及断言由同一次当前代码运行完成；全量source摘要、完成资格与会话额度仍由原控制器判定。
 
 T0.28产品独立验收的长测前置实跑与最终A1按明确证据链衔接：原run受控实跑完整时长和规模，原日志打印原始证据manifest SHA并由收据log_hash绑定，固定受验构建及源码经独立只读审查记录原始文件摘要后，最终A1在同source/protected/generation下完整重算全部原始样本与清理断言，同时核对前置收据/日志/manifest和独立报告。报告可先于A1且绑定固定受验构建提交，后续仅docs提交保持绑定。缺失、改写、旧基线或只引用passed摘要均失败。
 
-T01测试专用最小loopback服务只入tests/fixtures，随机端口/cap/CORS/Range及超时清理；正式构建检查其排除。T06..T11以HTTP和共用合成fixture验收，原包真实条目转N02，T20/T21最终复测。所有原包运行、真实来源、平台运行、安装、性能逐类别单独统计。
+T01测试专用最小loopback服务只入tests/fixtures，随机端口/cap/CORS/Range及超时清理；正式构建检查其排除。T06..T11保留HTTP和共用合成fixture历史；后续JSON来源以公开响应fixture覆盖行为，并在T0.19/T0.24补真实站点冒烟；全部晋级来源逐个验证JSON及媒体。在线失败保留具体原因，fixture成功与在线成功分别统计。每卡至少一个必需断言实际运行，零测试失败；公开媒体URL及凭据不写fixture/日志/报告，测试使用脱敏引用或自有媒体地址。
 
-workflow.verify分别校验原归档契约与实际protocol/契约（scripts/check-contracts.py），覆盖全部本地/跨文件引用、原有DTO/17命令兼容、原正负例和语义/生命周期不变量。四个历史命令为既定追加集合，T18的history.rs存在时必须全部发布并为每个Args/Result补正负例。归档原始定义及回归向量保持不变，实际protocol/追加契约；此入口始终执行，缺文件即失败。另覆盖现有npm行为测试、类型/构建、导入摘要，以及Rust存在后的fmt/check/clippy/test。verify-workflow仅控制流程测试。Android每卡构建/instrumentation、macOS长媒体/故障/安装按具名卡执行，保留固定源码/制品/期望结果。当前业务长验收NOT RUN；Rust未创建时check-project明确记录NOT RUN，T01/T05创建后自动执行原生检查。
+workflow.verify分别校验原归档契约与实际protocol/契约（scripts/check-contracts.py），覆盖全部本地/跨文件引用、原有DTO/17命令兼容、原正负例和语义/生命周期不变量。四个历史命令为既定追加集合，T18的history.rs存在时必须全部发布并为每个Args/Result补正负例。归档原始定义及回归向量保持不变，实际protocol/追加契约；此入口始终执行，缺文件即失败。另覆盖现有npm行为测试、类型/构建、导入摘要，以及Rust存在后的fmt/check/clippy/test。verify-workflow仅控制流程测试。Rust来源集成、macOS长媒体/故障/安装按具名卡执行，保留固定源码/制品/期望结果。未执行的业务长验收保持NOT RUN；当前Rust已创建，check-project沿原入口执行原生检查。
 
 ## 输入摘要绑定
 

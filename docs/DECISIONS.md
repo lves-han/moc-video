@@ -395,3 +395,19 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 
 来源：用户原话“能否将这几个android代码重写成rust 这样就不用做安卓兼容层了”，以及“先暂停，做交接文档，后续交给codex，我想使用rust重写。现在整理交接文档和交接提示词”。
 决定：暂停T0.19及Android引擎路线，后续由Codex以Rust重写播放源。本ADR记录方向，尚未修订SPEC、ARCHITECTURE与TASKS，U02、U05等要求的具体取代方式、许可、内容版权与首版范围待用户确认后由新ADR固定。交接说明见docs/HANDOFF-RUST-REWRITE.md。
+
+
+## ADR-048 2026-11-05T02:57:04+00:00 — 已采纳：个人使用的独立Rust JSON来源、任务与基线迁移
+
+来源：当前聊天用户原话“许可选择依据站点公开行为独立实现，暂时仅供个人使用，首版先做可用的 SuperVod JSON 来源，其余按你的建议。批准修订文档和迁移基线，独立审查通过后按任务顺序开始开发，先核实 AES 用途。”时间以当前聊天日期2026-11-05计；本记录时间为文档操作UTC时间。
+
+决定：
+- 许可选择依据站点公开行为独立实现。固定插件源码仓库未见许可证，照源码翻译存在衍生作品风险；本次未取得源码翻译许可。已读源码仅作范围和风险识别，产品实现和fixture依据公开HTTP行为，记录独立实现依据。个人使用是当前范围，内容版权授权和公开发行许可没有被本决定授予；公开发行/新增站点另请用户决定。
+- 首版仅可用SuperVod普通JSON来源。优质、量子、红牛、无尽、光速、极速、豪华已取得含播放字段JSON，仍待完整协议/媒体验证；淘片简略JSON待详情核实；卧龙非JSON暂排除；其余六包站点、XML及特殊播放器路径暂缓。HTTP200与协议/实际播放分别记录，逐个通过后才晋级支持。
+- AES范围核实：固定提交25cdd2119be03f62ae6a5a2cf46b16f9484224a2的SuperVod全部15个kt文件中，aesDecrypt仅Utils.kt定义，无调用；BaseVodProvider直接输出登记媒体，VodExtractor encrypt1/2为转义/Base64；Haiwaikan/JiangNan注册注释。普通JSON首版无需新增插件AES解密，HLS标准AES-128仍保留现有网关和播放器验证。静态核实与在线行为分列，不声称完整播放已通过。
+- U02以核准JSON来源的搜索/详情/选集/解析取代给定索引和全部provider；U05以独立Rust来源实际行为取代7包字节一致ART/DEX执行；U08改为Stremio元数据与Rust MacCMS播放。SPEC与replica-spec原文保持；TASKS覆盖表逐项注明R02/03/04/05/06/07/09/10/11/12/13/14/15/16/18/36/44/45/47/49/50/53/54/63等受影响义务。归档Android/原包义务在未完成卡由本ADR取代，已完成卡正文、失败历史、ADR/PROGRESS/BACKLOG既有内容保持。
+- T0.19复用maccms.rs/source_dispatch.rs/resolution.rs/gateway.rs实现JSON；T0.20多源身份/协议完整性；T0.21原生请求上下文/取消/隔离；T0.22宿主来源管理整合。沿用maccms kind和配置，现有机制足够时不新增provider抽象。T0.18保持随后设置/SQLite；T0.23由原包更新改配置事务；T0.24至T0.29改核准Rust来源的集成、网关、性能、个人使用安装包与交付。
+- M00至M05改为两平台本地Rust来源，移除Android双APK/Service和iOS配对远程Android引擎义务；真机/生命周期/网络/数据与签名验证保留。仍须桌面稳定上线后另行明确移动授权与设备/签名前提，本次开发授权止于桌面。
+- 公开响应脱敏fixture为主要行为回归、真实公开JSON与媒体短播为补充；每个支持来源逐个核实，至少一个真实完整闭环；所有在线失败/NOT RUN如实记录。验证码/Cloudflare/访问控制即停止该来源并报告，证书校验保持，日志和报告无凭据或capability/签名媒体URL。安全、鉴权、数据完整性与功能门保持。
+- 性能完全沿ADR-044：5次冷启动、响应目标只记录差距、10分钟网关播放、20Mbps3分钟、50次切集RSS五切窗口中位数首末增长≤64MiB且均≤512MiB、最终MP4/HLS各600秒及5次窗口开关；删除AVD测量对象，替换为Rust宿主，macOS arm64必需、其他平台NOT RUN沿ADR-005/006。
+- 用户明确授权本轮文档修订和T0.19原流程rebaseline；原protected摘要034b3b6a7baaa956956d0e29fe6a3b3c859ff2671fdb85df8d5ee310ebc7d129供核对，RESOLVED的批准摘要由实际task.py status新protected填写。迁移保留sessions/失败历史，旧验收证据失效。固定新文档基线独立只读审查CLEAR后，按任务顺序开发；每卡准确A1、完整verify、task done、完成提交与原review-only独立巡检，不自行accept-review。预算和workflow.json控制器不变；ADR-045当前对话执行方式继续适用。

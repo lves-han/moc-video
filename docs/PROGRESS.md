@@ -1937,3 +1937,10 @@
 - 事实：用户决定放弃Android兼容层，改用Rust重写并交接Codex（ADR-047）。Android构建被主动中断，evidence/runs/20261105T024100841304-diag-t02-build-2 exit125，无成功证据；engine补丁与覆盖层未编译成功。7个原包SHA-256已核对相符。
 - 需要用户决定：许可、内容版权、首版站点范围、U02与U05的取代方式、M系列处理、验收样本方式，详见docs/HANDOFF-RUST-REWRITE.md第6节。
 - 下一步：Codex提交修订方案，用户确认后修订文档，追加本卡RESOLVED并rebaseline。验收 A1：NOT RUN。
+
+## T0.19 Rust来源文档修订与授权迁移 2026-11-05T02:58:38.573642+00:00
+- 结果：RESOLVED
+- 决定：当前聊天用户明确选择“依据站点公开行为独立实现，暂时仅供个人使用，首版先做可用的 SuperVod JSON 来源，其余按你的建议。批准修订文档和迁移基线，独立审查通过后按任务顺序开始开发，先核实 AES 用途。”依ADR-048修订未完成任务及架构；SPEC原文、完成卡正文和失败历史保留；原task.py迁移后独立文档CLEAR才开始开发。
+- 批准摘要：8da3c6c5d17adbd958f588e4635df813ab500066d47e8dac85bc82b3747e2b13
+- 已核对：task.py check=roadmap OK 35 cards；scope=all changes inside scope；原驱动已退出、重锁空闲、未结束收据为空。AES静态15文件仅工具定义无调用，公开JSON行为独立核实，详情与分类7候选有效。
+- 验收 A1：NOT RUN；完整verify：NOT RUN；文档独立审查待执行。
