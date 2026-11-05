@@ -1998,3 +1998,7 @@
 - 事实：原CLI第2会话稳定WIP退出，sessions2/2。外层格式化修正、Clippy exit0；准确A1 evidence/runs/20261105T040420540558-A1/output.log exit1，5组断言3过2失败。5个独立Python反例通过，新原生测试10项8过2失败：双DNS失败转移DNS lookup failed，公开分类分页范围/排序校验失败。日志evidence/acceptance/T02-6effd096751f4eb9a70f62f5b5d2eefc/command-2.log。
 - 后续：先定位两失败原因并最小修复，重新准确A1/完整verify/受验提交/独立巡检。真实打包播放NOT RUN；完整verify及独立巡检NOT RUN。未用旧成功冒充本次通过。
 - 需要用户决定：workflow.json原max_sessions=2已使用，申请仅T0.19追加一次原预算内开发会话（原drive --once --max-sessions 3），不修改全局预算/权限、不清计数、不rebaseline。
+
+## T0.19 接续开发决定 2026-11-05T05:31:30+00:00
+- 结果：RESOLVED
+- 决定：用户原话“现在从T0.19开始继续做”；沿ADR-045在当前Claude对话内继续，不经drive.py、不改workflow.json与全局预算、不清计数、不rebaseline，失败历史保留。
