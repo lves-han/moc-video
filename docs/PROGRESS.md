@@ -2074,3 +2074,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T082807745737-A1/output.log`；断言：8个支持来源逐个覆盖身份稳定、旧引用失效、同UUID重加为同一来源、跨源隔离、重复组集、字段形态、页尾与部分失败
 - 完整verify：PASS；`evidence/verify/20261105T082816267724.json`，六门exit0。
 - Remaining：实际媒体仍归T0.19，本卡在线闭环NOT RUN。
+
+## T0.21 T04 完成 2026-11-05T08:44:03+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T084034046894-A1/output.log`；断言：无Android工具环境下Host与网关播放通过；单源失败/取消时另一来源和Stremio继续；401/403/407/429/451及挑战响应报access_control且不重试，后续栏目不再请求；自签证书报tls_certificate；退出回收且外部进程与监听保留
+- 完整verify：PASS；`evidence/verify/20261105T084042798948.json`，六门exit0。
+- Remaining：本卡仅fixture，在线闭环NOT RUN；访问控制提示的中文文案和界面展示归T0.22；docs/runtime.lock.json的android段为T0.1历史观测，未改动。
