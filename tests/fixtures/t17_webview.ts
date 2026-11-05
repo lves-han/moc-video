@@ -58,7 +58,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
   window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
   const count = (command: string) => calls.filter(call => call.command === command).length;
   const evidence: Record<string, any> = {};
-  describe = () => JSON.stringify({ hash: location.hash, route: appState.route.name, failure: one(".sources-failure")?.textContent, errors_ui: one(".sources-errors")?.textContent, providers: providers().map(item => [item.name, item.runtime_status]), selected: [appState.selected_metadata_source?.source_id, appState.selected_playback_source?.source_id], calls: calls.slice(-5).map(call => call.command), errors });
+  describe = () => JSON.stringify({ visibility: document.visibilityState, focused: document.hasFocus(), hash: location.hash, route: appState.route.name, failure: one(".sources-failure")?.textContent, errors_ui: one(".sources-errors")?.textContent, providers: providers().map(item => [item.name, item.runtime_status]), selected: [appState.selected_metadata_source?.source_id, appState.selected_playback_source?.source_id], calls: calls.slice(-5).map(call => call.command), errors });
   location.hash = "#/home";
   await appController.initialize();
   const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App) }) });
