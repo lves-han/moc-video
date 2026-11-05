@@ -2052,3 +2052,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T075639507818-A1/output.log`；断言：8个JSON源COMPATIBLE，卧龙SOURCE_UNAVAILABLE，抽样媒体结果只记入证据
 - 完整verify：PASS；`evidence/verify/20261105T080335776926.json`，六门exit0。
 - Remaining：卧龙不做预置；其余6个插件站点仍按ADR-048延后；中文校验消息留BACKLOG。
+
+## T0.20 T03 完成 2026-11-05T08:20:21+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T081710512183-A1/output.log`；断言：8个支持来源逐个覆盖身份稳定、旧引用失效、跨源隔离、重复组集、字段形态、页尾与部分失败
+- 完整verify：PASS；`evidence/verify/20261105T081718194735.json`，六门exit0。
+- Remaining：实际媒体仍归T0.19，本卡在线闭环NOT RUN；同一UUID且同一端点删除重加时身份公式给出相同标识，只取消在途请求，界面重加走新UUID。
