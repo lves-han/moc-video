@@ -1962,3 +1962,11 @@
 - 结果：RESOLVED
 - 决定：当前聊天用户确认两个域名已处理，要求重新检查DNS、正常后继续T0.19并在验收巡检通过后按序推进。实际检查cj.lziapi.com返回37.77/74.113/85.149公网地址、hhzyapi.com返回104.21.94.214及172.67.140.83；原驱动已退出、重锁空闲、无未结束收据。仅解除环境阻塞，冻结定义未改，无需rebaseline；下一步通过原生产HTTP取证确认连接及媒体，原失败保留。
 - 验收 A1：NOT RUN；完整verify：NOT RUN。
+
+## T0.19 媒体域名DNS阻塞 2026-11-05T03:34:25.065756+00:00
+- 结果：BLOCKED
+- 事实：用户处理API DNS后，量子/豪华原生生产HTTP已取得list/detail_page/detail_id/search/zero_search/category_page_1/2 JSON，adapter_details PASS。诊断evidence/runs/20261105T033320185969-diag-t02-public/output.log exit0/1测试，只表示取证循环完成；脱敏报告evidence/t02-public/7b92d5a4-642a-4735-86ce-c46a5ce5e27e/capture.json，来源支持仍0。
+- 失败历史：前一次诊断evidence/runs/20261105T033249509027-diag-t02-public/output.log exit101，根因取证代码用invoke名代替预算名；已改default_metadata/resolve，无生产改动。
+- 根因证据：首条媒体域名v.lzcdn31.com解析198.18.1.114，play.hhuus.com解析198.18.1.115，仍为Fake-IP保留段；生产媒体解析unsafe_target拒绝，未降低安全边界或改DNS。
+- 所需条件：用户处理上述媒体域名公网解析；API及脱敏JSON证据保留，恢复后继续媒体与A1。分片/key域名如有其他解析问题逐项报告。
+- 验收 A1：NOT RUN；完整verify：NOT RUN；代码独立巡检：NOT RUN。
