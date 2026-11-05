@@ -2028,3 +2028,9 @@
 - 结果：RESOLVED
 - 决定：用户明确指示“做兼容性，都兼容这几个视频源，至于是否能播放，有没有视频则是视频源的原因，不能判断为程序原因”；按ADR-051修订T0.19，其余门不变。
 - 批准摘要：8c2b0ab4f8e2af68b5a22900fd52e1b857521109224faaaa6c77d75de0cb6255
+
+## T0.19 T02 完成 2026-11-05T06:04:23+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T055403125482-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；9候选实测：8个COMPATIBLE（含淘片），卧龙SOURCE_UNAVAILABLE；真实公开JSON→详情→选集→Host解析→Rust网关→打包WKWebView短播通过；SERVFAIL转移、Fake-IP与重绑定拒绝；Android产物不在打包内容。
+- 完整verify：PASS；`evidence/verify/20261105T060126601585.json`，六门exit0。
+- Remaining：媒体可用性属来源状态（2026-11-05：优质、无尽样本0/8，量子1/8，其余8/8），随时间变化；卧龙接口返回HTML未规避；其他六个插件站点按ADR-048暂缓；内容版权与公开发行未授权，仅个人使用。
