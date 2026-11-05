@@ -141,6 +141,19 @@ export type ResolveEpisodeInput = { "episode_ref": Bridge_MediaRef; "match_id": 
 export type Args_match_playback = { "request_id": string; "input": PlaybackMatchInput };
 export type Result_match_playback = ({ "request_id": string; "engine_epoch": string; "data": PlaybackMatchResult } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type WatchHistoryRecord = { "content_id": string; "metadata_identity": MetadataIdentity; "video_id": (string | null); "season_number": (number | null); "episode_number": (number | null); "title": string; "kind": "movie" | "series" | "anime" | "other"; "poster_cache_key": (string | null); "source_id": string; "source_name": string; "position_ms": number; "duration_ms": (number | null); "completed": boolean; "updated_at": number };
+export type HistoryList = { "entries": Array<WatchHistoryRecord>; "write_sequence": number };
+export type HistoryListInput = {  };
+export type HistorySaveInput = { "record": WatchHistoryRecord; "session_id": string; "match_id": string; "playback_epoch": number; "write_sequence": number };
+export type HistoryRemoveInput = { "content_id": string; "write_sequence": number };
+export type HistoryClearInput = { "write_sequence": number };
+export type Args_list_history = { "request_id": string; "input": HistoryListInput };
+export type Result_list_history = ({ "request_id": string; "engine_epoch": string; "data": HistoryList } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_save_history = { "request_id": string; "input": HistorySaveInput };
+export type Result_save_history = ({ "request_id": string; "engine_epoch": string; "data": WatchHistoryRecord } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_remove_history = { "request_id": string; "input": HistoryRemoveInput };
+export type Result_remove_history = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_clear_history = { "request_id": string; "input": HistoryClearInput };
+export type Result_clear_history = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type CommandArgs = {
   "runtime_status": Args_runtime_status;
   "runtime_prepare": Args_runtime_prepare;
@@ -159,6 +172,10 @@ export type CommandArgs = {
   "get_resource_status": Args_get_resource_status;
   "release_resolution": Args_release_resolution;
   "match_playback": Args_match_playback;
+  "list_history": Args_list_history;
+  "save_history": Args_save_history;
+  "remove_history": Args_remove_history;
+  "clear_history": Args_clear_history;
 };
 export type CommandResults = {
   "runtime_status": Result_runtime_status;
@@ -178,6 +195,10 @@ export type CommandResults = {
   "get_resource_status": Result_get_resource_status;
   "release_resolution": Result_release_resolution;
   "match_playback": Result_match_playback;
+  "list_history": Result_list_history;
+  "save_history": Result_save_history;
+  "remove_history": Result_remove_history;
+  "clear_history": Result_clear_history;
 };
 export type Command = keyof CommandArgs;
 export type CommandInput<C extends Command> = CommandArgs[C]['input'];

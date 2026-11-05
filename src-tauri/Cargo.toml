@@ -29,6 +29,7 @@ base64 = "0.23"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 dom_query = "=0.28.0"
 hickory-resolver = "=0.26.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dev-dependencies]
 tauri = { version = "=2.12.5", features = ["test"] }

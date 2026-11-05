@@ -26,6 +26,11 @@ fn main() {
         "get_resource_status",
         "release_resolution",
         "match_playback",
+        "list_history",
+        "save_history",
+        "remove_history",
+        "clear_history",
+        "app_close_ready",
         #[cfg(feature = "t01-automation")]
         "t01_control",
     ];

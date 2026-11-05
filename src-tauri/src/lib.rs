@@ -6,6 +6,7 @@ pub mod commands;
 pub mod contracts;
 pub mod details;
 pub mod gateway;
+pub mod history;
 pub mod home;
 pub mod host;
 pub mod matching;
@@ -33,6 +34,14 @@ fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     Ok(target)
 }
 
+/// The page finished saving history after being told the window is closing.
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_close_ready(window: WebviewWindow) -> Result<(), String> {
+    require_main(&window)?;
+    window.destroy().map_err(|e| e.to_string())
+}
+
 #[cfg(all(not(mobile), feature = "t01-automation"))]
 mod automation;
 
@@ -41,10 +50,10 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(all(not(mobile), feature = "t01-automation"))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
-        tauri::generate_handler![player_fullscreen, automation::t01_control];
+        tauri::generate_handler![player_fullscreen, app_close_ready, automation::t01_control];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
-        tauri::generate_handler![player_fullscreen];
+        tauri::generate_handler![player_fullscreen, app_close_ready];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
     let business = commands::handler::<tauri::Wry>();
@@ -60,6 +69,24 @@ pub fn run() {
         }
     });
 
+    #[cfg(not(mobile))]
+    let builder = {
+        // History snapshots are saved before the window goes; a stuck page cannot hold exit.
+        let closing = std::sync::atomic::AtomicBool::new(false);
+        builder.on_window_event(move |window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && !closing.swap(true, std::sync::atomic::Ordering::SeqCst)
+                && let Some(view) = window.app_handle().get_webview_window(window.label())
+            {
+                api.prevent_close();
+                let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    let _ = view.destroy();
+                });
+            }
+        })
+    };
     builder
         .setup(|app| {
             let settings_path = app.path().app_data_dir()?.join("settings.json");

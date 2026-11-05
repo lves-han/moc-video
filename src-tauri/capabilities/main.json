@@ -6,5 +6,6 @@
     "allow-get-sources", "allow-sync-catalog", "allow-get-home", "allow-get-details",
     "allow-resolve-episode", "allow-open-playback", "allow-close-playback", "allow-cancel-request",
     "allow-start-interaction", "allow-finish-interaction", "allow-get-settings", "allow-save-settings",
-    "allow-get-resource-status", "allow-release-resolution", "allow-match-playback"]
+    "allow-get-resource-status", "allow-release-resolution", "allow-match-playback",
+    "allow-list-history", "allow-save-history", "allow-remove-history", "allow-clear-history", "allow-app-close-ready"]
 }

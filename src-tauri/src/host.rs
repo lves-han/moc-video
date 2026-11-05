@@ -1,11 +1,12 @@
 use crate::{
     contracts::{ApiError, COMMANDS, Contracts, envelope, wire_size},
     gateway::Gateway,
+    history::History,
     matching::{self, MatchStore},
     requests::{Clock, Job, MonotonicClock, Requests},
     resolution::{self, ResolutionStore},
     settings::SettingsFile,
-    source_dispatch::{SourceDispatch, SourceKind, SourceSnapshot},
+    source_dispatch::{SourceDispatch, SourceKind, SourceSnapshot, identity},
 };
 use serde_json::{Value, json};
 use std::{
@@ -34,6 +35,15 @@ struct Committed {
     resolutions: ResolutionStore,
     current_resolution: Option<String>,
     resolve_sequence: u64,
+    history: History,
+    resolution_contexts: std::collections::HashMap<String, Value>,
+    session_bindings: std::collections::HashMap<String, SessionBinding>,
+}
+
+/// The identity a playback Session confirmed when it opened; it outlives match and candidate GC.
+struct SessionBinding {
+    context: Value,
+    playback_epoch: Option<u64>,
 }
 
 pub struct Host {
@@ -59,6 +69,7 @@ impl Host {
     }
 
     pub fn with_clock(path: PathBuf, clock: Arc<dyn Clock>) -> Result<Arc<Self>, ApiError> {
+        let history_path = path.with_file_name("yingxiang-video.db");
         let (store, mut settings) = SettingsFile::load(path)?;
         let mut sources = SourceDispatch::default();
         sources.replace_configs(
@@ -96,6 +107,9 @@ impl Host {
                 matches: MatchStore::default(),
                 resolutions: ResolutionStore::default(),
                 current_resolution: None,
+                history: History::new(history_path),
+                resolution_contexts: Default::default(),
+                session_bindings: Default::default(),
                 resolve_sequence: 0,
             }),
         }))
@@ -399,6 +413,9 @@ impl Host {
                 "Cloudstream is no longer supported; add a JSON source instead",
             )),
             "release_resolution" => {
+                committed
+                    .resolution_contexts
+                    .remove(input["resolution_id"].as_str().unwrap_or(""));
                 if committed.current_resolution.as_deref() == input["resolution_id"].as_str() {
                     committed.current_resolution = None;
                 }
@@ -425,12 +442,28 @@ impl Host {
                     gateway.close(view["session_id"].as_str().expect("Session ID"));
                     return Err(error);
                 }
+                if let Some(context) = input["resolution_id"]
+                    .as_str()
+                    .and_then(|id| committed.resolution_contexts.get(id))
+                    .cloned()
+                {
+                    committed.session_bindings.insert(
+                        view["session_id"].as_str().expect("Session ID").to_owned(),
+                        SessionBinding {
+                            context,
+                            playback_epoch: None,
+                        },
+                    );
+                }
                 Ok(view)
             }
             "close_playback" => {
                 if let Some(gateway) = &committed.gateway {
                     gateway.close(input["session_id"].as_str().expect("Session ID"));
                 }
+                committed
+                    .session_bindings
+                    .remove(input["session_id"].as_str().expect("Session ID"));
                 Ok(json!({"ok":true}))
             }
             "get_resource_status" => {
@@ -443,6 +476,20 @@ impl Host {
                         json!({"kind":kind,"target_id":id,"state":"expired","error":ApiError::new("SESSION_EXPIRED","Resource is not registered")}),
                     )
                 }
+            }
+            // Committed history must report its result, whatever arrives after the write.
+            "list_history" => return committed.history.list(),
+            "save_history" => return save_history(&mut committed, input),
+            "remove_history" => {
+                return committed.history.remove(
+                    input["content_id"].as_str().expect("Content ID"),
+                    input["write_sequence"].as_u64().expect("Write sequence"),
+                );
+            }
+            "clear_history" => {
+                return committed
+                    .history
+                    .clear(input["write_sequence"].as_u64().expect("Write sequence"));
             }
             _ => Err(ApiError::bad("Unknown command")),
         };
@@ -1072,6 +1119,11 @@ impl Host {
             committed.resolutions.release(&old);
         }
         committed.current_resolution = value["id"].as_str().map(str::to_owned);
+        if let Some(id) = value["id"].as_str() {
+            committed
+                .resolution_contexts
+                .insert(id.to_owned(), record.context.clone());
+        }
         Ok(value)
     }
 
@@ -1107,6 +1159,50 @@ impl Host {
             .as_ref()
             .map(|gateway| gateway.address)
     }
+}
+
+/// An accepted retry skips the Session: the snapshot already holds its confirmed identity.
+fn save_history(committed: &mut Committed, input: &Value) -> Result<Value, ApiError> {
+    let sequence = input["write_sequence"].as_u64().expect("Write sequence");
+    if committed.history.retrying(sequence, input)? {
+        return committed.history.commit(sequence, input);
+    }
+    if sequence <= committed.history.committed() {
+        return Err(crate::history::superseded());
+    }
+    let session = input["session_id"].as_str().expect("Session ID");
+    let live = committed.gateway.as_ref().is_some_and(|gateway| {
+        gateway
+            .status("playback", session)
+            .is_ok_and(|status| status["state"] != "expired")
+    });
+    let binding = committed
+        .session_bindings
+        .get_mut(session)
+        .filter(|_| live)
+        .ok_or_else(|| ApiError::new("SESSION_EXPIRED", "Playback session is closed"))?;
+    let record = &input["record"];
+    let context = &binding.context;
+    let confirmed = &context["metadata_ref"]["identity"];
+    let text = |field: &str| confirmed[field].as_str().unwrap_or("");
+    let content_id = identity(
+        "metadata",
+        &[text("namespace"), text("type"), text("canonical_id")],
+    );
+    let epoch = input["playback_epoch"].as_u64().expect("Playback epoch");
+    if context["match_id"] != input["match_id"]
+        || record["metadata_identity"] != *confirmed
+        || record["content_id"] != content_id.as_str()
+        || record["video_id"] != context["metadata_video_id"]
+        || record["source_id"] != context["episode_ref"]["source_id"]
+        || binding.playback_epoch.is_some_and(|known| known != epoch)
+    {
+        return Err(ApiError::bad(
+            "History snapshot does not belong to this playback session",
+        ));
+    }
+    binding.playback_epoch = Some(epoch);
+    committed.history.commit(sequence, input)
 }
 
 fn platform() -> &'static str {

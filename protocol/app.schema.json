@@ -4777,6 +4777,387 @@
       ],
       "additionalProperties": false,
       "description": "SQLite目标记录DTO；content_id使用H(metadata,namespace,type,canonical_id)，跨字段进度约束由Rust与SQLite同时校验。本轮只定义契约，历史IPC与持久化在T18实现。"
+    },
+    "HistoryList": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WatchHistoryRecord"
+          }
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "entries",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryListInput": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "HistorySaveInput": {
+      "type": "object",
+      "properties": {
+        "record": {
+          "$ref": "#/$defs/WatchHistoryRecord"
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "match_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "playback_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "record",
+        "session_id",
+        "match_id",
+        "playback_epoch",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryRemoveInput": {
+      "type": "object",
+      "properties": {
+        "content_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "content_id",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryClearInput": {
+      "type": "object",
+      "properties": {
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "Args_list_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryListInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_list_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/HistoryList"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_save_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistorySaveInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_save_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/WatchHistoryRecord"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_remove_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryRemoveInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_remove_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_clear_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryClearInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_clear_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "x-command-contracts": {
@@ -4914,6 +5295,38 @@
       },
       "result": {
         "$ref": "#/$defs/Result_match_playback"
+      }
+    },
+    "list_history": {
+      "args": {
+        "$ref": "#/$defs/Args_list_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_list_history"
+      }
+    },
+    "save_history": {
+      "args": {
+        "$ref": "#/$defs/Args_save_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_save_history"
+      }
+    },
+    "remove_history": {
+      "args": {
+        "$ref": "#/$defs/Args_remove_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_remove_history"
+      }
+    },
+    "clear_history": {
+      "args": {
+        "$ref": "#/$defs/Args_clear_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_clear_history"
       }
     }
   },

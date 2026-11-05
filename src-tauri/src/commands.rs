@@ -42,7 +42,11 @@ business_commands!(
     save_settings,
     get_resource_status,
     release_resolution,
-    match_playback
+    match_playback,
+    list_history,
+    save_history,
+    remove_history,
+    clear_history
 );
 
 // Cancellation stays on the immediate IPC control path even when ordinary
@@ -81,6 +85,10 @@ pub fn handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + 
         save_settings,
         get_resource_status,
         release_resolution,
-        match_playback
+        match_playback,
+        list_history,
+        save_history,
+        remove_history,
+        clear_history
     ]
 }

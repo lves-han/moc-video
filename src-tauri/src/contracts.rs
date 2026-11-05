@@ -24,6 +24,10 @@ pub const COMMANDS: &[&str] = &[
     "get_resource_status",
     "release_resolution",
     "match_playback",
+    "list_history",
+    "save_history",
+    "remove_history",
+    "clear_history",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -8903,6 +8903,497 @@
       "value": {
         "name": "history"
       }
+    },
+    {
+      "name": "args_list_history",
+      "document": "app",
+      "schema": "Args_list_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {}
+      }
+    },
+    {
+      "name": "args_list_history_rejects_extra_field",
+      "document": "app",
+      "schema": "Args_list_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "limit": 1
+        }
+      }
+    },
+    {
+      "name": "result_list_history",
+      "document": "app",
+      "schema": "Result_list_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "entries": [
+            {
+              "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "metadata_identity": {
+                "config_id": "11111111-1111-4111-8111-111111111111",
+                "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "namespace": "tmdb",
+                "type": "series",
+                "meta_id": "series:1",
+                "canonical_id": "series:1"
+              },
+              "video_id": "video:1",
+              "season_number": 1,
+              "episode_number": 1.5,
+              "title": "示例",
+              "kind": "series",
+              "poster_cache_key": null,
+              "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "source_name": "来源",
+              "position_ms": 1000,
+              "duration_ms": 2000,
+              "completed": false,
+              "updated_at": 1800000000000
+            }
+          ],
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "result_list_history_rejects_negative_sequence",
+      "document": "app",
+      "schema": "Result_list_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "entries": [],
+          "write_sequence": -1
+        }
+      }
+    },
+    {
+      "name": "args_save_history",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "session-1",
+          "match_id": "host-match-not-a-uuid",
+          "playback_epoch": 3,
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_empty_match",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "session-1",
+          "match_id": "",
+          "playback_epoch": 3,
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_long_match",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "session-1",
+          "match_id": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+          "playback_epoch": 3,
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_empty_session",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "",
+          "match_id": "host-match-not-a-uuid",
+          "playback_epoch": 3,
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_zero_sequence",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "session-1",
+          "match_id": "host-match-not-a-uuid",
+          "playback_epoch": 3,
+          "write_sequence": 0
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_unknown_field",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000
+          },
+          "session_id": "session-1",
+          "match_id": "host-match-not-a-uuid",
+          "playback_epoch": 3,
+          "write_sequence": 7,
+          "cap": "x"
+        }
+      }
+    },
+    {
+      "name": "args_save_history_rejects_runtime_url_in_record",
+      "document": "app",
+      "schema": "Args_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "record": {
+            "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadata_identity": {
+              "config_id": "11111111-1111-4111-8111-111111111111",
+              "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "namespace": "tmdb",
+              "type": "series",
+              "meta_id": "series:1",
+              "canonical_id": "series:1"
+            },
+            "video_id": "video:1",
+            "season_number": 1,
+            "episode_number": 1.5,
+            "title": "示例",
+            "kind": "series",
+            "poster_cache_key": null,
+            "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_name": "来源",
+            "position_ms": 1000,
+            "duration_ms": 2000,
+            "completed": false,
+            "updated_at": 1800000000000,
+            "media_url": "http://127.0.0.1/x"
+          },
+          "session_id": "session-1",
+          "match_id": "host-match-not-a-uuid",
+          "playback_epoch": 3,
+          "write_sequence": 7
+        }
+      }
+    },
+    {
+      "name": "result_save_history",
+      "document": "app",
+      "schema": "Result_save_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "video_id": "video:1",
+          "season_number": 1,
+          "episode_number": 1.5,
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_name": "来源",
+          "position_ms": 1000,
+          "duration_ms": 2000,
+          "completed": false,
+          "updated_at": 1800000000000
+        }
+      }
+    },
+    {
+      "name": "args_remove_history",
+      "document": "app",
+      "schema": "Args_remove_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "write_sequence": 8
+        }
+      }
+    },
+    {
+      "name": "args_remove_history_rejects_short_id",
+      "document": "app",
+      "schema": "Args_remove_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "abc",
+          "write_sequence": 8
+        }
+      }
+    },
+    {
+      "name": "result_remove_history",
+      "document": "app",
+      "schema": "Result_remove_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "args_clear_history",
+      "document": "app",
+      "schema": "Args_clear_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "write_sequence": 9
+        }
+      }
+    },
+    {
+      "name": "args_clear_history_requires_sequence",
+      "document": "app",
+      "schema": "Args_clear_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {}
+      }
+    },
+    {
+      "name": "result_clear_history",
+      "document": "app",
+      "schema": "Result_clear_history",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "result_save_history_rejects_extra_field",
+      "document": "app",
+      "schema": "Result_save_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        },
+        "extra": 1
+      }
+    },
+    {
+      "name": "result_remove_history_rejects_extra_field",
+      "document": "app",
+      "schema": "Result_remove_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        },
+        "extra": 1
+      }
+    },
+    {
+      "name": "result_clear_history_rejects_extra_field",
+      "document": "app",
+      "schema": "Result_clear_history",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        },
+        "extra": 1
+      }
     }
   ],
   "semantic_cases": [

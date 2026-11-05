@@ -31,7 +31,8 @@ export class UnknownCommit extends Error {
 
 const commands: readonly Command[] = ["runtime_status", "runtime_prepare", "get_sources", "sync_catalog", "get_home",
   "get_details", "resolve_episode", "open_playback", "close_playback", "cancel_request", "start_interaction",
-  "finish_interaction", "get_settings", "save_settings", "get_resource_status", "release_resolution", "match_playback"];
+  "finish_interaction", "get_settings", "save_settings", "get_resource_status", "release_resolution", "match_playback",
+  "list_history", "save_history", "remove_history", "clear_history"];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -83,8 +84,9 @@ export class Api {
   async call<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID(), expectedHostEpoch?: string): Promise<CommandData<C>> {
     if (!commands.includes(command)) throw new Error("Unknown business command");
     if (!uuid.test(requestId)) throw new Error("request_id must be UUID");
-    const target = input as { source_id?: unknown; ref?: { source_id?: unknown }; playback_source?: { source_id?: unknown } };
-    const owner = target.source_id ?? target.ref?.source_id ?? target.playback_source?.source_id;
+    const target = input as { source_id?: unknown; ref?: { source_id?: unknown }; playback_source?: { source_id?: unknown }; config_id?: unknown };
+    // A sync names its configuration; get_sources moves that result to the source it became.
+    const owner = target.source_id ?? target.ref?.source_id ?? target.playback_source?.source_id ?? (command === "sync_catalog" ? target.config_id : undefined);
     const source = typeof owner === "string" ? owner : null, sequence = ++this.requestSequence;
     let handle: unknown;
     const timeout = new Promise<never>((_, reject) => {
@@ -121,6 +123,10 @@ export class Api {
       if (!["get_settings", "save_settings", "cancel_request", "runtime_status", "runtime_prepare"].includes(command) && response.engine_epoch === null) throw new UnknownCommit(requestId, "Missing host epoch");
       if (command === "get_sources" && record(response.data) && Array.isArray(response.data.providers)) {
         this.sourceKinds.clear();
+        for (const source of response.data.providers) if (record(source) && record(source.origin) && typeof source.id === "string" && typeof source.origin.config_id === "string") {
+          const synced = this.sourceResults[source.origin.config_id];
+          if (synced) { delete this.sourceResults[source.origin.config_id]; this.recordSourceResult(source.id, synced.sequence, synced.ok, synced.message); }
+        }
         for (const source of response.data.providers) if (record(source) && typeof source.id === "string" && typeof source.kind === "string") this.sourceKinds.set(source.id, source.kind);
       }
       this.recordSourceResult(source, sequence, true, "");

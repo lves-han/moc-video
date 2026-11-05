@@ -1,3 +1,5 @@
+import { api, UnknownCommit, type Api } from '../api.ts';
+import type { WatchHistoryRecord } from '../models.ts';
 import { parseHistoryEntry, type HistoryEntry } from './history-model.ts';
 
 // About 5s between periodic snapshots; pause and end write immediately, as does an explicit seek (SPEC 11.4).
@@ -6,14 +8,14 @@ export function historyWriteDue(phase: string, lastWrite: number, now: number) {
   return ["paused", "ended"].includes(phase) || now - lastWrite >= HISTORY_INTERVAL_MS;
 }
 
-// Session-only preview. The native implementation will persist through Rust/SQLite.
+// Browser interface preview only; the native app persists through Rust/SQLite below.
 const entries = new Map<string, HistoryEntry>();
 async function save(entry: HistoryEntry): Promise<void> {
   const valid = parseHistoryEntry(entry);
   const previous = entries.get(valid.content_id);
   if (!previous || valid.updated_at >= previous.updated_at) entries.set(valid.content_id, valid);
 }
-export const historyRepository = {
+const preview = {
   async list(): Promise<HistoryEntry[]> {
     return [...entries.values()]
       .sort((a,b) => b.updated_at-a.updated_at || a.content_id.localeCompare(b.content_id))
@@ -27,4 +29,57 @@ export const historyRepository = {
   saveOnExit: save,
   async remove(id: string): Promise<void> { entries.delete(id); },
   async clear(): Promise<void> { entries.clear(); },
+};
+
+export function entryFromRecord(record: WatchHistoryRecord): HistoryEntry {
+  const episode = Math.max(1, Math.ceil(record.episode_number ?? 1));
+  return { content_id: record.content_id, title: record.title, poster: "/mark.svg", kind: record.kind === "other" ? "series" : record.kind,
+    episode, episode_total: episode, source_id: record.source_id, source_name: record.source_name, position_ms: record.position_ms,
+    duration_ms: record.duration_ms, completed: record.completed, updated_at: record.updated_at, record };
+}
+
+// One queue gives snapshots, deletes and clears their increasing write sequence (C16).
+export function createNativeHistory(call: Api["call"]) {
+  let sequence: number | null = null, tail: Promise<unknown> = Promise.resolve();
+  let failed: { entry: HistoryEntry; sequence: number } | null = null;
+  const read = async () => { const data = await call("list_history", {}); sequence = data.write_sequence; return data.entries; };
+  function enqueue<T>(work: (next: () => Promise<number>) => Promise<T>): Promise<T> {
+    const run = tail.then(() => work(async () => { if (sequence === null) await read(); return sequence = sequence! + 1; }))
+      .catch(error => { if (error instanceof UnknownCommit) sequence = null; throw error; });
+    tail = run.catch(() => {});
+    return run;
+  }
+  return {
+    list: () => enqueue(async () => (await read()).map(entryFromRecord)),
+    get: (id: string) => enqueue(async () => { const row = (await read()).find(item => item.content_id === id); return row ? entryFromRecord(row) : null; }),
+    // A retry of the same snapshot object reuses its sequence so the Host can match the payload.
+    save: (entry: HistoryEntry) => enqueue(async next => {
+      const capture = entry.capture;
+      if (!capture) throw new TypeError("A native history snapshot needs its playback capture");
+      const write_sequence = failed?.entry === entry ? failed.sequence : await next();
+      try {
+        await call("save_history", { record: entry.record!, ...capture, write_sequence });
+        failed = null;
+      } catch (error) {
+        failed = { entry, sequence: write_sequence };
+        throw error;
+      }
+    }),
+    remove: (id: string) => enqueue(async next => { await call("remove_history", { content_id: id, write_sequence: await next() }); failed = null; }),
+    clear: () => enqueue(async next => { await call("clear_history", { write_sequence: await next() }); failed = null; }),
+    // Settles once everything already queued has finished.
+    drain: () => tail,
+  };
+}
+const native = createNativeHistory((command, input, ...rest) => api.call(command, input, ...rest));
+const isNative = Boolean((globalThis as { __TAURI__?: unknown }).__TAURI__);
+
+export const historyRepository = {
+  list: () => isNative ? native.list() : preview.list(),
+  get: (id: string) => isNative ? native.get(id) : preview.get(id),
+  save: (entry: HistoryEntry) => isNative ? native.save(entry) : preview.save(entry),
+  saveOnExit: (entry: HistoryEntry) => isNative ? native.save(entry) : preview.saveOnExit(entry),
+  remove: (id: string) => isNative ? native.remove(id) : preview.remove(id),
+  clear: () => isNative ? native.clear() : preview.clear(),
+  drain: () => isNative ? native.drain() : Promise.resolve(),
 };

@@ -125,7 +125,7 @@ def contracts(run):
     checker = importlib.util.module_from_spec(module)
     module.loader.exec_module(checker)
     observed = checker.check(ROOT / "protocol")
-    require(observed["commands"] == 17 and observed["structural_cases"] > 0 and observed["semantic_cases"] > 0,
+    require(observed["commands"] == 21 and observed["structural_cases"] > 0 and observed["semantic_cases"] > 0,
             "complete existing protocol coverage required")
     negatives = 0
     with tempfile.TemporaryDirectory(prefix="t05-contract-") as temp:

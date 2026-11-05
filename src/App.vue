@@ -17,7 +17,7 @@ import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabel
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
 import { locale, t, type Message } from "./i18n";
 import { palette, paletteOptions, normalizePalette } from "./ui/theme";
-import type { Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings } from "./models";
+import type { AppSource, Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
 
 const native = Boolean(window.__TAURI__);
 const messages = useMessage();
@@ -124,6 +124,7 @@ function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("
 function openDetails(ref: Bridge_MediaRef) { location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`; }
 async function playEpisode(videoId: string) {
   try {
+    await flushHistory();
     const result = await appController.match(videoId);
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
@@ -147,6 +148,7 @@ async function onHashChange() {
       appController.navigate({ name: "details", ref });
       await appController.loadDetails(ref);
       if (current !== sequence || appState.details.phase !== "ready") return;
+      if (wantedResume) void playEpisode(wantedResume.video_id);
       if (next.name === "watch") {
         const episode = Math.min(next.episode, film!.episodes);
         let saved: HistoryEntry | null = null;
@@ -186,12 +188,20 @@ function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   const index = episodes.findIndex(episode => metadataVideoId(episode.ref) === context.metadata_video_id);
   const provider = appState.sources.data?.providers.find(item => item.id === context.episode_ref.source_id);
   if (index < 0 || !provider) return null;
+  const session = state.session;
+  if (!session) return null;
   const kind = data.details.kind === "other" ? "series" : data.details.kind;
   const poster = data.details.poster ? data.images[data.details.poster.resource_id]?.url : undefined;
+  const episode = episodes[index]!, position_ms = Math.round(state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms);
+  const duration_ms = state.duration_ms ? Math.max(1, Math.round(state.duration_ms)) : null;
+  const completed = finished || state.phase === "ended", updated_at = Date.now();
   return { content_id: data.details.id, title: data.details.title, poster: poster ?? "/mark.svg", kind,
     episode: index + 1, episode_total: episodes.length, source_id: provider.id, source_name: provider.name,
-    position_ms: Math.round(state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms), duration_ms: state.duration_ms,
-    completed: finished || state.phase === "ended", updated_at: Date.now() };
+    position_ms, duration_ms, completed, updated_at,
+    record: { content_id: data.details.id, metadata_identity: context.metadata_ref.identity, video_id: context.metadata_video_id, season_number: episode.season ?? null,
+      episode_number: episode.number ?? index + 1, title: data.details.title, kind: data.details.kind, poster_cache_key: null, source_id: provider.id, source_name: provider.name,
+      position_ms, duration_ms, completed, updated_at },
+    capture: { session_id: session.session_id, match_id: context.match_id, playback_epoch: state.playback_epoch } };
 }
 function historySnapshot(finished = false): HistoryEntry | null {
   if (native) return nativeHistorySnapshot(finished);
@@ -214,20 +224,47 @@ async function flushHistory(finished = false) {
   if (snapshot) { lastWrite = Date.now(); lastHistory = snapshot; await persistHistory(snapshot); }
 }
 function retryHistorySave() { if (lastHistory) void persistHistory(lastHistory); }
-function discardPendingHistory(id: string | null) { if (id === null || lastHistory?.content_id === id) { lastHistory = null; historySaveError.value = null; } }
+function discardPendingHistory(id: string | null) {
+  if (id === null || lastHistory?.content_id === id) { lastHistory = null; historySaveError.value = null; }
+  if (id === null || latestHistory?.content_id === id) latestHistory = null;
+}
+// Resuming goes back through the source and match checks; the position waits for the confirmed episode.
+let wantedResume: { video_id: string; position_ms: number } | null = null;
+async function continueNativeHistory(record: WatchHistoryRecord) {
+  const providers = appState.sources.data?.providers ?? [], identity = record.metadata_identity;
+  const ready = (source: AppSource) => source.runtime_status === "ready";
+  const metadata = providers.find(source => source.kind === "stremio" && ready(source) && source.origin.config_id === identity.config_id);
+  if (!metadata) { messages.error(t("This title is unavailable in the current catalog.")); return; }
+  const playback = providers.find(source => source.id === record.source_id && ready(source));
+  if (!playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
+  try {
+    await appController.selectSource(metadata.id, "metadata");
+    await appController.selectSource(playback.id, "playback");
+    const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(["stremio", identity.addon_key, identity.type, identity.meta_id]) };
+    wantedResume = record.video_id ? { video_id: record.video_id, position_ms: record.completed ? 0 : record.position_ms } : null;
+    location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
+  } catch (error) { preferenceError.value = String(error); }
+}
+watch(() => appState.route, route => {
+  if (route.name === "playback" && wantedResume && route.context.metadata_video_id === wantedResume.video_id) {
+    pendingResume.value = { context: route.context, position_ms: wantedResume.position_ms, was_playing: true };
+    wantedResume = null;
+  }
+}, { flush: "sync" });
 function continueHistory(entry: HistoryEntry) {
+  if (native && entry.record) { void continueNativeHistory(entry.record); return; }
   const film = baseFilms.find(film => historyContentId(film.kind, film.id) === entry.content_id);
   if (film) location.hash = `#/watch/${film.id}/${entry.episode}?resume=1`;
   else messages.error(t("This title is unavailable in the current catalog."));
 }
 function onEnded(context: PlaybackContext, epoch: number) {
   if (epoch !== appState.playback.playback_epoch) return;
-  void flushHistory(true);
+  const saved = flushHistory(true);
   latestHistory = null;
   // Only a real EOS of the current session reaches here, so errors and manual stops keep the episode.
   if (native && appState.settings.auto_next) {
     const next = appController.nextVideo(context.metadata_video_id);
-    if (next) void playEpisode(next);
+    if (next) void saved.then(() => playEpisode(next));
   }
   if (!native && appState.settings.auto_next) {
     const film = baseFilms.find(film => film.id === context.metadata_ref.identity.meta_id);
@@ -247,18 +284,25 @@ watch(() => appState.playback.playback_epoch, () => {
   if (snapshot && snapshot !== lastHistory) { lastWrite = Date.now(); lastHistory = snapshot; void persistHistory(snapshot); }
 });
 function onPageHide() { void flushHistory(); }
+// The Host waits briefly while the window closes; saved or failed, the page then lets it go.
+async function onClosing() {
+  try { await flushHistory(); await historyRepository.drain(); }
+  finally { await window.__TAURI__?.core.invoke("app_close_ready", {}).catch(() => {}); }
+}
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
 onMounted(() => {
   // T12's formal harness supplies a Host-confirmed context before mounting App.
   if (readHash().name !== "playback") void onHashChange();
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("yingxiang-closing", onClosing);
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
 onBeforeUnmount(() => {
   void flushHistory(); ++sequence;
   window.removeEventListener("hashchange", onHashChange);
   window.removeEventListener("pagehide", onPageHide);
+  window.removeEventListener("yingxiang-closing", onClosing);
   document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>

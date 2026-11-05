@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { historyRepository } from '../src/data/history.ts';
+import { createNativeHistory, entryFromRecord, historyRepository } from '../src/data/history.ts';
+import { UnknownCommit } from '../src/api.ts';
 import { parseHistoryEntry, historyProgress, historyTime, type HistoryEntry } from '../src/data/history-model.ts';
 import { historyCompletionReady } from './fixtures/t13/history-completion.js';
 
@@ -110,4 +111,44 @@ test('T13 history completion shares one 12s deadline and rejects stale event or 
   }
   const evidence = completionEvidence(); evidence.observedAt = evidence.expected.deadline;
   assert.equal(ready(evidence), true);
+});
+
+const nativeRecord = { content_id: 'a'.repeat(64), metadata_identity: { config_id: 'c', addon_key: 'b'.repeat(64), namespace: 'n', type: 'series', meta_id: 'm', canonical_id: 'm' }, video_id: 'v', season_number: 1, episode_number: 2.5, title: 'T', kind: 'other', poster_cache_key: null, source_id: 's', source_name: 'S', position_ms: 10, duration_ms: 20, completed: false, updated_at: 5 } as never;
+function nativeFixture() {
+  const calls: { command: string; input: any }[] = []; const failures: unknown[] = [];
+  let sequence = 4;
+  const history = createNativeHistory((async (command: string, input: any) => {
+    calls.push({ command, input });
+    const failure = failures.shift();
+    if (failure) throw failure;
+    if (command === 'list_history') return { entries: [nativeRecord], write_sequence: sequence };
+    if (input.write_sequence) sequence = input.write_sequence;
+    return { ok: true };
+  }) as never);
+  const snapshot = { ...entryFromRecord(nativeRecord), capture: { session_id: 'x', match_id: 'not-uuid', playback_epoch: 3 } };
+  return { calls, failures, history, snapshot, writes: () => calls.filter(call => call.command !== 'list_history').map(call => call.input.write_sequence) };
+}
+test('REQ-T18: native writes read the Host sequence and keep order through one queue', async () => {
+  const { history, snapshot, writes, calls } = nativeFixture();
+  await Promise.all([history.save(snapshot), history.remove('a'.repeat(64)), history.clear()]);
+  assert.deepEqual(writes(), [5, 6, 7]);
+  assert.deepEqual(calls.filter(call => call.command !== 'list_history').map(call => call.command), ['save_history', 'remove_history', 'clear_history']);
+  assert.equal(entryFromRecord(nativeRecord).kind, 'series');
+  assert.equal(entryFromRecord(nativeRecord).episode, 3);
+});
+test('REQ-T18: a failed snapshot retries on its sequence and an unknown result rereads it', async () => {
+  const { history, snapshot, failures, writes, calls } = nativeFixture();
+  await history.list();
+  failures.push(new Error('disk'));
+  await assert.rejects(history.save(snapshot), /disk/);
+  await history.save(snapshot);
+  assert.deepEqual(writes(), [5, 5]);
+  failures.push(new UnknownCommit('r'));
+  const other = { ...snapshot };
+  await assert.rejects(history.save(other));
+  const before = calls.filter(call => call.command === 'list_history').length;
+  await history.clear();
+  assert.equal(calls.filter(call => call.command === 'list_history').length, before + 1, 'unknown commit rereads the sequence');
+  await assert.rejects(history.save({ ...snapshot, capture: undefined }), /capture/);
+  await history.drain();
 });

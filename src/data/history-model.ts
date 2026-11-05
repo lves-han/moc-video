@@ -1,3 +1,5 @@
+import type { WatchHistoryRecord } from '../models.ts';
+
 export interface HistoryEntry {
   content_id: string;
   title: string;
@@ -11,6 +13,9 @@ export interface HistoryEntry {
   duration_ms: number | null;
   completed: boolean;
   updated_at: number;
+  // Native rows keep the stored record; a new snapshot also carries the Session that confirmed it.
+  record?: WatchHistoryRecord;
+  capture?: { session_id: string; match_id: string; playback_epoch: number };
 }
 
 const columns = ['content_id','title','poster','kind','episode','episode_total','source_id','source_name','position_ms','duration_ms','completed','updated_at'] as const;

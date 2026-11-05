@@ -73,3 +73,19 @@ test("R13/R58/REQ-N02: validation and access failures read in Chinese and name t
     assert.equal(shown({ http_status: 500 }), "raw");
   } finally { locale.value = "en"; }
 });
+
+test("R24/REQ-T18: a sync result reaches the source it published once sources reload", async () => {
+  let reply: (value: unknown) => void = () => {};
+  const api = new Api((_command, args) => new Promise(resolve => { reply = data => resolve({ request_id: args.request_id, engine_epoch: "11111111-1111-4111-8111-111111111111", ...(data as object) }); }));
+  const sync = api.call("sync_catalog", { kind: "maccms", config_id: "c" } as never);
+  await new Promise(resolve => setTimeout(resolve));
+  reply({ data: { changed: true } });
+  await sync;
+  assert.equal(api.sourceResults.c?.ok, true);
+  const load = api.call("get_sources", {} as never);
+  await new Promise(resolve => setTimeout(resolve));
+  reply({ data: { providers: [{ id: "s", kind: "maccms", origin: { config_id: "c" } }], plugins: [] } });
+  await load;
+  assert.equal(api.sourceResults.c, undefined);
+  assert.equal(api.sourceResults.s?.ok, true);
+});

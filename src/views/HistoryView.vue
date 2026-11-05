@@ -7,6 +7,7 @@ import { locale, t } from '../i18n';
 import { historyRepository } from '../data/history';
 import { historyContentId, historyProgress, historyTime, type HistoryEntry } from '../data/history-model';
 
+const native = Boolean(window.__TAURI__);
 const props = defineProps<{ saveError: string | null }>();
 const emit = defineEmits<{ resume: [entry: HistoryEntry]; retrySave: []; removed: [id: string | null] }>();
 const entries = ref<HistoryEntry[]>([]);
@@ -68,7 +69,7 @@ onBeforeUnmount(() => { ++loadSequence; document.removeEventListener('visibility
 
 <template>
   <div class="page-heading"><div><p class="eyebrow">PICK UP WHERE YOU LEFT OFF</p><h1>{{ t('Watch history') }}</h1><p class="page-description">{{ t('Your stories, ready to continue.') }}</p></div><NButton v-if="entries.length" :disabled="busy || loading" @click="deletion = 'all'">{{ t('Clear history') }}</NButton></div>
-  <p class="history-preview-note">{{ t('Preview history resets when you reload this page.') }}</p>
+  <p v-if="!native" class="history-preview-note">{{ t('Preview history resets when you reload this page.') }}</p>
   <NAlert v-if="saveError" type="error" class="history-alert" :title="t('Watch history could not be saved')">{{ saveError }}<NButton size="small" @click="retrySave">{{ t('Retry') }}</NButton></NAlert>
   <NAlert v-if="error" type="error" class="history-alert" :title="t('History is unavailable')">{{ error }}<NButton size="small" @click="load">{{ t('Retry') }}</NButton></NAlert>
   <div v-if="loading" class="history-loading" :aria-label="t('Loading watch history')" aria-busy="true"><NSkeleton v-for="n in 3" :key="n" height="144px" :sharp="false" /></div>
