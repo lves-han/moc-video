@@ -32,6 +32,8 @@ def validate_sources(e):
     require(e["deleted"]["kept_after_cancel"] is True and e["deleted"]["configs"] == 2, "Delete must confirm first")
     g = e["failing"]
     require(g["message"] and g["others_ready"] is True and g["selection_kept"] is True, "A failing source must report its error without affecting others")
+    p = e["real_prepare"]
+    require(p["message"] and p["host_phase"] == "ready" and p["others_ready"] is True, "A real prepare refusal must be visible and leave HTTP sources working")
     c = e["cloudstream"]
     require(c["stimulus"] == "synthetic" and c["target"] == "cloudstream" and "SuperVod" in c["plugin"] and "ready" in c["guest"] and c["host_phase"] == "ready" and c["selectable"] is True, "Cloudstream packages and guest state must display apart from the host")
     n = e["interaction"]

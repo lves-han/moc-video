@@ -46,7 +46,8 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
       ? { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "ENGINE_NOT_READY", message: "Synthetic rejection", retryable: true } }
       : envelope(args, { id: "interaction-1", source_id: args?.input.source_id, status: "waiting", required_display_mode: "windowed", message: "Synthetic window open" })) as T;
     if (name === "finish_interaction" && synthetic) return envelope(args, { id: args?.input.interaction_id, source_id: CS, status: args?.input.request.action === "completed" ? "completed" : "failed", required_display_mode: "windowed", message: "done" }) as T;
-    const response = await rpc({ command: name, args });
+    // This machine has no Android guest, so the synthetic state replaces Host's real refusal.
+    const response = await rpc(synthetic && name === "runtime_prepare" ? { command: "runtime_status", args: { request_id: args?.request_id, input: {} } } : { command: name, args });
     if (synthetic && name === "get_sources") return { ...response, data: { providers: [...response.data.providers, csSource(synthetic === "interaction")], plugins: [{ internal_name: "SuperVod", version: 7, artifact_sha256: SHA, status: "loaded", provider_ids: [CS] }] } } as T;
     if (synthetic && (name === "runtime_status" || name === "runtime_prepare")) return { ...response, data: { ...response.data, cloudstream: { phase: "ready", engine_epoch: "22222222-2222-4222-8222-222222222222", display_mode: "headless", error: null,
       health: { api_version: "1", runtime_version: "synthetic-1.0", cloudstream_revision: "rev-abc", registry_sha256: SHA, status: "ready", loaded_plugin_count: 1, provider_count: 1, display_mode: "headless" } } } } as T;
@@ -139,6 +140,13 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     await until(() => one(".sources-confirm-delete"), "Delete confirmation missing");
     one<HTMLButtonElement>(".sources-confirm-delete")!.click();
     await until(() => !row("Failing source"), "Failing source not deleted");
+    await until(() => !all<HTMLButtonElement>(".sources-delete").some(button => button.disabled), "Delete did not settle");
+
+    // Without an Android guest, the real Host refuses and the page must say so.
+    const realCalls = count("runtime_prepare");
+    one<HTMLButtonElement>(".sources-prepare")!.click();
+    await until(() => count("runtime_prepare") > realCalls && !one<HTMLButtonElement>(".sources-delete")?.disabled && one(".sources-failure"), "Real prepare did not report its result");
+    evidence.real_prepare = { message: one(".sources-failure")!.textContent, host_phase: appState.runtime.phase, others_ready: providers().some(item => item.name === "My metadata" && item.runtime_status === "ready") };
 
     // Synthetic Cloudstream states, separate from the real host status.
     synthetic = "ready";
@@ -167,15 +175,15 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     one<HTMLButtonElement>(".sources-interaction-open")!.click();
     await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
     one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
-    await until(() => one(".sources-interaction"), "Interaction state missing");
+    await until(() => one<HTMLButtonElement>(".sources-interaction-cancel")?.disabled === false, "Interaction state missing");
     const startedText = one(".sources-interaction")!.textContent!, request = calls.filter(call => call.command === "start_interaction").at(-1)!.input;
     one<HTMLButtonElement>(".sources-interaction-cancel")!.click();
-    await until(() => !one(".sources-interaction"), "Interaction cancel failed");
+    await until(() => !one(".sources-interaction") && one<HTMLButtonElement>(".sources-interaction-open")?.disabled === false, "Interaction cancel failed");
     const cancelled = calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action;
     one<HTMLButtonElement>(".sources-interaction-open")!.click();
     await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
     one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
-    await until(() => one(".sources-interaction-done"), "Interaction state missing");
+    await until(() => one<HTMLButtonElement>(".sources-interaction-done")?.disabled === false, "Interaction state missing");
     synthetic = "ready";
     one<HTMLButtonElement>(".sources-interaction-done")!.click();
     await until(() => !one(".sources-interaction") && !one(".sources-interaction-open"), "Interaction completion failed");
