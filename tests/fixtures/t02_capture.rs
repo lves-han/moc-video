@@ -323,8 +323,8 @@ fn direct_episode<'a>(original: &Value, groups: &'a [Value]) -> Option<(usize, &
         })
 }
 
-/// One declared direct route per play group of one title.
-fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a Value)> {
+/// One declared direct route per play group of one title, with its media host.
+fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a Value, String)> {
     let Some(routes) = original["vod_play_url"].as_str() else {
         return vec![];
     };
@@ -334,9 +334,30 @@ fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a
         .filter_map(|(group, entries)| {
             let single = json!({"vod_play_url": entries});
             let slice = std::slice::from_ref(groups.get(group)?);
-            direct_episode(&single, slice).map(|(_, episode)| (group, episode))
+            let (_, episode) = direct_episode(&single, slice)?;
+            let host = entries.split('#').find_map(|entry| {
+                let resource = entry.rsplit_once('$').map_or(entry, |(_, url)| url);
+                let url = http_url(resource, false).ok()?;
+                let path = url.path().to_ascii_lowercase();
+                (path.ends_with(".m3u8") || path.ends_with(".mp4"))
+                    .then(|| url.host_str().map(str::to_owned))?
+            })?;
+            Some((group, episode, host))
         })
         .collect()
+}
+
+/// ADR-051: the adapter rejecting accessible data is a defect; transport and removed items are not.
+fn program_defect(error: &ApiError) -> bool {
+    error.message.starts_with("MacCMS")
+        && ![
+            "closed",
+            "not JSON",
+            "detail is missing",
+            "changed or is missing",
+        ]
+        .iter()
+        .any(|state| error.message.contains(state))
 }
 
 const MEDIA_SAMPLES: usize = 8;
@@ -361,6 +382,9 @@ fn media_summary(samples: &[Value]) -> Value {
 
 /// ADR-051: only an accessible response the adapter cannot use is a program defect.
 fn compatibility(records: &[Value]) -> &'static str {
+    if records.iter().any(|row| row["program_defect"] == true) {
+        return "PROGRAM_INCOMPATIBLE";
+    }
     let api = || {
         records.iter().filter(|row| {
             row["stage"] != "adapter_details" && row["stage"] != "direct_media_prefix"
@@ -387,12 +411,14 @@ fn compatibility(records: &[Value]) -> &'static str {
     }
 }
 
+/// One access-control refusal ends a host; other failures allow one more title on it.
 fn host_exhausted(samples: &[Value], host: &str) -> bool {
-    samples
-        .iter()
-        .filter(|row| row["host"] == host && row["status"] != "PREFIX_ONLY")
-        .count()
-        >= HOST_FAILURES
+    let failed = || {
+        samples
+            .iter()
+            .filter(|row| row["host"] == host && row["status"] != "PREFIX_ONLY")
+    };
+    failed().any(|row| row["status"] == "ACCESS_CONTROL_STOP") || failed().count() >= HOST_FAILURES
 }
 
 fn candidate(source: &Value) -> Value {
@@ -477,9 +503,13 @@ fn candidate(source: &Value) -> Value {
                 break;
             }
             let reference = catalog.card(item, &mut images)?["ref"].clone();
-            let Ok(mapped) = catalog.details(&http, &reference, &job(&host, "default_metadata"))
-            else {
-                continue;
+            let mapped = match catalog.details(&http, &reference, &job(&host, "default_metadata")) {
+                Ok(mapped) => mapped,
+                Err(error) => {
+                    records.push(json!({"stage":"adapter_details","status":"ITEM_FAILED","program_defect":program_defect(&error),
+                        "error":{"code":error.code,"message":error.message}}));
+                    continue;
+                }
             };
             let groups = mapped.value["details"]["groups"].as_array().unwrap();
             if !adapter_recorded {
@@ -487,15 +517,21 @@ fn candidate(source: &Value) -> Value {
                 records.push(json!({"stage":"adapter_details","status":"PASS","groups":groups.len(),
                     "episodes":groups.iter().map(|g| g["episodes"].as_array().unwrap().len()).sum::<usize>()}));
             }
-            for (group_index, episode) in direct_episodes(item, groups) {
+            for (group_index, episode, media_host) in direct_episodes(item, groups) {
                 if samples.len() >= MEDIA_SAMPLES {
                     break;
+                }
+                // A refused host is skipped before any request; other titles may use another CDN.
+                if host_exhausted(&samples, &media_host) {
+                    continue;
                 }
                 let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","group_index":group_index});
                 let link = match catalog.resolve(&http, &episode["ref"], &job(&host, "resolve")) {
                     Ok(link) => link,
                     Err(error) => {
                         record["status"] = json!("RESOLVE_FAILED");
+                        record["host"] = json!(media_host);
+                        record["program_defect"] = json!(program_defect(&error));
                         record["error"] = json!({"code":error.code,"message":error.message});
                         samples.push(record);
                         continue;
@@ -503,11 +539,6 @@ fn candidate(source: &Value) -> Value {
                 };
                 record["kind"] = json!(link.kind);
                 let url = http_url(&link.url, false)?;
-                let media_host = url.host_str().unwrap_or_default().to_owned();
-                // A refused host is skipped, while other titles may use another CDN (ADR-050).
-                if host_exhausted(&samples, &media_host) {
-                    continue;
-                }
                 record["host"] = json!(media_host);
                 if !link.playable {
                     record["status"] = json!("UNSUPPORTED_ROUTE");
@@ -613,8 +644,109 @@ fn t02_source_support_is_judged_across_sampled_videos() {
     let original = json!({"vod_play_url":"A$https://a.test/1.mp4$$$B$https://b.test/1.m3u8"});
     let routes = direct_episodes(&original, &groups);
     assert_eq!(
-        routes.iter().map(|(group, _)| *group).collect::<Vec<_>>(),
+        routes
+            .iter()
+            .map(|(group, _, _)| *group)
+            .collect::<Vec<_>>(),
         vec![0, 1]
+    );
+}
+
+fn sample_item(id: u64, url: String) -> Value {
+    json!({"vod_id":id,"vod_name":format!("Title {id}"),"vod_play_from":"Line","vod_play_url":format!("Episode${url}")})
+}
+
+fn sample_fixture(
+    items: Vec<Value>,
+    detail: impl Fn(&str) -> Option<Value> + Send + Sync + 'static,
+    media: Arc<std::sync::Mutex<Vec<String>>>,
+) -> Fixture {
+    Fixture::new(move |request, port| {
+        if request.target.starts_with("/m/") || request.target.starts_with("/ok/") {
+            media.lock().unwrap().push(format!(
+                "{}{}",
+                request.headers.get("host").map_or("", String::as_str),
+                request.target
+            ));
+            return if request.target.starts_with("/m/") {
+                Reply {
+                    status: 403,
+                    ..Reply::raw("refused", "text/plain")
+                }
+            } else {
+                Reply::raw(vec![0; 64], "video/mp4")
+            };
+        }
+        let fill = |value: &Value| {
+            serde_json::from_str::<Value>(&value.to_string().replace("PORT", &port.to_string()))
+                .unwrap()
+        };
+        if let Some(id) = request.query.get("ids") {
+            if let Some(value) = detail(id) {
+                return Reply::json(response(json!([fill(&value)]), json!([])));
+            }
+            let found: Vec<Value> = items
+                .iter()
+                .filter(|item| item["vod_id"].to_string() == *id)
+                .map(&fill)
+                .collect();
+            return Reply::json(response(json!(found), json!([])));
+        }
+        Reply::json(response(
+            json!(items.iter().map(&fill).collect::<Vec<_>>()),
+            json!([]),
+        ))
+    })
+}
+
+#[test]
+fn t02_one_failing_detail_marks_the_program_incompatible() {
+    let media = Arc::new(std::sync::Mutex::new(vec![]));
+    let items = vec![
+        sample_item(1, "http://maccms.fixture.test:PORT/ok/1.mp4".into()),
+        sample_item(2, "http://maccms.fixture.test:PORT/ok/2.mp4".into()),
+    ];
+    // The second title's detail response is accessible JSON the adapter cannot map.
+    let fixture = sample_fixture(
+        items,
+        |id| (id == "2").then(|| json!({"vod_id":2,"vod_name":null})),
+        media,
+    );
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    assert_eq!(
+        observation["compatibility"], "PROGRAM_INCOMPATIBLE",
+        "{observation}"
+    );
+    assert_eq!(observation["supported"], false);
+}
+
+#[test]
+fn t02_refused_media_host_is_requested_once_and_other_hosts_continue() {
+    let media = Arc::new(std::sync::Mutex::new(vec![]));
+    let items = vec![
+        sample_item(1, "http://maccms.fixture.test:PORT/m/1.mp4".into()),
+        sample_item(2, "http://maccms.fixture.test:PORT/m/2.mp4".into()),
+        sample_item(3, "http://maccms.fixture.test:PORT/m/3.mp4".into()),
+        sample_item(4, "http://other.fixture.test:PORT/ok/4.mp4".into()),
+    ];
+    let fixture = sample_fixture(items, |_| None, media.clone());
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    let requests = media.lock().unwrap().clone();
+    assert_eq!(
+        requests.iter().filter(|row| row.contains("/m/")).count(),
+        1,
+        "{requests:?}"
+    );
+    assert_eq!(
+        requests.iter().filter(|row| row.contains("/ok/4")).count(),
+        1,
+        "{requests:?}"
+    );
+    assert_eq!(observation["compatibility"], "COMPATIBLE", "{observation}");
+    assert_eq!(observation["media_samples"]["attempted"], 2);
+    assert_eq!(
+        observation["media_samples"]["failed_hosts"],
+        json!(["maccms.fixture.test"])
     );
 }
 
@@ -718,9 +850,9 @@ fn t02_live_public_gateway_webview() {
         let reference = catalog.card(&public["list"][0], &mut vec![]).unwrap()["ref"].clone();
         let details = ok(&host, "get_details", json!({"ref":reference}));
         let groups = details["details"]["groups"].as_array().unwrap();
-        let (group, episode) = direct_episodes(&public["list"][0], groups)
+        let (group, episode, _) = direct_episodes(&public["list"][0], groups)
             .into_iter()
-            .find(|(group, _)| Some(*group as u64) == sample["group"].as_u64())
+            .find(|(group, _, _)| Some(*group as u64) == sample["group"].as_u64())
             .expect("Verified direct media route disappeared");
         let home = ok(&host, "get_home", home_input(metadata_source));
         let meta = ok(

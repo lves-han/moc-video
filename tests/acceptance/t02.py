@@ -27,6 +27,8 @@ NATIVE = {
     "t02_direct_route_selection_preserves_later_hls_group",
     "t02_source_support_is_judged_across_sampled_videos",
     "t02_minimal_shape_accepts_a_list_without_code_only",
+    "t02_one_failing_detail_marks_the_program_incompatible",
+    "t02_refused_media_host_is_requested_once_and_other_hosts_continue",
     "t02_dns_two_servers_failover_and_both_families",
     "t02_dns_one_silent_server_keeps_other_available",
     "t02_dns_both_failed_never_falls_back_to_hosts_or_system",
