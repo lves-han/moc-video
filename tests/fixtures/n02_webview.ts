@@ -20,7 +20,7 @@ const set = (selector: string, value: string, event = "input") => { const elemen
 const row = (name: string) => all(".sources-row").find(item => item.querySelector("h3")?.textContent === name)!;
 const preset = (name: string) => one(`.sources-preset[data-preset="${name}"]`)!.querySelector<HTMLButtonElement>(".sources-preset-add")!;
 const providers = () => appState.sources.data?.providers ?? [];
-const quiet = () => !all<HTMLButtonElement>(".sources-delete, .sources-preset-add").some(button => button.disabled && !button.textContent?.includes("已添加"));
+const quiet = () => !all<HTMLButtonElement>(".sources-delete").some(button => button.disabled);
 
 export async function sourcesToPlaybackScenario(ready: Ready, prototype: { player: Player; base: string; cap: string }) {
   prototype.player.stop();
@@ -47,6 +47,8 @@ export async function sourcesToPlaybackScenario(ready: Ready, prototype: { playe
   describe = () => JSON.stringify({ hash: location.hash, route: appState.route.name, failure: one(".sources-failure")?.textContent, errors_ui: one(".sources-errors")?.textContent, playback: appState.playback.phase, dialog: Boolean(one('[role="dialog"]')), match: appState.playback.error?.message, details: appState.details.phase, home: appState.home.phase, video: one<HTMLVideoElement>("video")?.readyState, errors });
   location.hash = "#/sources";
   await appController.initialize();
+  await appController.updateSettings(settings => ({ ...settings, ui_locale: "zh-CN" }));
+  locale.value = "zh-CN";
   const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App) }) });
   app.mount(container);
   const add = async (kind: string, name: string, urls: string) => {
