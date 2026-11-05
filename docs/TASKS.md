@@ -1025,7 +1025,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 验证：HTTP配置行为与Cloudstream交互状态fixture、拒绝/取消、复制诊断；真实客体重启和HTTP播放持续在N02复测。
 
 ### T0.19 T02 SuperVod JSON原生来源
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.1, T0.4, T0.8, T0.9
 - 需求：U02, U05, R03, R12, R16, R45, R49, REQ-T02 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/runtime.lock.json`, `docs/ARCHITECTURE.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOFF-RUST-REWRITE.md`, `docs/HANDOFF-RUST-REWRITE-PROMPT.md`, `docs/reviews/doc-review/`, `android-engine/`
