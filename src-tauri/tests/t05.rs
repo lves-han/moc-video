@@ -149,7 +149,7 @@ fn t05_http_only_preparation_and_gateway() {
     );
     error(
         &call(&host, "runtime_prepare", json!({"target": "cloudstream"})),
-        "ENGINE_NOT_READY",
+        "CAPABILITY_UNAVAILABLE",
     );
     assert_eq!(ok(&host, "runtime_status", json!({})), ready);
     assert_eq!(
