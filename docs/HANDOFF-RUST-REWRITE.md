@@ -90,7 +90,7 @@ Android 构建被主动中断（`evidence/runs/20261105T024100841304-diag-t02-bu
 1. `docs/SPEC.md` 必须与 `replica-spec/DEVELOPMENT_SPEC.md` 逐字节相同（`scripts/check-project.py` 校验），保留原文，用 ADR、`docs/ARCHITECTURE.md`、`docs/TASKS.md` 取代相应要求。ADR-044 是现成先例。
 2. 修订 `docs/TASKS.md`：T0.19 至 T0.22 改为 Rust 播放源卡。控制器只识别 `T数字.数字`，沿用这些卡号最省事，后续卡的依赖不用大改。T0.23（索引与制品事务）需重写或取消。T0.24、T0.25、T0.27 要去掉 Android 和原包内容。同步更新覆盖表，**不要改动已完成卡（T0.1 至 T0.17 对应卡）的正文**，否则其完成校验会失效。
 3. 追加 ADR，并在 `docs/PROGRESS.md` 追加 T0.19 的 `- 结果：RESOLVED`，含 `- 决定：` 和 `- 批准摘要：<protected_hash>`。上一条决定记录已是本卡 `BLOCKED`。
-4. 运行 `task.py check`，然后 `task.py rebaseline T0.19 --protected <摘要>`。
+4. 运行 `task.py check`，然后 `task.py rebaseline T0.19 --protected <摘要>`。注意：`rebaseline` 会拒绝范围外的非冻结文件，而这两份 `docs/HANDOFF-RUST-REWRITE*.md` 目前在 T0.19 范围外。修订 T0.19 的范围时把它们列入，先用 `task.py scope` 确认为空。修订后 T0.19 不再需要的 `android-engine/` 改动同理。
 5. 按 `docs/PROMPT-DOC-REVIEW.md` 做一次文档独立审查再开发。
 
 ## 8. 每张卡的完成流程
