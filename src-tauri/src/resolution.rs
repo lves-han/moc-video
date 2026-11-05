@@ -317,7 +317,7 @@ fn expired() -> ApiError {
         "Resolution or stream expired; resolve again",
     )
 }
-fn no_links() -> ApiError {
+pub(crate) fn no_links() -> ApiError {
     ApiError::new("UPSTREAM_FAILED", "Provider returned no links")
         .with_details(json!({"reason":"no_links"}))
 }

@@ -2,6 +2,18 @@
 
 写于 2026-11-05。接手方：Codex。配套提示词见 [HANDOFF-RUST-REWRITE-PROMPT.md](HANDOFF-RUST-REWRITE-PROMPT.md)。
 
+## T0.19 开发会话2交接（2026-11-05，WIP，待外层原入口验证）
+
+- `task.py check`通过35卡，`start T0.19`恢复成功，开始时工作树干净；当前protected为`5f24a743a02cebf238fccdc755a1f5c8ae2aecd3617d3fc2d240d577554de7d1`，generation=2，sessions=2/2。冻结定义、控制脚本、预算和任务勾选保持；本会话仅处理T0.19。
+- 已实现待验：公共HTTP的测试专用nameserver注入扩展为多服务器；受控UDP验证A/AAAA、SERVFAIL/静默单服务器可用性、双服务器失败、hosts/系统无回退、双静默服务器deadline/取消、混合公网内网/Fake-IP、真实重定向中的DNS重绑定，复用原peer/重定向安全反例。正式解析仍固定1.1.1.1与8.8.8.8，无新增设置或依赖。
+- 公开fixture：`tests/fixtures/t02/public-responses.json`从既有固定公共DNS报告`evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json`提取8来源各7阶段的脱敏响应，保留原始字段、原响应SHA、列表、分类两页、搜索及完整组选集顺序。媒体与图片使用原投影的自有fixture地址，原始媒体签名未入库。Rust测试覆盖7候选公开协议、1280集样本原始顺序、淘片缺code拒绝、HTML/错误code/畸形/超限与直接媒体解析；这是待执行的测试覆盖，真实来源支持保持0。
+- 最小产品修复：代码检查发现详情之后上游清空全部播放组时，解析原返回普通“组缺失”。`maccms::Catalog::resolve`现复用`resolution::no_links`，返回`UPSTREAM_FAILED`与`reason=no_links`；已添加“详情后移除媒体”回归。当前环境尚未执行该回归，运行前后差异仍待验证。
+- A1入口已实现于`tests/acceptance/t02.py`，复用原验收收据/资源验证、测试清理、T01生产/自动化分包、原生GUI/RSS生命周期。先执行独立证据负例与10个新原生测试，再执行原not_found/no_links/cap隔离3项回归；真实链路复用手工MacCMS配置、受控Stremio仅作人工匹配身份、公开JSON/完整详情/Host resolve/真实Rust网关、打包WKWebView实际解码与5秒短播/音频。未有合格媒体、锁屏、媒体/原生错误都会使A1失败。无成功来源时保留报告且在线闭环保持NOT RUN。原始上游媒体地址仅在Rust内存，短寿命测试桥仅传递网关DTO；报告移除cap参数。
+- 取证修正：原诊断只选首组，部分公开接口首组为HTML播放器、后组为直接HLS。现按公开JSON显式选择原始组中的MP4/HLS并记录组号。已明确403的优质/无尽在候选清单保持停止；量子前次解析HTTP失败未记录数字状态，按不确定访问控制保持停止；淘片缺成功code保持排除；卧龙非JSON保持排除。红牛/光速/极速/豪华的后续直接组待真实验证，未切换端点、未绕过访问控制。
+- 已执行仅静态检查：两Python文件AST解析成功；`git diff --check`无空白告警；`task.py scope`为`all changes inside scope`。当前新增Rust/TypeScript的编译、格式、Clippy、行为测试、准确A1、完整verify、包排除及独立代码巡检全部NOT RUN。旧17项回归与取证exit0仍为历史诊断，未替代本次验收。
+- 按本会话明确交接及ADR-010，已确认的sysctl/Git权限限制交外层处理，未重复重任务权限探测、未绕过原run、未扩权限或重置会话。旧环境收据现为finished/exit125/raw_exit=null，原失败保留。开发会话以稳定WIP退出；外层先核对本会话已退出、PID+创建时间/两锁/无活跃写入者，再提交`WIP T0.19: add public JSON and DNS acceptance gates`。新代码须先经原run执行cargo fmt，再执行Clippy与准确A1；通过后直接完整verify、真实完成记录/勾卡/done/受验提交及原review-only独立CLEAR。
+- 可执行argv与顺序见`evidence/task-state/T0.19/session-2/outer-validation-argv.json`。格式化会改变源码，后续所有收据必须绑定格式化后的稳定摘要。外层须检查剩余截止时间覆盖完整命令；保留7200秒A1上限及原资源预算。若真实媒体或验收失败，保留日志，先note原因；本卡两会话已使用，所需新增开发/授权按原工作流报告。本会话未提交WIP、未写BLOCKED/RESOLVED/AUTHORIZED、未运行done或推进其他卡。
+
 ## T0.19 开发会话1交接（2026-11-05T03:12:33Z，WIP）
 
 - 当前文档基线已经迁移且独立round-42 CLEAR；原check通过，start T0.19成功，初始工作树干净。protected=`8da3c6c5d17adbd958f588e4635df813ab500066d47e8dac85bc82b3747e2b13`。本次只处理T0.19。

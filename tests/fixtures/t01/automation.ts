@@ -171,6 +171,29 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       }
       case "identity": return { foreground: await foreground(), origin: location.origin, secure_context: isSecureContext,
         user_agent: navigator.userAgent, capabilities: capabilities(video), native: await nativeInvoke("t01_control", { action: "identity" }), layout: layout() };
+      case "t02-public": {
+        await foreground();
+        const view = command.view;
+        assertCondition(view && command.kind, "T02 requires an actual Rust gateway view and media kind");
+        const gateway = new URL(view.media_url);
+        assertCondition(gateway.protocol === "http:" && gateway.hostname === "127.0.0.1" && gateway.port !== "",
+          "T02 playback must use the Rust loopback gateway");
+        const beforeFrames = frames;
+        open({ url: view.media_url, kind: command.kind, subtitles: view.subtitles });
+        await until(() => video.readyState >= 2 || Boolean(video.error), "T02 public media did not become ready", 45000);
+        assertCondition(!video.error, "T02 public gateway media failed");
+        await click("play");
+        await audio.resume();
+        await until(() => !video.paused && video.currentTime > 0.2 && frames > beforeFrames,
+          "T02 public media did not present frames", 30000);
+        const first = sample();
+        await delay(5000);
+        const final = sample();
+        assertCondition(!video.error && !video.paused && final.position > first.position + 2 && final.frames > first.frames,
+          "T02 public short playback stalled");
+        return { actual_gateway: video.currentSrc === view.media_url, first, final, error_count: errors.length,
+          native: await nativeInvoke("t01_control", { action: "identity" }) };
+      }
       case "open": {
         const activated = await foreground();
         const kind = command.kind ?? "mp4";

@@ -1,13 +1,17 @@
 //! Compiled as unit tests of the production module, so the two fixed fixture
 //! hostnames are unavailable in ordinary application builds.
+#[path = "t02_capture.rs"]
+mod t02;
+#[path = "t02_dns.rs"]
+mod t02_dns;
+#[path = "t02_json.rs"]
+mod t02_json;
 #[path = "t06_maccms.rs"]
 mod t06;
 #[path = "t07_maccms.rs"]
 mod t07;
 #[path = "t08_http.rs"]
 mod t08;
-#[path = "t02_capture.rs"]
-mod t02;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
@@ -146,6 +150,10 @@ struct DnsFixture {
 
 impl DnsFixture {
     fn new(handler: impl Fn(u16) -> Option<Vec<u8>> + Send + 'static) -> Self {
+        Self::with_rcode(0, handler)
+    }
+
+    fn with_rcode(rcode: u8, handler: impl Fn(u16) -> Option<Vec<u8>> + Send + 'static) -> Self {
         let socket = std::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         socket
             .set_read_timeout(Some(Duration::from_millis(20)))
@@ -184,7 +192,7 @@ impl DnsFixture {
                     packet[0],
                     packet[1],
                     0x81,
-                    0x80,
+                    0x80 | rcode,
                     0,
                     1,
                     0,
@@ -978,7 +986,7 @@ fn n00_public_addresses_dns_rebinding_and_peer() {
         })
     });
     let http = Http {
-        nameserver: Some(dns.address),
+        nameserver: Some(vec![dns.address]),
     };
     let fetch = || {
         http.get(
@@ -1008,7 +1016,7 @@ fn n00_public_addresses_dns_rebinding_and_peer() {
         })
     });
     let mixed = Http {
-        nameserver: Some(mixed_dns.address),
+        nameserver: Some(vec![mixed_dns.address]),
     };
     assert_eq!(
         mixed
@@ -1045,7 +1053,7 @@ fn n00_cancellation_interrupts_dns_lookup() {
         .begin(&request_id, "default_metadata", host.clock.clone())
         .unwrap();
     let http = Http {
-        nameserver: Some(dns.address),
+        nameserver: Some(vec![dns.address]),
     };
     let worker = thread::spawn(move || {
         http.get(

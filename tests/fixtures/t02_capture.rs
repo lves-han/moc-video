@@ -296,6 +296,31 @@ fn capture(
     result
 }
 
+fn direct_episode<'a>(original: &Value, groups: &'a [Value]) -> Option<(usize, &'a Value)> {
+    // Public JSON may include both an HTML player and a direct media route.
+    // Select a declared MP4/HLS route without executing the HTML player.
+    original["vod_play_url"]
+        .as_str()?
+        .split("$$$")
+        .enumerate()
+        .find_map(|(group, entries)| {
+            entries.split('#').enumerate().find_map(|(episode, entry)| {
+                let resource = if entry.starts_with("http://") || entry.starts_with("https://") {
+                    entry
+                } else {
+                    entry.split_once('$')?.1
+                };
+                let url = http_url(resource, false).ok()?;
+                let path = url.path().to_ascii_lowercase();
+                if path.ends_with(".m3u8") || path.ends_with(".mp4") {
+                    Some((group, &groups.get(group)?["episodes"][episode]))
+                } else {
+                    None
+                }
+            })
+        })
+}
+
 fn candidate(source: &Value) -> Value {
     let base = source["api_url"].as_str().unwrap();
     let mut records = Vec::new();
@@ -326,7 +351,7 @@ fn candidate(source: &Value) -> Value {
         let title = first["vod_name"]
             .as_str()
             .ok_or_else(|| upstream("Public sample title missing"))?;
-        capture(
+        let original = capture(
             &http,
             &host,
             base,
@@ -375,17 +400,14 @@ fn candidate(source: &Value) -> Value {
         let groups = mapped.value["details"]["groups"].as_array().unwrap();
         records.push(json!({"stage":"adapter_details","status":"PASS","groups":groups.len(),
             "episodes":groups.iter().map(|g| g["episodes"].as_array().unwrap().len()).sum::<usize>()}));
-        let episode = groups
-            .iter()
-            .flat_map(|g| g["episodes"].as_array().unwrap())
-            .next()
-            .ok_or_else(|| upstream("Public sample has no episodes"))?;
+        let (group_index, episode) = direct_episode(&original["list"][0], groups)
+            .ok_or_else(|| upstream("Public sample has no declared direct MP4/HLS episode"))?;
         let link = catalog.resolve(&http, &episode["ref"], &job(&host, "resolve"))?;
-        let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","kind":link.kind,"playable":link.playable});
+        let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","group_index":group_index,"kind":link.kind,"playable":link.playable});
         if !link.playable {
             record["status"] = json!("UNSUPPORTED");
             records.push(record);
-            return Ok(());
+            return Err(upstream("Public sample direct media is unsupported"));
         }
         let response = fetch(
             &http,
@@ -415,13 +437,131 @@ fn candidate(source: &Value) -> Value {
                 record["error"] = json!({"code":error.code,"message":error.message});
             }
         }
+        let failed = record["status"] != "PREFIX_ONLY";
         records.push(record);
-        Ok(())
+        if failed {
+            Err(upstream("Public direct media verification failed; candidate stopped"))
+        } else {
+            Ok(())
+        }
     })();
     json!({"name":source["name"],"api_url":base,"utc":OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
         "capture_status":if result.is_ok() {"CAPTURED"} else {"STOPPED"},
         "error":result.err().map(|e| json!({"code":e.code,"message":e.message})),"records":records,
         "supported":false,"real_gateway_webview":"NOT RUN"})
+}
+
+#[test]
+fn t02_direct_route_selection_preserves_later_hls_group() {
+    let groups = vec![
+        json!({"episodes":[{"ref":{"data":"html"}}]}),
+        json!({"episodes":[{"ref":{"data":"hls"}}]}),
+    ];
+    let original = json!({"vod_play_url":"Play$https://public.example/player?id=1$$$Play$https://public.example/index.m3u8?signature=PRIVATE"});
+    let (index, episode) = direct_episode(&original, &groups).unwrap();
+    assert_eq!(index, 1);
+    assert_eq!(episode["ref"]["data"], "hls");
+    assert!(direct_episode(&json!({"vod_play_url":"javascript:play()"}), &groups).is_none());
+}
+
+fn publish(path: &std::path::Path, value: &Value) {
+    let temporary = path.with_extension("tmp");
+    std::fs::write(&temporary, serde_json::to_vec(value).unwrap()).unwrap();
+    std::fs::rename(temporary, path).unwrap();
+}
+
+#[test]
+#[ignore = "A1 only: real public JSON/media and a packaged WebView client must own this bridge"]
+fn t02_live_public_gateway_webview() {
+    assert_eq!(std::env::var("AGENT_WORKFLOW_RUN").as_deref(), Ok("1"));
+    assert_eq!(std::env::var("RUST_TEST_THREADS").as_deref(), Ok("1"));
+    let directory = std::path::PathBuf::from(std::env::var_os("T12_BRIDGE_DIR").unwrap());
+    let inventory: Value = serde_json::from_str(INVENTORY).unwrap();
+    let mut observations = Vec::new();
+    let mut selected = None;
+    for source in inventory["sources"].as_array().unwrap() {
+        if selected.is_some() {
+            observations.push(json!({"name":source["name"],"status":"NOT RUN","reason":"First direct media candidate selected; remaining candidates remain unpromoted"}));
+            continue;
+        }
+        if source["probe"] != true {
+            observations.push(json!({"name":source["name"],"status":"NOT RUN","reason":source["reason"]}));
+            continue;
+        }
+        let observation = candidate(source);
+        let prefix = observation["records"].as_array().unwrap().iter().any(|row| row["stage"] == "direct_media_prefix" && row["status"] == "PREFIX_ONLY");
+        observations.push(observation);
+        publish(&directory.join("public-observations.json"), &json!({"sources":observations}));
+        if prefix {
+            selected = Some(source);
+        }
+    }
+    publish(&directory.join("public-observations.json"), &json!({"sources":observations}));
+    let mut live = None;
+    let mut ready = json!({"status":"NO_VERIFIED_MEDIA","sources":observations});
+    // A controlled metadata addon supplies only the manual-match identity. Every
+    // provider JSON/detail/resolve and all media bytes use public HTTP unchanged.
+    let metadata = Fixture::new(|request, _| {
+        let meta = json!({"id":"t02-selection","type":"series","name":"Manual public selection","videos":[{"id":"t02-video","title":"Manual episode","season":1,"episode":1}]});
+        if request.target.contains("manifest.json") {
+            Reply::json(json!({"id":"t02-owned-metadata","version":"1.0.0","name":"T02 metadata identity","description":"controlled manual-match identity","types":["series"],"resources":["catalog","meta"],"catalogs":[{"id":"all","type":"series"}]}))
+        } else if request.target.contains("/catalog/") {
+            Reply::json(json!({"metas":[meta]}))
+        } else {
+            Reply::json(json!({"meta":meta}))
+        }
+    });
+    if let Some(source) = selected {
+        let base = source["api_url"].as_str().unwrap();
+        let temporary = TempDir::new().unwrap();
+        let host = Host::open(temporary.path().join("settings.json")).unwrap();
+        let mut settings = settings::defaults();
+        let metadata_config = "22222222-2222-4222-8222-222222222222";
+        settings["source_configs"] = json!([
+            {"kind":"maccms","config_id":CONFIG,"name":source["name"],"enabled":true,"api_url":base},
+            {"kind":"stremio","config_id":metadata_config,"name":"T02 owned metadata","enabled":true,"manifest_urls":[metadata.url("/manifest.json")]}]);
+        ok(&host, "save_settings", settings);
+        let provider = sync(&host);
+        let sources = ok(&host, "sync_catalog", json!({"kind":"stremio","config_id":metadata_config}));
+        let metadata_source = sources["sources"]["providers"].as_array().unwrap().iter().find(|s| s["kind"] == "stremio").unwrap();
+        ok(&host, "runtime_prepare", json!({"target":"application"}));
+        let public = capture(&Http::default(), &host, base, "live_detail_page", &[("ac","detail"),("pg","1")], &mut vec![]).unwrap();
+        let catalog = catalog(&host);
+        let reference = catalog.card(&public["list"][0], &mut vec![]).unwrap()["ref"].clone();
+        let details = ok(&host, "get_details", json!({"ref":reference}));
+        let groups = details["details"]["groups"].as_array().unwrap();
+        let (group, episode) = direct_episode(&public["list"][0], groups).expect("Declared direct media route disappeared");
+        let home = ok(&host, "get_home", home_input(metadata_source));
+        let meta = ok(&host, "get_details", json!({"ref":home["page"]["sections"][0]["items"][0]["ref"]}));
+        let matched = ok(&host, "match_playback", json!({"metadata_ref":meta["metadata_ref"],"video_id":"t02-video",
+            "playback_source":{"source_id":provider["id"],"source_revision":provider["source_revision"]},
+            "selection":{"content_ref":reference,"group_id":groups[group]["id"],"episode_id":episode["id"]}}));
+        let context = &matched["context"];
+        let resolution = ok(&host, "resolve_episode", json!({"match_id":context["match_id"],"episode_ref":context["episode_ref"]}));
+        let view = ok(&host, "open_playback", json!({"resolution_id":resolution["id"],"stream_id":resolution["streams"][0]["id"]}));
+        ready = json!({"status":"READY","source":source["name"],"group_index":group,"sources":observations,
+            "view":view,"kind":if view["stream_kind"] == "hls" {"hls"} else {"mp4"},
+            "protocol":{"list":true,"details":true,"complete_groups":groups.len(),"episodes":groups.iter().map(|g|g["episodes"].as_array().unwrap().len()).sum::<usize>(),"resolve":true}});
+        live = Some((temporary, host, resolution, view));
+    }
+    publish(&directory.join("ready.json"), &ready);
+    let started = Instant::now();
+    let finish = directory.join("request-1.json");
+    while !finish.exists() {
+        assert!(started.elapsed() < Duration::from_secs(1200), "T02 WebView client timed out");
+        thread::sleep(Duration::from_millis(10));
+    }
+    let request: Value = serde_json::from_slice(&std::fs::read(finish).unwrap()).unwrap();
+    assert_eq!(request["operation"], "finish");
+    let mut closed = false;
+    if let Some((_temporary, host, resolution, view)) = live {
+        ok(&host, "close_playback", json!({"session_id":view["session_id"]}));
+        ok(&host, "release_resolution", json!({"resolution_id":resolution["id"]}));
+        assert_eq!(host.requests.active_count(), 0);
+        closed = true;
+    }
+    publish(&directory.join("response-1.json"), &json!({"ok":true}));
+    println!("T02_LIVE:{}", json!({"ready":ready["status"] == "READY","closed":closed,"source":ready["source"],"active_requests":0}));
 }
 
 #[test]

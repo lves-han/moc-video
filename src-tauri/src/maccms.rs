@@ -98,7 +98,7 @@ pub fn public_ip(ip: IpAddr) -> bool {
 #[derive(Clone, Default)]
 pub struct Http {
     #[cfg(test)]
-    pub(crate) nameserver: Option<SocketAddr>,
+    pub(crate) nameserver: Option<Vec<SocketAddr>>,
 }
 
 pub struct Response {
@@ -170,7 +170,7 @@ impl Http {
         // A blocking system lookup would keep Runtime::drop waiting past the
         // request deadline. Query both families before accepting any address.
         use hickory_resolver::{
-            config::{NameServerConfig, ResolverConfig, ResolveHosts},
+            config::{NameServerConfig, ResolveHosts, ResolverConfig},
             net::runtime::TokioRuntimeProvider,
         };
         #[allow(unused_mut)] // Test-only nameserver injection replaces this list.
@@ -179,10 +179,15 @@ impl Http {
             NameServerConfig::udp(Ipv4Addr::new(8, 8, 8, 8).into()),
         ];
         #[cfg(test)]
-        if let Some(server) = self.nameserver {
-            let mut nameserver = NameServerConfig::udp(server.ip());
-            nameserver.connections[0].port = server.port();
-            servers = vec![nameserver];
+        if let Some(addresses) = &self.nameserver {
+            servers = addresses
+                .iter()
+                .map(|server| {
+                    let mut nameserver = NameServerConfig::udp(server.ip());
+                    nameserver.connections[0].port = server.port();
+                    nameserver
+                })
+                .collect();
         }
         let mut builder = hickory_resolver::TokioResolver::builder_with_config(
             ResolverConfig::from_name_servers(servers),
@@ -1026,6 +1031,9 @@ impl Catalog {
             &item,
             &identity("content", &[&self.captured.source_id, &content]),
         )?;
+        if groups.is_empty() {
+            return Err(crate::resolution::no_links());
+        }
         let (value, media) = groups
             .get(group)
             .ok_or_else(|| upstream("MacCMS selected group is missing"))?;

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "card": "T0.19",
   "status": "WIP",
-  "updated_utc": "2026-11-05T03:12:33Z",
+  "updated_utc": "2026-11-05T03:55:22.149260+00:00",
   "implementation_basis": "Independent public HTTP responses; existing MacCMS adapter. Plugin source was used only for scope/risk investigation (C4, ADR-048).",
   "aes": {
     "basis": "C4 / ADR-048 static investigation of commit 25cdd2119be03f62ae6a5a2cf46b16f9484224a2",
@@ -13,35 +13,187 @@
   "runtime": {
     "kind": "maccms",
     "configuration": "Existing manual HTTP source manager (T0.17); preset UI belongs to T0.22.",
-    "historical_artifacts": ["android-engine/", "android-engine/packages/"],
+    "historical_artifacts": [
+      "android-engine/",
+      "android-engine/packages/"
+    ],
     "exclusion_basis": "src-tauri/tauri.conf.json has an empty bundle.resources; Cargo has no Android/DEX runtime dependency. Packaged artifact exclusion still requires A1.",
     "packaged_exclusion": "NOT RUN"
   },
   "network": {
-    "current_native_probe": "NOT RUN",
-    "reason": "Original run.py exited 125 at macOS sysctl process enumeration under workspace-write; cleanup_failed receipt must be recovered by the outer agent per ADR-010.",
-    "receipt": "evidence/runs/20261105T030511501379-diag-t02-environment/receipt.json",
-    "privacy": "Public API endpoints only; signed media URLs, headers, capabilities and raw response bodies remain in native memory. Capture output replaces every media/image URL and omits unknown fields."
+    "current_native_probe": "PUBLIC_JSON_CAPTURED_MEDIA_UNVERIFIED",
+    "reason": "Original public-DNS diagnostic completed; protocol and media results are separate. Current session adds fixtures/A1 but execution requires outer original run.py due the known sandbox sysctl restriction.",
+    "receipt": "evidence/runs/20261105T034400521107-diag-t02-public/receipt.json",
+    "privacy": "Public API endpoints only; signed media URLs, headers, capabilities and raw response bodies remain in native memory. Capture output replaces every media/image URL and omits unknown fields.",
+    "capture": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+    "dns": [
+      "1.1.1.1:53",
+      "8.8.8.8:53"
+    ],
+    "backend": "process-watchdog; rss-sampled; 4096MiB; jobs=2; test_threads=1"
   },
   "sources": [
     {
       "name": "优质",
       "api_url": "https://api.1080zyku.com/inc/apijson.php",
-      "probe": true,
+      "probe": false,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items; exact endpoint must be confirmed by the native capture.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "ACCESS_CONTROL_STOP",
+        "http_status": 403,
+        "reason": {
+          "code": "UPSTREAM_FAILED",
+          "message": "Public capture HTTP request failed; candidate stopped"
+        }
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:44:19.937479Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "direct_media_prefix",
+          "http_status": 403,
+          "status": "ACCESS_CONTROL_STOP",
+          "adapter_decode": {}
+        }
+      ],
+      "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "量子",
       "api_url": "https://cj.lziapi.com/api.php/provide/vod/",
       "public_documentation": "https://www.lzizy.net/index.php/help.html",
-      "probe": true,
+      "probe": false,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items; public help documents list/detail, t, pg, wd, ids and multiple playback groups.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "NOT VERIFIED",
+        "error": {
+          "code": "UPSTREAM_FAILED",
+          "message": "Public HTTP server returned an unsuccessful status"
+        }
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:44:31.891847Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        }
+      ],
+      "reason": "STOPPED: first media resolution returned unsuccessful HTTP status before capture could record its numeric status; access-control outcome remains uncertain. Preserve stop pending explicit review.",
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "红牛",
@@ -49,19 +201,159 @@
       "public_documentation": "https://hongniuziyuan.tv/index.php/help",
       "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "UNSUPPORTED",
+        "http_status": null,
+        "reason": "first declared group only; later direct media group remains NOT RUN"
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:44:42.390829Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        }
+      ],
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "无尽",
       "api_url": "https://api.wujinapi.com/api.php/provide/vod/",
       "public_documentation": "https://help.wujinapi.me/",
-      "probe": true,
+      "probe": false,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items and string page.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "ACCESS_CONTROL_STOP",
+        "http_status": 403,
+        "reason": {
+          "code": "UPSTREAM_FAILED",
+          "message": "Public capture HTTP request failed; candidate stopped"
+        }
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:44:56.033244Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "direct_media_prefix",
+          "http_status": 403,
+          "status": "ACCESS_CONTROL_STOP",
+          "adapter_decode": {}
+        }
+      ],
+      "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "光速",
@@ -69,9 +361,74 @@
       "public_documentation": "https://guangsuzy.tv/index.php/help",
       "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items and string page.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "UNSUPPORTED",
+        "http_status": null,
+        "reason": "first declared group only; later direct media group remains NOT RUN"
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:45:06.90704Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        }
+      ],
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "极速",
@@ -79,27 +436,239 @@
       "public_documentation": "https://jszyapi.com/index.php/help/index.html",
       "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items and string page.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "UNSUPPORTED",
+        "http_status": null,
+        "reason": "first declared group only; later direct media group remains NOT RUN"
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:45:17.004812Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        }
+      ],
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "豪华",
       "api_url": "https://hhzyapi.com/api.php/provide/vod/",
       "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items and string page.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
+      "current_media": {
+        "status": "UNSUPPORTED",
+        "http_status": null,
+        "reason": "first declared group only; later direct media group remains NOT RUN"
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:45:24.672959Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "status": "PASS"
+          }
+        }
+      ],
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "淘片",
       "api_url": "https://taopianapi.com/cjapi/mc/vod/json/m3u8.html",
-      "probe": true,
+      "probe": false,
       "prior_observation": "2026-11-05 handoff: abbreviated JSON list; detail shape remains unverified.",
-      "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
-      "supported": false
+      "current_protocol": "ADAPTER_REJECTED",
+      "current_media": {
+        "status": "NOT VERIFIED",
+        "error": {
+          "code": "UPSTREAM_FAILED",
+          "message": "MacCMS interface is closed or returned an error code"
+        }
+      },
+      "supported": false,
+      "observation_utc": "2026-11-05T03:45:44.365954Z",
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [
+        {
+          "stage": "list",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "detail_page",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "detail_id",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "zero_search",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "category_page_1",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        },
+        {
+          "stage": "category_page_2",
+          "http_status": 200,
+          "status": "JSON_CAPTURED",
+          "adapter_decode": {
+            "code": "UPSTREAM_FAILED",
+            "message": "MacCMS interface is closed or returned an error code",
+            "status": "FAIL"
+          }
+        }
+      ],
+      "reason": "Protocol rejected: captured public list/detail omit required success code. No promotion or production special case.",
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "卧龙",
@@ -107,17 +676,31 @@
       "probe": false,
       "prior_observation": "2026-11-05 handoff: non-JSON; excluded from the JSON shortlist.",
       "current_protocol": "NOT RUN",
-      "current_media": "NOT RUN",
+      "current_media": {
+        "status": "NOT VERIFIED",
+        "error": null
+      },
       "supported": false,
-      "reason": "Non-JSON scope exclusion, C4."
+      "reason": "Non-JSON scope exclusion, C4.",
+      "observation_utc": null,
+      "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+      "http_observations": [],
+      "real_gateway_webview": "NOT RUN"
     }
   ],
   "supported_sources": [],
   "required_acceptance": {
-    "public_response_fixtures": "NOT RUN",
-    "negative_fixtures_and_cap_isolation": "NOT RUN",
+    "public_response_fixtures": "IMPLEMENTED; NOT RUN",
+    "negative_fixtures_and_cap_isolation": "IMPLEMENTED; NOT RUN",
     "public_list_detail_episode_resolve_gateway_packaged_webview": "NOT RUN",
     "A1": "NOT RUN",
     "verify_all": "NOT RUN"
+  },
+  "fixture": {
+    "path": "tests/fixtures/t02/public-responses.json",
+    "basis": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+    "sources": 8,
+    "execution": "NOT RUN for current source",
+    "privacy": "Projected response fields and full group order; media/image URLs replaced; no upstream signatures"
   }
 }

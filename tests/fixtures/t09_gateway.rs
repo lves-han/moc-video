@@ -1474,7 +1474,7 @@ fn t09_ssrf_actual_peer_dns_mixture_and_rebinding() {
         }
     });
     let http = Http {
-        nameserver: Some(dns.address),
+        nameserver: Some(vec![dns.address]),
     };
     let gateway = Gateway::with_http(Arc::new(MonotonicClock::default()), http.clone()).unwrap();
     let view = session(&gateway, fixture.url("/dns"));
@@ -1493,7 +1493,7 @@ fn t09_ssrf_actual_peer_dns_mixture_and_rebinding() {
     let gateway = Gateway::with_http(
         Arc::new(MonotonicClock::default()),
         Http {
-            nameserver: Some(mixed.address),
+            nameserver: Some(vec![mixed.address]),
         },
     )
     .unwrap();
