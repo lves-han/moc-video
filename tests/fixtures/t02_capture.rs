@@ -688,7 +688,11 @@ fn sample_fixture(
             }
             let found: Vec<Value> = items
                 .iter()
-                .filter(|item| item["vod_id"].to_string() == *id)
+                .filter(|item| {
+                    item["vod_id"]
+                        .as_u64()
+                        .is_some_and(|value| id.parse() == Ok(value))
+                })
                 .map(&fill)
                 .collect();
             return Reply::json(response(json!(found), json!([])));
