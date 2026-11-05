@@ -164,6 +164,11 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await foreground();
         return playbackUiScenario(command.payload as never, { player, base, cap });
       }
+      case "n02": {
+        const { sourcesToPlaybackScenario } = await import("../n02_webview");
+        await foreground();
+        return sourcesToPlaybackScenario(command.payload as never, { player, base, cap });
+      }
       case "t17": {
         const { sourcesScenario } = await import("../t17_webview");
         await foreground();

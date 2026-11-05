@@ -347,8 +347,8 @@ impl Host {
             "runtime_prepare" => {
                 if input["target"] == "cloudstream" {
                     return Err(ApiError::new(
-                        "ENGINE_NOT_READY",
-                        "Cloudstream bridge preparation is not connected",
+                        "CAPABILITY_UNAVAILABLE",
+                        "Cloudstream is no longer supported; add a JSON source instead",
                     ));
                 }
                 if committed.gateway.is_none() {
@@ -395,8 +395,8 @@ impl Host {
                 return Ok(committed.settings.clone());
             }
             "start_interaction" | "finish_interaction" => Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "Cloudstream bridge is stopped",
+                "CAPABILITY_UNAVAILABLE",
+                "Cloudstream is no longer supported; add a JSON source instead",
             )),
             "release_resolution" => {
                 if committed.current_resolution.as_deref() == input["resolution_id"].as_str() {
@@ -473,8 +473,8 @@ impl Host {
         let kind = SourceKind::parse(&input["kind"])?;
         if kind == SourceKind::Cloudstream {
             return Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "Cloudstream bridge is stopped",
+                "CAPABILITY_UNAVAILABLE",
+                "Cloudstream is no longer supported; add a JSON source instead",
             ));
         }
         let captured = {
@@ -620,8 +620,8 @@ impl Host {
                 "Stremio provides metadata only",
             )),
             SourceKind::Cloudstream => Err(ApiError::new(
-                "ENGINE_NOT_READY",
-                "Cloudstream bridge is stopped",
+                "CAPABILITY_UNAVAILABLE",
+                "Cloudstream is no longer supported; add a JSON source instead",
             )),
             SourceKind::Stremio => {
                 if page_epoch.is_some_and(|epoch| epoch != committed.metadata_epoch) {
@@ -773,8 +773,8 @@ impl Host {
             }
             if provider["kind"] == "cloudstream" {
                 return Err(ApiError::new(
-                    "ENGINE_NOT_READY",
-                    "Cloudstream bridge is stopped",
+                    "CAPABILITY_UNAVAILABLE",
+                    "Cloudstream is no longer supported; add a JSON source instead",
                 ));
             }
             let metadata_snapshot = committed.sources.snapshot(

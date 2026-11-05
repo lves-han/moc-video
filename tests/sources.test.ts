@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Api } from "../src/api.ts";
+import { readFileSync } from "node:fs";
+import { describeError } from "../src/api.ts";
+import { SOURCE_PRESETS } from "../src/data/sourcePresets.ts";
+import { locale } from "../src/i18n.ts";
 import { redactDiagnostics, validateSourceDraft } from "../src/state.ts";
 
 const draft = (kind: "maccms" | "stremio", urls: string, name = "Name") => ({ kind, name, urls });
@@ -43,4 +47,29 @@ test("R24/REQ-T17: the last request per source follows the newest request, even 
   const older = call(), newer = call();
   pending[1]!("ok"); await newer; pending[0]!("fail"); await older;
   assert.equal(api.sourceResults.s!.ok, true);
+});
+
+test("U02/R03/REQ-N02: presets are exactly the supported sources of the compatibility report", () => {
+  const report = JSON.parse(readFileSync("docs/compatibility-report.json", "utf8"));
+  assert.deepEqual(SOURCE_PRESETS.map(preset => preset.name), report.supported_sources);
+  for (const preset of SOURCE_PRESETS) {
+    assert.equal(report.sources.find((source: { name: string }) => source.name === preset.name).api_url, preset.api_url);
+    assert.deepEqual(validateSourceDraft({ kind: "maccms", name: preset.name, urls: preset.api_url }, 0), []);
+  }
+  assert.ok(validateSourceDraft({ kind: "maccms", name: "x", urls: SOURCE_PRESETS[0].api_url }, 32).length, "the limit also stops presets");
+});
+
+test("R13/R58/REQ-N02: validation and access failures read in Chinese and name their cause", () => {
+  locale.value = "zh-CN";
+  try {
+    for (const message of [...validateSourceDraft({ kind: "maccms", name: " ", urls: "" }, 32), ...validateSourceDraft({ kind: "stremio", name: "x", urls: "not a url\nhttps://u:p@a.test/x\nhttps://a.test/x" }, 0)]) {
+      assert.match(message, /[\u4e00-\u9fff]/, message);
+      assert.ok(!message.includes("u:p@"), message);
+    }
+    const shown = (details: Record<string, unknown>) => describeError({ code: "UPSTREAM_FAILED", message: "raw", retryable: false, details } as never);
+    assert.match(shown({ reason: "access_control", signal: "status", http_status: 403 }), /拒绝访问.*403.*已停止请求/);
+    assert.match(shown({ reason: "access_control", signal: "challenge", http_status: 200 }), /人机验证.*已停止请求/);
+    assert.match(shown({ reason: "tls_certificate" }), /证书校验失败/);
+    assert.equal(shown({ http_status: 500 }), "raw");
+  } finally { locale.value = "en"; }
 });

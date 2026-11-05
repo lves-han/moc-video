@@ -198,7 +198,7 @@ async function saveSource() {
     <p>
       {{
         t(
-          "MacCMS JSON, Stremio add-ons and Cloudstream share one browsing and playback experience.",
+          "MacCMS JSON and Stremio add-ons share one browsing and playback experience.",
         )
       }}
     </p>

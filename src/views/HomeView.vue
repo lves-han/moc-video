@@ -3,6 +3,7 @@ import { computed, reactive } from "vue";
 import { NAlert, NButton, NEmpty } from "naive-ui";
 import { appState as state, appController as app } from "../state";
 import { locale, t } from "../i18n";
+import { describeError } from "../api";
 import type { Bridge_MediaCard, Bridge_MediaRef } from "../models";
 
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; select: [id: string, role: "metadata" | "playback"] }>();
@@ -45,7 +46,7 @@ async function refresh() {
   <div v-else-if="state.home.phase === 'empty'" class="home-empty"><NEmpty :description="word('该源暂无内容', 'This source has no content')" /><NButton class="home-retry" @click="app.loadHome()">{{ t('Retry') }}</NButton></div>
   <section v-for="row in rows" :key="row.index" class="catalog-section home-section" :data-section-index="row.index">
     <div class="section-heading"><h2>{{ row.title }}</h2></div>
-    <NAlert v-if="row.failed || app.sections[row.ref ?? '']?.error" class="home-section-error" type="error" role="alert">{{ app.sections[row.ref ?? '']?.error?.message ?? row.failed?.error.message }}<NButton class="home-section-retry" size="small" :loading="app.sections[row.ref ?? '']?.phase === 'loading'" :disabled="!row.ref" @click="app.loadHome(row.ref)">{{ t('Retry') }}</NButton></NAlert>
+    <NAlert v-if="row.failed || app.sections[row.ref ?? '']?.error" class="home-section-error" type="error" role="alert">{{ app.sections[row.ref ?? '']?.error?.message ?? (row.failed && describeError(row.failed.error)) }}<NButton class="home-section-retry" size="small" :loading="app.sections[row.ref ?? '']?.phase === 'loading'" :disabled="!row.ref" @click="app.loadHome(row.ref)">{{ t('Retry') }}</NButton></NAlert>
     <div v-if="row.section" class="film-grid home-grid">
       <article v-for="card in row.section.items" :key="card.id" class="film-card home-card" :data-card-id="card.id">
         <a :href="`#/details/${encodeURIComponent(JSON.stringify(card.ref))}`" class="poster-link" :aria-label="t('View details for {title}', { title: card.title })" @click.prevent="emit('open', card.ref)">

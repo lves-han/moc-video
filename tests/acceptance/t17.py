@@ -1,4 +1,4 @@
-"""T0.17 source manager acceptance: production App/NativeSourcesView against a real Host; Cloudstream states are synthetic until N02."""
+"""T0.17 source manager acceptance: production App/NativeSourcesView against a real Host."""
 import argparse
 import re
 from pathlib import Path
@@ -32,15 +32,8 @@ def validate_sources(e):
     require(e["deleted"]["kept_after_cancel"] is True and e["deleted"]["configs"] == 2, "Delete must confirm first")
     g = e["failing"]
     require(g["message"] and g["others_ready"] is True and g["selection_kept"] is True, "A failing source must report its error without affecting others")
-    p = e["real_prepare"]
-    require(p["message"] and p["host_phase"] == "ready" and p["others_ready"] is True, "A real prepare refusal must be visible and leave HTTP sources working")
-    c = e["cloudstream"]
-    require(c["stimulus"] == "synthetic" and c["target"] == "cloudstream" and "SuperVod" in c["plugin"] and "ready" in c["guest"] and c["host_phase"] == "ready" and c["selectable"] is True, "Cloudstream packages and guest state must display apart from the host")
-    n = e["interaction"]
-    require(n["stimulus"] == "synthetic" and n["after_reject"] == 0 and n["rejected_shown"] is True and "ended" in n["failed_message"] and "Synthetic window" in n["started"] and n["request"].get("source_revision") == "rev"
-            and n["cancelled"] == "cancelled" and n["completed"] == "completed", "Interaction must confirm first, report rejection, and cancel or complete explicitly")
     r = e["diagnostics"]
-    require(all(r[name] is True for name in ("copied_equals_report", "platform", "contract", "engine", "package", "full_digest_absent", "correlation", "states_separate")), "Diagnostics must carry versions, digests, platform, correlation and states: " + str(r))
+    require(all(r[name] is True for name in ("copied_equals_report", "platform", "contract", "correlation")), "Diagnostics must carry platform, contract and correlation: " + str(r))
     require(r["secret"] is False and r["query"] is False, "Diagnostics must be redacted")
     require(e["errors"] == [], "Source manager raised page errors: " + str(e["errors"]))
 
@@ -53,7 +46,7 @@ def frontend(run):
 
 
 def webview(run):
-    return t14.packaged(run, LIVE_TEST, "t17", validate_sources, "sources", lambda e: dict(interaction="synthetic; real interaction accepted in N02"))
+    return t14.packaged(run, LIVE_TEST, "t17", validate_sources, "sources", lambda e: dict(configs=e["deleted"]["configs"]))
 
 
 def main():
@@ -72,7 +65,7 @@ def main():
             return dict(tests=int(count[1]))
         run.case("independent-negative-oracles", ["REQ-T17"], "corrupted source manager evidence is rejected", oracles)
         run.case("frontend-behaviors", ["R01", "R24", "R58", "REQ-T17"], "nonzero validation, redaction and state tests", lambda: frontend(run))
-        run.case("packaged-sources", IDS, "real HTTP config add/edit/disable/delete, independent selection, real home; synthetic Cloudstream state and interaction; redacted diagnostics", lambda: webview(run))
+        run.case("packaged-sources", IDS, "real HTTP config add/edit/disable/delete, independent selection, real home; redacted diagnostics", lambda: webview(run))
     return run.save()
 
 

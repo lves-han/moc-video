@@ -15,6 +15,13 @@ fn isolated(mode: Arc<Mutex<&'static str>>) -> Fixture {
                     status: 403,
                     ..Reply::raw("refused", "text/plain")
                 },
+                "media-challenge" => Reply {
+                    headers: vec![
+                        ("Content-Type".into(), "text/html".into()),
+                        ("cf-mitigated".into(), "challenge".into()),
+                    ],
+                    ..Reply::raw("<title>Just a moment...</title>", "text/html")
+                },
                 _ => Reply::raw(vec![0x5a; 4096], "video/mp4"),
             };
         }
@@ -181,8 +188,16 @@ fn t04_one_failing_source_keeps_other_sources_and_stremio_working() {
     let request_id = id();
     let args = json!({"request_id":request_id,"input":home_input(&sources.failing)});
     let host = sources.host.clone();
+    let before = path_requests(&fixture, "/failing");
     let worker = thread::spawn(move || host.invoke("get_home", args, true));
-    fixture.wait_for(|request| request.target.starts_with("/failing"));
+    let start = Instant::now();
+    while path_requests(&fixture, "/failing") == before {
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "the slow request never started"
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
     let started = Instant::now();
     others_work(&sources);
     assert!(started.elapsed() < Duration::from_secs(2));
@@ -315,12 +330,14 @@ fn t04_refused_media_fails_once_and_never_reaches_a_local_secret_upstream() {
             }
         }
     }
-    *mode.lock().unwrap() = "media-403";
-    let before = path_requests(&fixture, "/media/");
-    let (status, body) = media_get(media);
-    assert_eq!(status, 502, "{body}");
-    assert!(body.contains("refused access"), "{body}");
-    assert_eq!(path_requests(&fixture, "/media/"), before + 1, "no retry");
+    for refusal in ["media-403", "media-challenge"] {
+        *mode.lock().unwrap() = refusal;
+        let before = path_requests(&fixture, "/media/");
+        let (status, body) = media_get(media);
+        assert_eq!(status, 502, "{body}");
+        assert!(body.contains("refused access"), "{body}");
+        assert_eq!(path_requests(&fixture, "/media/"), before + 1, "no retry");
+    }
     ok(
         &host,
         "close_playback",

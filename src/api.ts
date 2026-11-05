@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import type { Bridge_ApiError, Command, CommandData, CommandInput, Settings } from "./models.ts";
 import { REQUEST_BUDGETS } from "./models.ts";
+import { t } from "./i18n.ts";
 
 export type Invoke = (command: string, args: { request_id: string; input: unknown }) => Promise<unknown>;
 type Timer = { set: (callback: () => void, ms: number) => unknown; clear: (handle: unknown) => void };
@@ -8,6 +9,16 @@ const timers: Timer = {
   set: (callback, ms) => setTimeout(callback, ms),
   clear: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
+
+// Access control and certificate failures name their cause and that requests stopped.
+export function describeError(error: Bridge_ApiError): string {
+  const details = error.details as Record<string, unknown> | undefined;
+  if (details?.reason === "access_control") return details.signal === "challenge"
+    ? t("This source asked for human verification, so requests to it stopped. Retry later or switch source.")
+    : t("This source refused access (HTTP {status}), so requests to it stopped. Retry later or switch source.", { status: String(details.http_status) });
+  if (details?.reason === "tls_certificate") return t("This source's certificate could not be verified, so the connection was refused. Retry later or switch source.");
+  return error.message;
+}
 
 export class ApiFailure extends Error {
   readonly error: Bridge_ApiError;
@@ -92,10 +103,11 @@ export class Api {
       if (!success) {
         const error = response.error;
         if (!record(error) || typeof error.code !== "string" || typeof error.message !== "string" || typeof error.retryable !== "boolean") throw new UnknownCommit(requestId, "Invalid API error");
-        this.recordSourceResult(source, sequence, false, error.message);
-        this.failures.push({ command, request_id: requestId, source_id: source, code: error.code, message: error.message });
+        const shown = { ...error, message: describeError(error as Bridge_ApiError) } as Bridge_ApiError;
+        this.recordSourceResult(source, sequence, false, shown.message);
+        this.failures.push({ command, request_id: requestId, source_id: source, code: shown.code, message: shown.message });
         if (this.failures.length > 20) this.failures.shift();
-        throw new ApiFailure(error as Bridge_ApiError);
+        throw new ApiFailure(shown);
       }
       if ((command === "runtime_status" || command === "runtime_prepare") && (!record(response.data) || typeof response.data.phase !== "string")) {
         throw new UnknownCommit(requestId, "Missing runtime status");

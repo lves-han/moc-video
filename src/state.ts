@@ -1,7 +1,8 @@
 import { reactive } from "vue";
 import { api, Api, ApiFailure, settingsQueue, SettingsQueue } from "./api.ts";
 import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
-import type { Bridge_Interaction, HttpSourceConfig, AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
+import { t } from "./i18n.ts";
+import type { HttpSourceConfig, AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
   Command, CommandInput, PlaybackContext, PlaybackViewSession, PlayerEvent, ResumeSnapshot,
   AppSource, Bridge_HomeRequest, HomeViewData, MetadataRef, PlaybackMatchResult,
   PlaybackMatchSelection, Route, RuntimeStatus, Settings, SourceKey } from "./models.ts";
@@ -392,16 +393,16 @@ const draftUrls = (draft: SourceDraft) => draft.urls.split("\n").map(url => url.
 // SPEC 18.1: at most 32 configurations and 16 manifests, anonymous http(s) URLs only.
 export function validateSourceDraft(draft: SourceDraft, others: number) {
   const errors: string[] = [], urls = draftUrls(draft);
-  if (others >= 32) errors.push("At most 32 source configurations are allowed.");
-  if (!draft.name.trim()) errors.push("Enter a name for this source.");
-  if (!urls.length) errors.push("Enter a URL.");
-  if (draft.kind === "maccms" && urls.length > 1) errors.push("MacCMS takes exactly one API URL.");
-  if (urls.length > 16) errors.push("At most 16 manifest URLs are allowed.");
+  if (others >= 32) errors.push(t("At most 32 source configurations are allowed."));
+  if (!draft.name.trim()) errors.push(t("Enter a name for this source."));
+  if (!urls.length) errors.push(t("Enter a URL."));
+  if (draft.kind === "maccms" && urls.length > 1) errors.push(t("MacCMS takes exactly one API URL."));
+  if (urls.length > 16) errors.push(t("At most 16 manifest URLs are allowed."));
   for (const url of urls) {
     let parsed: URL;
-    try { parsed = new URL(url); } catch { errors.push(`Not a full URL: ${redactDiagnostics(url)}`); continue; }
-    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) errors.push(`Use http(s) without credentials or a fragment: ${redactDiagnostics(url)}`);
-    else if (draft.kind === "stremio" && !parsed.pathname.endsWith("/manifest.json")) errors.push(`A Stremio URL must end in /manifest.json: ${redactDiagnostics(url)}`);
+    try { parsed = new URL(url); } catch { errors.push(t("Not a full URL: {url}", { url: redactDiagnostics(url) })); continue; }
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) errors.push(t("Use http(s) without credentials or a fragment: {url}", { url: redactDiagnostics(url) }));
+    else if (draft.kind === "stremio" && !parsed.pathname.endsWith("/manifest.json")) errors.push(t("A Stremio URL must end in /manifest.json: {url}", { url: redactDiagnostics(url) }));
   }
   return errors;
 }
@@ -515,7 +516,6 @@ export class AppController {
   readonly diagnostics = reactive<Bridge_ApiError[]>([]);
   readonly homeImage = reactive({ error: "" });
   readonly detailsImage = reactive({ error: "" });
-  readonly interaction = reactive({ active: null as Bridge_Interaction | null, last: null as Bridge_Interaction | null });
   readonly matching = reactive({ result: null as PlaybackMatchResult | null, details: null as DetailsViewData | null,
     loading: false, pending: null as string | null, error: null as Bridge_ApiError | null });
   private requests = new Map<string, Ticket>();
@@ -799,32 +799,9 @@ export class AppController {
       last_metadata_config_id: settings.last_metadata_config_id === id ? null : settings.last_metadata_config_id }));
     await this.loadSources();
   }
-  async prepareCloudstream() {
-    this.applyRuntime(await this.api.call("runtime_prepare", { target: "cloudstream" }));
-    await this.loadSources();
-  }
-  async startInteraction(source: AppSource) {
-    this.invalidatePlayback();
-    await this.cleanup;
-    this.interaction.last = null;
-    this.interaction.active = await this.api.call("start_interaction", { source_id: source.id, source_revision: source.source_revision });
-    await this.refreshRuntime();
-    await this.loadSources();
-  }
-  async finishInteraction(action: "completed" | "cancelled") {
-    const active = this.interaction.active;
-    requireBinding(active, "No interaction is active");
-    const result = await this.api.call("finish_interaction", { interaction_id: active.id, request: { action } });
-    this.interaction.active = null;
-    this.interaction.last = result;
-    await this.loadSources();
-  }
   diagnosticsReport() {
-    const { runtime, sources } = this.state, guest = runtime.cloudstream.health;
+    const { runtime, sources } = this.state;
     const lines = [`platform: ${runtime.platform}`, `host phase: ${runtime.phase}`, `contract: ${runtime.health?.contract_version ?? "unavailable"}`,
-      `cloudstream phase: ${runtime.cloudstream.phase} (${runtime.cloudstream.display_mode})`,
-      `engine: ${guest ? `${guest.runtime_version} / ${guest.cloudstream_revision} / registry ${guest.registry_sha256.slice(0, 12)}` : "not running"}`,
-      ...(sources.data?.plugins ?? []).map(plugin => `package ${plugin.internal_name} v${plugin.version} ${plugin.artifact_sha256.slice(0, 12)} ${plugin.status} providers=${plugin.provider_ids.length}`),
       ...(sources.data?.providers ?? []).map(source => `source ${source.kind} ${source.name} registration=${source.runtime_status}${source.error ? ` error=${source.error.code}` : ""}`),
       ...this.api.failures.map(row => `failure ${row.command} ${row.code} correlation=${row.request_id}: ${row.message}`)];
     return redactDiagnostics(lines.join("\n"));

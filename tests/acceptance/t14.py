@@ -68,7 +68,7 @@ def webview(run):
     return packaged(run, LIVE_TEST, "t14", validate_home, "home", lambda e: dict(cards=e["pagination"]["cards"], layouts=e["layouts"]))
 
 
-def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None):
+def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None, command_timeout=240):
     require(t01.native_gui_session()["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
     t01.DATA = run.folder / "packaged"
@@ -95,7 +95,7 @@ def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prep
                     session.wait(0, 30)
                     # Registers WebKit helpers in the owned budget and cleanup, before and after their first use.
                     session.command("identity")
-                    evidence = session.command(op, timeout=240, payload=ready)
+                    evidence = session.command(op, timeout=command_timeout, payload=ready)
                     session.record["commands"][-1]["args"] = dict(payload="actual Host bridge payload; capability URLs redacted")
                     run.observed[key] = evidence
                     validate(evidence)

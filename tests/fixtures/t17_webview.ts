@@ -1,5 +1,4 @@
 // Test-mode only. Runs the production App/NativeSourcesView/state/Api against a real Host.
-// Every Cloudstream state and interaction below is synthetic: real ones are accepted in N02.
 import { createApp, h, nextTick } from "vue";
 import App from "../../src/App.vue";
 import UiProvider from "../../src/ui/UiProvider.vue";
@@ -33,25 +32,10 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     return response.json();
   };
   const original = window.__TAURI__!.core, calls: { command: string; input: any }[] = [], errors: string[] = [];
-  const CS = "c0000000000000000000000000000000000000000000000000000000000000cs", SHA = "a".repeat(64);
-  let synthetic: null | "ready" | "interaction" = null, interactionResult: "waiting" | "rejected" = "waiting";
-  const csSource = (needed: boolean) => ({ id: CS, source_revision: "rev", name: "Synthetic provider", language: "en", content_types: ["series"], kind: "cloudstream", runtime_status: "ready",
-    capabilities: { home: true, search: true, details: true, resolve: true, sequential_home: false }, origin: { plugin_internal_name: "SuperVod", plugin_sha256: SHA, registration_key: "k" },
-    error: needed ? { code: "INTERACTION_REQUIRED", message: "Synthetic challenge", retryable: true, details: { source_id: CS, source_revision: "rev", operation: "home", reason: "challenge", host: "source.test" } } : null });
-  const envelope = (args: Record<string, any> | undefined, data: unknown) => ({ request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, data });
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
-    if (name === "start_interaction" && synthetic) return (interactionResult === "rejected"
-      ? { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "ENGINE_NOT_READY", message: "Synthetic rejection", retryable: true } }
-      : envelope(args, { id: "interaction-1", source_id: args?.input.source_id, status: "waiting", required_display_mode: "windowed", message: "Synthetic window open" })) as T;
-    if (name === "finish_interaction" && synthetic) return envelope(args, { id: args?.input.interaction_id, source_id: CS, status: args?.input.request.action === "completed" ? "completed" : "failed", required_display_mode: "windowed", message: "Synthetic interaction ended" }) as T;
-    // This machine has no Android guest, so the synthetic state replaces Host's real refusal.
-    const response = await rpc(synthetic && name === "runtime_prepare" ? { command: "runtime_status", args: { request_id: args?.request_id, input: {} } } : { command: name, args });
-    if (synthetic && name === "get_sources") return { ...response, data: { providers: [...response.data.providers, csSource(synthetic === "interaction")], plugins: [{ internal_name: "SuperVod", version: 7, artifact_sha256: SHA, status: "loaded", provider_ids: [CS] }] } } as T;
-    if (synthetic && (name === "runtime_status" || name === "runtime_prepare")) return { ...response, data: { ...response.data, cloudstream: { phase: "ready", engine_epoch: "22222222-2222-4222-8222-222222222222", display_mode: "headless", error: null,
-      health: { api_version: "1", runtime_version: "synthetic-1.0", cloudstream_revision: "rev-abc", registry_sha256: SHA, status: "ready", loaded_plugin_count: 1, provider_count: 1, display_mode: "headless" } } } } as T;
-    return response;
+    return await rpc({ command: name, args });
   } };
   const onError = (event: ErrorEvent) => errors.push(event.message);
   const onRejection = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
@@ -143,54 +127,6 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     await until(() => !row("Failing source"), "Failing source not deleted");
     await until(() => !all<HTMLButtonElement>(".sources-delete").some(button => button.disabled), "Delete did not settle");
 
-    // Without an Android guest, the real Host refuses and the page must say so.
-    const realCalls = count("runtime_prepare");
-    one<HTMLButtonElement>(".sources-prepare")!.click();
-    await until(() => count("runtime_prepare") > realCalls && !one<HTMLButtonElement>(".sources-delete")?.disabled && one(".sources-failure"), "Real prepare did not report its result");
-    evidence.real_prepare = { message: one(".sources-failure")!.textContent, host_phase: appState.runtime.phase, others_ready: providers().some(item => item.name === "My metadata" && item.runtime_status === "ready") };
-
-    // Synthetic Cloudstream states, separate from the real host status.
-    synthetic = "ready";
-    const prepareCalls = count("runtime_prepare");
-    one<HTMLButtonElement>(".sources-prepare")!.click();
-    await until(() => count("runtime_prepare") > prepareCalls && one(".sources-plugin"), "Prepare did not show packages");
-    await until(() => !one<HTMLButtonElement>(".sources-delete")?.disabled, "Prepare did not settle");
-    evidence.cloudstream = { stimulus: "synthetic", target: calls.filter(call => call.command === "runtime_prepare").at(-1)!.input.target, plugin: one(".sources-plugin")!.textContent, guest: one(".sources-guest-state")!.textContent, host_phase: appState.runtime.phase, selectable: [...one<HTMLSelectElement>(".sources-playback")!.options].some(option => option.value === CS) };
-
-    synthetic = "interaction";
-    await appController.loadSources(); await nextTick();
-    await until(() => one(".sources-interaction-open"), "Interaction entry missing");
-    const starts = () => count("start_interaction"), startBefore = starts();
-    one<HTMLButtonElement>(".sources-interaction-open")!.click();
-    await until(() => one(".sources-interaction-reject"), "Interaction confirmation missing");
-    one<HTMLButtonElement>(".sources-interaction-reject")!.click();
-    await until(() => !one(".sources-interaction-reject"), "Interaction reject failed");
-    const afterReject = starts() - startBefore;
-    interactionResult = "rejected";
-    one<HTMLButtonElement>(".sources-interaction-open")!.click();
-    await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
-    one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
-    await until(() => one(".sources-failure")?.textContent?.includes("Synthetic rejection"), "Rejected interaction error missing");
-    const rejectedShown = !one(".sources-interaction");
-    interactionResult = "waiting";
-    one<HTMLButtonElement>(".sources-interaction-open")!.click();
-    await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
-    one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
-    await until(() => one<HTMLButtonElement>(".sources-interaction-cancel")?.disabled === false, "Interaction state missing");
-    const startedText = one(".sources-interaction")!.textContent!, request = calls.filter(call => call.command === "start_interaction").at(-1)!.input;
-    one<HTMLButtonElement>(".sources-interaction-cancel")!.click();
-    await until(() => !one(".sources-interaction") && one<HTMLButtonElement>(".sources-interaction-open")?.disabled === false, "Interaction cancel failed");
-    const cancelled = calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action;
-    const failedMessage = one(".sources-interaction-failed")?.textContent ?? "";
-    one<HTMLButtonElement>(".sources-interaction-open")!.click();
-    await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
-    one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
-    await until(() => one<HTMLButtonElement>(".sources-interaction-done")?.disabled === false, "Interaction state missing");
-    synthetic = "ready";
-    one<HTMLButtonElement>(".sources-interaction-done")!.click();
-    await until(() => !one(".sources-interaction") && !one(".sources-interaction-open"), "Interaction completion failed");
-    evidence.interaction = { stimulus: "synthetic", after_reject: afterReject, rejected_shown: rejectedShown, failed_message: failedMessage, started: startedText, request, cancelled, completed: calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action };
-
     const report = one(".sources-report")!.textContent!;
     let copied = "";
     const clipboard = navigator.clipboard;
@@ -199,8 +135,8 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     await until(() => one(".sources-copy-state"), "Copy state missing");
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: clipboard });
     const page = one(".native-sources")!.textContent!;
-    evidence.diagnostics = { copied_equals_report: copied === report, platform: report.includes("platform: macos"), contract: report.includes("contract: 1.5.0"), engine: report.includes("synthetic-1.0"), package: report.includes(`package SuperVod v7 ${SHA.slice(0, 12)}`), full_digest_absent: !report.includes(SHA),
-      correlation: /correlation=[0-9a-f-]{36}/.test(report), states_separate: report.includes("host phase: ready") && report.includes("cloudstream phase: ready"), secret: report.includes("T17SECRET") || page.includes("T17SECRET"), query: /[?&]token=/.test(report) };
+    evidence.diagnostics = { copied_equals_report: copied === report, platform: report.includes("platform: macos"), contract: report.includes("contract: 1.5.0"), 
+      correlation: /correlation=[0-9a-f-]{36}/.test(report), secret: report.includes("T17SECRET") || page.includes("T17SECRET"), query: /[?&]token=/.test(report) };
     evidence.errors = errors;
     return evidence;
   } finally {

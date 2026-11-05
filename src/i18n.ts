@@ -157,8 +157,19 @@ export const chinese = {
     "当前为界面预览，来源切换使用演示目录。新增配置仅保留在本次页面会话中，实际接口将在后续接入。",
   "Current source": "当前来源",
   "Use source": "使用此来源",
-  "MacCMS JSON, Stremio add-ons and Cloudstream share one browsing and playback experience.":
-    "支持 MacCMS JSON、Stremio 扩展与 Cloudstream，统一浏览与播放体验。",
+  "MacCMS JSON and Stremio add-ons share one browsing and playback experience.":
+    "支持 MacCMS JSON 与 Stremio 扩展，统一浏览与播放体验。",
+  "At most 32 source configurations are allowed.": "最多只能配置 32 个来源。",
+  "Enter a name for this source.": "请填写来源名称。",
+  "Enter a URL.": "请填写地址。",
+  "MacCMS takes exactly one API URL.": "MacCMS 只能填写一个 API 地址。",
+  "At most 16 manifest URLs are allowed.": "最多只能填写 16 个 manifest 地址。",
+  "Not a full URL: {url}": "地址不完整：{url}",
+  "Use http(s) without credentials or a fragment: {url}": "请使用不含账号密码和片段的 http(s) 地址：{url}",
+  "A Stremio URL must end in /manifest.json: {url}": "Stremio 地址必须以 /manifest.json 结尾：{url}",
+  "This source refused access (HTTP {status}), so requests to it stopped. Retry later or switch source.": "来源拒绝访问（HTTP {status}），已停止请求。可稍后重试或更换来源。",
+  "This source asked for human verification, so requests to it stopped. Retry later or switch source.": "来源要求人机验证，已停止请求。可稍后重试或更换来源。",
+  "This source's certificate could not be verified, so the connection was refused. Retry later or switch source.": "来源证书校验失败，已拒绝连接。可稍后重试或更换来源。",
   "Make yourself comfortable.": "按你喜欢的方式放映。",
   "A few small adjustments for a better viewing experience.":
     "一点小调整，让每一场观看更自在。",
@@ -231,7 +242,6 @@ export const chinese = {
     "请输入完整的 HTTP 或 HTTPS 接口地址，移除账户信息和片段。",
   "The Stremio add-on URL must end in /manifest.json.":
     "Stremio 扩展地址需要以 /manifest.json 结尾。",
-  "Enter a name for this source.": "请为这个来源起一个名称。",
   "Source added to this preview. Live connections will follow.":
     "来源已加入本次预览，实际接口将在后续接入。",
   "Enter a valid full URL, such as https://example.com/api.php/provide/vod/.":
