@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Api } from "../src/api.ts";
 import { redactDiagnostics, validateSourceDraft } from "../src/state.ts";
 
 const draft = (kind: "maccms" | "stremio", urls: string, name = "Name") => ({ kind, name, urls });
@@ -27,4 +28,19 @@ test("R24/REQ-T17: diagnostics and validation messages drop URL secrets", () => 
   for (const secret of ["SECRET", "user:pw", "#frag"]) assert.ok(!text.includes(secret), text);
   const error = validateSourceDraft(draft("maccms", "https://user:hidden@a.test/api?token=HIDDEN"), 0).join();
   assert.ok(!error.includes("hidden") && !error.includes("HIDDEN"), error);
+});
+
+test("R24/REQ-T17: the last request per source follows the newest request, even when it finishes first", async () => {
+  const pending: ((value: unknown) => void)[] = [], host = "11111111-1111-4111-8111-111111111111";
+  const api = new Api(((_: string, args: { request_id: string }) => new Promise(resolve => pending.push(outcome => resolve(outcome === "ok"
+    ? { request_id: args.request_id, engine_epoch: host, data: { page: {}, images: {} } }
+    : { request_id: args.request_id, engine_epoch: host, error: { code: "UPSTREAM_FAILED", message: "boom", retryable: true } })))) as never);
+  const call = () => api.call("get_home", { source_id: "s", source_revision: "1", section_ref: null, page: 1 } as never).catch(() => null);
+  let first = call(); pending.shift()!("fail"); await first;
+  assert.deepEqual([api.sourceResults.s!.ok, api.sourceResults.s!.message], [false, "boom"]);
+  first = call(); pending.shift()!("ok"); await first;
+  assert.equal(api.sourceResults.s!.ok, true);
+  const older = call(), newer = call();
+  pending[1]!("ok"); await newer; pending[0]!("fail"); await older;
+  assert.equal(api.sourceResults.s!.ok, true);
 });

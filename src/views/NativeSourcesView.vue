@@ -17,6 +17,10 @@ const cloudstream = computed(() => state.runtime.cloudstream);
 
 const providerOf = (config: HttpSourceConfig) => providers.value.find(source => source.kind === config.kind && source.origin.config_id === config.config_id);
 const hostOf = (config: HttpSourceConfig) => (config.kind === "maccms" ? [config.api_url] : config.manifest_urls).map(url => { try { return new URL(url).host; } catch { return ""; } }).join(", ");
+function lastRequest(config: HttpSourceConfig) {
+  const source = providerOf(config), result = source && controller.lastSourceResult(source.id);
+  return !result ? word('本次运行尚无请求', 'no request this session') : result.ok ? word('成功', 'succeeded') : result.message;
+}
 const kindLabel = (kind: string) => kind === "stremio" ? word("Stremio 元数据", "Stremio metadata") : kind === "maccms" ? word("MacCMS 播放", "MacCMS playback") : "Cloudstream";
 
 const editing = ref(false);
@@ -92,7 +96,7 @@ async function copyDiagnostics() {
           <h3>{{ config.name }}</h3>
           <p>{{ kindLabel(config.kind) }} · {{ hostOf(config) }}</p>
           <p class="sources-state">{{ word('登记状态', 'Registration') }}: {{ config.enabled ? providerOf(config)?.runtime_status ?? word('未同步', 'not synced') : word('已禁用', 'disabled') }}</p>
-          <p class="sources-last">{{ word('最近请求', 'Last request') }}: {{ providerOf(config) ? controller.lastSourceFailure(providerOf(config)!.id)?.message ?? word('本次运行没有失败', 'no failure this session') : word('无', 'none') }}</p>
+          <p class="sources-last">{{ word('最近请求', 'Last request') }}: {{ lastRequest(config) }}</p>
           <NAlert v-if="providerOf(config)?.error" class="sources-row-error" type="error">{{ providerOf(config)!.error!.message }}</NAlert>
         </div>
         <div class="sources-row-actions">
@@ -116,6 +120,7 @@ async function copyDiagnostics() {
         <p class="sources-interaction-needed" role="status">{{ word('来源需要人工交互', 'A source needs interaction') }}: {{ interactionSource.name }}</p>
         <NButton class="sources-interaction-open" :disabled="busy || Boolean(controller.interaction.active)" @click="pendingInteraction = interactionSource">{{ word('打开源站交互', 'Open source interaction') }}</NButton>
       </template>
+      <NAlert v-if="controller.interaction.last?.status === 'failed'" class="sources-interaction-failed" type="error" role="alert">{{ controller.interaction.last.message }}</NAlert>
       <div v-if="controller.interaction.active" class="sources-interaction" role="status">
         <p>{{ controller.interaction.active.message }} · {{ controller.interaction.active.status }}</p>
         <NButton class="sources-interaction-done" type="primary" :disabled="busy" @click="finishInteraction('completed')">{{ word('我已完成', 'I finished') }}</NButton>

@@ -45,7 +45,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     if (name === "start_interaction" && synthetic) return (interactionResult === "rejected"
       ? { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "ENGINE_NOT_READY", message: "Synthetic rejection", retryable: true } }
       : envelope(args, { id: "interaction-1", source_id: args?.input.source_id, status: "waiting", required_display_mode: "windowed", message: "Synthetic window open" })) as T;
-    if (name === "finish_interaction" && synthetic) return envelope(args, { id: args?.input.interaction_id, source_id: CS, status: args?.input.request.action === "completed" ? "completed" : "failed", required_display_mode: "windowed", message: "done" }) as T;
+    if (name === "finish_interaction" && synthetic) return envelope(args, { id: args?.input.interaction_id, source_id: CS, status: args?.input.request.action === "completed" ? "completed" : "failed", required_display_mode: "windowed", message: "Synthetic interaction ended" }) as T;
     // This machine has no Android guest, so the synthetic state replaces Host's real refusal.
     const response = await rpc(synthetic && name === "runtime_prepare" ? { command: "runtime_status", args: { request_id: args?.request_id, input: {} } } : { command: name, args });
     if (synthetic && name === "get_sources") return { ...response, data: { providers: [...response.data.providers, csSource(synthetic === "interaction")], plugins: [{ internal_name: "SuperVod", version: 7, artifact_sha256: SHA, status: "loaded", provider_ids: [CS] }] } } as T;
@@ -97,6 +97,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     evidence.home = { cards: all(".home-card").length, setup_gone: !one(".home-setup") };
     location.hash = "#/sources";
     await until(() => one(".native-sources"), "Source manager did not reopen");
+    evidence.home.last_request = row("My metadata").querySelector(".sources-last")!.textContent;
 
     const id = appState.settings.source_configs.find(config => config.name === "My playback")!.config_id;
     row("My playback").querySelector<HTMLButtonElement>(".sources-edit")!.click();
@@ -180,6 +181,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     one<HTMLButtonElement>(".sources-interaction-cancel")!.click();
     await until(() => !one(".sources-interaction") && one<HTMLButtonElement>(".sources-interaction-open")?.disabled === false, "Interaction cancel failed");
     const cancelled = calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action;
+    const failedMessage = one(".sources-interaction-failed")?.textContent ?? "";
     one<HTMLButtonElement>(".sources-interaction-open")!.click();
     await until(() => one(".sources-interaction-confirm"), "Interaction confirmation missing");
     one<HTMLButtonElement>(".sources-interaction-confirm")!.click();
@@ -187,7 +189,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
     synthetic = "ready";
     one<HTMLButtonElement>(".sources-interaction-done")!.click();
     await until(() => !one(".sources-interaction") && !one(".sources-interaction-open"), "Interaction completion failed");
-    evidence.interaction = { stimulus: "synthetic", after_reject: afterReject, rejected_shown: rejectedShown, started: startedText, request, cancelled, completed: calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action };
+    evidence.interaction = { stimulus: "synthetic", after_reject: afterReject, rejected_shown: rejectedShown, failed_message: failedMessage, started: startedText, request, cancelled, completed: calls.filter(call => call.command === "finish_interaction").at(-1)!.input.request.action };
 
     const report = one(".sources-report")!.textContent!;
     let copied = "";

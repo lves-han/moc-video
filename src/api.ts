@@ -36,9 +36,17 @@ const nativeInvoke: Invoke = async (command, args) => {
 };
 
 export type ApiFailureRecord = { command: Command; request_id: string; source_id: string | null; code: string; message: string };
+export type SourceResult = { sequence: number; ok: boolean; message: string };
 export class Api {
   // Recent failures with their correlation request IDs, for the diagnostics page.
   readonly failures = reactive<ApiFailureRecord[]>([]);
+  // The latest started request's result per source; a slower older request cannot overwrite it.
+  readonly sourceResults = reactive<Record<string, SourceResult>>({});
+  private requestSequence = 0;
+  private recordSourceResult(source: string | null, sequence: number, ok: boolean, message: string) {
+    const known = source ? this.sourceResults[source] : undefined;
+    if (source && (!known || known.sequence < sequence)) this.sourceResults[source] = { sequence, ok, message };
+  }
   private sourceKinds = new Map<string, string>();
   private readonly invoke: Invoke;
   private readonly timer: Timer;
@@ -64,6 +72,9 @@ export class Api {
   async call<C extends Command>(command: C, input: CommandInput<C>, requestId: string = crypto.randomUUID(), expectedHostEpoch?: string): Promise<CommandData<C>> {
     if (!commands.includes(command)) throw new Error("Unknown business command");
     if (!uuid.test(requestId)) throw new Error("request_id must be UUID");
+    const target = input as { source_id?: unknown; ref?: { source_id?: unknown }; playback_source?: { source_id?: unknown } };
+    const owner = target.source_id ?? target.ref?.source_id ?? target.playback_source?.source_id;
+    const source = typeof owner === "string" ? owner : null, sequence = ++this.requestSequence;
     let handle: unknown;
     const timeout = new Promise<never>((_, reject) => {
       handle = this.timer.set(() => reject(new UnknownCommit(requestId, "Transport deadline exhausted")), this.budget(command, input) + REQUEST_BUDGETS.transport_grace_ms);
@@ -81,9 +92,7 @@ export class Api {
       if (!success) {
         const error = response.error;
         if (!record(error) || typeof error.code !== "string" || typeof error.message !== "string" || typeof error.retryable !== "boolean") throw new UnknownCommit(requestId, "Invalid API error");
-        const target = input as { source_id?: unknown; ref?: { source_id?: unknown }; playback_source?: { source_id?: unknown } };
-        const owner = target.source_id ?? target.ref?.source_id ?? target.playback_source?.source_id;
-        const source = typeof owner === "string" ? owner : null;
+        this.recordSourceResult(source, sequence, false, error.message);
         this.failures.push({ command, request_id: requestId, source_id: source, code: error.code, message: error.message });
         if (this.failures.length > 20) this.failures.shift();
         throw new ApiFailure(error as Bridge_ApiError);
@@ -102,6 +111,7 @@ export class Api {
         this.sourceKinds.clear();
         for (const source of response.data.providers) if (record(source) && typeof source.id === "string" && typeof source.kind === "string") this.sourceKinds.set(source.id, source.kind);
       }
+      this.recordSourceResult(source, sequence, true, "");
       return response.data as CommandData<C>;
     } catch (error) {
       if (error instanceof ApiFailure) throw error;

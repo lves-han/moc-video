@@ -774,7 +774,7 @@ export class AppController {
     const index = videos.indexOf(videoId);
     return index >= 0 ? videos[index + 1] ?? null : null;
   }
-  lastSourceFailure(sourceId: string) { return [...this.api.failures].reverse().find(row => row.source_id === sourceId) ?? null; }
+  lastSourceResult(sourceId: string) { return this.api.sourceResults[sourceId] ?? null; }
   private async syncConfig(kind: "maccms" | "stremio", configId: string) {
     await this.api.call("sync_catalog", { kind, config_id: configId });
   }
@@ -806,6 +806,7 @@ export class AppController {
   async startInteraction(source: AppSource) {
     this.invalidatePlayback();
     await this.cleanup;
+    this.interaction.last = null;
     this.interaction.active = await this.api.call("start_interaction", { source_id: source.id, source_revision: source.source_revision });
     await this.refreshRuntime();
     await this.loadSources();

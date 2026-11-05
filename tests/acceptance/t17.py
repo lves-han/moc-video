@@ -21,8 +21,8 @@ def validate_sources(e):
     require(f["link"] == "#/setup" and f["opened"]["route"] == "sources" and f["opened"]["empty"] is True and f["opened"]["guidance"] == 2, "First run must lead to the source manager with guidance")
     require(e["invalid"]["saves"] == 0 and len(e["invalid"]["messages"]) == 4 and "hidden" not in str(e["invalid"]["messages"]), "Invalid drafts must be rejected before saving, without echoing credentials")
     a = e["added"]
-    require(a["kinds"] == ["stremio", "maccms"] and "ready" in a["state"] and "no failure" in a["last"] and a["shown_secret"] is False, "Added sources must show registration and last request separately, without URL secrets")
-    require(e["home"]["cards"] == 2 and e["home"]["setup_gone"] is True, "The real home must use the added source")
+    require(a["kinds"] == ["stremio", "maccms"] and "ready" in a["state"] and "no request" in a["last"] and a["shown_secret"] is False, "Added sources must show registration and last request separately, without URL secrets")
+    require(e["home"]["cards"] == 2 and e["home"]["setup_gone"] is True and "succeeded" in e["home"]["last_request"], "The real home must use the added source and update its last request")
     d = e["edit"]
     require(d["kind_locked"] is True and d["same_id"] is True and d["count"] == 2 and d["provider"] is True, "Editing must keep identity and republish the source")
     i = e["independent"]
@@ -37,7 +37,7 @@ def validate_sources(e):
     c = e["cloudstream"]
     require(c["stimulus"] == "synthetic" and c["target"] == "cloudstream" and "SuperVod" in c["plugin"] and "ready" in c["guest"] and c["host_phase"] == "ready" and c["selectable"] is True, "Cloudstream packages and guest state must display apart from the host")
     n = e["interaction"]
-    require(n["stimulus"] == "synthetic" and n["after_reject"] == 0 and n["rejected_shown"] is True and "Synthetic window" in n["started"] and n["request"].get("source_revision") == "rev"
+    require(n["stimulus"] == "synthetic" and n["after_reject"] == 0 and n["rejected_shown"] is True and "ended" in n["failed_message"] and "Synthetic window" in n["started"] and n["request"].get("source_revision") == "rev"
             and n["cancelled"] == "cancelled" and n["completed"] == "completed", "Interaction must confirm first, report rejection, and cancel or complete explicitly")
     r = e["diagnostics"]
     require(all(r[name] is True for name in ("copied_equals_report", "platform", "contract", "engine", "package", "full_digest_absent", "correlation", "states_separate")), "Diagnostics must carry versions, digests, platform, correlation and states: " + str(r))
