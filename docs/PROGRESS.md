@@ -1949,3 +1949,11 @@
 - 文档结论：DOC-REVIEW-VERDICT: CLEAR；独立只读agent doc_review_resume；原样报告docs/reviews/doc-review/round-42.md。
 - 受审提交：ed0a0ed5d79e89c269398c735305e4110830ce34；protected：8da3c6c5d17adbd958f588e4635df813ab500066d47e8dac85bc82b3747e2b13；ADR048摘要bdedb085c22082216d15421f21e2ea10e3afe61cce97080e9c9f180408b858c0。
 - 实现验收 A1：NOT RUN；完整verify：NOT RUN。按用户明确授权开始T0.19，使用原工作流和预算，逐卡验收巡检。
+
+## T0.19 公网DNS环境阻塞 2026-11-05T03:21:57.574430+00:00
+- 结果：BLOCKED
+- 事实：原CLI会话1 WIP稳定退出后，外层原run脱敏回归1项通过，日志evidence/runs/20261105T031639809402-diag-t02-projection/output.log。公开诊断首次因cargo test工作目录断言错误exit101，日志evidence/runs/20261105T031658729192-diag-t02-public/output.log；仅修正测试断言，重跑exit0/1项通过，但只表示取证循环完成，全部8候选在list阶段unsafe_target，未有来源成功。日志evidence/runs/20261105T031707997430-diag-t02-public/output.log，脱敏报告evidence/t02-public/0abce0cb-a82a-4d71-ac70-8809c44dc842/capture.json。
+- 根因证据：当前系统解析cj.lziapi.com为198.18.1.106、hhzyapi.com为198.18.1.111，处于198.18.0.0/15基准测试保留地址段，现有公共出站安全规则拒绝。普通工具请求成功与Rust安全链路成功分开，先前HTTP200未证明生产链路可用。
+- 已尝试：生产DNS/peer/TLS边界诊断；系统getaddrinfo最小核实。未更换DNS、代理、端点规避或放宽SSRF。WIP提交保留取证代码。
+- 所需条件：用户提供可正常解析真实公网地址的网络环境，或处理本机Fake-IP/DNS代理配置；环境恢复后复核公共解析并接续原第2会话及真实媒体验收。
+- 验收 A1：NOT RUN；完整verify：NOT RUN；代码独立巡检：NOT RUN。
