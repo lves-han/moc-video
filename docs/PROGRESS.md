@@ -2046,3 +2046,9 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261105T072238085544-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；9候选实测并分层记录兼容性与来源可用性，卡片、详情与解析适配错误判程序缺陷，被拒媒体域名不再请求；真实公开JSON→详情→选集→Host解析→Rust网关→打包WKWebView短播通过；SERVFAIL转移、Fake-IP与重绑定拒绝；Android产物不在打包内容。
 - 完整verify：PASS；`evidence/verify/20261105T073021874331.json`，六门exit0。
 - Remaining：媒体可用性属来源状态并逐轮变化，见evidence/acceptance/T02-all.json；卧龙域名已挂牌出售，接口不可用，建议不做预设；其他六个插件站点按ADR-048暂缓；内容版权与公开发行未授权，仅个人使用；原始RSS采样文件仍缺。
+
+## T0.19 T02 完成 2026-11-05T08:07:07+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T075639507818-A1/output.log`；断言：8个JSON源COMPATIBLE，卧龙SOURCE_UNAVAILABLE，抽样媒体结果只记入证据
+- 完整verify：PASS；`evidence/verify/20261105T080335776926.json`，六门exit0。
+- Remaining：卧龙不做预置；其余6个插件站点仍按ADR-048延后；中文校验消息留BACKLOG。
