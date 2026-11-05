@@ -2002,3 +2002,9 @@
 ## T0.19 接续开发决定 2026-11-05T05:31:30+00:00
 - 结果：RESOLVED
 - 决定：用户原话“现在从T0.19开始继续做”；沿ADR-045在当前Claude对话内继续，不经drive.py、不改workflow.json与全局预算、不清计数、不rebaseline，失败历史保留。
+
+## T0.19 T02 完成 2026-11-05T05:39:22+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T053527845535-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；真实公开JSON列表→详情→完整选集→Host解析→Rust网关→打包WKWebView短播通过（红牛）；双DNS含SERVFAIL转移、Fake-IP与重绑定拒绝；Android产物不在打包内容。
+- 完整verify：PASS；`evidence/verify/20261105T053619551842.json`，六门exit0。
+- Remaining：支持来源仅红牛；优质403、量子媒体失败均停止未重试，其余候选NOT RUN未晋级；内容版权与公开发行未授权，仅个人使用；站点可用性随时变化；T0.19在Claude对话内完成，sessions实际值保留。
