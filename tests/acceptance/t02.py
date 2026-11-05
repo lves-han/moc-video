@@ -100,7 +100,8 @@ def native(run):
             "Public response fixture coverage is incomplete")
     for name in REGRESSIONS:
         result = run.command(argv + [name, "--", "--test-threads=1", "--nocapture"])
-        require(f"::{name} ... ok" in result and "test result: ok. 1 passed; 0 failed; 0 ignored;" in result,
+        # --nocapture prints observations between the test name and its "ok".
+        require(f"::{name} ... " in result and "test result: ok. 1 passed; 0 failed; 0 ignored;" in result,
                 "Required matching/no_links/cap isolation regression did not pass")
     run.observed["native_counts"] = dict(required=len(NATIVE) + len(REGRESSIONS), ran=len(NATIVE) + len(REGRESSIONS),
                                           passed=len(NATIVE) + len(REGRESSIONS), failed=0, skipped=0, status="PASS")
