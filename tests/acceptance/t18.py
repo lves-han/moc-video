@@ -3,6 +3,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import uuid
 
 from t00 import require
 from t10 import resources
@@ -20,6 +21,8 @@ NATIVE = {
     "t18_delete_and_clear_block_older_writes_from_returning",
     "t18_snapshot_must_match_the_session_identity",
     "t18_active_session_keeps_saving_after_match_records_are_collected",
+    "t18_non_uuid_match_id_is_carried_and_bad_handles_are_refused",
+    "t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot",
     "t18_source_change_stops_new_snapshots_but_keeps_stored_history",
     "t18_fifty_switches_release_every_session_and_request",
 }
@@ -48,10 +51,20 @@ def validate(e):
     require(t["new_epoch"] is True and t["rows"] == 1 and t["write_sequence"] == 0, "Rows must survive a restart under a new Host sequence")
     u = e["resumed"]
     require(u["video"] is True and abs(u["at"] - u["saved_ms"] / 1000) < .8, "Resume must reach the saved position of the saved video")
-    c = e["closing"]
-    require(c["saved_first"] is True, "Closing must save before the window goes: " + str(c))
     require(e["cleared"]["rows"] == 0, "Clear must empty the database")
+    require(e["closing"]["rows_before"] == 0 and e["closing"]["video"], "The close test must start with no stored row")
     require(e["errors"] == [], "Pages raised errors: " + str(e["errors"]))
+
+
+def closed_window_kept_everything(bridge, e):
+    """Runs after the real window has gone: the Host must hold what the page was still saving."""
+    def invoke(command):
+        return bridge.invoke(dict(command=command, args=dict(request_id=str(uuid.uuid4()), input={})))["data"]
+    entries = invoke("list_history")["entries"]
+    require(len(entries) == 1 and entries[0]["video_id"] == e["closing"]["video"] and entries[0]["position_ms"] > 0, "Closing must save the playing episode: " + str(entries))
+    volume = invoke("get_settings")["volume"]
+    require(abs(volume - .42) < .001, f"Closing must finish the queued settings change, found {volume}")
+    e["closing"].update(saved=dict(position_ms=entries[0]["position_ms"]), volume=volume)
 
 
 def contracts(run):
@@ -87,7 +100,7 @@ def native(run):
 def webview(run):
     os.environ["T12_MIN_OPENS"] = "1"
     try:
-        return t14.packaged(run, n02.LIVE_TEST, "t18", validate, "history", lambda e: dict(saved=e["saved"], closing=e["closing"]), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=360)
+        return t14.packaged(run, n02.LIVE_TEST, "t18", validate, "history", lambda e: dict(saved=e["saved"], closing=e["closing"]), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=360, after_close=closed_window_kept_everything)
     finally:
         os.environ.pop("T12_MIN_OPENS", None)
 
@@ -105,7 +118,7 @@ def main():
         run.case("protocol-positive-and-negative-cases", ["R38", "R64", "REQ-T18"], "four history commands in the working protocol with both kinds of cases", lambda: contracts(run))
         run.case("frontend-history-queue", ["R38", "R43", "REQ-T18"], "one queue, sequence reread, identical retry", lambda: frontend(run))
         run.case("sqlite-host-and-settings", IDS, "real file, migration rollback, sequences, barriers, Session identity, GC, 50 switches, settings failures", lambda: native(run))
-        run.case("packaged-history", IDS, "real snapshot, failure notice and retry, remove, restart, resume, close order, clear", lambda: webview(run))
+        run.case("packaged-history", IDS, "real snapshot, failure notice and retry, remove, restart, resume, clear, and a real window close keeping history and settings", lambda: webview(run))
     return run.save()
 
 

@@ -312,21 +312,116 @@ fn t18_snapshot_must_match_the_session_identity() {
 
 #[test]
 fn t18_active_session_keeps_saving_after_match_records_are_collected() {
-    let playing = playing();
-    let host = &playing.host;
-    {
-        let mut committed = host.committed.lock().unwrap();
-        committed.matches.invalidate();
-        committed
-            .resolutions
-            .release(playing.context["match_id"].as_str().unwrap());
+    let delay = Arc::new(AtomicBool::new(false));
+    let fixture = gateway_fixture(delay.clone());
+    let clock = Arc::new(TestClock(AtomicU64::new(1)));
+    let (temp, host, provider, _, input) = setup_both(&fixture, clock.clone());
+    let context = selected(&host, &provider, &input);
+    let resolution = ok(&host, "resolve_episode", resolve_input(&context));
+    let view = ok(&host, "open_playback", open_input(&resolution));
+    // An open stream keeps the Session active while the match and resolution leases run out.
+    delay.store(true, Ordering::SeqCst);
+    let parsed = url::Url::parse(view["media_url"].as_str().unwrap()).unwrap();
+    let mut client = TcpStream::connect(("127.0.0.1", parsed.port().unwrap())).unwrap();
+    let before = fixture.requests.lock().unwrap().len();
+    write!(
+        client,
+        "GET {}?{} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        parsed.path(),
+        parsed.query().unwrap()
+    )
+    .unwrap();
+    let start = Instant::now();
+    while fixture.requests.lock().unwrap().len() == before {
+        assert!(start.elapsed() < Duration::from_secs(3));
+        thread::sleep(Duration::from_millis(2));
     }
-    ok(
+    clock
+        .0
+        .fetch_add(crate::matching::LEASE_MS + 1_000, Ordering::SeqCst);
+    let stale = call(&host, "resolve_episode", resolve_input(&context));
+    assert!(
+        stale.get("error").is_some(),
+        "the match has expired: {stale}"
+    );
+    let playing = Playing {
+        _fixture: fixture,
+        temp,
         host,
+        context,
+        view,
+    };
+    ok(
+        &playing.host,
         "save_history",
         save_input(&playing, record(&playing.context, 1000, 10), 1),
     );
-    assert_eq!(listed(host)["entries"][0]["position_ms"], 1000);
+    assert_eq!(listed(&playing.host)["entries"][0]["position_ms"], 1000);
+    delay.store(false, Ordering::SeqCst);
+    drop(client);
+}
+
+#[test]
+fn t18_non_uuid_match_id_is_carried_and_bad_handles_are_refused() {
+    let mut playing = playing();
+    let session = playing.view["session_id"].as_str().unwrap().to_owned();
+    let legal = "host-match-not-a-uuid";
+    playing
+        .host
+        .committed
+        .lock()
+        .unwrap()
+        .session_bindings
+        .get_mut(&session)
+        .unwrap()
+        .context["match_id"] = json!(legal);
+    playing.context["match_id"] = json!(legal);
+    let saved = record(&playing.context, 1000, 10);
+    ok(
+        &playing.host,
+        "save_history",
+        save_input(&playing, saved.clone(), 1),
+    );
+    for bad in [json!(""), json!("m".repeat(161)), json!("unknown-handle")] {
+        let mut input = save_input(&playing, saved.clone(), 2);
+        input["match_id"] = bad;
+        let args = json!({"request_id":id(),"input":input});
+        let result = playing.host.invoke("save_history", args, true);
+        assert_eq!(result["error"]["code"], "BAD_REQUEST", "{result}");
+    }
+    assert_eq!(
+        listed(&playing.host)["entries"].as_array().unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot() {
+    let playing = playing();
+    let path = database(&playing);
+    std::fs::create_dir(&path).unwrap();
+    let pending = save_input(&playing, record(&playing.context, 1000, 10), 1);
+    let result = call(&playing.host, "save_history", pending.clone());
+    error(&result, "INTERNAL_ERROR");
+    assert_eq!(
+        result["error"]["details"]["reason"], "permission",
+        "{result}"
+    );
+    assert!(
+        !result
+            .to_string()
+            .contains(playing.temp.path().to_str().unwrap())
+    );
+    error(
+        &call(&playing.host, "list_history", json!({})),
+        "INTERNAL_ERROR",
+    );
+    std::fs::remove_dir(&path).unwrap();
+    ok(&playing.host, "save_history", pending);
+    assert_eq!(
+        listed(&playing.host)["entries"].as_array().unwrap().len(),
+        1
+    );
 }
 
 #[test]

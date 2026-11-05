@@ -11,6 +11,7 @@ import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
+import { settingsQueue } from "./api";
 import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
@@ -294,7 +295,7 @@ watch(() => appState.playback.playback_epoch, () => {
 function onPageHide() { void flushHistory(); }
 // The Host waits briefly while the window closes; saved or failed, the page then lets it go.
 async function onClosing() {
-  try { await flushHistory(); await historyRepository.drain(); }
+  try { await flushHistory(); await historyRepository.drain(); await settingsQueue.close(); }
   finally { await window.__TAURI__?.core.invoke("app_close_ready", {}).catch(() => {}); }
 }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }

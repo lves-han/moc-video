@@ -68,7 +68,7 @@ def webview(run):
     return packaged(run, LIVE_TEST, "t14", validate_home, "home", lambda e: dict(cards=e["pagination"]["cards"], layouts=e["layouts"]))
 
 
-def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None, command_timeout=240):
+def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None, command_timeout=240, after_close=None):
     require(t01.native_gui_session()["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
     t01.DATA = run.folder / "packaged"
@@ -105,6 +105,8 @@ def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prep
                     require(session.record.get("exit") == 0 and session.record.get("lingering") == [] and session.record.get("peak_combined_rss_bytes", 0) > 0,
                             "Native session must exit cleanly with WebKit in its RSS budget")
                     require(fixture.active == 0, "Owned fixture HTTP remains")
+                if after_close:
+                    after_close(bridge, evidence)
                 bridge.finish()
                 return dict(summary(evidence), native="actual Host invoke/gateway and packaged WKWebView")
             finally:

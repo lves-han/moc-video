@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNativeHistory, entryFromRecord, historyRepository } from '../src/data/history.ts';
-import { ApiFailure, UnknownCommit } from '../src/api.ts';
+import { ApiFailure, SettingsQueue, UnknownCommit } from '../src/api.ts';
 import { parseHistoryEntry, historyProgress, historyTime, type HistoryEntry } from '../src/data/history-model.ts';
 import { historyCompletionReady } from './fixtures/t13/history-completion.js';
 
@@ -162,4 +162,34 @@ test('REQ-T18: a refused snapshot leaves the failed one and its sequence for ret
   await assert.rejects(history.save({ ...snapshot }));
   await history.save(snapshot);
   assert.deepEqual(writes(), [5, 6, 5]);
+});
+
+test('REQ-T18: reading history never lowers the sequence after a failed write', async () => {
+  const { history, snapshot, failures, writes } = nativeFixture();
+  await history.list();
+  failures.push(new Error('disk'));
+  await assert.rejects(history.save(snapshot));
+  await history.list();
+  await history.save({ ...snapshot });
+  assert.deepEqual(writes(), [5, 6], 'the new snapshot takes a new number');
+  await history.save(snapshot);
+  assert.deepEqual(writes(), [5, 6, 7], 'superseded by the newer write, so it is no longer a same-sequence retry');
+});
+test('R43/REQ-T18: closing the settings queue waits for what is queued', async () => {
+  const saved: unknown[] = []; let release: () => void = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const queue = new SettingsQueue({ call: async (command: string, input: unknown) => {
+    if (command === 'get_settings') return { volume: 1 };
+    await held; saved.push(input); return input;
+  } } as never);
+  await queue.initialize();
+  const pending = queue.update(settings => ({ ...settings, volume: .42 }));
+  let closed = false;
+  const closing = queue.close().then(() => { closed = true; });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(closed, false);
+  await assert.rejects(queue.update(settings => settings), /closing/);
+  release();
+  await Promise.all([pending, closing]);
+  assert.deepEqual(saved, [{ volume: .42 }]);
 });

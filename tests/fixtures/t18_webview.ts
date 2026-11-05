@@ -4,6 +4,7 @@ import App from "../../src/App.vue";
 import UiProvider from "../../src/ui/UiProvider.vue";
 import { appController, appState } from "../../src/state.ts";
 import type { Player } from "../../src/player.ts";
+import { historyRepository } from "../../src/data/history";
 import { locale } from "../../src/i18n";
 
 type Ready = { manifest: string; maccms: string };
@@ -32,10 +33,10 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
-    if (name === "app_close_ready") return undefined as T;
+    if (name === "app_close_ready") return original.invoke<T>(name, args);
     return await rpc({ command: name, args });
   } };
-  let seekedAt: number | null = null;
+  let keepOpen = false, seekedAt: number | null = null;
   const onSeeked = (event: Event) => { seekedAt = (event.target as HTMLVideoElement).currentTime; };
   document.addEventListener("seeked", onSeeked, true);
   const onError = (event: ErrorEvent) => errors.push(event.message);
@@ -137,15 +138,6 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await until(() => seekedAt !== null, "Resume did not seek to the saved position");
     evidence.resumed = { saved_ms: saved.position_ms, at: seekedAt, video: appState.playback.context!.metadata_video_id === saved.video_id };
 
-    // Closing saves first, then lets the window go, in that order.
-    await video()!.play().catch(() => {});
-    await delay(200);
-    const mark = calls.length;
-    window.dispatchEvent(new Event("yingxiang-closing"));
-    await until(() => count("app_close_ready") === 1, "Close was not released");
-    const closing = calls.slice(mark).map(call => call.command);
-    evidence.closing = { order: closing, saved_first: closing.indexOf("save_history") >= 0 && closing.indexOf("save_history") < closing.indexOf("app_close_ready") };
-
     appController.invalidatePlayback();
     await nextTick();
     location.hash = "#/history";
@@ -158,12 +150,22 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await until(() => !all(".history-card").length, "Clear did not empty the view");
     await delay(200);
     evidence.cleared = { rows: (await list()).entries.length };
+
+    // Left playing with no stored row and a settings change on its way: the real window close must keep both.
+    await appController.updateSettings(settings => ({ ...settings, auto_next: false }));
+    await playFromHome();
+    await video()!.play().catch(() => {});
+    await until(() => appState.playback.position_ms > 0, "Playback did not advance before closing");
+    await delay(300);
+    await historyRepository.clear();
+    evidence.closing = { rows_before: (await list()).entries.length, video: appState.playback.context!.metadata_video_id };
+    void appController.updateSettings(settings => ({ ...settings, volume: .42 }));
     evidence.errors = errors;
+    keepOpen = true;
     return evidence;
   } finally {
-    app.unmount();
     document.removeEventListener("seeked", onSeeked, true);
     window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
-    window.__TAURI__!.core = original;
+    if (!keepOpen) { app.unmount(); window.__TAURI__!.core = original; }
   }
 }

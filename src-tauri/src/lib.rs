@@ -81,7 +81,7 @@ pub fn run() {
                 api.prevent_close();
                 let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    std::thread::sleep(std::time::Duration::from_secs(5));
                     let _ = view.destroy();
                 });
             }

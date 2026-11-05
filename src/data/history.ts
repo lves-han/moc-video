@@ -45,12 +45,13 @@ export function historyRefused(error: unknown) {
 
 // One queue gives snapshots, deletes and clears their increasing write sequence (C16).
 export function createNativeHistory(call: Api["call"]) {
-  let sequence: number | null = null, tail: Promise<unknown> = Promise.resolve();
+  // The upper bound of every sequence handed out: reads never lower it, so a new snapshot cannot reuse a failed one's number.
+  let sequence = 0, known = false, tail: Promise<unknown> = Promise.resolve();
   let failed: { entry: HistoryEntry; sequence: number } | null = null;
-  const read = async () => { const data = await call("list_history", {}); sequence = data.write_sequence; return data.entries; };
+  const read = async () => { const data = await call("list_history", {}); sequence = Math.max(sequence, data.write_sequence); known = true; return data.entries; };
   function enqueue<T>(work: (next: () => Promise<number>) => Promise<T>): Promise<T> {
-    const run = tail.then(() => work(async () => { if (sequence === null) await read(); return sequence = sequence! + 1; }))
-      .catch(error => { if (error instanceof UnknownCommit) sequence = null; throw error; });
+    const run = tail.then(() => work(async () => { if (!known) await read(); return ++sequence; }))
+      .catch(error => { if (error instanceof UnknownCommit) known = false; throw error; });
     tail = run.catch(() => {});
     return run;
   }
