@@ -6,6 +6,8 @@ mod t06;
 mod t07;
 #[path = "t08_http.rs"]
 mod t08;
+#[path = "t02_capture.rs"]
+mod t02;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{

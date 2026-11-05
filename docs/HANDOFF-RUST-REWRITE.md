@@ -2,6 +2,24 @@
 
 写于 2026-11-05。接手方：Codex。配套提示词见 [HANDOFF-RUST-REWRITE-PROMPT.md](HANDOFF-RUST-REWRITE-PROMPT.md)。
 
+## T0.19 开发会话1交接（2026-11-05T03:12:33Z，WIP）
+
+- 当前文档基线已经迁移且独立round-42 CLEAR；原check通过，start T0.19成功，初始工作树干净。protected=`8da3c6c5d17adbd958f588e4635df813ab500066d47e8dac85bc82b3747e2b13`。本次只处理T0.19。
+- 原run.py环境预检exit125；`evidence/runs/20261105T030511501379-diag-t02-environment/receipt.json`为`cleanup_failed`，macOS进程枚举sysctl返回EPERM，raw_exit/tests未知。已task note；未重试、未recover、未绕过执行器。按ADR-010由外层在开发会话退出后确认原PID/创建时间、清理边界并用原task.py recover收尾。开发CLI权限保持。
+- 当前增量仅为取证准备：`tests/fixtures/t02_capture.rs`复用生产Http的DNS/peer/TLS/重定向/取消边界，按来源记录列表、详情页、按ID详情、正/零搜索、分类两页以及现有Catalog详情/首集resolve/64KiB直接媒体前缀。媒体/图片URL全部替换；原始响应、媒体签名和请求头留在原生内存；HTTP状态与JSON/适配判定分开，访问控制停止该候选。取证输出逐来源保存到新的`evidence/t02-public/<UUID>/capture.json`，所有`supported`保持false。
+- `docs/compatibility-report.json`记录9候选、AES既有核实结论、公开帮助页和各层NOT RUN。它同时是取证入口的候选清单，属于测试/文档输入，产品尚未内置预设。优质准确端点与淘片详情仍需本机取证确认；卧龙维持排除。原包/补丁保留，当前tauri配置resources为空、Cargo无Android运行依赖，实际包扫描待A1。
+- 已实际执行：rustfmt解析/格式化新Rust文件成功；git差异空白检查无告警；task.py scope=`all changes inside scope`。Rust编译、脱敏回归、真实取证、A1及完整verify均NOT RUN。Web工具读到量子/红牛/光速/极速公开帮助页；量子和无尽API正文工具不可达，未据此判定本机站点状态。
+- 外层下一步：先按真实身份处理上述cleanup_failed；通过原run.py依次执行下方两个准确argv。第一项只验证新脱敏投影；第二项是显式忽略的公开取证诊断，退出0只表示取证循环结束，各来源的HTTP/协议/媒体结果须读capture.json，仍未达到A1。需要修复时沿本卡剩余第2会话，保留原会话/失败，不重置额度。
+
+```json
+[
+  ["{python}", "-B", "scripts/run.py", "diag-t02-projection", "--", "cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "host::maccms::tests::t02::t02_capture_projection_removes_signed_urls_and_preserves_group_order", "--", "--exact", "--test-threads=1", "--nocapture"],
+  ["{python}", "-B", "scripts/run.py", "diag-t02-public", "--", "cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "host::maccms::tests::t02::t02_capture_public_json", "--", "--ignored", "--exact", "--test-threads=1", "--nocapture"]
+]
+```
+
+- 剩余开发：审阅真实脱敏响应并固化fixture；按实测差异最小修复maccms，保持正常零搜索与错误code分离、无媒体no_links；实现`tests/acceptance/t02.py`完整A1和至少一个候选真实Rust网关→打包WebView短播；逐来源晋级、包排除、安全负例/cap隔离；新源准确A1通过后完整verify、勾卡/done、受验提交及独立巡检。当前未修改产品源码、冻结定义或任务勾选，未执行done或Git提交；.git写入属于外层既有分工。
+
 ## 当前接续更新（2026-11-05，ADR-048）
 
 用户已明确批准：“许可选择依据站点公开行为独立实现，暂时仅供个人使用，首版先做可用的 SuperVod JSON 来源，其余按你的建议。批准修订文档和迁移基线，独立审查通过后按任务顺序开始开发，先核实 AES 用途。”
