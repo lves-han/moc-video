@@ -50,7 +50,11 @@ let volumeTimer: ReturnType<typeof setTimeout> | undefined;
 function commitPlaybackAudio() {
   const volume = state.volume, muted = state.muted;
   if (appState.settings.volume === volume && appState.settings.muted === muted) return;
-  appController.updateSettings(settings => ({ ...settings, volume, muted })).catch(cause => { ui.diagnostic = String(cause); });
+  appController.updateSettings(settings => ({ ...settings, volume, muted })).catch(cause => {
+    // After leaving, this view can no longer show the failure itself.
+    if (mounted) ui.diagnostic = String(cause);
+    else appController.diagnostics.push({ code: "INTERNAL_ERROR", message: String(cause), retryable: true });
+  });
 }
 function savePlaybackAudio() { clearTimeout(volumeTimer); volumeTimer = setTimeout(commitPlaybackAudio, 300); }
 function setVolume(value: number) { playback.setVolume(Math.min(1, Math.max(0, Math.round(value * 100) / 100))); savePlaybackAudio(); }

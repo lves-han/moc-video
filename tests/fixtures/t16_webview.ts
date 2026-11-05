@@ -39,11 +39,12 @@ export async function playbackUiScenario(payload: Bootstrap, prototype: { player
   };
   const original = window.__TAURI__!.core, calls: { command: string; input: any }[] = [], errors: string[] = [];
   // MacCMS has no verified identity, so an unattended match needs the Host-confirmed selection supplied here.
-  let confirmed = true;
+  let confirmed = true, failSettings = false;
   const inputs = payload.match_inputs.slice(1, 5), videos = inputs.map(input => input.video_id);
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
+    if (name === "save_settings" && failSettings) return { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "INTERNAL_ERROR", message: "Injected settings failure", retryable: true } } as T;
     const input = name === "match_playback" && confirmed && !args?.input?.selection ? { ...args, input: inputs.find(row => row.video_id === args?.input?.video_id) ?? args?.input } : args;
     return rpc({ command: name, args: input });
   } };
@@ -239,6 +240,19 @@ export async function playbackUiScenario(payload: Bootstrap, prototype: { player
     await delay(800);
     evidence.leave_volume = { saved: appState.settings.volume };
     evidence.identity = { content_id: page.details.id };
+
+    // A save that fails after leaving has no player left to report it.
+    check(await appController.match(videos[0]!), "Rematch before failed save");
+    location.hash = "#/playback";
+    await until(() => session() && video()?.readyState >= 2, "Episode did not reopen before failed save");
+    failSettings = true;
+    slide(labelled<HTMLInputElement>("Volume"), .73);
+    location.hash = "#/home";
+    await until(() => !one("video"), "Player did not close on failed save", 3000);
+    await delay(800);
+    const alert = all(".history-alert").find(row => row.textContent!.includes("Injected settings failure"));
+    evidence.leave_failure = { stimulus: "injected", visible: Boolean(alert), saved: appState.settings.volume };
+    failSettings = false;
     evidence.errors = errors;
     return evidence;
   } finally {

@@ -14,7 +14,7 @@ def good():
                 auto_off=dict(video="v3", expected="v3", matches=0, completed=True), stop=dict(matches=0, context=None),
                 auto_next=dict(video="v4", expected="v4", playing=True, session_bound=True, title="Show · Season 1 · Episode 4"),
                 last=dict(next_disabled=True, matches=0, video="v4", expected="v4"), ambiguous=dict(dialog=True, opens=0, session=None, video_elements=1),
-                leave_volume=dict(saved=.61), identity=dict(content_id="h1"),
+                leave_volume=dict(saved=.61), leave_failure=dict(visible=True, saved=.61), identity=dict(content_id="h1"),
                 history=dict(saved=[dict(content_id="h1", episode=1, episode_total=4, source_id="s", title="Show")]), errors=[])
 
 
@@ -55,6 +55,8 @@ class PlaybackEvidence(unittest.TestCase):
         self.rejects(lambda e: e["history"].update(saved=[]))
         self.rejects(lambda e: e["history"]["saved"][0].update(content_id="demo:series:42"))
         self.rejects(lambda e: e["leave_volume"].update(saved=.37))
+        self.rejects(lambda e: e["leave_failure"].update(visible=False))
+        self.rejects(lambda e: e["leave_failure"].update(saved=.73))
 
     def test_resume_and_errors(self):
         self.rejects(lambda e: e["resume"].update(position=0))

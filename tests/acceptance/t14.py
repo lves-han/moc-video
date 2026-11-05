@@ -93,11 +93,17 @@ def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prep
                 with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                     session = t01.NativeSession(run, fixture, executable, 1)
                     session.wait(0, 30)
+                    # Registers WebKit helpers in the owned budget and cleanup, before and after their first use.
+                    session.command("identity")
                     evidence = session.command(op, timeout=240, payload=ready)
                     session.record["commands"][-1]["args"] = dict(payload="actual Host bridge payload; capability URLs redacted")
                     run.observed[key] = evidence
                     validate(evidence)
+                    session.command("identity")
+                    require(session.record.get("webkit_pids", {}).get("renderer", 0) > 0, "WebKit renderer was not registered")
                     session.close()
+                    require(session.record.get("exit") == 0 and session.record.get("lingering") == [] and session.record.get("peak_combined_rss_bytes", 0) > 0,
+                            "Native session must exit cleanly with WebKit in its RSS budget")
                     require(fixture.active == 0, "Owned fixture HTTP remains")
                 bridge.finish()
                 return dict(summary(evidence), native="actual Host invoke/gateway and packaged WKWebView")

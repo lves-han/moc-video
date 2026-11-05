@@ -63,6 +63,8 @@ def validate_playback(e):
     a = e["ambiguous"]
     require(a["dialog"] is True and a["opens"] == 0 and a["session"] is None, "An ambiguous next video must wait for confirmation with nothing playing")
     require(e["leave_volume"]["saved"] == .61, "A volume changed just before leaving must persist")
+    f = e["leave_failure"]
+    require(f["visible"] is True and f["saved"] == .61, "A volume save failing after leaving must be visible and keep the confirmed value")
     saved = e["history"]["saved"]
     require(len(saved) == 1 and saved[0]["episode_total"] == 4 and saved[0]["source_id"] and saved[0]["title"], "History must keep one identified entry per title")
     # Host's content id already hashes namespace, type and canonical id, isolating addons (SPEC 18.6).

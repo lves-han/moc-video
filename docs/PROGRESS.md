@@ -1898,3 +1898,8 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261104T101824794474-A1/output.log`；断言：exit0，5 required全过，JUnit 13项0失败；离页后音量保存0.61，历史键等于Host content id，其余见前一DONE记录。
 - 完整verify：PASS；`evidence/verify/20261104T101927283341.json`，六门exit0。
 - Remaining：等待独立复巡；自动下一集成功路径用Host已确认selection；约5秒周期只有单测；网络错误、缓冲和DPI未在原生单独测；原生续播入口与SQLite属T0.18。
+
+## T0.16 复巡P2修复 2026-11-05T01:48:15+00:00
+- 实施状态：WIP；用户指示“先修这两项”，撤回勾选，巡检evidence/reviews/20261104T102254019358-T0.16 CLEAR及其发现原样保留。
+- 复现：注入保存失败后离页无提示，evidence/runs/20261105T014656632004-diag-t16-p2-before/output.log。
+- 修改：PlaybackView卸载后的保存失败进入应用级diagnostics；t14.packaged在场景前后登记WebKit进程，并要求渲染进程已登记、正常退出、无残留，T14、T15、T16共用。
