@@ -1910,3 +1910,9 @@
 - 完整verify：PASS；`evidence/verify/20261105T014950564964.json`，六门exit0。
 - 回归：T14、T15打包场景带WebKit登记诊断通过，evidence/runs/20261105T014815708899-diag-t14-t15-regress/output.log（诊断，不代替各卡验收）。
 - Remaining：等待独立复巡；自动下一集成功路径用Host已确认selection；约5秒周期只有单测；网络错误、缓冲和DPI未在原生单独测；原生续播入口与SQLite属T0.18。
+
+## T0.17 T17 完成 2026-11-05T02:16:05+00:00
+- 结果：DONE
+- 验收 A1：PASS；日志：`evidence/runs/20261105T021234231055-A1/output.log`；断言：exit0，真实Host+打包WKWebView覆盖HTTP来源增改禁用删、独立选择、真实首页、失败隔离、真实准备拒绝；Cloudstream状态与交互为合成，脱敏诊断无机密。
+- 完整verify：PASS；`evidence/verify/20261105T021256435666.json`，六门exit0。
+- Remaining：真实客体重启、人机验证判定与SuperVod全集由N02验收；合成交互未代表真实能力。

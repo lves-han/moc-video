@@ -981,7 +981,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 历史补充：按11.4捕获播放快照，周期及暂停/seek/切集/离页更新；恢复进度等待媒体metadata，记录来源与影片身份，防止旧播放事件写到新集。
 
 ### T0.17 T17 源选择 引擎设置与受控交互
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.13, T0.14, T0.4, T0.5
 - 需求：R01, R13, R24, R58, REQ-T17 → A1（覆盖表含精确对应）
 - 范围：`src/views/`, `src/App.vue`, `src/api.ts`, `src/style.css`, `tests/`, `docs/PROGRESS.md`, `src/state.ts`
