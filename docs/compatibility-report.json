@@ -22,7 +22,7 @@
   },
   "network": {
     "current_native_probe": "ALL_CANDIDATES_SAMPLED",
-    "reason": "Each source samples up to 8 videos; a media host is skipped after 2 failures and nothing is retried or bypassed.",
+    "reason": "Each source samples up to 8 videos. A media host is skipped after one access-control refusal or two other failures; nothing is retried or bypassed.",
     "privacy": "Public API endpoints only; signed media URLs, headers, capabilities and raw response bodies remain in native memory. Capture output replaces every media/image URL and omits unknown fields.",
     "dns": [
       "1.1.1.1:53",
@@ -36,20 +36,7 @@
       "api_url": "https://api.1080zyku.com/inc/apijson.php",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [
-          "cdn.vvvip-plays33.cc",
-          "cdn.yzzy30-play.com",
-          "cdn.yzzy31-play.com",
-          "player.yzzy37-play.vip",
-          "player.yzzyvip-35.com",
-          "svip.high20-playback.com"
-        ],
-        "passed": 0,
-        "verdict": "NO_SAMPLE_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "量子",
@@ -57,19 +44,7 @@
       "public_documentation": "https://www.lzizy.net/index.php/help.html",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [
-          "v.lzcdn27.com",
-          "v.lzcdn28.com",
-          "v.lzcdn31.com",
-          "vip.lz-cdn11.com",
-          "vip.lz-cdn12.com"
-        ],
-        "passed": 1,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "红牛",
@@ -77,13 +52,7 @@
       "public_documentation": "https://hongniuziyuan.tv/index.php/help",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [],
-        "passed": 8,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "无尽",
@@ -91,19 +60,7 @@
       "public_documentation": "https://help.wujinapi.me/",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [
-          "v12.ppqrrs.com",
-          "v3.ppqrrs.com",
-          "v4.ppqrrs.com",
-          "v8.ppqrrs.com",
-          "v9.ppqrrs.com"
-        ],
-        "passed": 0,
-        "verdict": "NO_SAMPLE_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "光速",
@@ -111,13 +68,7 @@
       "public_documentation": "https://guangsuzy.tv/index.php/help",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [],
-        "passed": 8,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "极速",
@@ -125,39 +76,21 @@
       "public_documentation": "https://jszyapi.com/index.php/help/index.html",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [],
-        "passed": 8,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "豪华",
       "api_url": "https://hhzyapi.com/api.php/provide/vod/",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [],
-        "passed": 8,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "淘片",
       "api_url": "https://taopianapi.com/cjapi/mc/vod/json/m3u8.html",
       "probe": true,
       "supported": true,
-      "compatibility": "COMPATIBLE",
-      "source_media_samples": {
-        "attempted": 8,
-        "failed_hosts": [],
-        "passed": 8,
-        "verdict": "MEDIA_AVAILABLE"
-      }
+      "compatibility": "COMPATIBLE"
     },
     {
       "name": "卧龙",
@@ -165,12 +98,6 @@
       "probe": true,
       "supported": false,
       "compatibility": "SOURCE_UNAVAILABLE",
-      "source_media_samples": {
-        "attempted": 0,
-        "failed_hosts": [],
-        "passed": 0,
-        "verdict": "NOT RUN"
-      },
       "source_state": "Public capture returned non-JSON; candidate stopped"
     }
   ],
@@ -199,9 +126,5 @@
     "privacy": "Projected response fields and full group order; media/image URLs replaced; no upstream signatures"
   },
   "judgement": "ADR-051: compatibility means the program parses and maps the public response; source availability, content and media playback are source state and never a program failure. Minimal shape tolerance only.",
-  "sources_note": "Results from one acceptance run on 2026-11-05; source availability changes over time.",
-  "short_play": {
-    "source": "量子",
-    "chain": "public JSON/list/detail/full episodes/Host resolve/Rust gateway/packaged WKWebView"
-  }
+  "source_availability": "Media availability is source state and changes between runs. Each acceptance run records per-source samples and the short-play source in evidence/acceptance/T02-all.json; this file keeps only stable compatibility results."
 }

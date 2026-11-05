@@ -337,7 +337,12 @@ fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a
             let slice = std::slice::from_ref(groups.get(group)?);
             let (_, episode) = direct_episode(&single, slice)?;
             let host = entries.split('#').find_map(|entry| {
-                let resource = entry.rsplit_once('$').map_or(entry, |(_, url)| url);
+                // The first separator ends the label; a URL may itself contain "$".
+                let resource = if entry.starts_with("http://") || entry.starts_with("https://") {
+                    entry
+                } else {
+                    entry.split_once('$')?.1
+                };
                 let url = http_url(resource, false).ok()?;
                 let path = url.path().to_ascii_lowercase();
                 (path.ends_with(".m3u8") || path.ends_with(".mp4"))
@@ -503,7 +508,14 @@ fn candidate(source: &Value) -> Value {
             if samples.len() >= MEDIA_SAMPLES {
                 break;
             }
-            let reference = catalog.card(item, &mut images)?["ref"].clone();
+            let reference = match catalog.card(item, &mut images) {
+                Ok(card) => card["ref"].clone(),
+                Err(error) => {
+                    records.push(json!({"stage":"adapter_details","status":"ITEM_FAILED","program_defect":program_defect(&error),
+                        "error":{"code":error.code,"message":error.message}}));
+                    continue;
+                }
+            };
             let mapped = match catalog.details(&http, &reference, &job(&host, "default_metadata")) {
                 Ok(mapped) => mapped,
                 Err(error) => {
@@ -583,7 +595,12 @@ fn candidate(source: &Value) -> Value {
     })();
     let summary = media_summary(&samples);
     records.extend(samples);
-    let verdict = compatibility(&records);
+    let outer_defect = result.as_ref().err().is_some_and(program_defect);
+    let verdict = if outer_defect {
+        "PROGRAM_INCOMPATIBLE"
+    } else {
+        compatibility(&records)
+    };
     json!({"name":source["name"],"api_url":base,"utc":OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
         "capture_status":if result.is_ok() {"CAPTURED"} else {"STOPPED"},
         "error":result.err().map(|e| json!({"code":e.code,"message":e.message})),"records":records,
@@ -723,6 +740,32 @@ fn t02_one_failing_detail_marks_the_program_incompatible() {
         "{observation}"
     );
     assert_eq!(observation["supported"], false);
+}
+
+#[test]
+fn t02_one_failing_card_marks_the_program_incompatible() {
+    let media = Arc::new(std::sync::Mutex::new(vec![]));
+    let mut broken = sample_item(2, "http://maccms.fixture.test:PORT/ok/2.mp4".into());
+    broken["vod_pic"] = json!("http://[");
+    let items = vec![
+        sample_item(1, "http://maccms.fixture.test:PORT/ok/1.mp4".into()),
+        broken,
+    ];
+    let fixture = sample_fixture(items, |_| None, media);
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    assert_eq!(
+        observation["compatibility"], "PROGRAM_INCOMPATIBLE",
+        "{observation}"
+    );
+}
+
+#[test]
+fn t02_media_host_comes_from_the_first_separator() {
+    let groups = vec![json!({"episodes":[{"id":"hls"}]})];
+    let original = json!({"vod_play_url":"Play$https://cdn.example/index.m3u8?token=a$b"});
+    let routes = direct_episodes(&original, &groups);
+    assert_eq!(routes.len(), 1);
+    assert_eq!(routes[0].2, "cdn.example");
 }
 
 #[test]
