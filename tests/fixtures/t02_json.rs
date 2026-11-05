@@ -72,7 +72,7 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
             let mapped = catalog
                 .home(
                     &http,
-                    &json!({"page":page,"section_ref":section.handle}),
+                    &json!({"source_id":catalog.source["id"],"source_revision":catalog.source["source_revision"],"page":page,"section_ref":section.handle}),
                     &job(&host, "default_metadata"),
                 )
                 .unwrap();

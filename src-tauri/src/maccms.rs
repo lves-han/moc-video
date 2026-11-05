@@ -189,21 +189,40 @@ impl Http {
                 })
                 .collect();
         }
-        let mut builder = hickory_resolver::TokioResolver::builder_with_config(
-            ResolverConfig::from_name_servers(servers),
-            TokioRuntimeProvider::default(),
-        );
-        // Never read OS DNS, hosts, or search domains (ADR-049).
-        builder.options_mut().use_hosts_file = ResolveHosts::Never;
-        builder.options_mut().ip_strategy = hickory_resolver::config::LookupIpStrategy::Ipv4AndIpv6;
-        let resolver = builder
-            .build()
-            .map_err(|_| upstream("Public HTTP DNS initialization failed"))?;
-        resolver
-            .lookup_ip(format!("{}.", host.trim_end_matches('.')))
-            .await
-            .map(|ips| ips.iter().map(|ip| SocketAddr::new(ip, port)).collect())
-            .map_err(|_| upstream("Public HTTP DNS lookup failed"))
+        // hickory's pool stops at a SERVFAIL response, so one failing server would hide the
+        // healthy one. Each server gets its own resolver; the first success wins and dropping
+        // the set aborts the other query.
+        let name = format!("{}.", host.trim_end_matches('.'));
+        let mut lookups = tokio::task::JoinSet::new();
+        for server in servers {
+            let mut builder = hickory_resolver::TokioResolver::builder_with_config(
+                ResolverConfig::from_name_servers(vec![server]),
+                TokioRuntimeProvider::default(),
+            );
+            // Never read OS DNS, hosts, or search domains (ADR-049).
+            builder.options_mut().use_hosts_file = ResolveHosts::Never;
+            builder.options_mut().ip_strategy =
+                hickory_resolver::config::LookupIpStrategy::Ipv4AndIpv6;
+            let resolver = builder
+                .build()
+                .map_err(|_| upstream("Public HTTP DNS initialization failed"))?;
+            let name = name.clone();
+            lookups.spawn(async move {
+                resolver
+                    .lookup_ip(name)
+                    .await
+                    .map(|ips| ips.iter().collect::<Vec<_>>())
+            });
+        }
+        while let Some(result) = lookups.join_next().await {
+            if let Ok(Ok(ips)) = result {
+                return Ok(ips
+                    .into_iter()
+                    .map(|ip| SocketAddr::new(ip, port))
+                    .collect());
+            }
+        }
+        Err(upstream("Public HTTP DNS lookup failed"))
     }
 
     pub fn get(
