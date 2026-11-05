@@ -1219,7 +1219,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 停止条件：缺必要公开行为依据、访问控制、真实媒体未验证或验收失败时如实记录，保留失败历史；仅fixture通过时在线闭环保持NOT RUN。
 
 ### T0.18 T18 设置与全生命周期清理
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.16, T0.17, T0.22
 - 需求：U01, U09, R11, R36, R38, R39, R40, R41, R42, R43, R64, R65, REQ-T18 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `src/api.ts`, `src/models.ts`, `src/data/history.ts`, `src/data/history-model.ts`, `src/views/HistoryView.vue`, `src/App.vue`, `protocol/`, `tests/`, `docs/PROGRESS.md`

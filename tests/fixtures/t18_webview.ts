@@ -33,10 +33,11 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
-    if (name === "app_close_ready") return original.invoke<T>(name, args);
+    if (name === "app_close_started" || name === "app_close_ready") return original.invoke<T>(name, args);
+    if (name === "save_settings" && slowSaves > 0) { slowSaves--; await delay(3500); }
     return await rpc({ command: name, args });
   } };
-  let keepOpen = false, seekedAt: number | null = null;
+  let keepOpen = false, slowSaves = 0, seekedAt: number | null = null;
   const onSeeked = (event: Event) => { seekedAt = (event.target as HTMLVideoElement).currentTime; };
   document.addEventListener("seeked", onSeeked, true);
   const onError = (event: ErrorEvent) => errors.push(event.message);
@@ -151,6 +152,10 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await delay(200);
     evidence.cleared = { rows: (await list()).entries.length };
 
+    window.dispatchEvent(new Event("resize"));
+    await until(() => appState.settings.window_bounds, "Window bounds were not saved");
+    evidence.bounds = { saved: appState.settings.window_bounds, width: window.innerWidth, height: window.innerHeight };
+
     // Left playing with no stored row and a settings change on its way: the real window close must keep both.
     await appController.updateSettings(settings => ({ ...settings, auto_next: false }));
     await playFromHome();
@@ -159,7 +164,11 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await delay(300);
     await historyRepository.clear();
     evidence.closing = { rows_before: (await list()).entries.length, video: appState.playback.context!.metadata_video_id };
+    // Longer in total than the unanswered-page timer: two slow saves queued, then audio still on its short timer.
+    slowSaves = 2;
     void appController.updateSettings(settings => ({ ...settings, volume: .42 }));
+    void appController.updateSettings(settings => ({ ...settings, auto_next: true }));
+    appState.playback.volume = .37;
     evidence.errors = errors;
     keepOpen = true;
     return evidence;

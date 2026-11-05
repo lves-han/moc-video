@@ -11,7 +11,7 @@ import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
-import { settingsQueue } from "./api";
+import { finishBeforeClose, settingsQueue, windowBounds } from "./api";
 import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
@@ -293,10 +293,29 @@ watch(() => appState.playback.playback_epoch, () => {
   if (snapshot && snapshot !== lastHistory) { lastWrite = Date.now(); lastHistory = snapshot; void persistHistory(snapshot); }
 });
 function onPageHide() { void flushHistory(); }
-// The Host waits briefly while the window closes; saved or failed, the page then lets it go.
+// Audio saved on a short timer and the window's last size go in with everything else still queued.
+async function saveLastSettings() {
+  const { volume, muted } = appState.playback, bounds = windowBounds(window), saved = appState.settings;
+  if (volume !== saved.volume || muted !== saved.muted || (bounds && JSON.stringify(bounds) !== JSON.stringify(saved.window_bounds)))
+    await appController.updateSettings(settings => ({ ...settings, volume, muted, window_bounds: bounds ?? settings.window_bounds }));
+}
+let boundsTimer: ReturnType<typeof setTimeout> | undefined;
+function onResize() {
+  clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => {
+    const bounds = windowBounds(window);
+    if (bounds && JSON.stringify(bounds) !== JSON.stringify(appState.settings.window_bounds))
+      void appController.updateSettings(settings => ({ ...settings, window_bounds: bounds })).catch(error => { preferenceError.value = String(error); });
+  }, 500);
+}
 async function onClosing() {
-  try { await flushHistory(); await historyRepository.drain(); await settingsQueue.close(); }
-  finally { await window.__TAURI__?.core.invoke("app_close_ready", {}).catch(() => {}); }
+  const core = window.__TAURI__?.core;
+  // From here the Host waits for this page, however long the saves take.
+  await core?.invoke("app_close_started", {}).catch(() => {});
+  try {
+    await finishBeforeClose({ saveHistory: async () => { await flushHistory(); await historyRepository.drain(); }, saveSettings: saveLastSettings,
+      settings: settingsQueue, release: async () => core?.invoke("app_close_ready", {}) });
+  } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
 }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
 onMounted(() => {
@@ -305,6 +324,7 @@ onMounted(() => {
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("yingxiang-closing", onClosing);
+  if (native) window.addEventListener("resize", onResize);
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
 onBeforeUnmount(() => {
@@ -312,6 +332,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("hashchange", onHashChange);
   window.removeEventListener("pagehide", onPageHide);
   window.removeEventListener("yingxiang-closing", onClosing);
+  window.removeEventListener("resize", onResize);
+  clearTimeout(boundsTimer);
   document.removeEventListener("visibilitychange", onVisibilityChange);
 });
 </script>

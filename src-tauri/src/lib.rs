@@ -34,7 +34,19 @@ fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     Ok(target)
 }
 
-/// The page finished saving history after being told the window is closing.
+#[cfg(not(mobile))]
+static CLOSE_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The page answered the closing signal, so only a page that never answers is closed by the timer.
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_close_started(window: WebviewWindow) -> Result<(), String> {
+    require_main(&window)?;
+    CLOSE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+/// The page finished saving after being told the window is closing.
 #[cfg(not(mobile))]
 #[tauri::command]
 fn app_close_ready(window: WebviewWindow) -> Result<(), String> {
@@ -49,11 +61,15 @@ mod automation;
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(all(not(mobile), feature = "t01-automation"))]
-    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
-        tauri::generate_handler![player_fullscreen, app_close_ready, automation::t01_control];
+    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+        player_fullscreen,
+        app_close_started,
+        app_close_ready,
+        automation::t01_control
+    ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
-        tauri::generate_handler![player_fullscreen, app_close_ready];
+        tauri::generate_handler![player_fullscreen, app_close_started, app_close_ready];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
     let business = commands::handler::<tauri::Wry>();
@@ -71,7 +87,7 @@ pub fn run() {
 
     #[cfg(not(mobile))]
     let builder = {
-        // History snapshots are saved before the window goes; a stuck page cannot hold exit.
+        // The page saves before the window goes. A second close request always exits.
         let closing = std::sync::atomic::AtomicBool::new(false);
         builder.on_window_event(move |window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event
@@ -82,7 +98,9 @@ pub fn run() {
                 let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(5));
-                    let _ = view.destroy();
+                    if !CLOSE_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+                        let _ = view.destroy();
+                    }
                 });
             }
         })
@@ -90,10 +108,11 @@ pub fn run() {
     builder
         .setup(|app| {
             let settings_path = app.path().app_data_dir()?.join("settings.json");
-            app.manage(
-                host::Host::open(settings_path)
-                    .map_err(|error| std::io::Error::other(error.message))?,
-            );
+            let host = host::Host::open(settings_path)
+                .map_err(|error| std::io::Error::other(error.message))?;
+            #[cfg(not(mobile))]
+            let bounds = host.window_bounds();
+            app.manage(host);
             #[cfg(all(not(mobile), feature = "t01-automation"))]
             let entry = "index.html#/prototype";
             #[cfg(any(mobile, not(feature = "t01-automation")))]
@@ -106,11 +125,42 @@ pub fn run() {
                 });
             #[cfg(not(mobile))]
             let window = window
-                .inner_size(1200.0, 800.0)
-                .min_inner_size(960.0, 640.0);
+                .inner_size(
+                    bounds.map_or(1200.0, |bounds| bounds.width),
+                    bounds.map_or(800.0, |bounds| bounds.height),
+                )
+                .min_inner_size(960.0, 640.0)
+                .maximized(bounds.is_some_and(|bounds| bounds.maximized));
+            #[cfg(not(mobile))]
+            let window = match bounds {
+                Some(bounds) => window.position(bounds.x, bounds.y),
+                None => window,
+            };
             #[cfg(all(not(mobile), feature = "t01-automation"))]
             let window = window.initialization_script(automation::bootstrap()?);
-            window.build()?;
+            let built = window.build()?;
+            // A display may have gone since the bounds were saved; never reopen out of reach.
+            #[cfg(not(mobile))]
+            if let Some(bounds) = bounds {
+                let reachable = built.available_monitors()?.iter().any(|monitor| {
+                    let scale = monitor.scale_factor();
+                    let (left, top) = (
+                        f64::from(monitor.position().x) / scale,
+                        f64::from(monitor.position().y) / scale,
+                    );
+                    let (width, height) = (
+                        f64::from(monitor.size().width) / scale,
+                        f64::from(monitor.size().height) / scale,
+                    );
+                    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + 20.0);
+                    x >= left && x < left + width && y >= top && y < top + height
+                });
+                if !reachable {
+                    built.center()?;
+                }
+            }
+            #[cfg(mobile)]
+            let _ = built;
             // Fail at startup if configuration accidentally creates a second player window.
             if app.webview_windows().len() != 1 {
                 return Err("Expected exactly one embedded player window".into());

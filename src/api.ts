@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import type { Bridge_ApiError, Command, CommandData, CommandInput, Settings } from "./models.ts";
+import type { Bridge_ApiError, Command, CommandData, CommandInput, Settings, WindowBounds } from "./models.ts";
 import { REQUEST_BUDGETS } from "./models.ts";
 import { t } from "./i18n.ts";
 
@@ -220,11 +220,33 @@ export class SettingsQueue {
     return this.recovery;
   }
 
+  // A close that could not finish leaves the app open, so it can take changes again.
+  reopen() { this.accepting = true; }
+
   async close(): Promise<void> {
     this.accepting = false;
     while (this.running) await this.running;
     if (this.paused) throw new Error("Settings commit is unresolved; retry recovery before exit");
   }
+}
+
+type WindowView = { screenX: number; screenY: number; innerWidth: number; innerHeight: number; outerWidth: number; outerHeight: number; screen: { availWidth: number; availHeight: number } };
+// Null below the supported minimum (an unusual test or split size): the saved bounds stay as they were.
+export function windowBounds(view: WindowView): WindowBounds | null {
+  const width = Math.round(view.innerWidth), height = Math.round(view.innerHeight);
+  if (width < 960 || height < 640) return null;
+  return { x: Math.round(view.screenX), y: Math.round(view.screenY), width, height,
+    maximized: view.outerWidth >= view.screen.availWidth && view.outerHeight >= view.screen.availHeight };
+}
+
+// History problems keep their own notice and never hold the window. Settings must land first;
+// if they cannot, the window stays open with the error, and closing it again exits.
+export async function finishBeforeClose(steps: { saveHistory: () => Promise<unknown>; saveSettings: () => Promise<unknown>;
+  settings: Pick<SettingsQueue, "close" | "reopen">; release: () => Promise<unknown> }) {
+  await steps.saveHistory().catch(() => {});
+  try { await steps.saveSettings(); await steps.settings.close(); }
+  catch (error) { steps.settings.reopen(); throw error; }
+  await steps.release();
 }
 
 export const api = new Api();

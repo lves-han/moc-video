@@ -30,6 +30,7 @@ fn main() {
         "save_history",
         "remove_history",
         "clear_history",
+        "app_close_started",
         "app_close_ready",
         #[cfg(feature = "t01-automation")]
         "t01_control",

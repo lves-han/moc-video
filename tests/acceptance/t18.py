@@ -21,6 +21,7 @@ NATIVE = {
     "t18_delete_and_clear_block_older_writes_from_returning",
     "t18_snapshot_must_match_the_session_identity",
     "t18_active_session_keeps_saving_after_match_records_are_collected",
+    "t18_window_bounds_return_after_a_restart",
     "t18_non_uuid_match_id_is_carried_and_bad_handles_are_refused",
     "t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot",
     "t18_source_change_stops_new_snapshots_but_keeps_stored_history",
@@ -52,6 +53,8 @@ def validate(e):
     u = e["resumed"]
     require(u["video"] is True and abs(u["at"] - u["saved_ms"] / 1000) < .8, "Resume must reach the saved position of the saved video")
     require(e["cleared"]["rows"] == 0, "Clear must empty the database")
+    b = e["bounds"]
+    require(b["saved"]["width"] == b["width"] and b["saved"]["height"] == b["height"], "Saved bounds must hold the real window size: " + str(b))
     require(e["closing"]["rows_before"] == 0 and e["closing"]["video"], "The close test must start with no stored row")
     require(e["errors"] == [], "Pages raised errors: " + str(e["errors"]))
 
@@ -62,9 +65,11 @@ def closed_window_kept_everything(bridge, e):
         return bridge.invoke(dict(command=command, args=dict(request_id=str(uuid.uuid4()), input={})))["data"]
     entries = invoke("list_history")["entries"]
     require(len(entries) == 1 and entries[0]["video_id"] == e["closing"]["video"] and entries[0]["position_ms"] > 0, "Closing must save the playing episode: " + str(entries))
-    volume = invoke("get_settings")["volume"]
-    require(abs(volume - .42) < .001, f"Closing must finish the queued settings change, found {volume}")
-    e["closing"].update(saved=dict(position_ms=entries[0]["position_ms"]), volume=volume)
+    settings = invoke("get_settings")
+    require(abs(settings["volume"] - .37) < .001 and settings["auto_next"] is True,
+            f"Closing must finish slow queued changes and the latest audio: {settings['volume']}, {settings['auto_next']}")
+    require(settings["window_bounds"] == e["bounds"]["saved"], "Closing must keep the window bounds")
+    e["closing"].update(saved=dict(position_ms=entries[0]["position_ms"]), volume=settings["volume"], auto_next=settings["auto_next"])
 
 
 def contracts(run):

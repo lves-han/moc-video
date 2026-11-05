@@ -425,6 +425,31 @@ fn t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot() {
 }
 
 #[test]
+fn t18_window_bounds_return_after_a_restart() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("settings.json");
+    let host = Host::open(path.clone()).unwrap();
+    assert_eq!(host.window_bounds(), None);
+    let mut settings = ok(&host, "get_settings", json!({}));
+    settings["window_bounds"] = json!({"x":-40,"y":25,"width":1280,"height":720,"maximized":false});
+    ok(&host, "save_settings", settings.clone());
+    drop(host);
+    let host = Host::open(path).unwrap();
+    assert_eq!(
+        host.window_bounds(),
+        Some(crate::host::WindowBounds {
+            x: -40.0,
+            y: 25.0,
+            width: 1280.0,
+            height: 720.0,
+            maximized: false
+        })
+    );
+    settings["window_bounds"]["width"] = json!(300);
+    error(&call(&host, "save_settings", settings), "BAD_REQUEST");
+}
+
+#[test]
 fn t18_source_change_stops_new_snapshots_but_keeps_stored_history() {
     let playing = playing();
     let host = &playing.host;

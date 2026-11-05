@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNativeHistory, entryFromRecord, historyRepository } from '../src/data/history.ts';
-import { ApiFailure, SettingsQueue, UnknownCommit } from '../src/api.ts';
+import { ApiFailure, SettingsQueue, UnknownCommit, finishBeforeClose, windowBounds } from '../src/api.ts';
 import { parseHistoryEntry, historyProgress, historyTime, type HistoryEntry } from '../src/data/history-model.ts';
 import { historyCompletionReady } from './fixtures/t13/history-completion.js';
 
@@ -192,4 +192,31 @@ test('R43/REQ-T18: closing the settings queue waits for what is queued', async (
   release();
   await Promise.all([pending, closing]);
   assert.deepEqual(saved, [{ volume: .42 }]);
+});
+
+test('R43/REQ-T18: closing waits for settings, keeps the window when they fail, and takes changes again', async () => {
+  const steps: string[] = [];
+  const settings = { close: async () => { steps.push('close'); }, reopen: () => steps.push('reopen') };
+  const release = async () => { steps.push('release'); };
+  await finishBeforeClose({ saveHistory: async () => { steps.push('history'); throw new Error('history keeps its own notice'); }, saveSettings: async () => { steps.push('settings'); }, settings, release });
+  assert.deepEqual(steps, ['history', 'settings', 'close', 'release']);
+  steps.length = 0;
+  await assert.rejects(finishBeforeClose({ saveHistory: async () => {}, saveSettings: async () => { throw new Error('unresolved'); }, settings, release }), /unresolved/);
+  assert.deepEqual(steps, ['reopen'], 'the window is not released');
+  steps.length = 0;
+  await assert.rejects(finishBeforeClose({ saveHistory: async () => {}, saveSettings: async () => {}, settings: { close: async () => { throw new Error('paused'); }, reopen: () => steps.push('reopen') }, release }), /paused/);
+  assert.deepEqual(steps, ['reopen']);
+  const queue = new SettingsQueue({ call: async (command: string, input: unknown) => command === 'get_settings' ? { volume: 1 } : input } as never);
+  await queue.initialize();
+  await queue.close();
+  await assert.rejects(queue.update(value => value), /closing/);
+  queue.reopen();
+  assert.equal((await queue.update(value => ({ ...value, volume: .5 }))).volume, .5);
+});
+test('R41/REQ-T18: window bounds hold the real inner size and skip unsupported sizes', () => {
+  const view = { screenX: 10.4, screenY: 20, innerWidth: 1200, innerHeight: 800, outerWidth: 1200, outerHeight: 830, screen: { availWidth: 1920, availHeight: 1080 } };
+  assert.deepEqual(windowBounds(view), { x: 10, y: 20, width: 1200, height: 800, maximized: false });
+  assert.equal(windowBounds({ ...view, outerWidth: 1920, outerHeight: 1080 })!.maximized, true);
+  assert.equal(windowBounds({ ...view, innerWidth: 390 }), null);
+  assert.equal(windowBounds({ ...view, innerHeight: 500 }), null);
 });

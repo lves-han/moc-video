@@ -54,6 +54,15 @@ pub struct Host {
     committed: Mutex<Committed>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowBounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub maximized: bool,
+}
+
 pub struct Call {
     command: String,
     args: Value,
@@ -1125,6 +1134,18 @@ impl Host {
                 .insert(id.to_owned(), record.context.clone());
         }
         Ok(value)
+    }
+
+    pub fn window_bounds(&self) -> Option<WindowBounds> {
+        let committed = self.committed.lock().ok()?;
+        let bounds = &committed.settings["window_bounds"];
+        Some(WindowBounds {
+            x: bounds["x"].as_f64()?,
+            y: bounds["y"].as_f64()?,
+            width: bounds["width"].as_f64()?,
+            height: bounds["height"].as_f64()?,
+            maximized: bounds["maximized"].as_bool()?,
+        })
     }
 
     pub fn capture_source(&self, config_id: &str, sync: bool) -> Result<SourceSnapshot, ApiError> {
