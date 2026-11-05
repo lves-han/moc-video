@@ -133,6 +133,7 @@ class Bridge(t12.Bridge):
 
 
 class Acceptance(BaseAcceptance):
+    DEPLOYMENT = "packaged Tauri WKWebView with real Host/gateway and a controlled Stremio addon; no cluster or Android"
     CARD, ORIGINAL, REQUIREMENTS = "T0.14", "T14", IDS
 
     def __init__(self, report, junit):
@@ -156,7 +157,7 @@ class Acceptance(BaseAcceptance):
             utc_finished=dt.datetime.now(dt.timezone.utc).isoformat(), source_before=self.source, tested_source_digest=current,
             protected=workflow.protected_hash(), platform=sys.platform, arch=platform.machine(), os=platform.platform(),
             observed=self.observed, commands=self.commands, cases=self.cases, summaries=summaries, counts=counts,
-            deployment="packaged Tauri WKWebView with real Host/gateway and a controlled Stremio addon; no cluster or Android",
+            deployment=self.DEPLOYMENT,
             deferred=[dict(target="real public Stremio addons/other platforms", status="NOT RUN", reason="T0.24 product end-to-end; ADR-005/006 local macOS arm64")]))
         rows = self.cases + summaries
         xml = ET.Element("testsuite", name=f"{self.ORIGINAL}-all", tests=str(len(rows)), errors="0", skipped="0",

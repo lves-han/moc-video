@@ -32,6 +32,7 @@ t02.NATIVE = t02.NATIVE | NATIVE | set(REGRESSIONS)
 
 class Acceptance(t02.Acceptance):
     CARD, ORIGINAL, REQUIREMENTS = "T0.20", "T03", IDS
+    DEPLOYMENT = "Rust unit-test Host over local public-response fixtures; no packaged WebView, cluster or Android"
 
 
 def native(run):

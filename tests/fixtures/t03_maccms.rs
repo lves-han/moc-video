@@ -262,6 +262,14 @@ fn t03_endpoint_disable_delete_and_readd_invalidate_old_references() {
             "get_details",
             json!({"ref":content_ref(&readded, &vod_id)}),
         );
+
+        // ADR-052: the same UUID and endpoint are the same source by the identity formula.
+        save_configs(&host, vec![]);
+        save_configs(&host, vec![edited]);
+        let same = sync(&host);
+        assert_eq!(same["id"], current["id"]);
+        assert_eq!(same["source_revision"], current["source_revision"]);
+        ok(&host, "get_details", json!({"ref":reference}));
         assert_eq!(host.requests.active_count(), 0);
     }
 }
