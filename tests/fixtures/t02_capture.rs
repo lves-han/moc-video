@@ -353,17 +353,31 @@ fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a
         .collect()
 }
 
-/// ADR-051: the adapter rejecting accessible data is a defect; transport and removed items are not.
+/// ADR-051: anything other than a recognised source state is a program defect.
 fn program_defect(error: &ApiError) -> bool {
-    error.message.starts_with("MacCMS")
-        && ![
-            "closed",
-            "not JSON",
-            "detail is missing",
-            "changed or is missing",
-        ]
-        .iter()
-        .any(|state| error.message.contains(state))
+    let source_state = [
+        "Public HTTP",
+        "HTTP redirect",
+        "HTTPS redirect",
+        "unsafe_target",
+        "closed",
+        "not JSON",
+        "detail is missing",
+        "changed or is missing",
+    ];
+    !(error.code == "UPSTREAM_TIMEOUT"
+        || error.message.contains("no links")
+        || source_state
+            .iter()
+            .any(|state| error.message.contains(state)))
+}
+
+fn access_refused(error: &ApiError) -> bool {
+    error
+        .details
+        .as_ref()
+        .and_then(|details| details["http_status"].as_u64())
+        .is_some_and(|status| matches!(status, 401 | 403 | 407 | 429 | 451))
 }
 
 const MEDIA_SAMPLES: usize = 8;
@@ -504,8 +518,9 @@ fn candidate(source: &Value) -> Value {
         )?;
         let mut images = Vec::new();
         let mut adapter_recorded = false;
+        let mut refused = false;
         for item in details["list"].as_array().into_iter().flatten() {
-            if samples.len() >= MEDIA_SAMPLES {
+            if refused || samples.len() >= MEDIA_SAMPLES {
                 break;
             }
             let reference = match catalog.card(item, &mut images) {
@@ -519,8 +534,13 @@ fn candidate(source: &Value) -> Value {
             let mapped = match catalog.details(&http, &reference, &job(&host, "default_metadata")) {
                 Ok(mapped) => mapped,
                 Err(error) => {
-                    records.push(json!({"stage":"adapter_details","status":"ITEM_FAILED","program_defect":program_defect(&error),
-                        "error":{"code":error.code,"message":error.message}}));
+                    let refused = access_refused(&error);
+                    records.push(json!({"stage":"adapter_details","status":if refused {"ACCESS_CONTROL_STOP"} else {"ITEM_FAILED"},
+                        "program_defect":program_defect(&error),"error":{"code":error.code,"message":error.message}}));
+                    // The API itself refused: stop this source without further requests.
+                    if refused {
+                        return Ok(());
+                    }
                     continue;
                 }
             };
@@ -547,6 +567,10 @@ fn candidate(source: &Value) -> Value {
                         record["program_defect"] = json!(program_defect(&error));
                         record["error"] = json!({"code":error.code,"message":error.message});
                         samples.push(record);
+                        if access_refused(&error) {
+                            refused = true;
+                            break;
+                        }
                         continue;
                     }
                 };
@@ -746,7 +770,7 @@ fn t02_one_failing_detail_marks_the_program_incompatible() {
 fn t02_one_failing_card_marks_the_program_incompatible() {
     let media = Arc::new(std::sync::Mutex::new(vec![]));
     let mut broken = sample_item(2, "http://maccms.fixture.test:PORT/ok/2.mp4".into());
-    broken["vod_pic"] = json!("http://[");
+    broken["vod_name"] = Value::Null;
     let items = vec![
         sample_item(1, "http://maccms.fixture.test:PORT/ok/1.mp4".into()),
         broken,
@@ -757,6 +781,64 @@ fn t02_one_failing_card_marks_the_program_incompatible() {
         observation["compatibility"], "PROGRAM_INCOMPATIBLE",
         "{observation}"
     );
+}
+
+#[test]
+fn t02_unusable_poster_is_treated_as_no_poster() {
+    let media = Arc::new(std::sync::Mutex::new(vec![]));
+    let mut items = vec![sample_item(
+        1,
+        "http://maccms.fixture.test:PORT/ok/1.mp4".into(),
+    )];
+    for (id, poster) in [(2, "http://["), (3, "ftp://public.example/poster.jpg")] {
+        let mut item = sample_item(id, format!("http://maccms.fixture.test:PORT/ok/{id}.mp4"));
+        item["vod_pic"] = json!(poster);
+        items.push(item);
+    }
+    let fixture = sample_fixture(items, |_| None, media);
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    assert_eq!(observation["compatibility"], "COMPATIBLE", "{observation}");
+}
+
+#[test]
+fn t02_refused_api_stops_requests_to_that_source() {
+    let requested = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = requested.clone();
+    let fixture = Fixture::new(move |request, port| {
+        let items: Vec<Value> = (1..=4)
+            .map(|id| sample_item(id, format!("http://maccms.fixture.test:{port}/ok/{id}.mp4")))
+            .collect();
+        if request.target.starts_with("/ok/") {
+            return Reply::raw(vec![0; 64], "video/mp4");
+        }
+        let Some(id) = request.query.get("ids") else {
+            return Reply::json(response(json!(items), json!([])));
+        };
+        seen.lock().unwrap().push(id.clone());
+        // The capture's own detail_id request for the first title is allowed through.
+        if id == "2" {
+            return Reply {
+                status: 403,
+                ..Reply::raw("refused", "text/plain")
+            };
+        }
+        Reply::json(response(
+            json!([items[id.parse::<usize>().unwrap() - 1]]),
+            json!([]),
+        ))
+    });
+    let observation = candidate(&json!({"name":"x","api_url":fixture.url("/api")}));
+    let requested = requested.lock().unwrap().clone();
+    assert_eq!(
+        requested.iter().filter(|id| *id == "2").count(),
+        1,
+        "{requested:?}"
+    );
+    assert!(
+        !requested.iter().any(|id| id == "3" || id == "4"),
+        "{requested:?}"
+    );
+    assert_eq!(observation["compatibility"], "COMPATIBLE", "{observation}");
 }
 
 #[test]

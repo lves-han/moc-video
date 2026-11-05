@@ -272,9 +272,10 @@ impl Http {
             .open(url, headers, Method::GET, job.connect_timeout_ms()?, config)
             .await?;
         if !response.status().is_success() {
-            return Err(upstream(
-                "Public HTTP server returned an unsuccessful status",
-            ));
+            return Err(
+                upstream("Public HTTP server returned an unsuccessful status")
+                    .with_details(json!({"http_status": response.status().as_u16()})),
+            );
         }
         if !probe
             && response
@@ -822,10 +823,14 @@ impl Catalog {
             self.captured.config["api_url"].as_str().expect("API URL"),
             true,
         )?;
-        let url = base
+        // A poster is optional, so one unusable URL must not reject the title or its page.
+        let Some(url) = base
             .join(value)
-            .map_err(|_| upstream("MacCMS image URL is invalid"))?;
-        http_url(url.as_str(), false)?;
+            .ok()
+            .filter(|url| http_url(url.as_str(), false).is_ok())
+        else {
+            return Ok(Value::Null);
+        };
         let id = identity(
             "http_image",
             &[
