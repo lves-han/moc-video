@@ -10,6 +10,29 @@ def evidence():
                 final=dict(frames=130, position=5.3, time=6000, paused=False, media_error=None, width=1280, height=720))
 
 
+def sources():
+    media = lambda passed, attempted: dict(attempted=attempted, passed=passed, failed_hosts=[], verdict="x")
+    return [dict(name="A", compatibility="COMPATIBLE", supported=True, media_samples=media(3, 8)),
+            dict(name="B", compatibility="COMPATIBLE", supported=True, media_samples=media(0, 8)),
+            dict(name="C", compatibility="SOURCE_UNAVAILABLE", supported=False, media_samples=media(0, 0))]
+
+
+class SourceCompatibilityEvidence(unittest.TestCase):
+    def test_unavailable_media_or_source_is_not_a_program_failure(self):
+        self.assertEqual(t02.validate_sources(sources(), "A"), ["A", "B"])
+
+    def test_program_defects_and_inconsistent_results_fail(self):
+        for change in (lambda s: s[0].update(compatibility="PROGRAM_INCOMPATIBLE"), lambda s: s[1].update(supported=False),
+                       lambda s: s[2].update(supported=True), lambda s: s[0].pop("compatibility"),
+                       lambda s: s[0]["media_samples"].update(attempted=9)):
+            value = sources()
+            change(value)
+            with self.assertRaises(ValueError):
+                t02.validate_sources(value, "A")
+        with self.assertRaises(ValueError):
+            t02.validate_sources(sources(), "B")
+
+
 class PublicPlaybackEvidence(unittest.TestCase):
     def rejects(self, change):
         value = copy.deepcopy(evidence())

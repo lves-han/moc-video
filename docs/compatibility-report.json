@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "card": "T0.19",
-  "status": "ACCEPTED_FOR_T0.19",
+  "status": "WIP",
   "updated_utc": "2026-11-05T05:35:27.577195+00:00",
   "implementation_basis": "Independent public HTTP responses; existing MacCMS adapter. Plugin source was used only for scope/risk investigation (C4, ADR-048).",
   "aes": {
@@ -36,7 +36,7 @@
     {
       "name": "优质",
       "api_url": "https://api.1080zyku.com/inc/apijson.php",
-      "probe": false,
+      "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items; exact endpoint must be confirmed by the native capture.",
       "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
       "current_media": {
@@ -114,18 +114,13 @@
           "adapter_decode": {}
         }
       ],
-      "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint."
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "量子",
       "api_url": "https://cj.lziapi.com/api.php/provide/vod/",
       "public_documentation": "https://www.lzizy.net/index.php/help.html",
-      "probe": false,
+      "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items; public help documents list/detail, t, pg, wd, ids and multiple playback groups.",
       "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
       "current_media": {
@@ -196,12 +191,7 @@
           }
         }
       ],
-      "reason": "STOPPED: first media resolution returned unsuccessful HTTP status before capture could record its numeric status; access-control outcome remains uncertain. Preserve stop pending explicit review.",
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "STOPPED: first media resolution returned unsuccessful HTTP status before capture could record its numeric status; access-control outcome remains uncertain. Preserve stop pending explicit review."
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "红牛",
@@ -215,7 +205,7 @@
         "http_status": null,
         "reason": "first declared group only; later direct media group remains NOT RUN"
       },
-      "supported": true,
+      "supported": false,
       "observation_utc": "2026-11-05T03:44:42.390829Z",
       "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
       "http_observations": [
@@ -276,17 +266,13 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "SHORT_PLAY_PASS",
-        "chain": "public JSON/list/detail/full episodes/Host resolve/Rust gateway/packaged WKWebView"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "无尽",
       "api_url": "https://api.wujinapi.com/api.php/provide/vod/",
       "public_documentation": "https://help.wujinapi.me/",
-      "probe": false,
+      "probe": true,
       "prior_observation": "2026-11-05 handoff: list/detail code=1 with 20 items and string page.",
       "current_protocol": "PUBLIC_JSON_ADAPTER_PASS",
       "current_media": {
@@ -364,12 +350,7 @@
           "adapter_decode": {}
         }
       ],
-      "reason": "ACCESS_CONTROL_STOP: native public media returned HTTP 403. Candidate remains stopped; no retry or alternate endpoint.",
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "光速",
@@ -444,11 +425,7 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "极速",
@@ -523,11 +500,7 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "豪华",
@@ -601,16 +574,12 @@
           }
         }
       ],
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "淘片",
       "api_url": "https://taopianapi.com/cjapi/mc/vod/json/m3u8.html",
-      "probe": false,
+      "probe": true,
       "prior_observation": "2026-11-05 handoff: abbreviated JSON list; detail shape remains unverified.",
       "current_protocol": "ADAPTER_REJECTED",
       "current_media": {
@@ -695,17 +664,12 @@
           }
         }
       ],
-      "reason": "Protocol rejected: captured public list/detail omit required success code. No promotion or production special case.",
-      "real_gateway_webview": "NOT RUN",
-      "acceptance_live": {
-        "status": "NOT RUN",
-        "reason": "First direct media candidate selected; remaining candidates remain unpromoted"
-      }
+      "real_gateway_webview": "NOT RUN"
     },
     {
       "name": "卧龙",
       "api_url": "https://collect.wolongzyw.com/api.php/provide/vod/",
-      "probe": false,
+      "probe": true,
       "prior_observation": "2026-11-05 handoff: non-JSON; excluded from the JSON shortlist.",
       "current_protocol": "NOT RUN",
       "current_media": {
@@ -713,7 +677,6 @@
         "error": null
       },
       "supported": false,
-      "reason": "Non-JSON scope exclusion, C4.",
       "observation_utc": null,
       "evidence": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
       "http_observations": [],
@@ -724,9 +687,7 @@
       }
     }
   ],
-  "supported_sources": [
-    "红牛"
-  ],
+  "supported_sources": [],
   "required_acceptance": {
     "public_response_fixtures": "PASS in evidence/acceptance/T02-all.json",
     "negative_fixtures_and_cap_isolation": "PASS in evidence/acceptance/T02-all.json",

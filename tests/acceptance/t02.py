@@ -25,6 +25,8 @@ LIVE_TEST = "host::maccms::tests::t02::t02_live_public_gateway_webview"
 NATIVE = {
     "t02_capture_projection_removes_signed_urls_and_preserves_group_order",
     "t02_direct_route_selection_preserves_later_hls_group",
+    "t02_source_support_is_judged_across_sampled_videos",
+    "t02_minimal_shape_accepts_a_list_without_code_only",
     "t02_dns_two_servers_failover_and_both_families",
     "t02_dns_one_silent_server_keeps_other_available",
     "t02_dns_both_failed_never_falls_back_to_hosts_or_system",
@@ -96,7 +98,7 @@ def native(run):
     require(names == NATIVE and f"test result: ok. {len(NATIVE)} passed; 0 failed; 0 ignored;" in output,
             "All named T02 native tests must execute with no failure or skip")
     fixture = [json.loads(line.split("T02_FIXTURE:", 1)[1]) for line in output.splitlines() if "T02_FIXTURE:" in line]
-    require(len(fixture) == 1 and fixture[0]["sources"] == 7 and fixture[0]["episodes"] >= 1200,
+    require(len(fixture) == 1 and fixture[0]["sources"] == 8 and fixture[0]["episodes"] >= 1200,
             "Public response fixture coverage is incomplete")
     for name in REGRESSIONS:
         result = run.command(argv + [name, "--", "--test-threads=1", "--nocapture"])
@@ -106,6 +108,21 @@ def native(run):
     run.observed["native_counts"] = dict(required=len(NATIVE) + len(REGRESSIONS), ran=len(NATIVE) + len(REGRESSIONS),
                                           passed=len(NATIVE) + len(REGRESSIONS), failed=0, skipped=0, status="PASS")
     return dict(public_fixture=fixture[0], regressions=REGRESSIONS, **run.observed["native_counts"])
+
+
+def validate_sources(sources, selected):
+    """ADR-051: a program defect fails acceptance; unavailable sources and media are recorded only."""
+    names = []
+    for source in sources:
+        verdict = source.get("compatibility")
+        require(verdict != "PROGRAM_INCOMPATIBLE", f"Adapter cannot use an accessible response from {source['name']}")
+        require(verdict in {"COMPATIBLE", "SOURCE_UNAVAILABLE", "SOURCE_NO_CONTENT"}, f"{source['name']} has no compatibility result")
+        summary = source["media_samples"]
+        require(source["supported"] is (verdict == "COMPATIBLE") and summary["passed"] <= summary["attempted"] <= 8, "Source results are inconsistent")
+        if source["supported"]:
+            names.append(source["name"])
+    require(any(row["name"] == selected and row["media_samples"]["passed"] > 0 for row in sources), "The short-play source must have an available sample")
+    return names
 
 
 def validate_short_play(value):
@@ -204,7 +221,7 @@ def webview(run):
                     require(session.record.get("exit") == 0 and session.record.get("lingering") == [], "Owned WKWebView processes remain")
                 bridge.finish()
                 require(run.observed["host"]["ready"] is True and run.observed["host"]["closed"] is True, "Public Host session was not closed")
-                run.observed["supported_sources"] = [ready["source"]]
+                run.observed["supported_sources"] = validate_sources(ready["sources"], ready["source"])
                 return dict(source=ready["source"], group_index=ready["group_index"], kind=ready["kind"], short_play_seconds=5,
                             chain="public JSON/list/detail/full episodes/Host resolve/Rust gateway/packaged WKWebView")
             finally:

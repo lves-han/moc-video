@@ -283,6 +283,8 @@ fn capture(
             Ok(_) => json!({"status":"PASS"}),
             Err(error) => json!({"status":"FAIL","code":error.code,"message":error.message}),
         };
+        // An explicit non-success code is the source reporting its own state.
+        record["source_error"] = json!(raw.get("code").is_some_and(|code| *code != json!(1)));
         record["status"] = json!("JSON_CAPTURED");
         Ok(raw)
     })();
@@ -321,11 +323,85 @@ fn direct_episode<'a>(original: &Value, groups: &'a [Value]) -> Option<(usize, &
         })
 }
 
+/// One declared direct route per play group of one title.
+fn direct_episodes<'a>(original: &Value, groups: &'a [Value]) -> Vec<(usize, &'a Value)> {
+    let Some(routes) = original["vod_play_url"].as_str() else {
+        return vec![];
+    };
+    routes
+        .split("$$$")
+        .enumerate()
+        .filter_map(|(group, entries)| {
+            let single = json!({"vod_play_url": entries});
+            let slice = std::slice::from_ref(groups.get(group)?);
+            direct_episode(&single, slice).map(|(_, episode)| (group, episode))
+        })
+        .collect()
+}
+
+const MEDIA_SAMPLES: usize = 8;
+const HOST_FAILURES: usize = 2;
+
+/// ADR-050: support is judged across sampled videos, so one failure never condemns a source.
+fn media_summary(samples: &[Value]) -> Value {
+    let passed = samples
+        .iter()
+        .filter(|row| row["status"] == "PREFIX_ONLY")
+        .count();
+    let mut failed_hosts: Vec<&str> = samples
+        .iter()
+        .filter(|row| row["status"] != "PREFIX_ONLY")
+        .filter_map(|row| row["host"].as_str())
+        .collect();
+    failed_hosts.sort_unstable();
+    failed_hosts.dedup();
+    json!({"attempted":samples.len(),"passed":passed,"failed_hosts":failed_hosts,
+        "verdict":if passed > 0 {"MEDIA_AVAILABLE"} else if samples.is_empty() {"NOT RUN"} else {"NO_SAMPLE_AVAILABLE"}})
+}
+
+/// ADR-051: only an accessible response the adapter cannot use is a program defect.
+fn compatibility(records: &[Value]) -> &'static str {
+    let api = || {
+        records.iter().filter(|row| {
+            row["stage"] != "adapter_details" && row["stage"] != "direct_media_prefix"
+        })
+    };
+    if records
+        .iter()
+        .any(|row| row["stage"] == "adapter_details" && row["status"] == "NO_CONTENT")
+    {
+        "SOURCE_NO_CONTENT"
+    } else if api()
+        .any(|row| row["adapter_decode"]["status"] == "FAIL" && row["source_error"] != true)
+    {
+        "PROGRAM_INCOMPATIBLE"
+    } else if api().any(|row| row["status"] != "JSON_CAPTURED" || row["source_error"] == true) {
+        "SOURCE_UNAVAILABLE"
+    } else if records
+        .iter()
+        .any(|row| row["stage"] == "adapter_details" && row["status"] == "PASS")
+    {
+        "COMPATIBLE"
+    } else {
+        "PROGRAM_INCOMPATIBLE"
+    }
+}
+
+fn host_exhausted(samples: &[Value], host: &str) -> bool {
+    samples
+        .iter()
+        .filter(|row| row["host"] == host && row["status"] != "PREFIX_ONLY")
+        .count()
+        >= HOST_FAILURES
+}
+
 fn candidate(source: &Value) -> Value {
     let base = source["api_url"].as_str().unwrap();
     let mut records = Vec::new();
     let (_temporary, host) = setup(base.into());
     let http = Http::default();
+    let mut samples: Vec<Value> = Vec::new();
+    let mut selected = Value::Null;
     let result = (|| -> Result<(), ApiError> {
         let list = capture(
             &http,
@@ -343,15 +419,15 @@ fn candidate(source: &Value) -> Value {
             &[("ac", "detail"), ("pg", "1")],
             &mut records,
         )?;
-        let first = details["list"]
-            .as_array()
-            .and_then(|items| items.first())
-            .ok_or_else(|| upstream("Public detail page has no sample item"))?;
+        let Some(first) = details["list"].as_array().and_then(|items| items.first()) else {
+            records.push(json!({"stage":"adapter_details","status":"NO_CONTENT"}));
+            return Ok(());
+        };
         let id = identifier(&first["vod_id"])?;
         let title = first["vod_name"]
             .as_str()
             .ok_or_else(|| upstream("Public sample title missing"))?;
-        let original = capture(
+        capture(
             &http,
             &host,
             base,
@@ -395,62 +471,151 @@ fn candidate(source: &Value) -> Value {
             &job(&host, "http_source_sync"),
         )?;
         let mut images = Vec::new();
-        let reference = catalog.card(first, &mut images)?["ref"].clone();
-        let mapped = catalog.details(&http, &reference, &job(&host, "default_metadata"))?;
-        let groups = mapped.value["details"]["groups"].as_array().unwrap();
-        records.push(json!({"stage":"adapter_details","status":"PASS","groups":groups.len(),
-            "episodes":groups.iter().map(|g| g["episodes"].as_array().unwrap().len()).sum::<usize>()}));
-        let (group_index, episode) = direct_episode(&original["list"][0], groups)
-            .ok_or_else(|| upstream("Public sample has no declared direct MP4/HLS episode"))?;
-        let link = catalog.resolve(&http, &episode["ref"], &job(&host, "resolve"))?;
-        let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","group_index":group_index,"kind":link.kind,"playable":link.playable});
-        if !link.playable {
-            record["status"] = json!("UNSUPPORTED");
-            records.push(record);
-            return Err(upstream("Public sample direct media is unsupported"));
-        }
-        let response = fetch(
-            &http,
-            http_url(&link.url, false)?,
-            &job(&host, "resolve"),
-            PROBE_LIMIT,
-            true,
-            &mut record,
-        );
-        match response {
-            Ok(response) => {
-                let (kind, _, reason) = classify(&response);
-                record["observed_kind"] = json!(kind);
-                record["reason"] = json!(reason);
-                record["status"] = json!(if reason.is_none()
-                    && matches!(kind, "progressive" | "hls")
-                {
-                    "PREFIX_ONLY"
-                } else {
-                    "FAIL"
-                });
+        let mut adapter_recorded = false;
+        for item in details["list"].as_array().into_iter().flatten() {
+            if samples.len() >= MEDIA_SAMPLES {
+                break;
             }
-            Err(error) => {
-                if record["status"] == "NOT RUN" {
-                    record["status"] = json!("FAILED_STOP");
+            let reference = catalog.card(item, &mut images)?["ref"].clone();
+            let Ok(mapped) = catalog.details(&http, &reference, &job(&host, "default_metadata"))
+            else {
+                continue;
+            };
+            let groups = mapped.value["details"]["groups"].as_array().unwrap();
+            if !adapter_recorded {
+                adapter_recorded = true;
+                records.push(json!({"stage":"adapter_details","status":"PASS","groups":groups.len(),
+                    "episodes":groups.iter().map(|g| g["episodes"].as_array().unwrap().len()).sum::<usize>()}));
+            }
+            for (group_index, episode) in direct_episodes(item, groups) {
+                if samples.len() >= MEDIA_SAMPLES {
+                    break;
                 }
-                record["error"] = json!({"code":error.code,"message":error.message});
+                let mut record = json!({"stage":"direct_media_prefix","status":"NOT RUN","group_index":group_index});
+                let link = match catalog.resolve(&http, &episode["ref"], &job(&host, "resolve")) {
+                    Ok(link) => link,
+                    Err(error) => {
+                        record["status"] = json!("RESOLVE_FAILED");
+                        record["error"] = json!({"code":error.code,"message":error.message});
+                        samples.push(record);
+                        continue;
+                    }
+                };
+                record["kind"] = json!(link.kind);
+                let url = http_url(&link.url, false)?;
+                let media_host = url.host_str().unwrap_or_default().to_owned();
+                // A refused host is skipped, while other titles may use another CDN (ADR-050).
+                if host_exhausted(&samples, &media_host) {
+                    continue;
+                }
+                record["host"] = json!(media_host);
+                if !link.playable {
+                    record["status"] = json!("UNSUPPORTED_ROUTE");
+                    samples.push(record);
+                    continue;
+                }
+                match fetch(
+                    &http,
+                    url,
+                    &job(&host, "resolve"),
+                    PROBE_LIMIT,
+                    true,
+                    &mut record,
+                ) {
+                    Ok(response) => {
+                        let (kind, _, reason) = classify(&response);
+                        record["observed_kind"] = json!(kind);
+                        record["reason"] = json!(reason);
+                        record["status"] = json!(if reason.is_none()
+                            && matches!(kind, "progressive" | "hls")
+                        {
+                            "PREFIX_ONLY"
+                        } else {
+                            "FAIL"
+                        });
+                    }
+                    Err(error) => {
+                        if record["status"] == "NOT RUN" {
+                            record["status"] = json!("FAILED_STOP");
+                        }
+                        record["error"] = json!({"code":error.code,"message":error.message});
+                    }
+                }
+                if record["status"] == "PREFIX_ONLY" && selected.is_null() {
+                    selected = json!({"id":identifier(&item["vod_id"])?,"group":group_index});
+                }
+                samples.push(record);
             }
         }
-        let failed = record["status"] != "PREFIX_ONLY";
-        records.push(record);
-        if failed {
-            Err(upstream(
-                "Public direct media verification failed; candidate stopped",
-            ))
-        } else {
-            Ok(())
-        }
+        Ok(())
     })();
+    let summary = media_summary(&samples);
+    records.extend(samples);
+    let verdict = compatibility(&records);
     json!({"name":source["name"],"api_url":base,"utc":OffsetDateTime::now_utc().format(&Rfc3339).unwrap(),
         "capture_status":if result.is_ok() {"CAPTURED"} else {"STOPPED"},
         "error":result.err().map(|e| json!({"code":e.code,"message":e.message})),"records":records,
-        "supported":false,"real_gateway_webview":"NOT RUN"})
+        "media_samples":summary,"compatibility":verdict,"supported":verdict == "COMPATIBLE","selected":selected})
+}
+
+#[test]
+fn t02_source_support_is_judged_across_sampled_videos() {
+    let row = |status: &str, host: &str| json!({"status":status,"host":host});
+    let mixed = media_summary(&[
+        row("ACCESS_CONTROL_STOP", "a.test"),
+        row("PREFIX_ONLY", "b.test"),
+    ]);
+    assert_eq!(mixed["verdict"], "MEDIA_AVAILABLE");
+    assert_eq!(mixed["passed"], 1);
+    assert_eq!(mixed["failed_hosts"], json!(["a.test"]));
+    assert_eq!(
+        media_summary(&[row("FAIL", "a.test")])["verdict"],
+        "NO_SAMPLE_AVAILABLE"
+    );
+    assert_eq!(media_summary(&[])["verdict"], "NOT RUN");
+    // Compatibility ignores media: a source with no playable sample stays compatible.
+    let api = |status: &str, decode: &str, source: bool| json!({"stage":"list","status":status,"adapter_decode":{"status":decode},"source_error":source});
+    let adapter = json!({"stage":"adapter_details","status":"PASS"});
+    let media =
+        json!({"stage":"direct_media_prefix","status":"ACCESS_CONTROL_STOP","host":"a.test"});
+    assert_eq!(
+        compatibility(&[api("JSON_CAPTURED", "PASS", false), adapter, media]),
+        "COMPATIBLE"
+    );
+    assert_eq!(
+        compatibility(&[api("JSON_CAPTURED", "FAIL", false)]),
+        "PROGRAM_INCOMPATIBLE"
+    );
+    assert_eq!(
+        compatibility(&[api("JSON_CAPTURED", "PASS", false)]),
+        "PROGRAM_INCOMPATIBLE"
+    );
+    assert_eq!(
+        compatibility(&[api("JSON_CAPTURED", "FAIL", true)]),
+        "SOURCE_UNAVAILABLE"
+    );
+    assert_eq!(
+        compatibility(&[json!({"stage":"list","status":"NON_JSON_STOP"})]),
+        "SOURCE_UNAVAILABLE"
+    );
+    assert_eq!(
+        compatibility(&[json!({"stage":"adapter_details","status":"NO_CONTENT"})]),
+        "SOURCE_NO_CONTENT"
+    );
+    let failed = [row("FAIL", "a.test"), row("FAIL", "a.test")];
+    assert!(host_exhausted(&failed, "a.test"));
+    assert!(!host_exhausted(&failed, "b.test"));
+    assert!(!host_exhausted(&failed[..1], "a.test"));
+    let groups = vec![
+        json!({"episodes":[{"id":"mp4"}]}),
+        json!({"episodes":[{"id":"hls"}]}),
+    ];
+    let original = json!({"vod_play_url":"A$https://a.test/1.mp4$$$B$https://b.test/1.m3u8"});
+    let routes = direct_episodes(&original, &groups);
+    assert_eq!(
+        routes.iter().map(|(group, _)| *group).collect::<Vec<_>>(),
+        vec![0, 1]
+    );
 }
 
 #[test]
@@ -482,29 +647,20 @@ fn t02_live_public_gateway_webview() {
     let mut observations = Vec::new();
     let mut selected = None;
     for source in inventory["sources"].as_array().unwrap() {
-        if selected.is_some() {
-            observations.push(json!({"name":source["name"],"status":"NOT RUN","reason":"First direct media candidate selected; remaining candidates remain unpromoted"}));
-            continue;
-        }
         if source["probe"] != true {
             observations
                 .push(json!({"name":source["name"],"status":"NOT RUN","reason":source["reason"]}));
             continue;
         }
         let observation = candidate(source);
-        let prefix = observation["records"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| row["stage"] == "direct_media_prefix" && row["status"] == "PREFIX_ONLY");
+        if selected.is_none() && !observation["selected"].is_null() {
+            selected = Some((source, observation["selected"].clone()));
+        }
         observations.push(observation);
         publish(
             &directory.join("public-observations.json"),
             &json!({"sources":observations}),
         );
-        if prefix {
-            selected = Some(source);
-        }
     }
     publish(
         &directory.join("public-observations.json"),
@@ -526,7 +682,7 @@ fn t02_live_public_gateway_webview() {
             Reply::json(json!({"meta":meta}))
         }
     });
-    if let Some(source) = selected {
+    if let Some((source, sample)) = selected {
         let base = source["api_url"].as_str().unwrap();
         let temporary = TempDir::new().unwrap();
         let host = Host::open(temporary.path().join("settings.json")).unwrap();
@@ -553,8 +709,8 @@ fn t02_live_public_gateway_webview() {
             &Http::default(),
             &host,
             base,
-            "live_detail_page",
-            &[("ac", "detail"), ("pg", "1")],
+            "live_detail_id",
+            &[("ac", "detail"), ("ids", sample["id"].as_str().unwrap())],
             &mut vec![],
         )
         .unwrap();
@@ -562,8 +718,10 @@ fn t02_live_public_gateway_webview() {
         let reference = catalog.card(&public["list"][0], &mut vec![]).unwrap()["ref"].clone();
         let details = ok(&host, "get_details", json!({"ref":reference}));
         let groups = details["details"]["groups"].as_array().unwrap();
-        let (group, episode) = direct_episode(&public["list"][0], groups)
-            .expect("Declared direct media route disappeared");
+        let (group, episode) = direct_episodes(&public["list"][0], groups)
+            .into_iter()
+            .find(|(group, _)| Some(*group as u64) == sample["group"].as_u64())
+            .expect("Verified direct media route disappeared");
         let home = ok(&host, "get_home", home_input(metadata_source));
         let meta = ok(
             &host,

@@ -479,8 +479,12 @@ fn identifier(value: &Value) -> Result<String, ApiError> {
 }
 
 fn decode(response: &Response) -> Result<Value, ApiError> {
-    let value: Value = serde_json::from_slice(&response.body)
+    let mut value: Value = serde_json::from_slice(&response.body)
         .map_err(|_| upstream("MacCMS response is not JSON"))?;
+    // Some public interfaces omit code; a list is then the success signal.
+    if value.get("code").is_none() && value["list"].is_array() {
+        value["code"] = json!(1);
+    }
     if value["code"] != json!(1)
         || value.get("closed").is_some_and(|v| {
             !matches!(v, Value::Null | Value::Bool(false)) && *v != json!(0) && *v != json!("0")
@@ -760,7 +764,7 @@ impl Catalog {
     }
 
     fn cards_limit(&self, response: &Value, page: u64, maximum: usize) -> Result<Mapped, ApiError> {
-        if number(&response["page"], 1)? != page {
+        if response.get("page").is_some() && number(&response["page"], 1)? != page {
             return Err(upstream("MacCMS returned a different page"));
         }
         number(&response["pagecount"], 0)?;

@@ -47,9 +47,6 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
     let mut validated = 0;
     let mut total_episodes = 0;
     for source in data["sources"].as_array().unwrap() {
-        if source["name"] == "淘片" {
-            continue;
-        }
         let fixture = serve_public(source.clone());
         let (_temp, host) = setup(fixture.url("/api"));
         let catalog = catalog(&host);
@@ -150,7 +147,7 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
         assert_eq!(host.requests.active_count(), 0);
         validated += 1;
     }
-    assert_eq!(validated, 7);
+    assert_eq!(validated, 8);
     assert!(total_episodes >= 1200);
     println!(
         "T02_FIXTURE:{}",
@@ -159,22 +156,27 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
 }
 
 #[test]
-fn t02_public_json_errors_zero_results_and_bounds_remain_explicit() {
-    let data: Value = serde_json::from_str(RESPONSES).unwrap();
-    let unsupported = data["sources"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|s| s["name"] == "淘片")
-        .unwrap();
-    for record in unsupported["records"].as_array().unwrap() {
-        let response = Response {
+fn t02_minimal_shape_accepts_a_list_without_code_only() {
+    let parse = |body: Value| {
+        decode(&Response {
             url: "https://public.example/api".parse().unwrap(),
             headers: HeaderMap::new(),
-            body: serde_json::to_vec(&record["response"]).unwrap(),
-        };
-        assert_eq!(decode(&response).unwrap_err().code, "UPSTREAM_FAILED");
+            body: serde_json::to_vec(&body).unwrap(),
+        })
+    };
+    assert!(parse(json!({"pagecount":2,"list":[]})).is_ok());
+    assert!(parse(json!({"code":1,"list":[]})).is_ok());
+    for rejected in [
+        json!({"pagecount":2}),
+        json!({"list":"x"}),
+        json!({"code":0,"list":[]}),
+    ] {
+        assert!(parse(rejected).is_err());
     }
+}
+
+#[test]
+fn t02_public_json_errors_zero_results_and_bounds_remain_explicit() {
     n00_query_search_encoding_and_empty_results();
     n00_metadata_limits_and_foreign_section_refs();
     n00_protocol_numbers_closed_and_errors();
