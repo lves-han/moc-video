@@ -1974,3 +1974,21 @@
 ## T0.19 媒体DNS环境恢复 2026-11-05T03:36:33.390673+00:00
 - 结果：RESOLVED
 - 决定：沿本聊天用户“恢复正常后继续T0.19，验收和独立巡检通过后按任务顺序推进”的既有明确授权，当前实际复核v.lzcdn31.com及play.hhuus.com均返回公网地址，解除媒体DNS环境阻塞；冻结内容保持。原失败与支持未验证状态保留，接续原生产HTTP诊断。
+
+## T0.19 固定公共DNS契约修订 2026-11-05T03:41:56.643841+00:00
+- 结果：BLOCKED
+- 事实：用户明确要求“指定1.1.1.1  8.8.8.8这两个公共DNS，不使用本机dns”；C6及验收需同步修订，当前无存活驱动/重命令，保留原失败历史。
+- 下一步：固定两公共DNS、保留全部公网/peer/TLS防护，修订受审定义后原rebaseline与独立审查；未实现。
+
+## T0.19 固定公共DNS修订授权 2026-11-05T03:42:04.528044+00:00
+- 结果：RESOLVED
+- 决定：用户明确指定1.1.1.1和8.8.8.8，不使用本机DNS；按ADR049修订C6/T019，无UI/新增依赖，保留安全门。原流程迁移后独立审查再实现。
+- 批准摘要：5f24a743a02cebf238fccdc755a1f5c8ae2aecd3617d3fc2d240d577554de7d1
+
+## T0.19 公共DNS文档独立审查 2026-11-05T03:43:26.607082+00:00
+- 文档结论：DOC-REVIEW-VERDICT: CLEAR；独立只读dns_doc_review，原样报告docs/reviews/doc-review/round-43.md；protected5f24a743a02cebf238fccdc755a1f5c8ae2aecd3617d3fc2d240d577554de7d1。实现验收NOT RUN。
+
+## T0.19 指定公共DNS局部实施 2026-11-05T03:46:20.972282+00:00
+- 实施状态：WIP；公共HTTP入口固定1.1.1.1/8.8.8.8，禁用hosts和系统配置读取，原公网全集/peer/TLS保持。
+- 局部验证：原run diag-t02-public-dns 17项通过，日志evidence/runs/20261105T034345876280-diag-t02-public-dns/output.log；固定DNS实际诊断exit0/1项，日志evidence/runs/20261105T034400521107-diag-t02-public/output.log，报告evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json。多个来源取得JSON及adapter_details PASS；媒体前缀出现访问拒绝/不支持，全部仍未晋级，遇访问控制已停止相关来源。
+- 格式检查首次发现新增模块/导入排序，原日志保留，随后cargo fmt按既有规则修正。专项双DNS故障转移回归、A1、完整verify及独立代码巡检NOT RUN；接续剩余第2会话补齐。

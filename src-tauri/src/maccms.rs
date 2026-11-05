@@ -169,21 +169,27 @@ impl Http {
         // Async DNS is part of the same cancellable future as connect/body I/O.
         // A blocking system lookup would keep Runtime::drop waiting past the
         // request deadline. Query both families before accepting any address.
-        let mut builder = hickory_resolver::TokioResolver::builder_tokio()
-            .map_err(|_| upstream("Public HTTP DNS configuration failed"))?;
+        use hickory_resolver::{
+            config::{NameServerConfig, ResolverConfig, ResolveHosts},
+            net::runtime::TokioRuntimeProvider,
+        };
+        #[allow(unused_mut)] // Test-only nameserver injection replaces this list.
+        let mut servers = vec![
+            NameServerConfig::udp(Ipv4Addr::new(1, 1, 1, 1).into()),
+            NameServerConfig::udp(Ipv4Addr::new(8, 8, 8, 8).into()),
+        ];
         #[cfg(test)]
         if let Some(server) = self.nameserver {
-            use hickory_resolver::{
-                config::{NameServerConfig, ResolverConfig},
-                net::runtime::TokioRuntimeProvider,
-            };
             let mut nameserver = NameServerConfig::udp(server.ip());
             nameserver.connections[0].port = server.port();
-            builder = hickory_resolver::TokioResolver::builder_with_config(
-                ResolverConfig::from_name_servers(vec![nameserver]),
-                TokioRuntimeProvider::default(),
-            );
+            servers = vec![nameserver];
         }
+        let mut builder = hickory_resolver::TokioResolver::builder_with_config(
+            ResolverConfig::from_name_servers(servers),
+            TokioRuntimeProvider::default(),
+        );
+        // Never read OS DNS, hosts, or search domains (ADR-049).
+        builder.options_mut().use_hosts_file = ResolveHosts::Never;
         builder.options_mut().ip_strategy = hickory_resolver::config::LookupIpStrategy::Ipv4AndIpv6;
         let resolver = builder
             .build()

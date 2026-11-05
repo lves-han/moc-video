@@ -1029,6 +1029,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 依赖：T0.1, T0.4, T0.8, T0.9
 - 需求：U02, U05, R03, R12, R16, R45, R49, REQ-T02 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `tests/`, `docs/compatibility-report.json`, `docs/runtime.lock.json`, `docs/ARCHITECTURE.md`, `docs/TASKS.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOFF-RUST-REWRITE.md`, `docs/HANDOFF-RUST-REWRITE-PROMPT.md`, `docs/reviews/doc-review/`, `android-engine/`
+- 补充验收（ADR-049，A1关联R12/R49/REQ-T02）：公共DNS固定1.1.1.1与8.8.8.8，无系统DNS/hosts回退；用受控DNS验证A/AAAA、单服务器失败转移、两服务器失败/取消/超时、混合公网内网及Fake-IP拒绝、DNS重绑定/重定向/peer校验；真实网络验证固定公共DNS下JSON与媒体链路，失败如实记录。测试覆盖公共解析入口，其他平台NOT RUN沿原决定。
 - 交付物：记录AES用途核实结果（C4，无需新增插件AES解密）及公开响应实现依据；复用maccms.rs/source_dispatch.rs/resolution.rs/gateway.rs，以现有maccms kind和配置接入。协议候选为优质、量子、红牛、无尽、光速、极速、豪华；淘片简略JSON待详情核实、卧龙非JSON暂排除。仅完成JSON、详情及直接媒体验证的候选进入支持列表；其余逐个列明失败/NOT RUN。已读插件源码只作范围风险调查，产品代码依据公开HTTP响应独立实现，保留实现依据，全部原包及Android补丁保留历史且从运行/发行路径排除。
 - 验收：
 ```json

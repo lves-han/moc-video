@@ -44,6 +44,8 @@ MacCMS匿名JSON、首个$拆条目而保留URL余串，组/集原顺序与歧�
 
 配置最多32、每Stremio配置1..16 manifests，UUID唯一，禁用/删除/重加的generation墓碑与sync_sequence防止旧提交。公共HTTP入口覆盖API/manifest/图像/媒体/字幕/HLS/key/探测：全部DNS A/AAAA与实际peer公网单播，IPv4映射IPv6还原，地址绑定连接，保持Host/TLS/SNI，逐跳最多5次且拒绝HTTPS降级，跨Origin清除敏感头，禁用环境代理。受控本机fixture只在测试构建固定允许列表中开放。
 
+ADR-049：应用公共HTTP域名只通过1.1.1.1:53和8.8.8.8:53解析A/AAAA，复用hickory异步解析器及其受操作总deadline约束的失败转移；不读取系统DNS、hosts、搜索域或环境DNS配置，无本机回退。IP字面量继续原地址检查。所有API/图片/媒体/字幕/HLS子资源及每次重定向共用此入口。两服务器均失败时明确返回DNS错误；即使公共DNS返回内网/保留地址或混合结果仍拒绝，resolve_to_addrs绑定及实际peer校验、原域名TLS/SNI与证书校验保持。测试专用nameserver/fixture映射仅cfg(test)。使用明文DNS可能受网络劫持，地址防护仍执行；真实网络诊断须区分解析成功、媒体成功及拦截失败，暂不增加DoH/代理功能或设置UI。
+
 ### C7 请求预算与取消（SPEC §6.2/§7.3/§11.2）
 
 下表保留原生HTTP操作预算，排队、重试、重定向与全部子请求共享单调deadline。聚合提前1000ms取消收尾，前端传输余量2000ms后主动取消，公共元数据4槽。连接上限10000ms并裁剪剩余，流无字节空闲30000ms。UUID重复/自身取消BAD_REQUEST，取消独立控制路径，父子级联，finally清理，返回前核对取消与世代。
