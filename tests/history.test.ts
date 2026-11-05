@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNativeHistory, entryFromRecord, historyRepository } from '../src/data/history.ts';
-import { UnknownCommit } from '../src/api.ts';
+import { ApiFailure, UnknownCommit } from '../src/api.ts';
 import { parseHistoryEntry, historyProgress, historyTime, type HistoryEntry } from '../src/data/history-model.ts';
 import { historyCompletionReady } from './fixtures/t13/history-completion.js';
 
@@ -151,4 +151,15 @@ test('REQ-T18: a failed snapshot retries on its sequence and an unknown result r
   assert.equal(calls.filter(call => call.command === 'list_history').length, before + 1, 'unknown commit rereads the sequence');
   await assert.rejects(history.save({ ...snapshot, capture: undefined }), /capture/);
   await history.drain();
+});
+
+test('REQ-T18: a refused snapshot leaves the failed one and its sequence for retry', async () => {
+  const { history, snapshot, failures, writes } = nativeFixture();
+  await history.list();
+  failures.push(new Error('disk'));
+  await assert.rejects(history.save(snapshot));
+  failures.push(new ApiFailure({ code: 'SESSION_EXPIRED', message: 'closed', retryable: false } as never));
+  await assert.rejects(history.save({ ...snapshot }));
+  await history.save(snapshot);
+  assert.deepEqual(writes(), [5, 6, 5]);
 });

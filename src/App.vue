@@ -11,8 +11,7 @@ import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
-import { historyRepository, historyWriteDue } from "./data/history";
-import { ApiFailure } from "./api";
+import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
@@ -216,23 +215,25 @@ function historySnapshot(finished = false): HistoryEntry | null {
     position_ms: state.duration_ms ? Math.min(state.duration_ms, state.position_ms) : state.position_ms,
     duration_ms: state.duration_ms, completed: finished || state.phase === "ended", updated_at: Date.now() };
 }
-function describeHistoryError(error: unknown) { return error instanceof Error ? error.message : String(error); }
+let failedHistory: HistoryEntry | null = null;
 async function persistHistory(snapshot: HistoryEntry) {
   try { await historyRepository.save(snapshot); historySaveError.value = null; }
   catch (error) {
-    // The Host refused a snapshot that can never be saved (its Session ended or a newer change won); retrying cannot help.
-    const refused = error instanceof ApiFailure && ["SESSION_EXPIRED", "CANCELLED"].includes(error.error.code);
-    historySaveError.value = refused ? null : describeHistoryError(error);
-    if (refused && lastHistory === snapshot) lastHistory = null;
+    // A refused snapshot only matters if it is the one awaiting retry; an earlier real failure keeps its notice.
+    if (!historyRefused(error)) { failedHistory = snapshot; historySaveError.value = error instanceof Error ? error.message : String(error); }
+    else if (failedHistory === snapshot) { failedHistory = null; historySaveError.value = null; }
+    return;
   }
+  failedHistory = null;
 }
 async function flushHistory(finished = false) {
   const snapshot = historySnapshot(finished);
   if (snapshot) { lastWrite = Date.now(); lastHistory = snapshot; await persistHistory(snapshot); }
 }
-function retryHistorySave() { if (lastHistory) void persistHistory(lastHistory); }
+function retryHistorySave() { const snapshot = failedHistory ?? lastHistory; if (snapshot) void persistHistory(snapshot); }
 function discardPendingHistory(id: string | null) {
-  if (id === null || lastHistory?.content_id === id) { lastHistory = null; historySaveError.value = null; }
+  if (id === null || lastHistory?.content_id === id) lastHistory = null;
+  if (id === null || failedHistory?.content_id === id) { failedHistory = null; historySaveError.value = null; }
   if (id === null || latestHistory?.content_id === id) latestHistory = null;
 }
 // Resuming goes back through the source and match checks; the position waits for the confirmed episode.

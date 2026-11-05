@@ -91,11 +91,10 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await until(() => all(".history-card").length === 1, "History view did not list the row");
     await until(() => one(".history-alert"), "Unsaved history notice missing");
     const notice = one(".history-alert")!.textContent!, rowText = one(".history-card")!.textContent!;
-    const retried = calls.filter(call => call.command === "save_history").at(-1)!.input.write_sequence;
     await rpc({ operation: "unlock_history" });
     one<HTMLButtonElement>(".history-alert button")!.click();
     await until(() => !one(".history-alert"), "Retry did not clear the notice");
-    evidence.failed_write = { notice: /could not be saved/.test(notice), row_kept: rowText.includes("Same title"), same_sequence: calls.filter(call => call.command === "save_history").at(-1)!.input.write_sequence === retried, preview_note: Boolean(one(".history-preview-note")) };
+    evidence.failed_write = { notice: /could not be saved/.test(notice), row_kept: rowText.includes("Same title"), same_sequence: (() => { const sequences = calls.filter(call => call.command === "save_history").map(call => call.input.write_sequence); return sequences.slice(0, -1).includes(sequences.at(-1)); })(), preview_note: Boolean(one(".history-preview-note")) };
 
     // Removing asks first; afterwards the row stays gone even after a later list.
     const removeButton = one(".history-actions")!.querySelectorAll<HTMLButtonElement>("button");
@@ -116,6 +115,8 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     check(saved, "Second row was not stored");
     const epoch = appState.runtime.engine_epoch;
     appController.invalidatePlayback();
+    await until(() => !session(), "Playback did not stop before the restart");
+    await delay(500);
     await rpc({ operation: "restart" });
     await appController.initialize();
     for (const config of appState.settings.source_configs) await rpc({ command: "sync_catalog", args: { request_id: crypto.randomUUID(), input: { kind: config.kind, config_id: config.config_id } } });

@@ -1,4 +1,4 @@
-import { api, UnknownCommit, type Api } from '../api.ts';
+import { api, ApiFailure, UnknownCommit, type Api } from '../api.ts';
 import type { WatchHistoryRecord } from '../models.ts';
 import { parseHistoryEntry, type HistoryEntry } from './history-model.ts';
 
@@ -38,6 +38,11 @@ export function entryFromRecord(record: WatchHistoryRecord): HistoryEntry {
     duration_ms: record.duration_ms, completed: record.completed, updated_at: record.updated_at, record };
 }
 
+// The Host refused for good: the Session ended or a newer change won, so retrying cannot help.
+export function historyRefused(error: unknown) {
+  return error instanceof ApiFailure && ["SESSION_EXPIRED", "CANCELLED"].includes(error.error.code);
+}
+
 // One queue gives snapshots, deletes and clears their increasing write sequence (C16).
 export function createNativeHistory(call: Api["call"]) {
   let sequence: number | null = null, tail: Promise<unknown> = Promise.resolve();
@@ -61,7 +66,9 @@ export function createNativeHistory(call: Api["call"]) {
         await call("save_history", { record: entry.record!, ...capture, write_sequence });
         failed = null;
       } catch (error) {
-        failed = { entry, sequence: write_sequence };
+        // A refused snapshot must not take the place of one the Host still holds for retry.
+        if (!historyRefused(error)) failed = { entry, sequence: write_sequence };
+        else if (failed?.entry === entry) failed = null;
         throw error;
       }
     }),
