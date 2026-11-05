@@ -284,7 +284,8 @@ fn capture(
             Err(error) => json!({"status":"FAIL","code":error.code,"message":error.message}),
         };
         // An explicit non-success code is the source reporting its own state.
-        record["source_error"] = json!(raw.get("code").is_some_and(|code| *code != json!(1)));
+        record["source_error"] =
+            json!(raw.get("code").is_some_and(|code| code.as_i64() != Some(1)));
         record["status"] = json!("JSON_CAPTURED");
         Ok(raw)
     })();
