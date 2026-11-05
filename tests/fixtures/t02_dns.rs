@@ -50,18 +50,32 @@ fn t02_dns_two_servers_failover_and_both_families() {
 #[test]
 fn t02_dns_one_silent_server_keeps_other_available() {
     let silent = DnsFixture::new(|_| None);
-    let healthy = DnsFixture::new(|kind| Some(if kind == 1 {
-        vec![8, 8, 8, 8]
-    } else {
-        "2001:4860:4860::8888".parse::<std::net::Ipv6Addr>().unwrap().octets().to_vec()
-    }));
+    let healthy = DnsFixture::new(|kind| {
+        Some(if kind == 1 {
+            vec![8, 8, 8, 8]
+        } else {
+            "2001:4860:4860::8888"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets()
+                .to_vec()
+        })
+    });
     let (_temp, host) = setup("https://public.example/api".into());
-    for servers in [vec![silent.address, healthy.address], vec![healthy.address, silent.address]] {
-        let http = Http { nameserver: Some(servers) };
-        let addresses = runtime().block_on(watched(
-            &job(&host, "default_metadata"), Duration::from_secs(15),
-            http.addresses(&"https://public.example/api".parse().unwrap()),
-        )).unwrap();
+    for servers in [
+        vec![silent.address, healthy.address],
+        vec![healthy.address, silent.address],
+    ] {
+        let http = Http {
+            nameserver: Some(servers),
+        };
+        let addresses = runtime()
+            .block_on(watched(
+                &job(&host, "default_metadata"),
+                Duration::from_secs(15),
+                http.addresses(&"https://public.example/api".parse().unwrap()),
+            ))
+            .unwrap();
         assert_eq!(addresses.len(), 2);
         assert!(addresses.contains(&"8.8.8.8:443".parse::<SocketAddr>().unwrap()));
         assert!(addresses.contains(&"[2001:4860:4860::8888]:443".parse::<SocketAddr>().unwrap()));
@@ -80,7 +94,12 @@ fn t02_dns_both_failed_never_falls_back_to_hosts_or_system() {
     // Hickory synthesizes localhost per RFC 6761 independently of hosts.
     // Use macOS's ordinary hosts alias to exercise actual hosts-file bypass.
     #[cfg(target_os = "macos")]
-    assert!(std::fs::read_to_string("/etc/hosts").unwrap().split_whitespace().any(|word| word == "broadcasthost"));
+    assert!(
+        std::fs::read_to_string("/etc/hosts")
+            .unwrap()
+            .split_whitespace()
+            .any(|word| word == "broadcasthost")
+    );
     for name in ["broadcasthost", "example.com"] {
         let url: Url = format!("http://{name}:12345/api").parse().unwrap();
         let error = runtime()
@@ -205,9 +224,20 @@ fn t02_dns_fake_ip_mixed_results_and_redirect_rebinding_rejected() {
     });
     let fixture = Fixture::new(|_, _| Reply::redirect("/rebound".into()));
     let (_temporary, host) = setup(fixture.url("/redirect"));
-    let http = Http { nameserver: Some(vec![dns.address]) };
-    let error = http.get(fixture.url("/redirect").parse().unwrap(), HeaderMap::new(),
-        &job(&host, "default_metadata"), 100, false, false).err().unwrap();
+    let http = Http {
+        nameserver: Some(vec![dns.address]),
+    };
+    let error = http
+        .get(
+            fixture.url("/redirect").parse().unwrap(),
+            HeaderMap::new(),
+            &job(&host, "default_metadata"),
+            100,
+            false,
+            false,
+        )
+        .err()
+        .unwrap();
     assert_eq!(error.details.unwrap()["reason"], "unsafe_target");
     assert_eq!(fixture.requests.lock().unwrap().len(), 1);
     assert_eq!(count.load(Ordering::SeqCst), 2);
