@@ -28,7 +28,7 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
 
 #[cfg(not(mobile))]
 #[tauri::command]
-fn player_fullscreen(
+async fn player_fullscreen(
     window: WebviewWindow,
     target: Option<bool>,
     query: Option<bool>,
@@ -40,6 +40,14 @@ fn player_fullscreen(
     }
     let target = target.unwrap_or(!current);
     window.set_fullscreen(target).map_err(|e| e.to_string())?;
+    // macOS completes the window animation after accepting the request.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while window.is_fullscreen().map_err(|e| e.to_string())? != target {
+        if std::time::Instant::now() >= deadline {
+            return Err("Native fullscreen transition did not finish".into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
     Ok(target)
 }
 
