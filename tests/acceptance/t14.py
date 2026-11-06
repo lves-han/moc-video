@@ -160,7 +160,7 @@ class Acceptance(BaseAcceptance):
             protected=workflow.protected_hash(), platform=sys.platform, arch=platform.machine(), os=platform.platform(),
             observed=self.observed, commands=self.commands, cases=self.cases, summaries=summaries, counts=counts,
             deployment=self.DEPLOYMENT,
-            deferred=getattr(self, "DEFERRED", [dict(target="real public Stremio addons/other platforms", status="NOT RUN", reason="T0.24 product end-to-end; ADR-005/006 local macOS arm64")]))
+            deferred=getattr(self, "DEFERRED", [dict(target="real public Stremio addons/other platforms", status="NOT RUN", reason="T0.24 product end-to-end; ADR-005/006 local macOS arm64")])))
         rows = self.cases + summaries
         xml = ET.Element("testsuite", name=f"{self.ORIGINAL}-all", tests=str(len(rows)), errors="0", skipped="0",
                          failures=str(sum(row["result"] != "PASS" for row in rows)), timestamp=self.started)
