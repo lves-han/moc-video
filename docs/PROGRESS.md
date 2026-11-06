@@ -2231,3 +2231,13 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261106T085150020811-A1/output.log`；断言：exit0，11组必需、31项JUnit零失败；缓存专项12项全过，设置23命令及213结构用例通过；真实公开推荐→播放切集/图标/历史、缓存上限保存恢复、保存失败/清理失败反馈重试、0关闭/清理后播放、跨季EOS换源与逐源公开取证通过。此前公开切集超时及HTTP超时保留，定向重跑通过，原因未完全确认，未降低原闭环要求。
 - 完整verify：PASS；`evidence/verify/20261106T090518664605.json`，六门exit0；受验源码保持。
 - Remaining：待新固定提交独立复巡CLEAR；其他平台NOT RUN、历史海报过期恢复/R62定向证据/原RSS采样缺口等旧P2保持；仅个人使用，不推送不改历史，不accept-review。
+
+
+## T0.24 用户指定Video.js播放器迁移 2026-11-06T09:20:42.495266+00:00
+- 结果：BLOCKED
+- 来源：用户当前聊天要求“播放器使用Video.js这个组件，不使用自己搭的，版本使用最新版”。
+- 已核实：官方https://videojs.org/changelog/10.3.0显示2026-11-03稳定发布10.3.0；普通请求npm官方registry video.js/latest与@videojs/html/latest均返回10.3.0。官方Vue文档https://videojs.org/docs/framework/html/guides/vue指定@videojs/html、自定义元素精确白名单和store订阅/卸载清理。
+- 最小方案：采用@videojs/html 10.3.0官方播放器/默认皮肤和必要官方HLS适配，以精确版本写package.json和lockfile，不加载CDN、分析或外部服务。替换PlaybackView手写主控制栏与player.ts媒体管理，保留仅用于对接业务的薄适配；播放器控件使用官方图标/提示/无障碍与中英文接线，选集/下一集/线路等业务通过官方插槽或组件扩展接入。保持Rust网关Session/cap、缓存隔离与清理屏障、字幕、250ms事件合并、旧epoch丢弃、历史保存续播、EOS与自动下一集确认、Tauri原生全屏和错误恢复。
+- 冻结冲突：ARCHITECTURE C10及旧播放器验收目前指向单video/native-HLS/hls.js与手工控制；T0.24范围未包含package.json、package-lock.json和vite.config.ts。仅重开当前卡、修改相关架构条款并追加ADR承接旧播放器义务、加入必要依赖/Vue自定义元素配置范围与Video.js实例/官方控制栏验收，原安全和资源门保持；SPEC与已完成旧卡历史保持原文。
+- 验证：官方组件实际渲染与hover/键盘/双语/390px、真实MP4/HLS与字幕/倍速/音量/全屏；停止卸载/切源切集无残留媒体和旧事件、历史/EOS、缓存设置及清理；WIP后原准确A1、完整verify、done、完成提交与独立巡检CLEAR。
+- 需要用户决定：批准相关冻结契约、T0.24范围和验收修订及原rebaseline；批准后独立文档审查CLEAR再实施。当前播放器源码尚未修改，缓存完成提交af6496a及其独立CLEAR保留。
