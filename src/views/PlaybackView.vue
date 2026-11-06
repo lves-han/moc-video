@@ -75,7 +75,14 @@ onMounted(async () => {
     state.volume = video.value!.volume; state.muted = video.value!.muted; savePlaybackAudio();
   }, { signal: interaction.signal });
   video.value!.addEventListener('ratechange', () => { state.speed = video.value!.playbackRate; }, { signal: interaction.signal });
-  video.value!.addEventListener('seeked', () => emit('seek'), { signal: interaction.signal });
+  video.value!.addEventListener('seeked', () => {
+    const media = video.value!;
+    if (state.session?.media_url !== media.currentSrc || !Number.isFinite(media.currentTime)) return;
+    // Official controls seek the media directly; snapshots/history need the
+    // settled position before the next coalesced position event.
+    state.position_ms = Math.max(0, Math.round(media.currentTime * 1000));
+    emit('seek');
+  }, { signal: interaction.signal });
   window.addEventListener('yingxiang-player-action-error', event => { ui.diagnostic = String((event as CustomEvent).detail); }, { signal: interaction.signal });
   try { appState.settings = await settingsQueue.initialize(); }
   catch (cause) { ui.diagnostic = String(cause); }
