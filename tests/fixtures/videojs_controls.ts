@@ -1,6 +1,6 @@
 // Tests query the shipped skin's open shadow root, never a duplicate application control bar.
 export function videoJsControls() {
-  const skin = document.querySelector('video-compat-skin');
+  const skin = document.querySelector('video-scaffold-skin');
   if (!skin?.shadowRoot) throw new Error('Official Video.js skin is not mounted');
   return skin.shadowRoot;
 }

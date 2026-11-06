@@ -314,7 +314,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
       await until(() => video.volume === 1 && appState.playback.volume === 1, 'Official volume did not restore');
       mute.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
-      const settings = controls.querySelector<HTMLButtonElement>('.media-settings-button')!;
+      const settings = controls.querySelector('media-icon[name=gear]')!.closest<HTMLButtonElement>('button')!;
       const rates = controls.querySelector<HTMLElement>('media-playback-rate-radio-group')!;
       check(settings && rates, 'Official playback-rate menu missing');
       for (const rate of [1.5, 1]) {

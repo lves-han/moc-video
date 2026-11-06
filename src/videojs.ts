@@ -2,7 +2,7 @@
 import { createPlayer as createVideoJsPlayer } from '@videojs/html';
 import { videoFeatures } from '@videojs/html/video';
 import { definePlayerFeature, fullscreenFeature } from '@videojs/core/dom';
-import '@videojs/html/video/compat-skin';
+import '@videojs/html/video/scaffold-skin';
 import '@videojs/html/i18n/locales/zh-CN/register';
 import { nativeInvoke } from './player.ts';
 

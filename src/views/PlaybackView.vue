@@ -58,7 +58,7 @@ function commitPlaybackAudio() {
 }
 function savePlaybackAudio() { clearTimeout(volumeTimer); volumeTimer = setTimeout(commitPlaybackAudio, 300); }
 watch(() => [state.duration_ms, state.session?.session_id], () => {
-  const seek = officialPlayer.value?.querySelector('video-compat-skin')?.shadowRoot?.querySelector<HTMLElement & { disabled: boolean }>('media-time-slider');
+  const seek = officialPlayer.value?.querySelector('video-scaffold-skin')?.shadowRoot?.querySelector<HTMLElement & { disabled: boolean }>('media-time-slider');
   if (seek) seek.disabled = state.duration_ms === null || !state.session;
 }, { flush: 'post' });
 watch(() => props.context, context => {
@@ -92,7 +92,7 @@ onMounted(async () => {
   state.muted = appState.settings.muted;
   playback.setVolume(state.volume); playback.setMuted(state.muted); audioInitialized = true;
   if (props.context) void playback.load(props.context, { resume: props.resume });
-  const container = officialPlayer.value?.querySelector('video-compat-skin')?.shadowRoot?.querySelector<HTMLElement>('media-container');
+  const container = officialPlayer.value?.querySelector('video-scaffold-skin')?.shadowRoot?.querySelector<HTMLElement>('media-container');
   (container ?? panel.value)?.focus({ preventScroll: true });
 });
 onBeforeUnmount(() => {
@@ -117,9 +117,9 @@ defineExpose({ playback });
     <p v-if="nowPlaying" class="playback-now">{{ nowPlaying }}</p>
     <media-i18n :lang="locale">
     <video-player class="official-player" :lang="locale" default-playback-rates="0.5 1 1.25 1.5 2" ref="officialPlayer">
-      <video-compat-skin class="official-skin">
+      <video-scaffold-skin class="official-skin">
         <video ref="video" crossorigin="anonymous" playsinline :aria-label="word('视频', 'Video')" />
-      </video-compat-skin>
+      </video-scaffold-skin>
     </video-player>
     </media-i18n>
     <p v-if="state.session && state.duration_ms === null" role="status">{{ word('时长未知', 'Unknown duration') }}</p>

@@ -48,6 +48,9 @@ def profile(run, mode):
                     samples.append(t12.process_sample(session, bridge))
                 row['rss_windows'] = t12.rss_windows(samples)
                 print(mode, 'MiB:', [round(value / 1048576, 2) for value in row['rss_windows']], flush=True)
+                t12.validate_stop(session.command('t12', action='stop'))
+                disposed = session.command('t12', action='dispose')
+                t12.require(disposed['audio_closed'] and disposed['videos'] == 0 and not disposed['errors'], 'Diagnostic media/audio must be released')
                 session.close()
         bridge.finish()
         return row
