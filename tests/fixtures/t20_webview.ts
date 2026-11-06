@@ -44,24 +44,36 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
   const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App) }) }); app.mount(root);
   try {
     await until(() => all('.home-card-title').length > 0, 'Public recommendations missing', 90000);
-    const recommendations = all<HTMLAnchorElement>('.home-card-title').map(a => ({ title: a.textContent!.trim(), href: a.href }));
+    await until(() => appState.home.phase !== 'loading', 'Public home did not settle', 90000);
+    const homeItems = appState.home.data!.page.sections.flatMap(section => section.items);
+    const recommendations = [...new Map(homeItems.filter(card => card.kind === 'series' && /[一-鿿]/.test(card.title)).map(card => [card.id, { title: card.title, href: '#/details/' + encodeURIComponent(JSON.stringify(card.ref)) }])).values()];
+    const playback = appState.sources.data!.providers.find(source => source.name === '红牛' && source.runtime_status === 'ready');
+    check(playback, 'Public playback source is not ready');
+    await appController.selectSource(playback!.id, 'playback');
     const observations: any[] = [];
     let result: any = null;
-    for (const card of recommendations.slice(0, 30)) {
+    for (const card of recommendations.slice(0, 8)) {
       if (!/[一-鿿]/.test(card.title)) continue;
-      location.href = card.href;
+      location.hash = card.href;
+      await delay(100);
       await until(() => (appState.details.phase === 'ready' && appState.details.data?.details.title === card.title) || appState.details.phase === 'failed', 'Public detail did not settle');
       await nextTick();
-      if (appState.details.phase !== 'ready' || appState.details.data?.details.kind === 'movie') continue;
+      if (appState.details.phase !== 'ready') { observations.push({ title: card.title, stage: 'details', status: appState.details.error?.code }); continue; }
+      const group = appState.details.data!.details.groups.find(group => group.episodes.length >= 2);
+      if (!group) { observations.push({ title: card.title, stage: 'videos', status: 'fewer_than_two' }); continue; }
+      all<HTMLButtonElement>('.details-group').find(button => button.dataset.groupId === group.id)?.click();
+      await nextTick();
       const episodes = all<HTMLButtonElement>('.details-episode');
-      if (episodes.length < 2) continue;
+      check(episodes.length >= 2, 'Selected metadata season did not render');
       const videoId = episodes[0]!.dataset.videoId;
       const before = calls.filter(c => c === 'open_playback').length;
       episodes[0]!.click();
+      await nextTick(); await delay(100);
       await until(() => !appController.matching.loading, 'Public search did not settle');
       if (!one('.details-candidate')) { observations.push({ title: card.title, stage: 'match', status: 'no_candidates' }); continue; }
       check(calls.filter(c => c === 'open_playback').length === before, 'Playback opened before confirmation');
       one<HTMLButtonElement>('.details-candidate')!.click();
+      await nextTick(); await delay(100);
       await until(() => all('.details-candidate-episode').length > 0 || !appController.matching.loading, 'Public candidate did not settle');
       const candidates = all<HTMLButtonElement>('.details-candidate-episode');
       if (candidates.length < 2) { appController.invalidatePlayback(); continue; }
@@ -87,7 +99,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
         gateway: next.currentSrc === appState.playback.session!.media_url, saved: rows.some(r => r.record?.video_id === appState.playback.context!.metadata_video_id) };
       break;
     }
-    check(result, 'No public series completed playback and switching; observations=' + JSON.stringify(observations));
+    check(result, 'No public series completed playback and switching; series=' + recommendations.length + '; observations=' + JSON.stringify(observations));
     appController.invalidatePlayback(); location.hash = '#/history';
     await until(() => all('.history-card').length > 0, 'Public history missing');
     await until(() => { const img = one<HTMLImageElement>('.history-poster'); return img && !img.src.endsWith('/mark.svg') && img.complete && img.naturalWidth > 0; }, 'Public history poster missing');
