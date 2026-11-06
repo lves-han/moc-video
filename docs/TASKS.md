@@ -1274,7 +1274,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - SQLite补充：按11.4实现Rust本地历史仓储与迁移；先同步机器DTO、IPC和样例，再替换前端history数据入口。验证跨重启、迁移失败、磁盘/权限错误、原子更新、乱序写入、删除/清空与待写快照、退出写队列；Settings v2维持JSON兼容。
 
 ### T0.23 T19 来源配置刷新与事务
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.20, T0.3, T0.22
 - 需求：R02, R04, R14, R44, REQ-T19 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/src/`, `src/views/NativeSourcesView.vue`, `src/state.ts`, `src/api.ts`, `src/models.ts`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
