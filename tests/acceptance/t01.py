@@ -250,6 +250,7 @@ def bundle(run, name, binary):
 
 
 def build(run):
+    command_start = len(run.commands)
     check_media()
     require((ROOT / "src-tauri/Cargo.lock").exists(), "prepare must create Cargo.lock first")
     require("TAURI_CONFIG" not in os.environ, "build requires an unmodified production config")
@@ -274,7 +275,7 @@ def build(run):
         production=dict(path=str(production.relative_to(ROOT)), files=tree_hashes(production)),
         automation=dict(path=str(automation.relative_to(ROOT)), files=tree_hashes(automation)),
         production_frontend=tree_hashes(production_frontend), production_gate=production_gate,
-        test_config=test_config, command_logs=run.commands)
+        test_config=test_config, command_logs=run.commands[command_start:])
     write_json(BUILD, receipt)
     return receipt
 
