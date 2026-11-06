@@ -76,7 +76,12 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     listeners = undefined;
     listenerRegistrations = 0;
     video.pause();
-    if (provider) provider.source = null;
+    if (provider) {
+      provider.source = null;
+      // source changes load in a microtask; detach first so the empty source
+      // cannot overwrite the synchronous native-media release below.
+      (provider as HlsJsAdapter & { adapter?: HlsJsAdapter }).adapter?.detach();
+    }
     fallback?.destroy();
     fallback = undefined;
     provider = undefined;
@@ -145,6 +150,8 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     }
     if (provider) {
       const original = provider;
+      const adapter = (original as HlsJsAdapter & { adapter?: HlsJsAdapter }).adapter;
+      adapter?.attach(video);
       listen(original, 'error', event => {
         const error = original.error;
         if (fresh(event) && error) mediaFailure('video', `Video.js: ${error.message}`, error.code, (error.data as { response?: { code?: number } } | undefined)?.response?.code);
