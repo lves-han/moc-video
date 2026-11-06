@@ -249,6 +249,17 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
   const video = current.video;
   let result: Record<string, unknown> = {};
   switch (command.action) {
+    case "profile-native": {
+      // Diagnostic only: compare media/controller allocation with the official
+      // UI detached. A1 never calls this operation and retains its full skin.
+      const player = current.container.querySelector('video-player')!;
+      const rect = video.getBoundingClientRect();
+      current.container.append(video);
+      video.style.width = `${rect.width}px`; video.style.height = `${rect.height}px`;
+      player.remove();
+      result = { diagnostic_only: true, official_ui_removed: !current.container.querySelector('video-player'), native_media_kept: true };
+      break;
+    }
     case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
       framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
     case "switch": {
