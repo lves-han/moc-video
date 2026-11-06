@@ -82,7 +82,7 @@ class Acceptance(t02.Acceptance):
     CARD, ORIGINAL, REQUIREMENTS = "T0.26", "T22", IDS
 
     def __init__(self, suite, report, junit):
-        super().__init__(report, junit)
+        super().__init__(report.resolve(), junit.resolve())
         self.suite = suite
 
     def save(self):

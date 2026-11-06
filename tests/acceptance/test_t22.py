@@ -56,6 +56,14 @@ def stream():
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_literal_relative_report_arguments_are_root_relative_for_save(self):
+        report = Path("evidence/acceptance/T22-startup-ui.json")
+        junit = Path("evidence/acceptance/T22-startup-ui.xml")
+        run = t22.Acceptance("startup-ui", report, junit)
+        self.addCleanup(run.folder.rmdir)
+        self.assertEqual(run.report_path.relative_to(t22.ROOT), report)
+        self.assertEqual(run.junit_path.relative_to(t22.ROOT), junit)
+
     def test_empty_suite_cannot_pass_via_source_stability_only(self):
         with tempfile.TemporaryDirectory(prefix="t22-oracle-", dir=t22.ROOT / "evidence") as temporary:
             run = t22.Acceptance.__new__(t22.Acceptance)
