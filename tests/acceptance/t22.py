@@ -231,6 +231,10 @@ def check_ui(value):
     require(len(value["responses"]) == 10 and [row["zoom"] for row in value["layouts"]] == [1, 1.25, 1.5, 2]
             and all(row["no_overflow"] is True and row["controls"] > 0 and row["width"] > 0 for row in value["layouts"])
             and value["fullscreen"] is True and value["restored"] is True, "UI response/scale/fullscreen coverage missing")
+    rect, viewport = value["fullscreen_rect"], value["fullscreen_viewport"]
+    require(value["fullscreen_covers_viewport"] is True and abs(rect["x"]) <= 1 and abs(rect["y"]) <= 1
+            and abs(rect["width"] - viewport["width"]) <= 1 and abs(rect["height"] - viewport["height"]) <= 1,
+            "Fullscreen must cover the viewport, not only switch the native window state")
     require(len(value["metadata_responses"]) == 30 and all(row["valid"] is True and row["command"] == "get_details"
             for row in value["metadata_responses"]), "Actual local no-external-network metadata response samples required")
     p95([row["milliseconds"] for row in value["responses"]])

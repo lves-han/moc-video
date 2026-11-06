@@ -325,11 +325,27 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       }
       await nativeInvoke("t01_control", { action: "zoom", value: 1 });
       await nativeInvoke("t01_control", { action: "width", value: 1200 });
-      const fullscreen = await nativeInvoke<boolean>("player_fullscreen"); await delay(300);
+      const player = current.container.querySelector<HTMLElement>('video-player')!;
+      const originalWidth = player.getBoundingClientRect().width;
+      const fullscreenButton = videoJsControl('fullscreen');
+      fullscreenButton.click();
+      await until(() => fullscreenButton.hasAttribute('data-fullscreen'), 'Official fullscreen did not enter');
+      await until(() => {
+        const rect = player.getBoundingClientRect(), media = video.getBoundingClientRect();
+        return Math.abs(rect.left) <= 1 && Math.abs(rect.top) <= 1
+          && Math.abs(rect.width - innerWidth) <= 1 && Math.abs(rect.height - innerHeight) <= 1
+          && Math.abs(media.width - innerWidth) <= 1 && Math.abs(media.height - innerHeight) <= 1;
+      }, 'Native fullscreen player/video did not cover the viewport');
+      const fullscreenRect = player.getBoundingClientRect().toJSON();
+      const fullscreenViewport = { width: innerWidth, height: innerHeight };
       const full = await nativeInvoke<any>("t01_control", { action: "identity" });
-      const restored = await nativeInvoke<boolean>("player_fullscreen"); await delay(300);
-      check(fullscreen && full.fullscreen && !restored, "Native fullscreen/restore failed");
-      result = { responses, metadata_responses, layouts, fullscreen: full.fullscreen, restored: !restored };
+      fullscreenButton.click();
+      await until(() => !fullscreenButton.hasAttribute('data-fullscreen') && !player.classList.contains('native-fullscreen'), 'Official fullscreen did not exit');
+      await until(() => Math.abs(player.getBoundingClientRect().width - originalWidth) <= 1, 'Player width did not restore after fullscreen');
+      const restored = await nativeInvoke<any>("t01_control", { action: "identity" });
+      check(full.fullscreen && !restored.fullscreen, "Native fullscreen/restore failed");
+      result = { responses, metadata_responses, layouts, fullscreen: full.fullscreen, fullscreen_covers_viewport: true,
+        fullscreen_rect: fullscreenRect, fullscreen_viewport: fullscreenViewport, restored: !restored.fullscreen };
       break;
     }
     case "profile-native": {

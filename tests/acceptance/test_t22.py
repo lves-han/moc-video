@@ -115,12 +115,17 @@ class EvidenceTests(unittest.TestCase):
             metadata_responses=[dict(milliseconds=i, command="get_details", valid=True) for i in range(30)],
             layouts=[dict(zoom=zoom, controls=5, official_controls=4, play_pause=True, width=960 / zoom, height=620 / zoom, no_overflow=True,
                 native=dict(physical_width=1920, physical_height=1280, scale_factor=2, top_content_inset=20)) for zoom in (1, 1.25, 1.5, 2)],
-            fullscreen=True, restored=True)
+            fullscreen=True, restored=True, fullscreen_covers_viewport=True,
+            fullscreen_rect=dict(x=0, y=0, width=1920, height=1080), fullscreen_viewport=dict(width=1920, height=1080))
         t22.check_ui(value)
         for field in ("responses", "metadata_responses", "layouts"):
             changed = copy.deepcopy(value); changed[field].pop()
             with self.subTest(field=field), self.assertRaises(ValueError):
                 t22.check_ui(changed)
+        changed = copy.deepcopy(value)
+        changed["fullscreen_rect"]["width"] = 1200
+        with self.assertRaisesRegex(ValueError, "cover the viewport"):
+            t22.check_ui(changed)
 
     def test_full_ten_minute_current_gateway_pcm_and_frames_pass(self):
         self.assertEqual(t22.check_endurance(playback())["seconds"], 600)

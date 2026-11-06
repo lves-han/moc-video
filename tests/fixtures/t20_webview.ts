@@ -127,6 +127,11 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       fullscreen.click(); await until(() => fullscreen.hasAttribute('data-fullscreen'), 'Official native fullscreen did not enter');
       const entered = await original.invoke<{ fullscreen: boolean }>('t01_control', { action: 'identity' });
       check(entered.fullscreen, 'Official control did not enter the native Tauri window');
+      await until(() => {
+        const rect = video.getBoundingClientRect();
+        return Math.abs(rect.left) <= 1 && Math.abs(rect.top) <= 1
+          && Math.abs(rect.width - innerWidth) <= 1 && Math.abs(rect.height - innerHeight) <= 1;
+      }, 'Fullscreen video did not fill the viewport');
       fullscreen.click(); await until(() => !fullscreen.hasAttribute('data-fullscreen'), 'Official native fullscreen did not exit');
       const exited = await original.invoke<{ fullscreen: boolean }>('t01_control', { action: 'identity' });
       check(!exited.fullscreen, 'Native fullscreen remained active');

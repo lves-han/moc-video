@@ -45,6 +45,8 @@ const busy = computed(() => Boolean(appController.matching.pending));
 const panelOpen = ref(false);
 const interaction = new AbortController();
 const officialPlayer = ref<HTMLElement>();
+const nativeFullscreen = ref(false);
+let unsubscribeOfficial: (() => void) | undefined;
 // Dragging the slider only saves its settled value.
 let volumeTimer: ReturnType<typeof setTimeout> | undefined;
 function commitPlaybackAudio() {
@@ -70,6 +72,12 @@ watch(() => props.context, context => {
 
 onMounted(async () => {
   mounted = true;
+  const official = officialPlayer.value as HTMLElement & {
+    store: { isFullscreen: boolean; subscribe(callback: () => void): () => void }
+  };
+  const syncFullscreen = () => { nativeFullscreen.value = native && official.store.isFullscreen; };
+  unsubscribeOfficial = official.store.subscribe(syncFullscreen);
+  syncFullscreen();
   playback.attach(video.value!);
   video.value!.addEventListener('volumechange', () => {
     state.volume = video.value!.volume; state.muted = video.value!.muted; savePlaybackAudio();
@@ -102,6 +110,7 @@ onMounted(async () => {
   (container ?? panel.value)?.focus({ preventScroll: true });
 });
 onBeforeUnmount(() => {
+  unsubscribeOfficial?.();
   if (audioInitialized && video.value) { state.volume = video.value.volume; state.muted = video.value.muted; }
   interaction.abort();
   unbind();
@@ -122,7 +131,7 @@ defineExpose({ playback });
     <p v-if="!context" role="status">{{ word('请从影片详情选择已确认的剧集。', 'Choose a confirmed episode from film details.') }}</p>
     <p v-if="nowPlaying" class="playback-now">{{ nowPlaying }}</p>
     <media-i18n :lang="locale">
-    <video-player class="official-player" :lang="locale" default-playback-rates="0.5 1 1.25 1.5 2" ref="officialPlayer">
+    <video-player class="official-player" :class="{ 'native-fullscreen': nativeFullscreen }" :lang="locale" default-playback-rates="0.5 1 1.25 1.5 2" ref="officialPlayer">
       <video-compat-skin class="official-skin">
         <video ref="video" crossorigin="anonymous" playsinline :aria-label="word('视频', 'Video')" />
       </video-compat-skin>
@@ -169,6 +178,8 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid 
 .official-player { display: block; width: 100%; }
 video { display: block; width: 100%; height: 100%; min-width: 0; object-fit: contain; }
 .official-skin { display: block; width: 100%; aspect-ratio: 16 / 9; --media-accent-color: var(--accent); --media-accent-text-color: var(--accent-ink); --media-scale-unit: 20px; }
+.official-player.native-fullscreen { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 10000; background: #000; }
+.native-fullscreen .official-skin { height: 100%; aspect-ratio: auto; }
 .playback-business-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
 .playback-business-controls :deep(button) { min-width: 44px; min-height: 44px; }
 </style>
