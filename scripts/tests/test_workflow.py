@@ -416,6 +416,48 @@ class WorkflowTests(unittest.TestCase):
             stream.write(f"\n## T0.1 resolved\n- 结果：RESOLVED\n- 决定：用户批准上述契约修订。\n- 批准摘要：{frozen}\n")
         return frozen
 
+    def prepare_controlled_recovery(self, marker=True):
+        self.w.start("T0.1")
+        node = self.w.state("T0.1")
+        node.update(sessions=1, hard_sessions=[0, 1], failures=[dict(time=1, signature="retained", session=1, exit=1, log="retained.log")], last_note=2)
+        self.w.write_json(self.w.card_dir("T0.1") / "state.json", node)
+        frozen = self.approve_revision()
+        if marker:
+            with (self.repo / "docs/PROGRESS.md").open("a", encoding="utf-8") as stream:
+                stream.write("- 受控恢复：1->2\n")
+        self.w.rebaseline("T0.1", frozen)
+        return frozen, self.w.state("T0.1")
+
+    def test_controlled_recovery_preserves_history_and_refuses_repeat(self):
+        frozen, before = self.prepare_controlled_recovery()
+        self.w.task(["resume-hard", "T0.1", "--protected", frozen])
+        after = self.w.state("T0.1")
+        self.assertEqual(after["sessions"], 2)
+        self.assertEqual(after["failures"], before["failures"])
+        self.assertEqual(after["hard_sessions"], before["hard_sessions"])
+        self.assertEqual(after["generation"], before["generation"])
+        with self.assertRaisesRegex(self.w.WorkflowError, "已经使用"):
+            self.w.resume_hard("T0.1", frozen)
+        self.assertEqual(self.w.state("T0.1"), after)
+
+    def test_controlled_recovery_requires_explicit_bound_approval(self):
+        frozen, before = self.prepare_controlled_recovery(marker=False)
+        with self.assertRaisesRegex(self.w.WorkflowError, "明确单次恢复"):
+            self.w.resume_hard("T0.1", frozen)
+        self.assertEqual(self.w.state("T0.1"), before)
+
+    def test_controlled_recovery_rejects_digest_budget_and_unfinished_run(self):
+        frozen, before = self.prepare_controlled_recovery()
+        with self.assertRaisesRegex(self.w.WorkflowError, "摘要"):
+            self.w.resume_hard("T0.1", "0" * 64)
+        with patch.object(self.w, "config", return_value={**self.w.config(), "max_sessions": 1}):
+            with self.assertRaisesRegex(self.w.WorkflowError, "额度"):
+                self.w.resume_hard("T0.1", frozen)
+        with patch.object(self.w, "receipts", return_value=[dict(status="running")]):
+            with self.assertRaisesRegex(self.w.WorkflowError, "重命令"):
+                self.w.resume_hard("T0.1", frozen)
+        self.assertEqual(self.w.state("T0.1"), before)
+
     def test_authorized_rebaseline_resumes_without_resetting_history(self):
         self.w.start("T0.1")
         node = self.w.state("T0.1")

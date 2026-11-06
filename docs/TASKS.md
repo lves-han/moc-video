@@ -1318,7 +1318,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 依赖：T0.14, T0.15, T0.16, T0.17, T0.18, T0.23, T0.22
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U02, U03, U04, U05, U08, U09, R07, R10, R16, R20, R40, R41, R42, R43, R50, R62, R63, R66, R67, REQ-T20 → A1（覆盖表含精确对应）
-- 范围：`package.json`, `package-lock.json`, `vite.config.ts`, `protocol/`, `scripts/check-contracts.py`, `src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 范围：`package.json`, `package-lock.json`, `vite.config.ts`, `protocol/`, `scripts/check-contracts.py`, `scripts/workflow.py`, `scripts/tests/`, `src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json

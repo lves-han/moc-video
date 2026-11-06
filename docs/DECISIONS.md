@@ -450,3 +450,9 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 
 来源：用户要求使用最新版Video.js组件替代自搭播放器，并在当前聊天明确批准修订播放器冻结契约、T0.24范围和验收及原rebaseline，指定Video.js 10.3.0官方播放器与控制栏，保留缓存、切集、字幕与历史续播，完成原验收和独立CLEAR。
 决定：按C10迁移，Vue采用官方@videojs/html及必要官方媒体适配/默认皮肤，精确版本10.3.0及锁文件；原自搭主控制栏和直接Hls生命周期由官方实现取代，业务仅薄适配。当前官网稳定版及npm latest已核实10.3.0，官方Vue指南https://videojs.org/docs/framework/html/guides/vue，版本https://videojs.org/changelog/10.3.0。不启用CDN/分析/外部源，不放宽安全和资源预算。仅修改当前T0.24相关架构/范围/验收（加入package.json/package-lock.json/vite.config.ts），SPEC和历史卡正文保留。原rebaseline保留额度失败历史，独立文档CLEAR后实现；WIP、准确A1、完整verify、done、完成提交及review-only CLEAR全部保持。
+
+
+## ADR-056 2026-11-06T12:07:18.041614+00:00 — 已采纳：一次额外受控恢复入口
+
+来源：用户当前聊天批准修订工作流恢复入口，增加一次受控恢复机会，保留全部失败历史和原验收阈值，不自行修改状态文件；先原rebaseline及独立文档审查，继续T0.24至完整验收与独立CLEAR。
+决定：新增task.py resume-hard <当前卡> --protected <摘要>，仅在当前卡已STUCK-HARD、现有max_sessions内、唯一额外恢复尚未消费、最新rebaseline批准条目含精确受控恢复会话迁移标记时可用。持原驱动/重任务锁，核对无存活驱动/开发/重命令，校验冻结及追加记录；原脚本原子写入一次消费事件并仅将会话1增至2，失败与hard_sessions、预算/资源/验收阈值保持。当前用户只批准T0.24本次使用；作者不得手改状态。独立文档CLEAR后消费，再通过run.py验证入口正负例，原A1、完整verify、done/完成提交与review-only CLEAR不变；失败再次硬停止后等待用户决定。独立文档审查可在恢复前只读执行，控制器运行测试在恢复后进行。

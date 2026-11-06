@@ -522,6 +522,45 @@ def rebaseline(cid, frozen, include_paused=None):
     print(f"{cid} 授权基线已更新；保留额度及失败历史，旧验收证据失效，须重新完整验收")
 
 
+def resume_hard(cid, frozen):
+    """Consume the one additional, explicitly approved recovery (ADR-056)."""
+    cfg = config()
+    with runtime.FileLock(REPO / "evidence/drive/driver.lock") as driver_lock, \
+            runtime.FileLock(runtime.lock_path(cfg)) as heavy_lock:
+        if not driver_lock.acquire() or not heavy_lock.acquire():
+            raise WorkflowError("驱动器或重任务仍活跃，不能恢复")
+        if cid != current():
+            raise WorkflowError("只能恢复当前卡")
+        check_frozen(cid)
+        node = state(cid)
+        if frozen != node["protected"] or frozen != protected_hash():
+            raise WorkflowError("恢复批准摘要不匹配")
+        if node.get("controlled_recovery"):
+            raise WorkflowError("额外受控恢复机会已经使用")
+        previous = node["sessions"]
+        if previous not in node.get("hard_sessions", []) or previous >= cfg["max_sessions"]:
+            raise WorkflowError("需要已停止的STUCK-HARD会话及现有会话额度")
+        events = node.get("rebaselines", [])
+        approvals = [entry for entry in progress_entries() if digest(entry) == (events[-1]["approval"] if events else None)]
+        marker = f"- 受控恢复：{previous}->{previous + 1}"
+        if len(approvals) != 1 or marker not in approvals[0].splitlines():
+            raise WorkflowError("需要经rebaseline绑定的明确单次恢复决定")
+        driver = read_json(REPO / "evidence/drive/state.json")
+        if any(runtime.alive(dict(pid=driver.get(pid), identity=driver.get(token))) for pid, token in
+               (("pid", "identity"), ("agent_pid", "agent_identity"))):
+            raise WorkflowError("先停止驱动器和开发进程")
+        if any(run["status"] != "finished" or any(runtime.alive(ref) for ref in [
+                dict(pid=run.get("pid"), identity=run.get("identity")),
+                dict(pid=run.get("payload_pid"), identity=run.get("payload_identity")),
+                *run.get("payload_refs", [])]) for run in receipts()):
+            raise WorkflowError("先完成重命令及身份核对清理")
+        node["controlled_recovery"] = dict(time=utc(), previous=previous, session=previous + 1,
+                                           protected=frozen, approval=events[-1]["approval"])
+        node["sessions"] = previous + 1
+        write_json(card_dir(cid) / "state.json", node)
+        print(f"{cid} 已消耗一次额外受控恢复；会话{previous}->{previous + 1}，全部失败历史和硬停止记录保留")
+
+
 def rebaseline_paused(cid, frozen, include_paused):
     # One explicit approval covers this set; interrupted per-file saves can resume
     # from the existing rebaseline events without a separate transaction state.
@@ -758,6 +797,8 @@ def task(args):
         print(f"started: {args[1]}")
     elif command == "rebaseline" and len(args) == 4 and args[2] == "--protected":
         rebaseline(args[1], args[3])
+    elif command == "resume-hard" and len(args) == 4 and args[2] == "--protected":
+        resume_hard(args[1], args[3])
     elif command == "rebaseline" and len(args) == 6 and args[2] == "--protected" and args[4] == "--include-paused":
         rebaseline(args[1], args[3], args[5].split(","))
     elif command in ("note", "handoff") and len(args) > 1:
