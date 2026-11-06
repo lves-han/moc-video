@@ -411,6 +411,17 @@ impl Host {
                 committed.stremio.retain(|id, _| !affected.contains(id));
                 committed.matches.revoke(&affected);
                 committed.resolutions.revoke(&affected);
+                let owned = |context: &Value| {
+                    context["episode_ref"]["source_id"]
+                        .as_str()
+                        .is_some_and(|id| affected.iter().any(|source| source == id))
+                };
+                committed
+                    .resolution_contexts
+                    .retain(|_, context| !owned(context));
+                committed
+                    .session_bindings
+                    .retain(|_, binding| !owned(&binding.context));
                 if let Some(gateway) = &committed.gateway {
                     gateway.revoke(&affected);
                 }
