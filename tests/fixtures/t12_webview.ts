@@ -312,7 +312,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
         const trigger = controls.querySelector<HTMLElement>(`media-menu-item[commandfor="${content.id}"]`)!;
         await until(() => trigger.getClientRects().length > 0, 'Official settings menu did not open'); trigger.click();
         const item = rates.querySelector<HTMLElement>(`media-menu-radio-item[data-rate="${rate}"]`)!;
-        await until(() => item?.getClientRects().length, 'Official playback-rate option did not open'); item.click();
+        await until(() => Boolean(item?.getClientRects().length), 'Official playback-rate option did not open'); item.click();
         await until(() => video.playbackRate === rate && appState.playback.speed === rate, 'Official playback-rate did not reach media/state');
       }
       const seek = videoJsControl("seek") as HTMLElement & { disabled: boolean; step: number };
