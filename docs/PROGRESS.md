@@ -2384,3 +2384,12 @@
 - Verified：task.py check/start T0.26/check均exit0；4个变更Python文件AST解析exit0；3个变更Rust文件rustfmt --edition 2024 --config skip_children=true格式化exit0；git diff --check exit0。10项新Python测试仅已定义，执行NOT RUN；Rust编译、TypeScript类型检查、真实GPU/窗口/媒体/吞吐、准确A1/A2、完整verify及独立巡检均NOT RUN。调查时不存在路径/glob及补丁上下文匹配失败已按原note保留并改用实际路径/精确段落，未执行失败重试或改验收阈值。
 - 基线：source=37edd2b85d635794a3cdadf049c6f7119b7db499cbb9cbf04c963b266e4387bf；protected=b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af；generation0、sessions1、4096MiB/jobs2/测试线程1保持。未启动构建、服务或重任务，未重复探测已知sysctl/sccache/.git权限限制。
 - 下一步：已生成并读回准确argv清单evidence/acceptance/T22-session-1-outer-argv.json，A1/A2 payload首项保持字面量{python}。外层确认本CLI和旧重命令退出、源码稳定后代办WIP提交；先通过原run.py运行diag-t22-oracles、diag-t22-reused-oracles及diag-t22-environment（AGX实际计数器尚待实测），单独核对桌面已解锁，再按顺序完整A1、交接、完整A2、交接及直接verify.py all。A1后改源码须重新A1，A2拒绝旧源码/基线/构建/文件或环境改变。通过后原勾卡/PROGRESS/done/受验提交/独立CLEAR；实现失败先原note并交回本卡第2会话。不accept-review、不推送、不改历史。
+
+
+## T0.26 耐久跳转取证与等待解锁 2026-11-06T16:05:07.873715+00:00
+- 结果：BLOCKED
+- 已完成：原会话1交接后外层11/12/13项判定、28项复用测试、类型、原生编译与AGX环境探测；当前WIP bd281db。A1最近154126为7/7/JUnit13，但新被动审计改变源码，须重新A1后A2，不复用旧源成功。
+- 失败保留：首轮A1报告路径相对/绝对转换错误已修并回归；首轮A2初始PCM未就绪，已复用原帧/PCM就绪门后开始完整600秒且保留就绪前样本。第二轮A2媒体485->595->618秒跳转并提前结束，速率样本1、实际帧仅正常约140增量；相同SHA媒体首轮无该跳转，原因未确认。两次180秒20Mbps/450MB均通过，完整A2均未通过。
+- 最小定位：新增有界被动native seeking/ratechange及播放器内可信指针/seek键分类记录，不捕获文本/URL、不禁用控件，不放宽原600秒/PCM/资源门；13项判定与类型通过。
+- 阻塞：单独外层锁屏预检True，未启动重验；已向用户请求解锁，提醒长测时勿操作测试播放器（可使用其他应用），不将未知跳转归咎用户。回复后先单独复查，追加RESOLVED再原A1/A2/完整verify/done/受验提交/独立CLEAR。
+- 用户停止边界：完成T0.27全部质量门与独立CLEAR后结束、删除automation-2，绝不启动T0.28；等待解锁期间不另开会话或跳卡。
