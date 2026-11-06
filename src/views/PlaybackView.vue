@@ -156,6 +156,8 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid 
 
 <style scoped>
 .official-player { display: block; width: 100%; }
+/* The official skin directly slots the custom media host; size its native child too. */
+hlsjs-video, hlsjs-video > video { display: block; width: 100%; height: 100%; min-width: 0; object-fit: contain; }
 .official-skin { display: block; width: 100%; aspect-ratio: 16 / 9; --media-accent-color: var(--accent); --media-accent-text-color: var(--accent-ink); --media-scale-unit: 20px; }
 .playback-business-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
 .playback-business-controls :deep(button) { min-width: 44px; min-height: 44px; }

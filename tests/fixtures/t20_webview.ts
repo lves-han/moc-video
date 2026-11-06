@@ -136,7 +136,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
         await original.invoke('t01_control', { action: 'width', value: width }); await delay(250);
         const controls = videoJsControls().querySelector<HTMLElement>('media-container')!;
         const fits = document.documentElement.scrollWidth <= innerWidth + 1 && controls.scrollWidth <= controls.clientWidth + 1;
-        check(fits, 'Playback icon controls overflowed the viewport');
+        check(fits, 'Playback icon controls overflowed the viewport: ' + JSON.stringify({ width: innerWidth, document: document.documentElement.scrollWidth, controls: controls.scrollWidth, client: controls.clientWidth, video: video.getBoundingClientRect().width }));
         iconLayouts.push({ width: innerWidth, fits });
       }
       await original.invoke('t01_control', { action: 'width', value: 1200 });
