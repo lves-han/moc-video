@@ -2241,3 +2241,9 @@
 - 冻结冲突：ARCHITECTURE C10及旧播放器验收目前指向单video/native-HLS/hls.js与手工控制；T0.24范围未包含package.json、package-lock.json和vite.config.ts。仅重开当前卡、修改相关架构条款并追加ADR承接旧播放器义务、加入必要依赖/Vue自定义元素配置范围与Video.js实例/官方控制栏验收，原安全和资源门保持；SPEC与已完成旧卡历史保持原文。
 - 验证：官方组件实际渲染与hover/键盘/双语/390px、真实MP4/HLS与字幕/倍速/音量/全屏；停止卸载/切源切集无残留媒体和旧事件、历史/EOS、缓存设置及清理；WIP后原准确A1、完整verify、done、完成提交与独立巡检CLEAR。
 - 需要用户决定：批准相关冻结契约、T0.24范围和验收修订及原rebaseline；批准后独立文档审查CLEAR再实施。当前播放器源码尚未修改，缓存完成提交af6496a及其独立CLEAR保留。
+
+
+## T0.24 Video.js迁移修订授权 2026-11-06T09:22:47.504517+00:00
+- 结果：RESOLVED
+- 决定：用户当前聊天原话：批准修订播放器冻结契约、T0.24 范围和验收，并按原流程 rebaseline。使用 Video.js 10.3.0 官方播放器和控制栏替换自搭实现，保留缓存、切集、字幕和历史续播功能，完成 A1、完整 verify 和独立巡检至 CLEAR。已授权工作直接继续。
+- 批准摘要：fea28d0ff9f288dd6222c94de40ae75cf684b12bb6861f2756fefbcbb3eb2e48

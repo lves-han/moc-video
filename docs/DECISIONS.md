@@ -444,3 +444,9 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 
 来源：用户先要求加入媒体缓存、设置最大容量和清理，随后在当前聊天明确选择“批准，加入缓存并统一验收”，批准相关设置/IPC契约、T0.24范围和验收修订及原流程rebaseline。
 决定：按ARCHITECTURE C9/C11增加网关鉴权后的有界磁盘缓存，默认256MiB、可调、0关闭；完整HLS媒体分片/初始化片段及MP4完整或原样Range响应，保持流式背压；LRU/原子发布/启动恢复/容量预留/清理世代屏障，待释放占用可见。缓存按HTTP可缓存性及新鲜期处理，清单/密钥/凭据/cap不落盘，身份和请求上下文以哈希隔离，不跨会话复活授权。新Settings v2可选字段和两项固定IPC在原主WebView权限内，旧21项保持，SPEC及replica-spec原文保留；仅修订相关ARCHITECTURE、T0.24范围（加入protocol及原契约检查脚本）和验收。原完整A1 argv/安全/资源门不变，缓存与播放图标统一重验至独立CLEAR。失败/额度历史保持，当前protected摘要经原status记录后rebaseline，文档独立只读审查CLEAR后实现。仅个人使用，不增加离线下载/导出/分享功能。
+
+
+## ADR-055 2026-11-06T09:22:47.157870+00:00 — 已采纳：Video.js 10.3.0官方播放器与控制栏
+
+来源：用户要求使用最新版Video.js组件替代自搭播放器，并在当前聊天明确批准修订播放器冻结契约、T0.24范围和验收及原rebaseline，指定Video.js 10.3.0官方播放器与控制栏，保留缓存、切集、字幕与历史续播，完成原验收和独立CLEAR。
+决定：按C10迁移，Vue采用官方@videojs/html及必要官方媒体适配/默认皮肤，精确版本10.3.0及锁文件；原自搭主控制栏和直接Hls生命周期由官方实现取代，业务仅薄适配。当前官网稳定版及npm latest已核实10.3.0，官方Vue指南https://videojs.org/docs/framework/html/guides/vue，版本https://videojs.org/changelog/10.3.0。不启用CDN/分析/外部源，不放宽安全和资源预算。仅修改当前T0.24相关架构/范围/验收（加入package.json/package-lock.json/vite.config.ts），SPEC和历史卡正文保留。原rebaseline保留额度失败历史，独立文档CLEAR后实现；WIP、准确A1、完整verify、done、完成提交及review-only CLEAR全部保持。

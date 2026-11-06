@@ -1314,18 +1314,18 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 工作与验收：复用settings.rs/source_dispatch.rs与来源管理入口，测试配置探测锁外、保存同锁、配置原子替换/失败保持确认值、修订与世代失效、无变更保持播放及并发取消。删除插件索引刷新/下载/ZIP安装产品路径；旧制品仅留历史。配置刷新失败保持前一完整状态，报告保留请求失败原因。
 
 ### T0.24 T20 Rust来源与产品端到端
-- [x] 完成
+- [ ] 完成
 - 依赖：T0.14, T0.15, T0.16, T0.17, T0.18, T0.23, T0.22
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U02, U03, U04, U05, U08, U09, R07, R10, R16, R20, R40, R41, R42, R43, R50, R62, R63, R66, R67, REQ-T20 → A1（覆盖表含精确对应）
-- 范围：`protocol/`, `scripts/check-contracts.py`, `src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 范围：`package.json`, `package-lock.json`, `vite.config.ts`, `protocol/`, `scripts/check-contracts.py`, `src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "本机macOS arm64真实Stremio→核准Rust JSON来源推荐/详情/匹配确认/内嵌播放切集；受控HTTP媒体完整正负例与单源故障隔离；每个支持来源按实际能力记录公开JSON和媒体链路，在线失败与fixture结果分列；真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px；媒体磁盘缓存真实命中减少上游请求、精确Range/来源修订/请求上下文隔离、cap失效不命中、过期与no-store/no-cache、LRU容量与临时字节核算、重启恢复、取消断流无残片、并发清理/降额屏障、设置页改容量/关闭/清理/失败反馈与播放继续。缺真实公开来源闭环、macOS运行或只复制fixture摘要时失败。",
+    "description": "本机macOS arm64真实Stremio→核准Rust JSON来源推荐/详情/匹配确认/内嵌播放切集；受控HTTP媒体完整正负例与单源故障隔离；每个支持来源按实际能力记录公开JSON和媒体链路，在线失败与fixture结果分列；真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px；媒体磁盘缓存真实命中减少上游请求、精确Range/来源修订/请求上下文隔离、cap失效不命中、过期与no-store/no-cache、LRU容量与临时字节核算、重启恢复、取消断流无残片、并发清理/降额屏障、设置页改容量/关闭/清理/失败反馈与播放继续。Video.js 10.3.0官方播放器/控制栏实际渲染和操作、MP4/HLS字幕/倍速/音量/原生全屏/seek/图标提示/键盘/中英文390px、单实例及50次切集/卸载旧音频事件隔离和缓存历史续播保持；缺真实公开来源闭环、macOS运行、官方播放器真实操作，或只复制fixture摘要时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1371,6 +1371,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 
 
 - 用户新增缓存交付（ADR-054）：按C9/C11实现本地媒体磁盘缓存、Settings可选容量字段及get_media_cache/clear_media_cache IPC，缓存文件不含URL/凭据原文；真实设置按钮及受控HTTP请求计数/文件断言拒绝仅展示占位功能。旧协议正负例全部保留，并增加新两命令正负例；图标播放控制的悬浮说明、状态切换、键盘名称及390px行为一并验收。
+
+
+- 用户指定播放器迁移（ADR-055）：使用Video.js 10.3.0官方播放器与控制栏替换自搭基础实现，必要官方HTML/HLS包精确锁版，Vue精确自定义标签白名单；保留原缓存/切集/字幕/历史/事件身份与错误恢复，扩展业务接线不复制基础控制栏，不接CDN或分析服务。旧T01/T12/T16播放器能力由本卡最新实现承接，测试定位改为官方组件真实行为，原安全/资源门和必需反例保持。
 
 ### T0.25 T21 媒体网关与鉴权回归
 - [ ] 完成
