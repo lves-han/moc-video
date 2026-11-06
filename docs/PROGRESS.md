@@ -2251,3 +2251,14 @@
 
 ## T0.24 Video.js契约独立文档审查 2026-11-06T09:27:53.684695+00:00
 - 文档结论：DOC-REVIEW-VERDICT: CLEAR；独立只读videojs_doc_review，原样报告`docs/reviews/doc-review/round-45.md`；提交59f35c287fc38ad5d817d01152a79456b3fae6bf，protectedfea28d0ff9f288dd6222c94de40ae75cf684b12bb6861f2756fefbcbb3eb2e48。迁移验收NOT RUN。
+
+
+## T0.24 Video.js真实窗口回归与STUCK-HARD 2026-11-06T12:02:40.782496+00:00
+- 结果：BLOCKED
+- 已实现：精确Video.js 10.3.0官方player/Compat皮肤/控制栏，原生video及官方HLS适配；保留缓存、选集/线路、字幕和历史控制器。WIP b3c0e1b；冻结修订与独立文档CLEAR见round-45。
+- 已验证：先前166项前端测试、类型检查、构建及Rust Clippy通过；官方真实窗口播放/暂停、静音、原生全屏往返已通过到后续布局断言。最新源码由真实打包回归构建并运行50次切集，字幕加载、实际帧/音频、旧轨道禁用通过到RSS断言。
+- 未通过：最新官方Compat皮肤50次切集RSS首末窗口中位数313.73/383.53MiB，增长69.80MiB，大于原64MiB；原阈值保留。日志evidence/runs/20261106T103051682446-diag-t24-videojs-lifecycle/output.log，报告evidence/acceptance/T20-videojs-lifecycle-diag.json，原始场景evidence/acceptance/T20-a854-placeholder无效（实际目录见下条）。
+- 已尝试：官方自定义媒体宿主；修复异步source清空覆盖原生释放（释放断言随后通过）；官方原生video接入；根据vmmap图形表面证据切换官方Compat皮肤。一次原生video运行通过RSS后触发seek夹具节点问题，已按官方thumb事件接口修正，修正后完整场景受RSS门阻断。最新源码后续seek/恢复/EOS/释放等步骤尚未执行。
+- 当前阻塞：run.py同特征累计5次，STUCK-HARD；原一次恢复会话已使用，drive原逻辑明确等待用户决定。未改状态文件、失败记录、预算、控制脚本或阈值；未继续重跑。
+- Remaining：需要用户决定受控恢复方式；恢复后先定位RSS增长并复验真实控件/390px/续播字幕，再执行原准确A1、完整verify、done/完成提交、drive --review-only至CLEAR。此次迁移的完整A1/verify/独立开发巡检均NOT RUN。
+- 证据路径更正：上一条占位目录为记录错误；最新真实目录是evidence/acceptance/T20-a3593f62b8a34975ac4a51a4876e324e，包含results-1.jsonl及vmmap command-14/15.log。
