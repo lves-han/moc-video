@@ -76,11 +76,13 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       one<HTMLButtonElement>('.details-candidate')!.click();
       await nextTick(); await delay(100);
       await until(() => all('.details-candidate-episode').length > 0 || !appController.matching.loading, 'Public candidate did not settle');
-      const candidates = all<HTMLButtonElement>('.details-candidate-episode');
+      const directGroup = all('.details-candidate-group').find(group => /m3u8|hls|mp4/i.test(group.querySelector('h3')?.textContent ?? ''));
+      const candidates = directGroup ? [...directGroup.querySelectorAll<HTMLButtonElement>('.details-candidate-episode')] : [];
+      const line = directGroup?.querySelector('h3')?.textContent;
       if (candidates.length < 2) { appController.invalidatePlayback(); continue; }
       candidates[0]!.click();
       await until(() => (one<HTMLVideoElement>('video')?.readyState ?? 0) >= 2 || appState.playback.phase === 'failed', 'Public media did not settle', 90000);
-      if (appState.playback.phase === 'failed') { observations.push({ title: card.title, stage: 'media', status: appState.playback.error?.code }); appController.invalidatePlayback(); continue; }
+      if (appState.playback.phase === 'failed') { observations.push({ title: card.title, line, stage: 'media', status: appState.playback.error?.code, message: appState.playback.error?.message }); appController.invalidatePlayback(); continue; }
       const video = one<HTMLVideoElement>('video')!; await video.play(); const start = video.currentTime;
       await until(() => video.currentTime >= start + 2, 'Public playback did not advance'); video.pause();
 
@@ -90,13 +92,15 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       await until(() => one('.details-candidate') || (appState.playback.session && appState.playback.session.session_id !== first), 'Next episode did not request confirmation');
       if (one('.details-candidate')) {
         one<HTMLButtonElement>('.details-candidate')!.click(); await until(() => all('.details-candidate-episode').length > 1, 'Next candidate episodes missing');
-        all<HTMLButtonElement>('.details-candidate-episode')[1]!.click();
+        const nextGroup = all('.details-candidate-group').find(group => /m3u8|hls|mp4/i.test(group.querySelector('h3')?.textContent ?? ''));
+        check(nextGroup, 'Direct media group missing on next confirmation');
+        nextGroup!.querySelectorAll<HTMLButtonElement>('.details-candidate-episode')[1]!.click();
       }
       await until(() => appState.playback.session?.session_id !== first && (one<HTMLVideoElement>('video')?.readyState ?? 0) >= 2, 'Public next episode did not play', 90000);
       const next = one<HTMLVideoElement>('video')!; await next.play(); const nextStart = next.currentTime;
       await until(() => next.currentTime > nextStart + 1, 'Public next did not advance'); next.pause(); await delay(200); await historyRepository.drain();
       const rows = await historyRepository.list();
-      result = { title: card.title, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
+      result = { title: card.title, line, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
         gateway: next.currentSrc === appState.playback.session!.media_url, saved: rows.some(r => r.record?.video_id === appState.playback.context!.metadata_video_id) };
       break;
     }
