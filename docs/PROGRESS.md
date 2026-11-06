@@ -2368,3 +2368,9 @@
 - 真实追踪：66个Session、86条媒体请求与同一自有MP4/HLS/分片集合核对；子请求上下文/归属/响应字节与SHA256正确，本地cap/Authorization/Cookie未到上游，Host与上游活跃请求归零。原生CSP/CORS拒绝、3个特权命令拒绝、合法Range206通过；51份进程样本与登记XPC角色/身份/支持进程/清理核对通过。50切集RSS窗口297.50->344.86MiB，增长47.36MiB<=原64，各窗口<=原512MiB；总预算原4096MiB RSS采样/jobs2/线程1，无真实集群，不宣称内核硬隔离。
 - 完整 verify：PASS；收据：`evidence/verify/20261106T143722544304.json`；六门exit0，控制器131（124通过/7平台跳过）、前端169、协议与项目Rust/构建检查通过。受验源码7beaba392a9acf6d1d5ce635f9a0ced49432c3578dbc1463b3fb7fd9734c2974，protected b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af，验证后无源码修改。
 - Remaining：macOS arm64已验；其他桌面平台NOT RUN（ADR-005/006）。支持来源样本未观测DASH，条件性DASH实际播放NOT RUN；10分钟网关耐久归T0.26/A2（ADR-044），本卡未执行。旧失败历史和阈值保留，待完成提交与独立review-only CLEAR；不accept-review、不推送、不改历史。
+
+
+## T0.25 独立巡检CLEAR与后续顺序 2026-11-06T14:47:58.071291+00:00
+- 独立巡检：CLEAR；固定受验提交c9e9b38d4e53c9bb42fa0d4b0150f1a98fd3fc5c；原drive.py --review-only报告：`evidence/reviews/20261106T144143010831-T0.25/output.log`。核对35/35准确A1/JUnit51、六门verify、66Session/86请求原始追踪、51份RSS采样、9份登记运行/无重叠/日志与报告哈希、done和固定提交源码一致；无新确认高严重度缺陷，未accept-review。
+- 保留P2：t01.py无条件引用缺失samples-1.jsonl，51份原始切集样本已内嵌报告可重算。下一卡T0.26耐久与性能应按实际产物登记并核对完整采样；其他平台/条件性DASH实际播放NOT RUN，10分钟耐久归T0.26/A2。R62/海报过期定向证据仍沿既有记录。
+- 下一张：原task.py next=T0.26；按用户既有逐卡授权，以原drive --once和本聊天automation-2监管接续，保留全部历史/预算/阈值。
