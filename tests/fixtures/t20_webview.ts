@@ -31,7 +31,17 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
   window.addEventListener('error', onError); window.addEventListener('unhandledrejection', onRejection);
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (['t01_control', 'player_fullscreen', 'window_bounds_now', 'app_close_started', 'app_close_aborted', 'app_close_ready'].includes(name)) return original.invoke<T>(name, args);
-    calls.push(name); return rpc({ command: name, args });
+    calls.push(name);
+    const result = await rpc({ command: name, args });
+    if (result.error) {
+      const sourceId = args?.input?.ref?.source_id ?? args?.input?.source_id;
+      const configId = args?.input?.config_id;
+      const source = appState.sources.data?.providers.find(source => source.id === sourceId);
+      const config = appState.settings.source_configs.find(config => config.config_id === configId);
+      const label = source?.name ?? config?.name ?? 'local';
+      result.error.message = `[${name}; ${label}] ${result.error.message}`;
+    }
+    return result;
   } };
   location.hash = '#/home';
   await appController.initialize();
