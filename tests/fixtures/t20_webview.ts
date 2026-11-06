@@ -47,7 +47,8 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
     for (const card of recommendations.slice(0, 30)) {
       if (!/[一-鿿]/.test(card.title)) continue;
       location.href = card.href;
-      await until(() => appState.details.phase === 'ready' || appState.details.phase === 'failed', 'Public detail did not settle');
+      await until(() => (appState.details.phase === 'ready' && appState.details.data?.details.title === card.title) || appState.details.phase === 'failed', 'Public detail did not settle');
+      await nextTick();
       if (appState.details.phase !== 'ready' || appState.details.data?.details.kind === 'movie') continue;
       const episodes = all<HTMLButtonElement>('.details-episode');
       if (episodes.length < 2) continue;
@@ -86,14 +87,19 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
     check(result, 'No public series completed playback and switching; observations=' + JSON.stringify(observations));
     appController.invalidatePlayback(); location.hash = '#/history';
     await until(() => all('.history-card').length > 0, 'Public history missing');
-    await until(() => one<HTMLImageElement>('.history-poster')?.src.includes('/image'), 'Public history poster missing');
+    await until(() => { const img = one<HTMLImageElement>('.history-poster'); return img && !img.src.endsWith('/mark.svg') && img.complete && img.naturalWidth > 0; }, 'Public history poster missing');
     result.poster = one<HTMLImageElement>('.history-poster')!.complete && one<HTMLImageElement>('.history-poster')!.naturalWidth > 0;
     result.label = !one('.history-card')!.textContent!.includes('Feature');
     const layouts = [];
-    for (const language of ['en', 'zh-CN'] as const) for (const theme of ['light', 'dark'] as const) {
-      await appController.updateSettings(s => ({ ...s, ui_locale: language, ui_theme: theme } as typeof s)); locale.value = language; await nextTick();
-      layouts.push({ language, theme, overflow: document.documentElement.scrollWidth > innerWidth + 1 });
+    for (const width of [960, 390]) for (const language of ['en', 'zh-CN'] as const) for (const theme of ['light', 'dark'] as const) {
+      await original.invoke('t01_control', { action: 'width', value: width });
+      await original.invoke('t01_control', { action: 'theme', value: theme === 'dark' ? 1 : 0 });
+      await appController.updateSettings(s => ({ ...s, ui_locale: language })); locale.value = language; await delay(250); await nextTick();
+      const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      check(dark === (theme === 'dark'), 'Native theme did not change');
+      layouts.push({ width: innerWidth, language, theme, dark, overflow: document.documentElement.scrollWidth > innerWidth + 1 });
     }
+    await original.invoke('t01_control', { action: 'width', value: 1200 });
     await rpc({ operation: 'restart' });
     return { public: result, recommendations: recommendations.length, observations, layouts, errors };
   } finally { app.unmount(); window.__TAURI__!.core = original; }

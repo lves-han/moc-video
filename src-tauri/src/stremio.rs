@@ -119,9 +119,9 @@ fn language_url(url: &Url, language: &str) -> Result<Url, ApiError> {
     {
         segments[prefix] = language.into();
     } else {
-        return Err(ApiError::bad(
-            "TMDB configuration encoding has no verified language mapping",
-        ));
+        // Opaque addon configuration belongs to the user; preserve it verbatim.
+        // Only the language-segment convention above supports automatic localization.
+        return Ok(url.clone());
     }
     let mut result = url.clone();
     result.set_path(&format!("/{}", segments.join("/")));
@@ -327,7 +327,7 @@ impl Catalog {
                     let response = fetch(http, url.clone(), job, true)?;
                     let manifest: Value = serde_json::from_slice(&response.body).map_err(|_| upstream("Stremio manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest).map_err(|_| upstream("Stremio manifest fields are invalid"))?;
-                    let localized = tmdb_host(&url) && manifest["id"] == "tmdb-addon";
+                    let localized = tmdb_host(&url) && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
                     Ok((Addon { key: identity("addon", &[url.as_str()]), url, manifest, localized }, format!("{:x}", Sha256::digest(&response.body))))
                 })).collect::<Vec<_>>().into_iter().map(|worker| worker.join().unwrap_or_else(|_| Err(ApiError::internal("Stremio manifest worker failed")))).collect::<Vec<_>>()
             });

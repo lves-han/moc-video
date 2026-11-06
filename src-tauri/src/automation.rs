@@ -64,6 +64,14 @@ pub async fn t01_control(
                 .set_size(LogicalSize::new(width, 800.0))
                 .map_err(|e| e.to_string())?;
         }
+        "theme" => {
+            let theme = match value {
+                Some(0.0) => tauri::Theme::Light,
+                Some(1.0) => tauri::Theme::Dark,
+                _ => return Err("Unsupported acceptance theme".into()),
+            };
+            window.set_theme(Some(theme)).map_err(|e| e.to_string())?;
+        }
         "zoom" => {
             let zoom = value.ok_or("zoom required")?;
             if ![1.0, 1.25, 1.5, 2.0].contains(&zoom) {

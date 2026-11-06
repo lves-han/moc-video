@@ -21,6 +21,7 @@ def validate_public(e):
     p = e['public']
     require(e['recommendations'] > 0 and all(p[k] is True for k in ['chinese','confirmed','played','next','gateway','saved','poster','label']), 'Public metadata-to-playback chain incomplete: '+str(p))
     require(e['errors'] == [], 'Unhandled public page errors')
+    require(len(e['layouts']) == 8 and any(row['width'] <= 390 for row in e['layouts']) and all(not row['overflow'] for row in e['layouts']), 'Bilingual light/dark 390px layouts must fit')
 def public(run):
     os.environ['T12_MIN_OPENS'] = '1'
     try:
