@@ -126,7 +126,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
         nextGroup!.querySelectorAll<HTMLButtonElement>('.details-candidate-episode')[1]!.click();
       }
       await until(() => (appState.playback.session?.session_id !== first && (one<HTMLVideoElement>('video')?.readyState ?? 0) >= 2) || appState.playback.phase === 'failed', 'Public next episode did not settle', 90000);
-      check(appState.playback.phase !== 'failed', 'Public next episode failed: ' + JSON.stringify({ phase: appState.playback.phase, code: appState.playback.error?.code, message: appState.playback.error?.message, video: appState.playback.context?.metadata_video_id, has_session: Boolean(appState.playback.session) }));
+      check(String(appState.playback.phase) !== 'failed', 'Public next episode failed: ' + JSON.stringify({ phase: appState.playback.phase, code: appState.playback.error?.code, message: appState.playback.error?.message, video: appState.playback.context?.metadata_video_id, has_session: Boolean(appState.playback.session) }));
       const next = one<HTMLVideoElement>('video')!; await next.play(); const nextStart = next.currentTime;
       await until(() => next.currentTime > nextStart + 1, 'Public next did not advance'); next.pause(); await delay(200); await historyRepository.drain();
       const rows = await historyRepository.list();
