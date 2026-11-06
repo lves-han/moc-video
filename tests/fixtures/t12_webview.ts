@@ -286,12 +286,13 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       await until(() => video.paused, "Formal pause control failed");
       const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
       const seek = videoJsControl("seek") as HTMLElement & { disabled: boolean; step: number };
-      const slider = seek;
-      const step = slider.step; slider.step = .5; await nextTick();
+      const slider = seek.querySelector<HTMLElement>("media-slider-thumb")!;
+      check(slider, "Official seek thumb missing");
+      const step = seek.step; seek.step = .5; await (seek as typeof seek & { updateComplete: Promise<unknown> }).updateComplete;
       slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
       await until(() => !video.seeking && video.currentTime < .05, 'Official seek home failed');
       slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
-      slider.step = step;
+      seek.step = step;
       await until(() => !video.seeking && Math.abs(video.currentTime - .5) < .05, "Formal seek control failed");
       const res = appState.playback.resolution!.id; const session = appState.playback.session!.session_id;
       await current.controller.selectStream(appState.playback.resolution!.streams[1]!.id);
