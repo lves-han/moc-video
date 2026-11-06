@@ -69,8 +69,9 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       const before = calls.filter(c => c === 'open_playback').length;
       episodes[0]!.click();
       await nextTick(); await delay(100);
-      await until(() => !appController.matching.loading, 'Public search did not settle');
-      if (!one('.details-candidate')) { observations.push({ title: card.title, stage: 'match', status: 'no_candidates' }); continue; }
+      await until(() => appController.matching.pending === null && (appController.matching.result !== null || appState.playback.phase === 'failed'), 'Public search did not settle');
+      await nextTick();
+      if (!one('.details-candidate')) { observations.push({ title: card.title, stage: 'match', status: appController.matching.result?.status ?? 'failed', code: appState.playback.error?.code }); continue; }
       check(calls.filter(c => c === 'open_playback').length === before, 'Playback opened before confirmation');
       one<HTMLButtonElement>('.details-candidate')!.click();
       await nextTick(); await delay(100);
