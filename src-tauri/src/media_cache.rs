@@ -534,6 +534,7 @@ impl MediaCache {
             remaining: metadata.body_len,
         })
     }
+    #[cfg(test)]
     pub fn begin(
         self: &Arc<Self>,
         key: String,
@@ -541,6 +542,20 @@ impl MediaCache {
         upstream: &HeaderMap,
         headers: &HeaderMap,
         length: Option<u64>,
+    ) -> Option<CacheWrite> {
+        self.begin_at(key, status, upstream, headers, length, self.generation())
+    }
+    pub fn generation(&self) -> u64 {
+        self.state.lock().expect("cache lock").generation
+    }
+    pub fn begin_at(
+        self: &Arc<Self>,
+        key: String,
+        status: u16,
+        upstream: &HeaderMap,
+        headers: &HeaderMap,
+        length: Option<u64>,
+        expected_generation: u64,
     ) -> Option<CacheWrite> {
         owned_key(&format!("{key}.cache"))?;
         if !matches!(status, 200 | 206) {
@@ -568,6 +583,9 @@ impl MediaCache {
             return None;
         }
         let mut state = self.state.lock().expect("cache lock");
+        if state.generation != expected_generation {
+            return None;
+        }
         if state.limit <= HEADER
             || length.is_some_and(|n| n > state.limit - HEADER)
             || !self.prepare(&mut state)

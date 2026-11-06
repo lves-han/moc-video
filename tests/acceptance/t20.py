@@ -24,6 +24,7 @@ CACHE_NATIVE = {
     't24_cache_gateway_hls_does_not_persist_keys_or_manifests',
     't24_cache_gateway_contexts_policy_and_unusable_disk',
     't24_cache_gateway_clear_while_cached_http_read_continues',
+    't24_cache_gateway_clear_before_upstream_response_blocks_old_fill',
     't24_cache_host_settings_permissions_and_restart',
     't24_cache_host_limit_and_clear_keep_active_session',
 }

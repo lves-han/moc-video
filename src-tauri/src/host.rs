@@ -439,9 +439,9 @@ impl Host {
                 }
                 self.requests.cancel_sources(&affected);
                 let confirmed = committed.settings.clone();
-                drop(committed);
                 self.media_cache
                     .configure(crate::media_cache::limit(&confirmed));
+                drop(committed);
                 return Ok(confirmed);
             }
             "start_interaction" | "finish_interaction" => Err(ApiError::new(

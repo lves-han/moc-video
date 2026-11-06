@@ -555,6 +555,7 @@ struct RequestLease {
     headers: HeaderMap,
     kind: &'static str,
     finished: bool,
+    cache_generation: u64,
 }
 impl Shared {
     fn acquire(self: &Arc<Self>, req: &Request) -> Result<RequestLease, ApiError> {
@@ -594,6 +595,7 @@ impl Shared {
                 headers: r.headers.clone(),
                 kind: r.kind,
                 finished: false,
+                cache_generation: self.media_cache.generation(),
             })
         } else if let ["", "images", id] = parts.as_slice() {
             let i = records.images.get_mut(*id).ok_or_else(expired)?;
@@ -616,6 +618,7 @@ impl Shared {
                 headers: i.image.headers.clone(),
                 kind: "image",
                 finished: false,
+                cache_generation: self.media_cache.generation(),
             })
         } else {
             Err(expired())
@@ -1204,10 +1207,14 @@ async fn transfer(
     }
     let length = known_length;
     let mut cache_write = cache_key.and_then(|key| {
-        lease
-            .shared
-            .media_cache
-            .begin(key, status, response.headers(), &output, length)
+        lease.shared.media_cache.begin_at(
+            key,
+            status,
+            response.headers(),
+            &output,
+            length,
+            lease.cache_generation,
+        )
     });
     *sent = true;
     watched(

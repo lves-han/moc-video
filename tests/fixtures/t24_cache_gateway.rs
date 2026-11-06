@@ -198,3 +198,56 @@ fn t24_cache_gateway_clear_while_cached_http_read_continues() {
     wait_for(|| cache.status()["used_bytes"] == 0);
     assert_eq!(count(&fixture, "/large.mp4"), 1);
 }
+
+#[test]
+fn t24_cache_gateway_clear_before_upstream_response_blocks_old_fill() {
+    struct Release(Arc<AtomicBool>);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+    for lower in [false, true] {
+        let gate = Arc::new(AtomicBool::new(false));
+        let opened = gate.clone();
+        let fixture = Fixture::new(move |_, _| {
+            while !opened.load(Ordering::SeqCst) {
+                thread::sleep(Duration::from_millis(2));
+            }
+            Reply::body(vec![6; 128], "video/mp4").header("Cache-Control", "max-age=3600")
+        });
+        let (_temp, cache, gateway) = cached();
+        let view = session(&gateway, fixture.url("/late.mp4"));
+        let url = media(&view).to_owned();
+        let worker = thread::spawn(move || fetch(&url, "GET", &[]));
+        let _release = Release(gate.clone());
+        wait_for(|| count(&fixture, "/late.mp4") == 1);
+        assert_eq!(
+            cache.status()["used_bytes"],
+            0,
+            "response has not reached the cache writer"
+        );
+        if lower {
+            cache.configure(512 * 1024);
+        } else {
+            assert_eq!(cache.clear().unwrap()["used_bytes"], 0);
+        }
+        gate.store(true, Ordering::SeqCst);
+        let response = worker.join().unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body, vec![6; 128]);
+        assert_eq!(
+            cache.status()["used_bytes"],
+            0,
+            "request predating the barrier refilled the cache"
+        );
+        assert_eq!(cache.status()["entry_count"], 0);
+        assert_eq!(fetch(media(&view), "GET", &[]).body, vec![6; 128]);
+        assert_eq!(count(&fixture, "/late.mp4"), 2);
+        assert_eq!(
+            cache.status()["entry_count"],
+            1,
+            "a genuinely new request can cache"
+        );
+    }
+}
