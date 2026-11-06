@@ -2294,3 +2294,8 @@
 - 调查与最小试验：既有采样显示主要增长在WebContent；DOM/轨道数量稳定，停播/卸载后占用未明显回落；将逐帧采样canvas设为willReadFrequently，保持全部原采样、颜色/音频/帧断言及50次/64MiB门槛。该选项是否改善内存尚未真实验证，产品内存根因尚未证实。
 - 锁屏失败：外层预检True后被同批工具调用误启动run.py，场景前置拒绝，GUI未执行；原失败日志evidence/runs/20261106T121241675132-diag-t24-videojs-lifecycle-readback/output.log已保留，随后已写note，后续预检与启动分开。
 - 等待：已向用户请求解锁；获回复后单独预检，通过后才启动真实回归。随后完成官方控件/字幕倍速音量/390px/续播、准确A1、完整verify、done/完成提交和review-only至CLEAR。完整A1/verify/独立开发巡检仍NOT RUN。
+
+
+## T0.24 解锁恢复真实验收 2026-11-06T12:45:07.367238+00:00
+- 结果：RESOLVED
+- 决定：用户回复已解锁，外层单独预检screen_locked=None，恢复既有授权的真实窗口验证。

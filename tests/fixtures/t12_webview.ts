@@ -74,9 +74,7 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
   const bins = new Float32Array(analyser.fftSize);
   const spectrum = new Float32Array(analyser.frequencyBinCount);
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
-  // Every sample reads pixels back. Request the browser's readback surface so
-  // the observer does not retain GPU conversion surfaces across media changes.
-  const drawing = canvas.getContext("2d", { willReadFrequently: true });
+  const drawing = canvas.getContext("2d");
   check(drawing, "Media observation requires a canvas 2D context");
   let reads = 0;
   return {
@@ -88,8 +86,11 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
       for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
       drawing.clearRect(0, 0, 1, 1);
       if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
+      const pixel = [...drawing.getImageData(0, 0, 1, 1).data];
+      // Retain only scalar pixels, not the video readback drawing surface.
+      canvas.width = 1;
       return { audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length),
-        audio_peak_hz: peak * sampleRate / analyser.fftSize, pixel: [...drawing.getImageData(0, 0, 1, 1).data] };
+        audio_peak_hz: peak * sampleRate / analyser.fftSize, pixel };
     },
     diagnostics: () => ({ reads, scratch_buffers: 2, scratch_bytes: bins.byteLength + spectrum.byteLength, scratch_canvases: 1 }),
     dispose() { canvas.width = canvas.height = 0; },
