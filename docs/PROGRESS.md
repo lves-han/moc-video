@@ -2155,3 +2155,12 @@
 - 完整verify：PASS；`evidence/verify/20261106T023112663065.json`，六门exit0；工作流128项含7项跳过，实际121项通过。
 - 范围：按用户批准及ADR-053加入交接文档，原rebaseline完成；产品源码未变，历史和额度保留。
 - Remaining：在线媒体NOT RUN；待当前完成提交的独立巡检CLEAR后继续T0.24，主备扩展选择已获用户确认。
+
+
+## T0.24 公开产品诊断STUCK-HARD 2026-11-06T03:08:16.696191+00:00
+- 结果：BLOCKED
+- 已完成：历史集号原值与类型标签、按持久化元数据身份重取海报；TMDB不透明配置路径兼容。WIP2914065。history15项、SQLite12项、TMDB配置路径1项及Vue类型检查通过；准确A1、完整verify、done和独立巡检NOT RUN。
+- 事实：真实公开产品诊断经历配置路径拒绝、格式检查、DOM抽样/季分组、匹配等待竞态及首组网页线路问题；已逐项定位并修复，所有失败和note保留。最后日志`evidence/runs/20261106T030600247189-diag-t20-public-product/output.log`：Transport result is unknown；原生Host桥在`tests/fixtures/n02_host.rs:135`拒绝了非contracts::COMMANDS命令，具体命令未记录，尚未确认来源。报告`evidence/acceptance/T20-public-diag.json`。
+- 停止原因：同签名0f2d0557fc4cf25e累计5次，原执行器STUCK-HARD，本会话停止重跑；未修改状态、计数或控制器。
+- 下一步：获得恢复授权后沿原流程新会话，先让测试桥明确记录被拒命令名并核对Tauri窗口/主题操作的传输边界；补齐跨季、换源重匹配、主备元数据和真实历史展示断言，再运行单卡准确A1、完整verify、done、完成提交及review-only到CLEAR。
+- 需要用户决定：授权按工作流允许的恢复方式接续本卡；额度/失败历史保持，任何状态迁移只走获准原入口。
