@@ -11,6 +11,7 @@ from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[1]
 HISTORY = {'list_history', 'save_history', 'remove_history', 'clear_history'}
+CACHE = {'get_media_cache', 'clear_media_cache'}
 
 
 def check(directory):
@@ -23,15 +24,20 @@ def check(directory):
     baseline_fixture = original.read('examples/contract-cases.json')
     assert bridge == original.read('bridge.openapi.json'), 'Existing Android bridge contract changed'
     for name, definition in baseline_app['$defs'].items():
-        assert app['$defs'][name] == definition, f'Existing DTO changed: {name}'
+        actual = json.loads(json.dumps(app['$defs'][name]))
+        if name == 'Settings':
+            assert actual['properties'].pop('media_cache_max_bytes', None) == {'type': 'integer', 'minimum': 0, 'maximum': 9007199254740991, 'default': 268435456}, 'Cache setting contract changed'
+        assert actual == definition, f'Existing DTO changed: {name}'
     for key in ('x-command-contracts', 'x-event-contracts', 'x-request-budgets', 'x-stremio-capability-rule'):
         for name, definition in baseline_app[key].items():
             assert app[key][name] == definition, f'Existing {key} changed: {name}'
     commands = app['x-command-contracts']
     additions = set(commands) - set(baseline_app['x-command-contracts'])
-    assert additions in (set(), HISTORY), 'History commands must be introduced as one complete set'
+    assert additions == HISTORY | CACHE, 'History and media cache commands must have their complete contracts'
     if (ROOT / 'src-tauri/src/history.rs').exists():
-        assert additions == HISTORY, 'Native history requires all four IPC contracts'
+        assert HISTORY <= additions, 'Native history requires all four IPC contracts'
+    for command in CACHE:
+        assert app["$defs"]["Args_" + command]["properties"]["input"] == {"type": "object", "properties": {}, "additionalProperties": False}, "Cache commands accept no path or sequencing input"
     validate(bridge)
     Draft202012Validator.check_schema(app)
     registry = Registry().with_resource(original.BRIDGE_URI, Resource.from_contents({

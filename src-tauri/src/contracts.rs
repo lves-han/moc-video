@@ -28,6 +28,8 @@ pub const COMMANDS: &[&str] = &[
     "save_history",
     "remove_history",
     "clear_history",
+    "get_media_cache",
+    "clear_media_cache",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

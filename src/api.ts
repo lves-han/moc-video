@@ -16,6 +16,7 @@ export function describeError(error: Bridge_ApiError): string {
   if (details?.reason === "access_control") return details.signal === "challenge"
     ? t("This source asked for human verification, so requests to it stopped. Retry later or switch source.")
     : t("This source refused access (HTTP {status}), so requests to it stopped. Retry later or switch source.", { status: String(details.http_status) });
+  if (details?.reason === "media_cache_io") return t("Media cache files could not be updated. Check disk space and permissions, then retry.");
   if (details?.reason === "tls_certificate") return t("This source's certificate could not be verified, so the connection was refused. Retry later or switch source.");
   return error.message;
 }
@@ -32,7 +33,7 @@ export class UnknownCommit extends Error {
 const commands: readonly Command[] = ["runtime_status", "runtime_prepare", "get_sources", "sync_catalog", "get_home",
   "get_details", "resolve_episode", "open_playback", "close_playback", "cancel_request", "start_interaction",
   "finish_interaction", "get_settings", "save_settings", "get_resource_status", "release_resolution", "match_playback",
-  "list_history", "save_history", "remove_history", "clear_history"];
+  "list_history", "save_history", "remove_history", "clear_history", "get_media_cache", "clear_media_cache"];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 

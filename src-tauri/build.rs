@@ -30,6 +30,8 @@ fn main() {
         "save_history",
         "remove_history",
         "clear_history",
+        "get_media_cache",
+        "clear_media_cache",
         "app_close_started",
         "app_close_aborted",
         "app_close_ready",

@@ -14,6 +14,25 @@ from t00 import require
 from t10 import resources
 ROOT = Path(__file__).resolve().parents[2]
 IDS = ['U02','U03','U04','U05','U08','U09','R07','R10','R16','R20','R40','R41','R42','R43','R50','R62','R63','R66','R67','REQ-T20']
+CACHE_NATIVE = {
+    't24_media_cache_complete_range_keys_and_restart',
+    't24_media_cache_lru_limit_and_partial_reservations',
+    't24_media_cache_clear_and_lower_limit_barrier_keeps_readers',
+    't24_media_cache_http_policy_and_recovery',
+    't24_media_cache_directory_ownership_and_corrupt_read',
+    't24_cache_gateway_hits_ranges_headers_and_clear',
+    't24_cache_gateway_hls_does_not_persist_keys_or_manifests',
+    't24_cache_gateway_contexts_policy_and_unusable_disk',
+    't24_cache_gateway_clear_while_cached_http_read_continues',
+    't24_cache_host_settings_permissions_and_restart',
+    't24_cache_host_limit_and_clear_keep_active_session',
+}
+def cache_native(run):
+    import re
+    output = run.command(['cargo','test','--locked','--offline','--manifest-path','src-tauri/Cargo.toml','--lib','t24_','--','--test-threads=1','--nocapture'], timeout=600)
+    names = {name.split('::')[-1] for name in re.findall(r'^test (\S+) \.\.\.',output,re.M)}
+    require(names == CACHE_NATIVE and f'test result: ok. {len(CACHE_NATIVE)} passed; 0 failed; 0 ignored;' in output, 'All cache request-count, disk, clear, restart and permission tests must execute')
+    return dict(required=len(CACHE_NATIVE), passed=len(CACHE_NATIVE))
 class Acceptance(t14.Acceptance):
     CARD, ORIGINAL, REQUIREMENTS = 'T0.24', 'T20', IDS
     DEFERRED = [dict(target='macOS x86_64 / Windows / Linux', status='NOT RUN', reason='ADR-005/006 local macOS arm64')]
@@ -44,6 +63,8 @@ def isolated(run, name, action):
 def controlled_history(run):
     def validate(e):
         t18.validate(e)
+        require(e['cache_limit']['invalid_refused'] and e['cache_limit']['failed_save_kept_limit'] and e['cache_limit']['saved'] == 1048576 and e['cache_limit']['restored'] and e['cache_limit']['used'] <= 1048576, 'Cache limit must save, apply and restore')
+        require(all(e['cache_clear'][key] for key in ['failed_clear_kept_files','cleared','disabled','playback_after_clear']), 'Cache clear/off must change real occupancy and preserve playback')
         require(e['cross_season'] == dict(season=2, episode=1, distinct_video=True), 'Cross-season video identity must survive SQLite restart and resume')
         require(e['eos'] == dict(current_video=True, completed=True), 'Current video EOS must persist completion')
         require(all(e['source_switch'][key] for key in ['rematched','confirmed_before_open','history_kept']), 'Source switch must rematch and keep history')
@@ -60,9 +81,11 @@ def main():
     args = parser.parse_args()
     require(args.report.resolve() == ROOT/'evidence/acceptance/T20-all.json' and args.junit.resolve() == ROOT/'evidence/acceptance/T20-all.xml', 'Exact T20 report paths required')
     require(t01.native_gui_session()['screen_locked'] is not True, 'Unlock the desktop before T20 packaged acceptance')
-    t02.NATIVE |= set(n02.REGRESSIONS) | t18.NATIVE | set(t18.SETTINGS) | set(t18.REGRESSIONS) | {n02.LIVE_TEST.split('::')[-1]}
+    t02.NATIVE |= CACHE_NATIVE | set(n02.REGRESSIONS) | t18.NATIVE | set(t18.SETTINGS) | set(t18.REGRESSIONS) | {n02.LIVE_TEST.split('::')[-1]}
     run = Acceptance(args.report, args.junit)
     if run.case('resource-ownership', ['REQ-T20'], 'project scope and resource ownership', lambda: resources(run, card='T0.24')):
+        run.case('media-cache-storage-and-gateway', ['U09','R10','R16','REQ-T20'], 'real upstream request counts, disk files, ranges/context/auth, LRU, restart, in-flight clear and settings permissions', lambda: cache_native(run))
+        run.case('cache-wire-contracts', ['U09','REQ-T20'], 'old IPC preserved and both new cache commands have positive/negative cases', lambda: t18.contracts(run))
         run.case('history-behaviors', ['U09','R40','R41','R42','R43','REQ-T20'], 'history identity, queue, fractional episodes and transient metadata posters', lambda: t18.frontend(run))
         run.case('sqlite-regressions', ['U09','R40','R41','R42','R43','REQ-T20'], 'real SQLite, restart, failures and identity', lambda: t18.native(run))
         run.case('network-session-regressions', ['U02','U05','R07','R10','R16','R20','R50','R63','REQ-T20'], 'media formats, conditional DASH, subtitles, faults and source isolation', lambda: n02.native(run))

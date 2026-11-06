@@ -76,7 +76,7 @@ def closed_window_kept_everything(bridge, e):
 def contracts(run):
     output = run.command(["{python}", "-B", "scripts/check-contracts.py"])
     match = re.search(r'"commands":\s*(\d+)', output)
-    require(match and int(match[1]) == 21, "The working protocol must define 21 commands")
+    require(match and int(match[1]) == 23, "The working protocol must retain 21 existing commands plus two cache commands")
     return output.strip()[:300]
 
 

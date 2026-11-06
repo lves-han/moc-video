@@ -10,6 +10,7 @@ pub mod history;
 pub mod home;
 pub mod host;
 pub mod matching;
+pub mod media_cache;
 pub mod requests;
 pub mod resolution;
 pub mod settings;

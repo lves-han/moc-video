@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { NRadioGroup, NRadioButton, NSwitch, NTag, useOsTheme } from "naive-ui";
+import { computed, onMounted, ref, watch } from "vue";
+import { NRadioGroup, NRadioButton, NSwitch, NTag, NButton, NAlert, useOsTheme } from "naive-ui";
+import { api, ApiFailure, describeError, settingsQueue } from "../api";
+import { appController, appState } from "../state";
+import type { MediaCacheStatus } from "../models";
 import Icon from "../components/Icon.vue";
 import { locale, getStremioLanguage, t } from "../i18n";
 import {
@@ -9,7 +12,7 @@ import {
 } from "../ui/theme";
 
 const speed = defineModel<number>("speed", { required: true });
-defineProps<{ preview?: boolean }>();
+const props = defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
 const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string] }>();
 const osTheme = useOsTheme();
@@ -29,6 +32,52 @@ function changeLanguage(value: string) {
 function changePalette(value: string | number | boolean) {
   emit("palette", String(value));
 }
+const cache = ref<MediaCacheStatus | null>(null);
+const cacheBusy = ref(false), cacheError = ref(''), cacheNotice = ref('');
+const cacheMaxMiB = ref<number | null>((appState.settings.media_cache_max_bytes ?? 268435456) / 1048576);
+watch(() => appState.settings.media_cache_max_bytes, value => { cacheMaxMiB.value = (value ?? 268435456) / 1048576; });
+const cacheSize = (bytes: number) => `${(bytes / 1048576).toLocaleString(locale.value, { maximumFractionDigits: 2 })} MiB`;
+function editCacheLimit(event: Event) {
+  const value = (event.target as HTMLInputElement).valueAsNumber;
+  cacheMaxMiB.value = Number.isFinite(value) ? value : null;
+}
+function cacheFailure(error: unknown) { return error instanceof ApiFailure ? describeError(error.error) : String(error); }
+async function readCache() {
+  cache.value = await api.call('get_media_cache', {});
+  cacheError.value = cache.value.last_error ? describeError(cache.value.last_error) : '';
+}
+async function refreshCache() {
+  if (props.preview) return;
+  cacheBusy.value = true; cacheError.value = '';
+  try { await readCache(); } catch (error) { cacheError.value = cacheFailure(error); }
+  finally { cacheBusy.value = false; }
+}
+async function saveCacheLimit() {
+  cacheNotice.value = '';
+  if (cacheMaxMiB.value === null || !Number.isFinite(cacheMaxMiB.value) || cacheMaxMiB.value < 0 || !Number.isSafeInteger(cacheMaxMiB.value * 1048576)) {
+    cacheError.value = t('Enter a valid non-negative cache size.'); return;
+  }
+  const bytes = cacheMaxMiB.value * 1048576;
+  cacheBusy.value = true; cacheError.value = ''; cacheNotice.value = '';
+  try {
+    if (settingsQueue.paused) await appController.restoreSettings();
+    await appController.updateSettings(settings => ({ ...settings, media_cache_max_bytes: bytes }));
+    await readCache(); cacheNotice.value = t('Cache limit saved.');
+  } catch (error) { cacheError.value = cacheFailure(error); }
+  finally { cacheBusy.value = false; }
+}
+async function clearCache() {
+  cacheBusy.value = true; cacheError.value = ''; cacheNotice.value = '';
+  try {
+    cache.value = await api.call('clear_media_cache', {});
+    cacheNotice.value = t(cache.value.pending_bytes ? 'Cache cleared. In-use data will be released when playback finishes reading it.' : 'Media cache cleared.');
+  } catch (error) {
+    const message = cacheFailure(error);
+    try { await readCache(); } catch { /* Preserve the clear failure when the status query also fails. */ }
+    cacheError.value = message;
+  } finally { cacheBusy.value = false; }
+}
+onMounted(() => { void refreshCache(); });
 </script>
 
 <template>
@@ -175,6 +224,18 @@ function changePalette(value: string | number | boolean) {
       </select>
     </div>
   </section>
+  <section class="settings-panel media-cache-settings" :aria-busy="cacheBusy">
+    <h2>{{ t('Media cache') }}</h2>
+    <p>{{ t('Played media is cached on this device. Older cache is removed automatically when the limit is reached.') }}</p>
+    <p v-if="preview">{{ t('Manage media cache in the desktop app.') }}</p>
+    <div class="setting-row">
+      <div><h3><label for="media-cache-max">{{ t('Maximum cache size') }}</label></h3><p>{{ t('Set to 0 to turn off caching.') }}</p></div>
+      <div class="cache-limit-controls"><input id="media-cache-max" class="setting-select compact-select" type="number" min="0" step="1" :aria-label="t('Maximum cache size (MiB)')" :value="cacheMaxMiB ?? ''" :disabled="preview || cacheBusy" @input="editCacheLimit" /><span>MiB</span><NButton data-action="cache-save" :disabled="preview || cacheBusy" @click="saveCacheLimit">{{ t('Save') }}</NButton></div>
+    </div>
+    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }} / {{ cacheSize(cache.max_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ t('Clear media cache') }}</NButton></div></div>
+    <NAlert v-if="cacheError" type="error" class="media-cache-error">{{ cacheError }}</NAlert>
+    <p v-if="cacheNotice" role="status" class="media-cache-notice">{{ cacheNotice }}</p>
+  </section>
   <section class="settings-panel">
     <h2>{{ t("About Yingxiang Video") }}</h2>
     <div class="about-brand">
@@ -194,3 +255,10 @@ function changePalette(value: string | number | boolean) {
     </p>
   </section>
 </template>
+
+<style scoped>
+.cache-limit-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 100%; }
+.cache-limit-controls input { width: 130px; max-width: 100%; min-height: 44px; }
+.media-cache-settings > p { color: var(--muted); margin-bottom: 12px; }
+.media-cache-error, .media-cache-notice { margin-top: 12px; overflow-wrap: anywhere; }
+</style>

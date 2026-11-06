@@ -3,6 +3,7 @@ use crate::{
     gateway::Gateway,
     history::History,
     matching::{self, MatchStore},
+    media_cache::MediaCache,
     requests::{Clock, Job, MonotonicClock, Requests},
     resolution::{self, ResolutionStore},
     settings::SettingsFile,
@@ -51,6 +52,7 @@ pub struct Host {
     pub requests: Arc<Requests>,
     pub clock: Arc<dyn Clock>,
     store: SettingsFile,
+    media_cache: Arc<MediaCache>,
     committed: Mutex<Committed>,
 }
 
@@ -79,6 +81,7 @@ impl Host {
 
     pub fn with_clock(path: PathBuf, clock: Arc<dyn Clock>) -> Result<Arc<Self>, ApiError> {
         let history_path = path.with_file_name("yingxiang-video.db");
+        let cache_path = path.with_file_name("media-cache");
         let (store, mut settings) = SettingsFile::load(path)?;
         let mut sources = SourceDispatch::default();
         sources.replace_configs(
@@ -105,6 +108,7 @@ impl Host {
             requests: Arc::default(),
             clock,
             store,
+            media_cache: MediaCache::new(cache_path, crate::media_cache::limit(&settings)),
             committed: Mutex::new(Committed {
                 settings,
                 sources,
@@ -358,6 +362,11 @@ impl Host {
                     error_details,
                 );
             }
+            "get_media_cache" => return self.media_cache.status_checked(|| job.check()),
+            "clear_media_cache" => {
+                job.check()?;
+                return self.media_cache.clear_checked(|| job.check());
+            }
             _ => {}
         }
         let mut committed = self
@@ -375,7 +384,10 @@ impl Host {
                     ));
                 }
                 if committed.gateway.is_none() {
-                    committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
+                    committed.gateway = Some(Gateway::with_media_cache(
+                        self.clock.clone(),
+                        self.media_cache.clone(),
+                    )?);
                 }
                 self.runtime(&committed)
             }
@@ -426,7 +438,11 @@ impl Host {
                     gateway.revoke(&affected);
                 }
                 self.requests.cancel_sources(&affected);
-                return Ok(committed.settings.clone());
+                let confirmed = committed.settings.clone();
+                drop(committed);
+                self.media_cache
+                    .configure(crate::media_cache::limit(&confirmed));
+                return Ok(confirmed);
             }
             "start_interaction" | "finish_interaction" => Err(ApiError::new(
                 "CAPABILITY_UNAVAILABLE",
@@ -454,7 +470,10 @@ impl Host {
                     .sources
                     .source(&selected.link.provider, Some(&selected.source_revision))?;
                 if committed.gateway.is_none() {
-                    committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
+                    committed.gateway = Some(Gateway::with_media_cache(
+                        self.clock.clone(),
+                        self.media_cache.clone(),
+                    )?);
                 }
                 let gateway = committed.gateway.as_ref().expect("Gateway ready");
                 let view = gateway.open(selected)?;
@@ -1020,7 +1039,10 @@ impl Host {
             Ok(())
         })?;
         if !references.is_empty() && committed.gateway.is_none() {
-            committed.gateway = Some(Gateway::with_clock(self.clock.clone())?);
+            committed.gateway = Some(Gateway::with_media_cache(
+                self.clock.clone(),
+                self.media_cache.clone(),
+            )?);
         }
         let mut access = serde_json::Map::new();
         for (id, image) in references {

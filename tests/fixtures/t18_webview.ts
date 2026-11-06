@@ -131,6 +131,32 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     evidence.eos = { current_video: true, completed: true };
 
     // A second season reuses episode 1 but must retain its different metadata video.
+    // The real settings controls persist the limit before the existing Host restart.
+    location.hash = "#/settings";
+    await until(() => one('.media-cache-settings')?.getAttribute('aria-busy') === 'false' && one('.media-cache-used'), 'Cache settings did not load');
+    const initialCache = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
+    check(initialCache.data.used_bytes > 0, 'Playback produced no cache file');
+    const cacheInput = one<HTMLInputElement>('#media-cache-max')!;
+    check(Number(cacheInput.value) * 1048576 === initialCache.data.max_bytes, 'Cache draft differs from the Host limit');
+    const savesBeforeInvalid = count('save_settings');
+    cacheInput.value = '-1'; cacheInput.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
+    await until(() => one('.media-cache-error'), 'Invalid cache size was not explained');
+    check(count('save_settings') === savesBeforeInvalid && !one('.media-cache-notice'), 'Invalid cache size saved or kept a success notice');
+    cacheInput.value = '2'; cacheInput.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    await rpc({ operation: 'lock_settings_files' });
+    try {
+      one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
+      await until(() => one('.media-cache-error') && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Cache setting failure was not shown');
+      const failedSetting = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
+      check(failedSetting.data.max_bytes === initialCache.data.max_bytes && (appState.settings.media_cache_max_bytes ?? 268435456) === initialCache.data.max_bytes, 'Failed cache setting changed the confirmed limit');
+    } finally { await rpc({ operation: 'unlock_settings_files' }); }
+    cacheInput.value = '1'; cacheInput.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
+    await until(() => appState.settings.media_cache_max_bytes === 1048576 && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Cache limit did not save');
+    const cacheLimit = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
+    check(cacheLimit.data.max_bytes === 1048576 && cacheLimit.data.used_bytes <= 1048576, 'Cache limit was not enforced');
+    evidence.cache_limit = { invalid_refused: true, failed_save_kept_limit: true, saved: 1048576, used: cacheLimit.data.used_bytes };
     const metadataRef = appState.details.data!.details.ref;
     location.hash = `#/details/${encodeURIComponent(JSON.stringify(metadataRef))}`;
     await until(() => appState.route.name === "details" && appState.details.phase === "ready" && appState.details.request_id === null && one(".details-group"), "Season controls missing");
@@ -156,6 +182,8 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     location.hash = "#/history";
     await until(() => all(".history-card").length === 1, "Row did not survive the restart");
     evidence.restart = { new_epoch: appState.runtime.engine_epoch !== epoch, rows: all(".history-card").length, write_sequence: (await list()).write_sequence };
+    check(appState.settings.media_cache_max_bytes === 1048576, 'Cache limit did not survive restart');
+    evidence.cache_limit.restored = true;
     await until(() => one(".history-actions") && !one(".history-loading"), "History did not finish loading");
     seekedAt = null;
     one(".history-actions")!.querySelector<HTMLButtonElement>("button")!.click();
@@ -181,6 +209,26 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     const retained = (await list()).entries[0];
     check(retained.video_id === originalRow.video_id && retained.source_id === originalRow.source_id && retained.position_ms > 0, "Source switch lost previous history");
     evidence.source_switch = { rematched: true, confirmed_before_open: true, history_kept: true };
+    location.hash = '#/settings';
+    await until(() => one('.media-cache-settings')?.getAttribute('aria-busy') === 'false' && one('.media-cache-used'), 'Cache controls did not return');
+    await rpc({ operation: 'lock_cache_files' });
+    try {
+      one<HTMLButtonElement>('[data-action="cache-clear"]')!.click();
+      await until(() => one('.media-cache-error') && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Cache clear failure did not show a retryable error');
+      check(Number(one('.media-cache-used')!.dataset.bytes) > 0 && !one('.media-cache-notice'), 'Failed clear reported empty or successful state');
+    } finally { await rpc({ operation: 'unlock_cache_files' }); }
+    one<HTMLButtonElement>('[data-action="cache-clear"]')!.click();
+    await until(() => one('.media-cache-settings')?.getAttribute('aria-busy') === 'false' && one('.media-cache-used')?.dataset.bytes === '0', 'Clear cache did not release files');
+    const clearResult = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
+    check(clearResult.data.used_bytes === 0 && clearResult.data.entry_count === 0, 'Clear cache reported stale occupancy');
+    const disableCache = one<HTMLInputElement>('#media-cache-max')!;
+    disableCache.value = '0'; disableCache.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
+    await until(() => appState.settings.media_cache_max_bytes === 0 && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Caching did not turn off');
+    await playFromHome(); await pauseAndSave();
+    const disabledCache = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
+    check(disabledCache.data.max_bytes === 0 && disabledCache.data.used_bytes === 0, 'Disabled caching wrote media files');
+    evidence.cache_clear = { failed_clear_kept_files: true, cleared: true, disabled: true, playback_after_clear: true };
     appController.invalidatePlayback();
     await nextTick();
     location.hash = "#/history";

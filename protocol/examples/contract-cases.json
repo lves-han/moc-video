@@ -9394,6 +9394,213 @@
         },
         "extra": 1
       }
+    },
+    {
+      "name": "args_get_media_cache",
+      "document": "app",
+      "schema": "Args_get_media_cache",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {}
+      }
+    },
+    {
+      "name": "args_get_media_cache_invalid",
+      "document": "app",
+      "schema": "Args_get_media_cache",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "path": "outside-cache"
+        }
+      }
+    },
+    {
+      "name": "result_get_media_cache",
+      "document": "app",
+      "schema": "Result_get_media_cache",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "max_bytes": 268435456,
+          "used_bytes": 0,
+          "pending_bytes": 0,
+          "entry_count": 0,
+          "last_error": null
+        }
+      }
+    },
+    {
+      "name": "result_get_media_cache_invalid",
+      "document": "app",
+      "schema": "Result_get_media_cache",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "max_bytes": 268435456,
+          "used_bytes": -1,
+          "pending_bytes": 0,
+          "entry_count": 0,
+          "last_error": null
+        }
+      }
+    },
+    {
+      "name": "args_clear_media_cache",
+      "document": "app",
+      "schema": "Args_clear_media_cache",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {}
+      }
+    },
+    {
+      "name": "args_clear_media_cache_invalid",
+      "document": "app",
+      "schema": "Args_clear_media_cache",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "path": "outside-cache"
+        }
+      }
+    },
+    {
+      "name": "result_clear_media_cache",
+      "document": "app",
+      "schema": "Result_clear_media_cache",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "max_bytes": 268435456,
+          "used_bytes": 0,
+          "pending_bytes": 0,
+          "entry_count": 0,
+          "last_error": null
+        }
+      }
+    },
+    {
+      "name": "result_clear_media_cache_invalid",
+      "document": "app",
+      "schema": "Result_clear_media_cache",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "max_bytes": 268435456,
+          "used_bytes": -1,
+          "pending_bytes": 0,
+          "entry_count": 0,
+          "last_error": null
+        }
+      }
+    },
+    {
+      "name": "cache_limit_off",
+      "document": "app",
+      "schema": "Args_save_settings",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "schema_version": 2,
+          "last_source_key": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "volume": 0.8,
+          "muted": false,
+          "auto_next": false,
+          "window_bounds": null,
+          "source_configs": [],
+          "media_cache_max_bytes": 0
+        }
+      }
+    },
+    {
+      "name": "cache_limit_small",
+      "document": "app",
+      "schema": "Args_save_settings",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "schema_version": 2,
+          "last_source_key": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "volume": 0.8,
+          "muted": false,
+          "auto_next": false,
+          "window_bounds": null,
+          "source_configs": [],
+          "media_cache_max_bytes": 1
+        }
+      }
+    },
+    {
+      "name": "cache_limit_negative",
+      "document": "app",
+      "schema": "Args_save_settings",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "schema_version": 2,
+          "last_source_key": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "volume": 0.8,
+          "muted": false,
+          "auto_next": false,
+          "window_bounds": null,
+          "source_configs": [],
+          "media_cache_max_bytes": -1
+        }
+      }
+    },
+    {
+      "name": "cache_limit_fraction",
+      "document": "app",
+      "schema": "Args_save_settings",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "schema_version": 2,
+          "last_source_key": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "volume": 0.8,
+          "muted": false,
+          "auto_next": false,
+          "window_bounds": null,
+          "source_configs": [],
+          "media_cache_max_bytes": 0.5
+        }
+      }
+    },
+    {
+      "name": "cache_limit_unsafe",
+      "document": "app",
+      "schema": "Args_save_settings",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "schema_version": 2,
+          "last_source_key": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "volume": 0.8,
+          "muted": false,
+          "auto_next": false,
+          "window_bounds": null,
+          "source_configs": [],
+          "media_cache_max_bytes": 9007199254740992
+        }
+      }
     }
   ],
   "semantic_cases": [

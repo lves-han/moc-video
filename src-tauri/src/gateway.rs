@@ -3,6 +3,7 @@
 use crate::{
     contracts::ApiError,
     host::maccms::{Http, Image, http_url, redirect_headers},
+    media_cache::{self, MediaCache},
     requests::{Clock, MonotonicClock},
     resolution::{HttpContext, HttpManifestContext, LinkRecord},
 };
@@ -109,6 +110,7 @@ struct Shared {
     stop: AtomicBool,
     idle_ms: AtomicU64,
     http: Http,
+    media_cache: Arc<MediaCache>,
 }
 pub struct Gateway {
     pub address: SocketAddr,
@@ -122,7 +124,20 @@ impl Gateway {
     pub fn with_clock(clock: Arc<dyn Clock>) -> Result<Self, ApiError> {
         Self::with_http(clock, Http::default())
     }
+    pub fn with_media_cache(
+        clock: Arc<dyn Clock>,
+        cache: Arc<MediaCache>,
+    ) -> Result<Self, ApiError> {
+        Self::with_cache(clock, Http::default(), cache)
+    }
     fn with_http(clock: Arc<dyn Clock>, http: Http) -> Result<Self, ApiError> {
+        Self::with_cache(clock, http, MediaCache::disabled())
+    }
+    fn with_cache(
+        clock: Arc<dyn Clock>,
+        http: Http,
+        cache: Arc<MediaCache>,
+    ) -> Result<Self, ApiError> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .map_err(|_| ApiError::internal("Loopback gateway bind failed"))?;
         listener
@@ -139,6 +154,7 @@ impl Gateway {
             stop: AtomicBool::new(false),
             idle_ms: AtomicU64::new(30_000),
             http,
+            media_cache: cache,
         });
         let running = shared.clone();
         let worker = thread::Builder::new().name("host-gateway".into()).spawn(move || {
@@ -894,6 +910,77 @@ async fn transfer(
     } else {
         Method::GET
     };
+    let cache_key = if req.method == Method::GET
+        && lease.kind == "media"
+        && !transformed
+        && !media_cache::request_bypasses(&req.headers)
+        && !media_cache::request_bypasses(&headers)
+        && !["if-range", "if-none-match", "if-modified-since"]
+            .iter()
+            .any(|name| req.headers.contains_key(*name))
+    {
+        lease.selected.as_ref().map(|selected| {
+            media_cache::key(
+                &selected.link.provider,
+                &selected.source_revision,
+                url.as_str(),
+                &headers,
+            )
+        })
+    } else {
+        None
+    };
+    if let Some(key) = &cache_key
+        && let Some(mut cached) = lease.shared.media_cache.get(key)
+    {
+        let mut bytes = vec![0; STREAM_BUFFER];
+        // A cache read that fails before headers can safely use the original network path.
+        if let Ok(first) = cached.read(&mut bytes)
+            && first > 0
+            && !looks_html(&bytes[..first.min(64)])
+        {
+            if let Some(mime) = lease
+                .selected
+                .as_ref()
+                .filter(|selected| lease.resource == selected.stream_id)
+                .and_then(|selected| selected.link.mime_type.as_ref())
+            {
+                cached.headers.insert(
+                    "content-type",
+                    mime.parse()
+                        .map_err(|_| ApiError::bad("Invalid native media MIME"))?,
+                );
+            }
+            cached
+                .headers
+                .insert("cache-control", "no-store".parse().expect("cache header"));
+            *sent = true;
+            watched(
+                lease,
+                read,
+                write_head(
+                    write,
+                    cached.status,
+                    &cached.headers,
+                    Some(cached.length),
+                    req.origin.as_deref(),
+                    false,
+                ),
+            )
+            .await?;
+            write_chunk(lease, read, write, &bytes[..first], false).await?;
+            loop {
+                let count = cached
+                    .read(&mut bytes)
+                    .map_err(|_| upstream("Cached media read failed; retry playback"))?;
+                if count == 0 {
+                    break;
+                }
+                write_chunk(lease, read, write, &bytes[..count], false).await?;
+            }
+            return Ok(());
+        }
+    }
     let mut response = watched(
         lease,
         read,
@@ -1116,6 +1203,12 @@ async fn transfer(
         return transfer_manifest(req, lease, read, write, sent, response, first).await;
     }
     let length = known_length;
+    let mut cache_write = cache_key.and_then(|key| {
+        lease
+            .shared
+            .media_cache
+            .begin(key, status, response.headers(), &output, length)
+    });
     *sent = true;
     watched(
         lease,
@@ -1134,10 +1227,12 @@ async fn transfer(
     if !first.is_empty() {
         total += first.len() as u64;
         write_chunk(lease, read, write, &first, length.is_none()).await?;
+        cache_append(&mut cache_write, &first);
     }
     if let Some(pending) = pending {
         total += pending.len() as u64;
         write_chunk(lease, read, write, &pending, length.is_none()).await?;
+        cache_append(&mut cache_write, &pending);
     }
     while let Some(chunk) = watched(lease, read, async {
         response.chunk().await.map_err(resource_error)
@@ -1149,6 +1244,7 @@ async fn transfer(
             return Err(upstream("Resource body exceeds Content-Length"));
         }
         write_chunk(lease, read, write, &chunk, length.is_none()).await?;
+        cache_append(&mut cache_write, &chunk);
     }
     if length.is_some_and(|n| total != n) {
         return Err(upstream("Resource body ended before Content-Length"));
@@ -1159,7 +1255,22 @@ async fn transfer(
         })
         .await?;
     }
+    if let Some(cache_write) = cache_write {
+        cache_write.finish();
+    }
     Ok(())
+}
+
+fn cache_append(writer: &mut Option<media_cache::CacheWrite>, bytes: &[u8]) {
+    // Preserve the gateway's bounded streaming buffer even when reqwest returns a large chunk.
+    for chunk in bytes.chunks(STREAM_BUFFER) {
+        if let Some(current) = writer
+            && !current.append(chunk)
+        {
+            *writer = None;
+            break;
+        }
+    }
 }
 
 async fn transfer_subtitle(
@@ -1417,8 +1528,10 @@ fn rewrite_manifest(
         redirect_headers(base, &url, &mut headers)?;
         let kind = if reference.playlist || url.path().to_ascii_lowercase().ends_with(".m3u8") {
             "manifest"
-        } else {
+        } else if reference.cacheable {
             "media"
+        } else {
+            "auxiliary"
         };
         // Stable identity preserves byterange implicit offsets and repeated live
         // refreshes. Include inherited headers so different scopes never alias.

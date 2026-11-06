@@ -56,7 +56,7 @@ export type Bridge_ResourceStatusEnvelope = { "request_id": string; "engine_epoc
 export type EmptyInput = {  };
 export type SourceKey = { "source_id": string; "source_revision": string };
 export type WindowBounds = { "x": number; "y": number; "width": number; "height": number; "maximized": boolean };
-export type Settings = { "schema_version": 2; "last_source_key": (string | null); "volume": number; "muted": boolean; "auto_next": boolean; "window_bounds": (WindowBounds | null); "source_configs": Array<HttpSourceConfig>; "ui_locale"?: "en" | "zh-CN"; "ui_theme"?: "dark" | "light"; "color_palette"?: "lime" | "ocean" | "violet" | "rose" | "amber"; "last_metadata_config_id"?: (string | null); "last_playback_source_key"?: (string | null) };
+export type Settings = { "schema_version": 2; "last_source_key": (string | null); "volume": number; "muted": boolean; "auto_next": boolean; "window_bounds": (WindowBounds | null); "source_configs": Array<HttpSourceConfig>; "ui_locale"?: "en" | "zh-CN"; "ui_theme"?: "dark" | "light"; "color_palette"?: "lime" | "ocean" | "violet" | "rose" | "amber"; "last_metadata_config_id"?: (string | null); "last_playback_source_key"?: (string | null); "media_cache_max_bytes"?: number };
 export type RuntimeStatus = { "platform": "macos" | "windows" | "linux" | "android" | "ios"; "phase": "unavailable" | "checking" | "preparing" | "starting" | "ready" | "stopping" | "failed"; "engine_epoch": (string | null); "health": (HostHealth | null); "error": (Bridge_ApiError | null); "cloudstream": CloudstreamRuntime };
 export type ResourceUrl = string;
 export type ImageAccess = { "resource_id": string; "url": ResourceUrl; "expires_at": string };
@@ -154,6 +154,11 @@ export type Args_remove_history = { "request_id": string; "input": HistoryRemove
 export type Result_remove_history = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type Args_clear_history = { "request_id": string; "input": HistoryClearInput };
 export type Result_clear_history = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type MediaCacheStatus = { "max_bytes": number; "used_bytes": number; "pending_bytes": number; "entry_count": number; "last_error": (Bridge_ApiError | null) };
+export type Args_get_media_cache = { "request_id": string; "input": {  } };
+export type Result_get_media_cache = ({ "request_id": string; "engine_epoch": string; "data": MediaCacheStatus } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_clear_media_cache = { "request_id": string; "input": {  } };
+export type Result_clear_media_cache = ({ "request_id": string; "engine_epoch": string; "data": MediaCacheStatus } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type CommandArgs = {
   "runtime_status": Args_runtime_status;
   "runtime_prepare": Args_runtime_prepare;
@@ -176,6 +181,8 @@ export type CommandArgs = {
   "save_history": Args_save_history;
   "remove_history": Args_remove_history;
   "clear_history": Args_clear_history;
+  "get_media_cache": Args_get_media_cache;
+  "clear_media_cache": Args_clear_media_cache;
 };
 export type CommandResults = {
   "runtime_status": Result_runtime_status;
@@ -199,6 +206,8 @@ export type CommandResults = {
   "save_history": Result_save_history;
   "remove_history": Result_remove_history;
   "clear_history": Result_clear_history;
+  "get_media_cache": Result_get_media_cache;
+  "clear_media_cache": Result_clear_media_cache;
 };
 export type Command = keyof CommandArgs;
 export type CommandInput<C extends Command> = CommandArgs[C]['input'];

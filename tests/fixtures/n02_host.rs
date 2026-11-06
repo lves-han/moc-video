@@ -56,7 +56,11 @@ fn n02_host_sources_webview_bridge() {
                 .next()
                 .unwrap();
             assert!(!name.contains('/') && !name.contains(".."));
-            return Reply::raw(std::fs::read(media.join(name)).unwrap(), "video/mp4");
+            let mut reply = Reply::raw(std::fs::read(media.join(name)).unwrap(), "video/mp4");
+            reply
+                .headers
+                .push(("Cache-Control".into(), "max-age=3600".into()));
+            return reply;
         }
         if request.target.starts_with("/fail") {
             return Reply {
@@ -113,6 +117,40 @@ fn n02_host_sources_webview_bridge() {
                     rusqlite::Connection::open(path.with_file_name("yingxiang-video.db")).unwrap();
                 connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
                 history_lock = Some(connection);
+                json!({"ok":true})
+            }
+            "lock_settings_files" | "unlock_settings_files" => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mode = if request["operation"] == "lock_settings_files" {
+                        0o500
+                    } else {
+                        0o700
+                    };
+                    std::fs::set_permissions(
+                        path.parent().unwrap(),
+                        std::fs::Permissions::from_mode(mode),
+                    )
+                    .unwrap();
+                }
+                json!({"ok":true})
+            }
+            "lock_cache_files" | "unlock_cache_files" => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mode = if request["operation"] == "lock_cache_files" {
+                        0o500
+                    } else {
+                        0o700
+                    };
+                    std::fs::set_permissions(
+                        path.with_file_name("media-cache"),
+                        std::fs::Permissions::from_mode(mode),
+                    )
+                    .unwrap();
+                }
                 json!({"ok":true})
             }
             "unlock_history" => {

@@ -29,6 +29,24 @@ export function setLocale(value: AppLocale): boolean {
 }
 
 export const chinese = {
+  "Media cache": "媒体缓存",
+  "Played media is cached on this device. Older cache is removed automatically when the limit is reached.": "播放过的媒体会缓存在本机，达到上限时自动清理较久未使用的缓存。",
+  "Manage media cache in the desktop app.": "请在桌面应用中管理媒体缓存。",
+  "Maximum cache size": "最大缓存大小",
+  "Maximum cache size (MiB)": "最大缓存大小（MiB）",
+  "Set to 0 to turn off caching.": "设为 0 可关闭缓存。",
+  "Cache used": "缓存占用",
+  "Cache usage unavailable": "暂时无法读取缓存占用",
+  "Waiting to release": "等待释放",
+  "Clear media cache": "清理媒体缓存",
+  "Enter a valid non-negative cache size.": "请输入有效的非负缓存大小。",
+  "Cache limit saved.": "缓存上限已保存。",
+  "Media cache cleared.": "媒体缓存已清理。",
+  "Cache cleared. In-use data will be released when playback finishes reading it.": "缓存已清理，播放正在使用的数据会在读取结束后释放。",
+  "Media cache files could not be updated. Check disk space and permissions, then retry.": "缓存文件操作失败，请检查磁盘剩余空间和访问权限后重试。",
+  "Save": "保存",
+  "Refresh": "刷新",
+
   "Preference could not be saved": "偏好保存失败",
   "Settings are unavailable": "设置暂不可用",
   "Action failed": "操作失败",

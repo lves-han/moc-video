@@ -8,6 +8,7 @@ pub(super) const LIMIT: usize = 8 * 1024 * 1024;
 pub(super) struct Reference {
     pub span: Range<usize>,
     pub playlist: bool,
+    pub cacheable: bool,
 }
 
 fn invalid() -> ApiError {
@@ -96,6 +97,7 @@ pub(super) fn references(text: &str) -> Result<Vec<Reference>, ApiError> {
             refs.push(Reference {
                 span: offset..offset + line.len(),
                 playlist: variant,
+                cacheable: !variant,
             });
             variant = false;
         } else if let Some((tag, values)) = line.split_once(':') {
@@ -166,6 +168,7 @@ pub(super) fn references(text: &str) -> Result<Vec<Reference>, ApiError> {
                         }
                         refs.push(Reference {
                             span: start + span.start..start + span.end,
+                            cacheable: matches!(tag, "#EXT-X-MAP" | "#EXT-X-PART"),
                             playlist: matches!(
                                 tag,
                                 "#EXT-X-MEDIA"

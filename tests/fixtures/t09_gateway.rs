@@ -4,6 +4,8 @@
 mod t10;
 #[path = "t11_subtitles.rs"]
 mod t11;
+#[path = "t24_cache_gateway.rs"]
+mod t24_cache;
 use super::*;
 use crate::resolution::{Link, ResolutionStore, Subtitle};
 use sha2::{Digest, Sha256};
