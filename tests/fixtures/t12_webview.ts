@@ -305,8 +305,10 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       });
       try { await delay(650); } finally { unsubscribe(); }
       check(progressUpdates > 0 && progressUpdates <= 12, 'Official progress notifications are missing or still update every frame');
+      const paused = new Promise<void>(resolve => video.addEventListener('pause', () => resolve(), { once: true }));
       videoJsControl('play').click();
       await until(() => video.paused, "Formal pause control failed");
+      await paused;
       check(Math.abs(official.store.currentTime - video.currentTime) < .05, 'Official settled pause position was coalesced');
       const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
       const controls = videoJsControls();
