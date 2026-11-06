@@ -337,6 +337,10 @@ def check_endurance(rows):
     session_id = first["value"]["session_id"]
     for row in rows:
         value, sample = row["value"], row["value"]["sample"]
+        require(value["input_audit"]["active"] is True
+                and not any(event["kind"] == "seeking" or event["kind"] == "ratechange" and event["rate"] != 1
+                            for event in value["input_audit"]["events"]),
+                "Unexpected seek/rate change during continuous playback; inspect raw input audit")
         require(value["session_id"] == session_id and session_id and value["actual_gateway"] is True
                 and value["playback_rate"] == 1 and sample["session_bound"] is True and sample["video_count"] == 1
                 and sample["width"] == 1920 and sample["height"] == 1080 and not sample["paused"] and sample["media_error"] is None

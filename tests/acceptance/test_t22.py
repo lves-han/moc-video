@@ -41,6 +41,7 @@ def playback():
             paused=False, media_error=None, audio_state="running", audio_rms=.06, audio_peak_hz=440,
             session_bound=True, video_count=1)
         value = dict(sample=sample, session_id="current-session", actual_gateway=True, playback_rate=1,
+            input_audit=dict(active=True, count=0, events=[]),
             ui_position=sample["position"], visibility="visible", native=native(), errors=[], dropped_frames=0)
         rows.append(dict(host_monotonic=100 + index * 5, value=value, gpu=dict(counters=[{"Device Utilization %": 1}]), process=process()))
     return rows
@@ -148,6 +149,13 @@ class EvidenceTests(unittest.TestCase):
             rows = playback()
             rows[index]["value"]["sample"]["audio_rms"] = 0
             with self.subTest(index=index), self.assertRaises(ValueError):
+                t22.check_endurance(rows)
+
+    def test_seek_or_transient_fast_rate_cannot_pass_continuous_playback(self):
+        for event in (dict(kind="seeking", rate=1), dict(kind="ratechange", rate=2)):
+            rows = playback()
+            rows[10]["value"]["input_audit"]["events"] = [event]
+            with self.subTest(event=event), self.assertRaisesRegex(ValueError, "Unexpected seek"):
                 t22.check_endurance(rows)
 
     def test_short_stream_wrong_load_omitted_resources_and_leak_fail(self):

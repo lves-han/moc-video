@@ -18,6 +18,7 @@ type Harness = {
   frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
   errors: string[]; stopErrors: () => void;
   initialLocale: typeof locale.value; details: DetailsViewData;
+  enduranceAudit?: { read(): { active: boolean; count: number; events: Record<string, unknown>[] }; dispose(): void };
 };
 const diagnostic = (value: unknown) => String(value).replace(/([?&](?:cap|token|capability)=)[^\s"'<>]*/gi, "$1<redacted>");
 let harness: Harness | undefined;
@@ -251,12 +252,33 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
   switch (command.action) {
     case "t22-ready": {
       result = await waitForEpisodeSample(() => sample(current), 0, performance.now() + 30000);
+      await until(() => !video.seeking, 'Initial media seek did not settle');
+      current.enduranceAudit?.dispose();
+      const events: Record<string, unknown>[] = [], abort = new AbortController();
+      let count = 0;
+      const record = (kind: string, event: Event) => {
+        count++;
+        events.push({ kind, trusted: event.isTrusted, at_ms: performance.now(), position: video.currentTime, rate: video.playbackRate });
+        if (events.length > 64) events.shift();
+      };
+      for (const kind of ['seeking', 'seeked', 'ratechange', 'pause', 'ended'])
+        video.addEventListener(kind, event => record(kind, event), { signal: abort.signal });
+      for (const kind of ['pointerdown', 'keydown']) current.container.addEventListener(kind, event => {
+        if (!event.composedPath().some(node => node instanceof HTMLElement && node.localName === 'video-player')) return;
+        // Record only navigation/control categories, never arbitrary typed text.
+        if (event instanceof KeyboardEvent && !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'l'].includes(event.key)) return;
+        record(kind === 'keydown' ? 'seek-key' : 'player-pointer', event);
+      }, { capture: true, signal: abort.signal });
+      current.enduranceAudit = {
+        read: () => ({ active: !abort.signal.aborted, count, events: events.map(event => ({ ...event })) }),
+        dispose: () => abort.abort(),
+      };
       break;
     }
     case "t22-observe": {
       const official = current.container.querySelector('video-player') as HTMLElement & { store: { currentTime: number } };
       const quality = video.getVideoPlaybackQuality();
-      result = { ui_position: official.store.currentTime, duration: video.duration,
+      result = { input_audit: current.enduranceAudit?.read(), ui_position: official.store.currentTime, duration: video.duration,
         total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames,
         visibility: document.visibilityState, focused: document.hasFocus(),
         session_id: appState.playback.session?.session_id, playback_rate: video.playbackRate,
@@ -790,6 +812,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "dispose": {
+      current.enduranceAudit?.dispose();
       await current.controller.stop(); current.app.unmount(); await current.controller.settled();
       video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect();
       // Failure diagnostics may have already closed the test-owned AudioContext.
