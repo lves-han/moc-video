@@ -2185,3 +2185,12 @@
 - 结果：RESOLVED
 - 决定：沿用户本轮明确恢复授权，在当前桌面执行环境接续；原恢复CLI已退出，其权限保持原状。原task.py recover已成功核对清理并将diag-t20-bridge-command保留为interrupted exit125，旧日志全部保留；当前环境Git写入与进程检查可用，sessions保持原驱动创建的1。
 - 下一步：WIP固定安全命令名诊断后复现实际拒绝命令，最小修复转发并完成T0.24原验收及独立巡检。
+
+
+## T0.24 T20 Rust来源与产品端到端完成 2026-11-06T03:42:30.875331+00:00
+- 结果：DONE
+- Changed：历史保留原始集号，电影/剧集标签按kind区分；按持久化元数据身份重取详情与临时网关海报，临时URL不写SQLite；官方TMDB不透明配置路径原样保留；真实窗口测试转发window_bounds_now/app_close_*到原生传输，Host契约保持。
+- 验收 A1：PASS；日志：`evidence/runs/20261106T032639590851-A1/output.log`；断言：exit0，9组required/29项JUnit全过；前端22项、SQLite/设置16项、网络与Session10项回归通过。真实主TMDB中文推荐幻视任务→详情→人工确认hnm3u8→JSON来源播放切集、历史海报标签与8组双语明暗960/390px通过；备份真实Host注册、中文权力的游戏详情与video通过，主选择保持；受控跨季第2季第1集独立video_id、SQLite重启续播、当前集真实EOS、换源重匹配前不打开及旧历史保留、写失败重试/清空/真实关窗通过；8个支持来源逐一公开取证，另有优质真实打包5秒短播。
+- 报告：`evidence/acceptance/T20-all.json`、`evidence/acceptance/T20-all.xml`；在线与fixture证据分列，当前来源状态见报告public_sources。
+- 完整verify：PASS；`evidence/verify/20261106T033811003914.json`，六门exit0；工作流128项中121通过/7跳过，其他门按原收据记录。
+- Remaining：独立巡检待执行；macOS arm64必需环境已测，其余桌面平台NOT RUN（ADR-005/006）。备份当前配置只提供搜索/详情，无无需搜索参数的首页推荐，主扩展承担推荐。仅个人使用；来源可用性会变化，DASH仍按条件触发。此前失败与中断历史、原始RSS采样历史缺口保留。恢复session1由原drive创建，未手改状态、额度、权限或accept-review。
