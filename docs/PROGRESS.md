@@ -2171,3 +2171,17 @@
 - 决定：用户当前聊天原话：批准按原工作流恢复 T0.24，保留失败历史，不自行修改状态文件。先定位测试桥拒绝的具体命令并修复，再完成真实端到端验收、完整 verify 和独立巡检，推进到 CLEAR。已授权工作直接继续。
 - 恢复方式：由原drive.py --once创建一次恢复会话并自行维护sessions，保持workflow.json、失败历史和额度；不直接写状态文件，不accept-review。
 - 已定位线索：t20_webview.ts的invoke代理缺少t18_webview.ts已有的window_bounds_now及app_close_*原生命令转发，窗口resize触发尺寸读取；恢复会话先对实际拒绝命令取证再最小修复。
+
+## T0.24 执行环境阻塞 2026-11-06T03:12:17.331603+00:00
+- 结果：BLOCKED
+- Changed：仅在tests/fixtures/n02_host.rs的契约命令断言增加安全命令名诊断，ASCII字母数字与下划线、最多64字符；尚未修改原生窗口命令转发。
+- 事实：task.py check与start T0.24退出0。diag-t20-bridge-command在payload进程边界因sysctl Operation not permitted退出125；收据evidence/runs/20261106T031056828541-diag-t20-bridge-command/receipt.json为cleanup_failed，日志同目录output.log。本次未取得真实诊断、A1或verify结果。
+- 已尝试：原task.py recover退出2，无法确认payload session清理；只读核对payload PID70944和执行器PID70938均不存在，完整session边界枚举仍被当前沙箱拒绝。git diff --check退出0；git add tests/fixtures/n02_host.rs退出128，创建.git/index.lock被Operation not permitted拒绝，故要求的WIP提交未成立，改动保留在工作树。
+- 所需条件：原执行环境恢复既有进程核对与Git写权限。恢复后先由原task.py recover核对边界，再确认真实被拒命令并沿T18规则修复桥，继续整卡A1、完整verify、done与独立巡检；保留失败历史、当前session和预算。当前环境下停止重任务。
+- 交接：已通过task.py note和handoff记录；未修改状态文件、冻结内容或CLI权限，未写RESOLVED、AUTHORIZED或完成勾选。
+
+
+## T0.24 执行环境接续 2026-11-06T03:13:09.180467+00:00
+- 结果：RESOLVED
+- 决定：沿用户本轮明确恢复授权，在当前桌面执行环境接续；原恢复CLI已退出，其权限保持原状。原task.py recover已成功核对清理并将diag-t20-bridge-command保留为interrupted exit125，旧日志全部保留；当前环境Git写入与进程检查可用，sessions保持原驱动创建的1。
+- 下一步：WIP固定安全命令名诊断后复现实际拒绝命令，最小修复转发并完成T0.24原验收及独立巡检。

@@ -132,7 +132,15 @@ fn n02_host_sources_webview_bridge() {
             }
             "invoke" => {
                 let command = request["command"].as_str().unwrap();
-                assert!(crate::contracts::COMMANDS.contains(&command));
+                assert!(
+                    crate::contracts::COMMANDS.contains(&command),
+                    "bridge rejected command: {}",
+                    command
+                        .chars()
+                        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+                        .take(64)
+                        .collect::<String>()
+                );
                 get_home += usize::from(command == "get_home");
                 let result = host.invoke(command, request["args"].clone(), true);
                 Contracts::get()
