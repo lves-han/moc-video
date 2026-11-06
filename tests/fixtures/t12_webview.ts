@@ -288,6 +288,33 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       videoJsControl('play').click();
       await until(() => video.paused, "Formal pause control failed");
       const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
+      const controls = videoJsControls();
+      const captions = controls.querySelector<HTMLElement>('media-captions-button')!;
+      check(captions, 'Official captions button missing');
+      captions.click(); await until(() => [...video.textTracks].every(track => track.mode === 'disabled'), 'Official captions off failed');
+      captions.click(); await until(() => [...video.textTracks].some(track => track.mode === 'showing'), 'Official captions on failed');
+      const mute = videoJsControl('mute');
+      mute.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+      await until(() => Boolean(controls.querySelector('media-volume-popover[data-open]')), 'Official volume popup did not open');
+      const volumeThumb = videoJsControl('volume').querySelector<HTMLElement>('media-slider-thumb')!;
+      volumeThumb.focus();
+      volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+      await until(() => video.volume === 0 && appState.playback.volume === 0, 'Official volume did not reach state');
+      volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      await until(() => video.volume === 1 && appState.playback.volume === 1, 'Official volume did not restore');
+      mute.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+      const settings = controls.querySelector<HTMLButtonElement>('.media-settings-button')!;
+      const rates = controls.querySelector<HTMLElement>('media-playback-rate-radio-group')!;
+      check(settings && rates, 'Official playback-rate menu missing');
+      for (const rate of [1.5, 1]) {
+        settings.click();
+        const content = rates.closest('media-menu-content')!;
+        const trigger = controls.querySelector<HTMLElement>(`media-menu-item[commandfor="${content.id}"]`)!;
+        await until(() => trigger.getClientRects().length > 0, 'Official settings menu did not open'); trigger.click();
+        const item = rates.querySelector<HTMLElement>(`media-menu-radio-item[data-rate="${rate}"]`)!;
+        await until(() => item?.getClientRects().length, 'Official playback-rate option did not open'); item.click();
+        await until(() => video.playbackRate === rate && appState.playback.speed === rate, 'Official playback-rate did not reach media/state');
+      }
       const seek = videoJsControl("seek") as HTMLElement & { disabled: boolean; step: number };
       const slider = seek.querySelector<HTMLElement>("media-slider-thumb")!;
       check(slider, "Official seek thumb missing");
@@ -301,7 +328,8 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       await current.controller.selectStream(appState.playback.resolution!.streams[1]!.id);
       await until(() => video.readyState >= 2, "Alternate line metadata missing");
       check(video.paused && Math.abs(video.currentTime - .5) < .05, "Line switch lost paused resume snapshot");
-      result = { paused: video.paused, seek: video.currentTime, resolution_retained: res === appState.playback.resolution!.id,
+      result = { official_subtitles: true, official_volume: true, official_speed: true,
+        paused: video.paused, seek: video.currentTime, resolution_retained: res === appState.playback.resolution!.id,
         session_changed: session !== appState.playback.session!.session_id };
       break;
     }

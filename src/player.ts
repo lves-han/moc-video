@@ -135,8 +135,8 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       });
       video.append(track);
     }
-    if (!provider && source.kind === 'hls') {
-      if (!video.canPlayType('application/vnd.apple.mpegurl') && !Hls.isSupported()) {
+    if (source.kind === 'hls' && !video.canPlayType('application/vnd.apple.mpegurl')) {
+      if (!Hls.isSupported()) {
         notify('failed', 'MEDIA_UNSUPPORTED: Video.js cannot play HLS on this device');
         throw new UnsupportedMedia('MEDIA_UNSUPPORTED: Video.js cannot play HLS on this device');
       }
