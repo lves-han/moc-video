@@ -296,8 +296,18 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       break;
     }
     case "controls": {
+      const official = current.container.querySelector('video-player') as HTMLElement & {
+        store: { currentTime: number; subscribe(callback: () => void): () => void }
+      };
+      let progressUpdates = 0, previousTime = official.store.currentTime;
+      const unsubscribe = official.store.subscribe(() => {
+        if (official.store.currentTime !== previousTime) { progressUpdates++; previousTime = official.store.currentTime; }
+      });
+      try { await delay(650); } finally { unsubscribe(); }
+      check(progressUpdates > 0 && progressUpdates <= 12, 'Official progress notifications are missing or still update every frame');
       videoJsControl('play').click();
       await until(() => video.paused, "Formal pause control failed");
+      check(Math.abs(official.store.currentTime - video.currentTime) < .05, 'Official settled pause position was coalesced');
       const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
       const controls = videoJsControls();
       const captions = controls.querySelector<HTMLElement>('media-captions-button')!;
@@ -339,7 +349,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       await current.controller.selectStream(appState.playback.resolution!.streams[1]!.id);
       await until(() => video.readyState >= 2, "Alternate line metadata missing");
       check(video.paused && Math.abs(video.currentTime - .5) < .05, "Line switch lost paused resume snapshot");
-      result = { official_subtitles: true, official_volume: true, official_speed: true,
+      result = { official_progress_updates: progressUpdates, official_subtitles: true, official_volume: true, official_speed: true,
         paused: video.paused, seek: video.currentTime, resolution_retained: res === appState.playback.resolution!.id,
         session_changed: session !== appState.playback.session!.session_id };
       break;

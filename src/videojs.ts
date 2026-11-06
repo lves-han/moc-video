@@ -1,10 +1,27 @@
 // Official Video.js controls and media. The only custom feature bridges desktop-window fullscreen.
 import { createPlayer as createVideoJsPlayer } from '@videojs/html';
 import { videoFeatures } from '@videojs/html/video';
-import { definePlayerFeature, fullscreenFeature } from '@videojs/core/dom';
-import '@videojs/html/video/scaffold-skin';
+import { definePlayerFeature, fullscreenFeature, timeFeature } from '@videojs/core/dom';
+import '@videojs/html/video/compat-skin';
 import '@videojs/html/i18n/locales/zh-CN/register';
 import { nativeInvoke } from './player.ts';
+
+// Keep official seek/lifecycle behavior while matching the application's 250ms
+// position cadence. Metadata, seeking and settled pause updates remain immediate.
+const coalescedTime: typeof timeFeature = {
+  ...timeFeature,
+  attach(context) {
+    let lastPosition = -Infinity;
+    return timeFeature.attach!({ ...context, set(update) {
+      if (Object.keys(update).length === 1 && 'currentTime' in update) {
+        const now = performance.now();
+        if (now - lastPosition < 250) return;
+        lastPosition = now;
+      }
+      context.set(update);
+    } });
+  },
+};
 
 const desktopFullscreen: typeof fullscreenFeature = definePlayerFeature({
   name: 'fullscreen',
@@ -41,6 +58,7 @@ const desktopFullscreen: typeof fullscreenFeature = definePlayerFeature({
   },
 });
 const { PlayerElement } = createVideoJsPlayer({
-  features: videoFeatures.map(feature => feature === fullscreenFeature && window.__TAURI__ ? desktopFullscreen : feature) as typeof videoFeatures,
+  features: videoFeatures.map(feature => feature === timeFeature ? coalescedTime
+    : feature === fullscreenFeature && window.__TAURI__ ? desktopFullscreen : feature) as typeof videoFeatures,
 });
 if (!customElements.get('video-player')) customElements.define('video-player', PlayerElement);
