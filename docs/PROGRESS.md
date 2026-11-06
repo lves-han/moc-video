@@ -2285,3 +2285,12 @@
 
 ## T0.24 受控恢复独立文档复审 2026-11-06T12:12:13.064074+00:00
 - 文档结论：DOC-REVIEW-VERDICT: CLEAR；独立只读recovery_doc_review；原始报告docs/reviews/doc-review/round-47.md，受审7823608，protected b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af。业务与控制器新增测试NOT RUN；随后按原入口消费。
+
+
+## T0.24 受控恢复验证与锁屏等待 2026-11-06T12:15:44.632164+00:00
+- 结果：BLOCKED
+- 恢复：原task.py resume-hard入口成功消费一次受控恢复，会话1->2，全部failures/hard_sessions与阈值保留，人工状态改写无。独立文档CLEAR见docs/reviews/doc-review/round-47.md。
+- 离线验证：diag-t24-controlled-recovery 3项入口正负例通过；evidence/runs/20261106T121215021769-diag-t24-controlled-recovery/output.log。完整控制器validate 131项、7项平台跳过、exit0；evidence/runs/20261106T121304327463-diag-t24-offline-recovery-suite/output.log。vue-tsc exit0；evidence/runs/20261106T121508154636-diag-t24-videojs-offline-final/output.log。npm test 166/166通过；evidence/runs/20261106T121517214337-diag-t24-videojs-offline-tests/output.log。
+- 调查与最小试验：既有采样显示主要增长在WebContent；DOM/轨道数量稳定，停播/卸载后占用未明显回落；将逐帧采样canvas设为willReadFrequently，保持全部原采样、颜色/音频/帧断言及50次/64MiB门槛。该选项是否改善内存尚未真实验证，产品内存根因尚未证实。
+- 锁屏失败：外层预检True后被同批工具调用误启动run.py，场景前置拒绝，GUI未执行；原失败日志evidence/runs/20261106T121241675132-diag-t24-videojs-lifecycle-readback/output.log已保留，随后已写note，后续预检与启动分开。
+- 等待：已向用户请求解锁；获回复后单独预检，通过后才启动真实回归。随后完成官方控件/字幕倍速音量/390px/续播、准确A1、完整verify、done/完成提交和review-only至CLEAR。完整A1/verify/独立开发巡检仍NOT RUN。
