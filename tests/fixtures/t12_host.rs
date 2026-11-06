@@ -2,6 +2,8 @@
 //! A synthetic native callback adds two lines and VTT to real MacCMS resolutions.
 use super::*;
 use crate::resolution::{Link, Subtitle};
+#[path = "t21_trace.rs"]
+mod t21_trace;
 
 fn publish(path: &std::path::Path, value: &Value) {
     let temporary = path.with_extension("tmp");
@@ -29,6 +31,8 @@ fn t12_host_formal_webview_bridge() {
     let observed_mode = mode.clone();
     let error_requests = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
     let observed_errors = error_requests.clone();
+    let trace = t21_trace::Trace::from_environment();
+    let observed_trace = trace.clone();
     let upstream = Fixture::new(move |request, port| {
         if request.target.contains("manifest.json") {
             return metadata_reply(request).unwrap();
@@ -64,43 +68,44 @@ fn t12_host_formal_webview_bridge() {
             if (1..=3).contains(&mode) {
                 observed_errors.lock().unwrap().push(json!({"mode":mode,"target":request.target,"status":match mode {1=>401,2=>502,_=>200},"mime":if mode == 3 {"video/mp4"} else {"text/plain"}}));
             }
-            match mode {
-                1 => {
-                    return Reply {
-                        status: 401,
-                        ..Reply::raw("upstream unauthorized", "text/plain")
+            let reply = match mode {
+                1 => Reply {
+                    status: 401,
+                    ..Reply::raw("upstream unauthorized", "text/plain")
+                },
+                2 => Reply {
+                    status: 502,
+                    ..Reply::raw("upstream unavailable", "text/plain")
+                },
+                3 => Reply::raw(vec![0x5a; 4096], "video/mp4"),
+                _ => {
+                    let name = request
+                        .target
+                        .trim_start_matches("/media/")
+                        .split('?')
+                        .next()
+                        .unwrap();
+                    assert!(!name.contains('/') && !name.contains(".."));
+                    let mime = if name.ends_with(".m3u8") {
+                        "application/vnd.apple.mpegurl"
+                    } else if name.ends_with(".ts") {
+                        "video/mp2t"
+                    } else {
+                        "video/mp4"
                     };
+                    Reply::raw(
+                        media
+                            .as_ref()
+                            .map(|folder| std::fs::read(folder.join(name)).unwrap())
+                            .unwrap_or_else(|| vec![0; 64]),
+                        mime,
+                    )
                 }
-                2 => {
-                    return Reply {
-                        status: 502,
-                        ..Reply::raw("upstream unavailable", "text/plain")
-                    };
-                }
-                3 => return Reply::raw(vec![0x5a; 4096], "video/mp4"),
-                _ => {}
-            }
-            let name = request
-                .target
-                .trim_start_matches("/media/")
-                .split('?')
-                .next()
-                .unwrap();
-            assert!(!name.contains('/') && !name.contains(".."));
-            let mime = if name.ends_with(".m3u8") {
-                "application/vnd.apple.mpegurl"
-            } else if name.ends_with(".ts") {
-                "video/mp2t"
-            } else {
-                "video/mp4"
             };
-            return Reply::raw(
-                media
-                    .as_ref()
-                    .map(|folder| std::fs::read(folder.join(name)).unwrap())
-                    .unwrap_or_else(|| vec![0; 64]),
-                mime,
-            );
+            if let Some(trace) = &observed_trace {
+                trace.request(request, &reply, mode);
+            }
+            return reply;
         }
         let mut raw = item(port);
         raw["vod_name"] = json!("Same title");
@@ -249,7 +254,20 @@ fn t12_host_formal_webview_bridge() {
                                 clock.now_ms(),
                             )
                             .unwrap();
-                        let mut second: Link = selected.link.clone();
+                        let mut first: Link = selected.link.clone();
+                        if trace.is_some() {
+                            first.headers.insert(
+                                "x-t21-context",
+                                Uuid::new_v4().to_string().parse().unwrap(),
+                            );
+                        }
+                        let mut second: Link = first.clone();
+                        if trace.is_some() {
+                            second.headers.insert(
+                                "x-t21-context",
+                                Uuid::new_v4().to_string().parse().unwrap(),
+                            );
+                        }
                         second.label = "Alternate native callback".into();
                         let subtitle = Subtitle {
                             original: json!({"native_callback":true}),
@@ -264,7 +282,7 @@ fn t12_host_formal_webview_bridge() {
                             .resolutions
                             .register(
                                 &reference,
-                                vec![selected.link.clone(), second],
+                                vec![first, second],
                                 vec![subtitle],
                                 clock.now_ms(),
                             )
@@ -280,6 +298,21 @@ fn t12_host_formal_webview_bridge() {
                         .validate(&format!("Result_{command}"), &result)
                         .unwrap();
                     if command == "open_playback" && result.get("data").is_some() {
+                        if let Some(trace) = &trace {
+                            let view = &result["data"];
+                            let selected = host
+                                .committed
+                                .lock()
+                                .unwrap()
+                                .resolutions
+                                .selected(
+                                    view["resolution_id"].as_str().unwrap(),
+                                    view["stream_id"].as_str().unwrap(),
+                                    clock.now_ms(),
+                                )
+                                .unwrap();
+                            trace.bind(view, &selected.link);
+                        }
                         opened.push(result["data"].clone());
                     }
                     result
@@ -319,6 +352,30 @@ fn t12_host_formal_webview_bridge() {
         }
     }
     assert_eq!(host.requests.active_count(), 0);
+    if let Some(trace) = trace {
+        upstream.wait_for(|request| request.target.starts_with("/media/seg-"));
+        let raw = upstream.requests.lock().unwrap();
+        for view in &opened {
+            let url = url::Url::parse(view["media_url"].as_str().unwrap()).unwrap();
+            let cap = url.query_pairs().find(|(key, _)| key == "cap").unwrap().1;
+            assert!(
+                raw.iter().all(|request| {
+                    !request.target.contains(cap.as_ref())
+                        && request
+                            .headers
+                            .values()
+                            .all(|value| !value.contains(cap.as_ref()))
+                }),
+                "local capability reached the upstream"
+            );
+        }
+        drop(raw);
+        assert_eq!(upstream.active.load(Ordering::SeqCst), 0);
+        trace.finish(
+            host.requests.active_count(),
+            upstream.active.load(Ordering::SeqCst),
+        );
+    }
     println!(
         "T12_VECTOR:{}",
         json!({"kind":"host","invokes":invoke_count,"opens":opened.len(),"closed":true,"active_requests":0,"synthetic_callbacks":true})

@@ -2331,3 +2331,18 @@
 - 独立巡检：CLEAR；原drive.py --review-only，固定受验提交8a8fd6c073e4f77543edc61a44d716e5345c9a6f；报告：`evidence/reviews/20261106T135723375858-T0.24/output.log`。已核对A1/verify/done/固定提交源码摘要、51份RSS原始采样与148份登记运行/无重叠/日志及归档哈希、授权/追加前缀。未发现新的已确认高严重度缺陷，未accept-review。
 - 保留P2：五个打包会话引用samples-1.jsonl缺失（t01.py无条件登记路径）；50次专项原始51份采样已内嵌报告可核算。R62定向双语覆盖/播放中切语言和历史海报过期恢复证据仍未验证；其他平台与后续产品长测NOT RUN。沿现有BACKLOG继续跟踪。
 - 下一张：原task.py next返回T0.25（媒体网关与鉴权回归），按既有逐卡授权和当前聊天监管继续，旧聊天监管保持暂停。
+
+## T0.25 T21媒体网关与鉴权回归实现交接 2026-11-06T14:23:00+00:00
+- 实施状态：WIP；本卡第1/2会话。按ADR-010既定分工完成范围内实现及静态核对，外层在本CLI退出且源码稳定后执行原run.py重任务、Git及完成门。TASKS未勾选，未done/rebaseline，未写RESOLVED/AUTHORIZED/BLOCKED。
+- Changed：新增tests/acceptance/t21.py，复用16项T09、8项T10、9项T11行为与独立观察器，纳入5项真实Tauri/包络/大小/预算/取消及5项HTTP/DNS/重定向边界回归；工作协议沿原23项检查。新增test_t21.py的10项证据正负例，涵盖错误Session/Resolution/stream/context/episode、错分片、缺文件/样本/进程角色/身份/RSS、凭据、超预算与清理残留。
+- Changed：复用现有官方Video.js真实WKWebView的50切集/51份RSS、HLS、图片4096 LRU所属DTO刷新、一次播放恢复、错误/字幕/停止/卸载全链；T12入口增加默认关闭的安全检查参数，T21实际执行原生CSP/CORS/特权IPC负例。测试Host新增可选T21追踪，逐媒体请求核对来源上下文与已签发Session/Resolution/stream/episode、HLS清单成员，记录实际fixture Reply的状态/字节数/SHA256并与播放器同一自有媒体集合交叉核对；本地cap及Authorization/Cookie不上游。测试替身仍仅cfg(test)/自动化构建，产品源码、冻结定义及依赖保持。
+- Why：既有网关具备本卡主要行为，当前缺T21统一入口及共享媒体子请求/资源账目拒绝断言；仅增加这些验收能力。DASH按C8读取原始公开采样及最新T02公开来源观察，若出现DASH立即要求完整条件性验证；未出现时明确NOT RUN。macOS arm64必需，其他桌面平台沿ADR-005/006列NOT RUN，10分钟网关耐久归T0.26/A2。
+- Verified：task.py check/start T0.25/status/check均exit0；三个变更Python文件AST解析exit0；rustfmt --edition 2024 --config skip_children=true仅格式化本卡两个Rust测试文件exit0；git diff --check exit0。10项新Python测试为已定义数量，执行NOT RUN；Rust编译/类型检查、实际媒体请求、准确A1、完整verify均NOT RUN。公开采样静态读取一次KeyError已原task.py note记录，随后按实际来源的可选records结构修正。
+- 基线：source=7beaba392a9acf6d1d5ce635f9a0ced49432c3578dbc1463b3fb7fd9734c2974；protected=b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af；generation0、sessions1及原4096MiB/jobs2/线程1保持。未启动构建、服务或重任务，未重复探测已知sysctl/sccache/.git限制。
+- 下一步：准确argv清单已生成并读回evidence/acceptance/T21-session-1-outer-argv.json，A1 payload首项保持字面量{python}。外层先代办WIP T0.25: add gateway authentication and shared-media regressions，通过原run.py执行diag-t21-oracles及准确A1；全部通过后直接verify.py all，再按原勾卡/PROGRESS/done/受验提交/独立CLEAR门收尾。若实现失败，先原note并交回本卡剩余第2会话；不以本次静态检查或旧卡成功替代新收据。
+
+
+## T0.25 外层代验预检 2026-11-06T14:26:33.115556+00:00
+- 原CLI及驱动均以PID/创建身份核对退出，无重命令或锁占用后接手。当前仅测试/验收范围内改动，冻结摘要保持b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af。
+- 离线验证：新增10项判定反例已实际通过；日志evidence/runs/20261106T142433950922-diag-t21-oracles/output.log，exit0。新Rust共享媒体追踪夹具cargo test --lib --no-run编译通过；日志evidence/runs/20261106T142445334718-diag-t21-native-compile/output.log，exit0（仅编译，Rust行为未运行）。
+- GUI外层单独预检screen_locked=True，未启动A1，已请求用户解锁；等待后单独复查，再执行卡片准确A1及完整verify/独立巡检。原失败历史及验收阈值保持。

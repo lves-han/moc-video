@@ -430,7 +430,7 @@ def diagnose_rss_failure(run, session, bridge):
             break
 
 
-def webview(run):
+def webview(run, *, check_security=False):
     run.observed["gui_session"] = t01.native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     t01.check_media()
@@ -448,6 +448,8 @@ def webview(run):
             with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                 session = t01.NativeSession(run, fixture, executable, 1)
                 session.wait(0, 30)
+                if check_security:
+                    run.observed["webview_security"] = session.command("security")
                 identity = session.command("identity")
                 require(identity["origin"] == "tauri://localhost", "Incorrect packaged origin")
                 start = session.command("t12", action="start", payload=ready, timeout=60)
