@@ -143,6 +143,13 @@ class EvidenceTests(unittest.TestCase):
     def test_full_stream_samples_bytes_and_cleanup_pass(self):
         self.assertGreater(t22.check_stream(*stream())["mbps"], 19.99)
 
+    def test_zero_pcm_is_rejected_at_first_and_later_measured_samples(self):
+        for index in (0, 10):
+            rows = playback()
+            rows[index]["value"]["sample"]["audio_rms"] = 0
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                t22.check_endurance(rows)
+
     def test_short_stream_wrong_load_omitted_resources_and_leak_fail(self):
         for kind in ("seconds", "bytes", "target_bps", "active_requests", "live_sessions", "ports_released", "cpu", "sample", "identity", "leak", "gap"):
             vector, samples = stream()

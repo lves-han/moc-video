@@ -357,6 +357,9 @@ def check_endurance(rows):
 
 
 def endurance(run, session, bridge):
+    readiness = session.command("t12", action="t22-ready", timeout=40)
+    run.observed["endurance_readiness"] = readiness
+    write_json(run.folder / "endurance-readiness.json", readiness)
     rows = run.observed.setdefault("endurance_samples", [])
     start = time.monotonic()
     while True:

@@ -249,6 +249,10 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
   const video = current.video;
   let result: Record<string, unknown> = {};
   switch (command.action) {
+    case "t22-ready": {
+      result = await waitForEpisodeSample(() => sample(current), 0, performance.now() + 30000);
+      break;
+    }
     case "t22-observe": {
       const official = current.container.querySelector('video-player') as HTMLElement & { store: { currentTime: number } };
       const quality = video.getVideoPlaybackQuality();
