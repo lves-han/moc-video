@@ -2325,3 +2325,9 @@
 - 完整 verify：PASS；收据：`evidence/verify/20261106T135225569309.json`；六门exit0；控制器131项（124通过/7平台跳过）、前端169/169、协议契约/实际IPC、生产构建与Rust项目检查通过。源码e533cd7fcd8a2eb0fccdde20b55eeb1960654c34b01d4603c5362a0e76fcb6d5，protected b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af，验证后无源码修改。
 - 监管：当前聊天automation-2 ACTIVE/5分钟，旧聊天两任务PAUSED保持；工作中仅监控，不并发开发。
 - Remaining：macOS arm64真实打包窗口已验，其他桌面平台NOT RUN（ADR-005/006）；遗留P2沿BACKLOG记录。待受验完成提交和drive --review-only独立巡检，CLEAR后再推进；不accept-review、不推送、不改写历史。
+
+
+## T0.24 官方Video.js完成提交独立巡检 2026-11-06T14:05:27.841652+00:00
+- 独立巡检：CLEAR；原drive.py --review-only，固定受验提交8a8fd6c073e4f77543edc61a44d716e5345c9a6f；报告：`evidence/reviews/20261106T135723375858-T0.24/output.log`。已核对A1/verify/done/固定提交源码摘要、51份RSS原始采样与148份登记运行/无重叠/日志及归档哈希、授权/追加前缀。未发现新的已确认高严重度缺陷，未accept-review。
+- 保留P2：五个打包会话引用samples-1.jsonl缺失（t01.py无条件登记路径）；50次专项原始51份采样已内嵌报告可核算。R62定向双语覆盖/播放中切语言和历史海报过期恢复证据仍未验证；其他平台与后续产品长测NOT RUN。沿现有BACKLOG继续跟踪。
+- 下一张：原task.py next返回T0.25（媒体网关与鉴权回归），按既有逐卡授权和当前聊天监管继续，旧聊天监管保持暂停。
