@@ -2346,3 +2346,10 @@
 - 原CLI及驱动均以PID/创建身份核对退出，无重命令或锁占用后接手。当前仅测试/验收范围内改动，冻结摘要保持b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af。
 - 离线验证：新增10项判定反例已实际通过；日志evidence/runs/20261106T142433950922-diag-t21-oracles/output.log，exit0。新Rust共享媒体追踪夹具cargo test --lib --no-run编译通过；日志evidence/runs/20261106T142445334718-diag-t21-native-compile/output.log，exit0（仅编译，Rust行为未运行）。
 - GUI外层单独预检screen_locked=True，未启动A1，已请求用户解锁；等待后单独复查，再执行卡片准确A1及完整verify/独立巡检。原失败历史及验收阈值保持。
+
+
+## T0.25 真实打包窗口等待解锁 2026-11-06T14:28:09.654860+00:00
+- 结果：BLOCKED
+- 事实：单独外层预检屏幕锁定，A1尚未启动；无锁屏失败重跑，未改状态或阈值。原会话1已退出，WIP 0b55c1e工作树固定。
+- 已验证：10项新判定正负例exit0；新Rust lib测试夹具编译exit0，Rust行为/真实窗口/A1/完整verify/独立巡检均待运行。
+- 需要用户操作：解锁电脑并回复已解锁；已有异步问题等待答复。随后先单独复查screen_locked，再恢复本卡原准确A1、完整verify、done/完成提交与review-only至CLEAR；不另启开发会话或跳至后卡。
