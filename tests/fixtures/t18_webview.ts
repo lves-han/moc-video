@@ -7,7 +7,7 @@ import type { Player } from "../../src/player.ts";
 import { historyRepository } from "../../src/data/history";
 import { locale } from "../../src/i18n";
 
-type Ready = { manifest: string; maccms: string };
+type Ready = { manifest: string; maccms: string; second: string };
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const check = (value: unknown, message: string) => { if (!value) throw new Error(message); };
 let describe = () => "";
@@ -119,6 +119,28 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     let saved = (await list()).entries[0];
     for (let i = 0; i < 100 && !saved; i++) { await delay(50); saved = (await list()).entries[0]; }
     check(saved, "Second row was not stored");
+    // Only the currently bound video is completed by a real EOS.
+    await appController.updateSettings(settings => ({ ...settings, auto_next: false }));
+    const eosVideo = appState.playback.context!.metadata_video_id;
+    await video()!.play(); video()!.currentTime = Math.max(0, video()!.duration - .15);
+    await until(() => appState.playback.phase === "ended", "Current video EOS did not arrive");
+    await until(() => count("save_history") > 0, "EOS did not save");
+    await delay(100); await historyRepository.drain();
+    const eosRow = (await list()).entries[0];
+    check(eosRow.video_id === eosVideo && eosRow.completed, "EOS marked the wrong video");
+    evidence.eos = { current_video: true, completed: true };
+
+    // A second season reuses episode 1 but must retain its different metadata video.
+    const metadataRef = appState.details.data!.details.ref;
+    location.hash = `#/details/${encodeURIComponent(JSON.stringify(metadataRef))}`;
+    await until(() => appState.route.name === "details" && one(".details-group"), "Season controls missing");
+    const secondSeason = appState.details.data!.details.groups.find(group => group.season_number === 2)!;
+    check(secondSeason, "Cross-season fixture missing");
+    all<HTMLButtonElement>(".details-group").find(button => button.dataset.groupId === secondSeason.id)!.click(); await nextTick();
+    one<HTMLButtonElement>(".details-episode")!.click(); await confirmFirst(); await pauseAndSave();
+    await historyRepository.drain(); saved = (await list()).entries[0];
+    check(saved.season_number === 2 && saved.episode_number === 1 && saved.video_id !== eosVideo && !saved.completed, "Cross-season history lost its video binding");
+    evidence.cross_season = { season: saved.season_number, episode: saved.episode_number, distinct_video: saved.video_id !== eosVideo };
     const epoch = appState.runtime.engine_epoch;
     appController.invalidatePlayback();
     await until(() => !session(), "Playback did not stop before the restart");
@@ -139,6 +161,22 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await until(() => seekedAt !== null, "Resume did not seek to the saved position");
     evidence.resumed = { saved_ms: saved.position_ms, at: seekedAt, video: appState.playback.context!.metadata_video_id === saved.video_id };
 
+    // Changing the source closes the prior Session and rematches before any open.
+    const originalRow = (await list()).entries[0];
+    await appController.saveSourceConfig({ config_id: null, kind: "maccms", name: "Second playback", urls: ready.second, enabled: true });
+    const secondSource = appState.sources.data!.providers.find(source => source.name === "Second playback")!;
+    const openedBeforeSwitch = count("open_playback");
+    await appController.selectSource(secondSource.id, "playback");
+    await until(() => !session(), "Old source Session remained active");
+    location.hash = `#/details/${encodeURIComponent(JSON.stringify(metadataRef))}`;
+    await until(() => appState.route.name === "details" && appState.details.phase === "ready", "Metadata missing after source switch");
+    const rematched = await appController.match(saved.video_id); await nextTick();
+    check(rematched?.status === "needs_confirmation" && rematched.candidates.every(candidate => candidate.content_ref.source_id === secondSource.id), "Source switch reused an old confirmation");
+    check(count("open_playback") === openedBeforeSwitch, "Source switch opened before confirmation");
+    appController.invalidatePlayback(); await delay(100); await historyRepository.drain();
+    const retained = (await list()).entries[0];
+    check(retained.video_id === originalRow.video_id && retained.source_id === originalRow.source_id && retained.position_ms > 0, "Source switch lost previous history");
+    evidence.source_switch = { rematched: true, confirmed_before_open: true, history_kept: true };
     appController.invalidatePlayback();
     await nextTick();
     location.hash = "#/history";

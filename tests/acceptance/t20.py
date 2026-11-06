@@ -1,6 +1,8 @@
 """T20: real public metadata/playback plus controlled product and history regressions."""
 import argparse
 import os
+import subprocess
+import sys
 from pathlib import Path
 import n02
 import t01
@@ -37,6 +39,17 @@ def isolated(run, name, action):
         return action(run)
     finally:
         run.folder = previous
+def controlled_history(run):
+    def validate(e):
+        t18.validate(e)
+        require(e['cross_season'] == dict(season=2, episode=1, distinct_video=True), 'Cross-season video identity must survive SQLite restart and resume')
+        require(e['eos'] == dict(current_video=True, completed=True), 'Current video EOS must persist completion')
+        require(all(e['source_switch'][key] for key in ['rematched','confirmed_before_open','history_kept']), 'Source switch must rematch and keep history')
+    os.environ['T12_MIN_OPENS'] = '1'
+    try:
+        return t14.packaged(run, n02.LIVE_TEST, 't18', validate, 'history', lambda e: dict(cross_season=e['cross_season'], source_switch=e['source_switch'], eos=e['eos']), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=600, after_close=t18.closed_window_kept_everything)
+    finally:
+        os.environ.pop('T12_MIN_OPENS', None)
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--suite', choices=['all'], required=True)
@@ -53,8 +66,16 @@ def main():
         run.case('network-session-regressions', ['U02','U05','R07','R10','R16','R20','R50','R63','REQ-T20'], 'media formats, conditional DASH, subtitles, faults and source isolation', lambda: n02.native(run))
         run.case('public-product-chain', ['U02','U03','U04','U08','R10','R16','R50','R62','R63','REQ-T20'], 'public metadata recommendation/details/confirmation/playback/next/history/poster', lambda: isolated(run, 'public-product', public))
         run.case('controlled-product-chain', ['U02','U03','U04','U05','U08','R07','R10','R16','R20','R50','R63','R66','R67','REQ-T20'], 'controlled source management, independent preferences, ambiguity and next pause', lambda: isolated(run, 'controlled-product', n02.webview))
-        run.case('controlled-history-window', ['U09','R40','R41','R42','R43','REQ-T20'], 'real SQLite restart, resume and failed-save notice in product', lambda: isolated(run, 'controlled-history', t18.webview))
+        run.case('controlled-history-window', ['U09','R40','R41','R42','R43','REQ-T20'], 'real SQLite restart, resume and failed-save notice in product', lambda: isolated(run, 'controlled-history', controlled_history))
         run.case('public-source-capabilities', ['U02','U05','R07','R10','R16','REQ-T20'], 'all supported source public JSON and media observations, separately from fixture evidence', lambda: isolated(run, 'public-sources', t02.webview))
     return run.save()
 if __name__ == '__main__':
-    raise SystemExit(main())
+    # Keep an unattended packaged run awake; the owned helper exits with this process.
+    awake = subprocess.Popen(['/usr/bin/caffeinate', '-di', '-w', str(os.getpid())]) if sys.platform == 'darwin' else None
+    try:
+        code = main()
+    finally:
+        if awake is not None:
+            awake.terminate()
+            awake.wait(timeout=10)
+    raise SystemExit(code)

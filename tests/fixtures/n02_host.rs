@@ -8,9 +8,10 @@ fn publish(path: &std::path::Path, value: &Value) {
 }
 
 fn metadata() -> Value {
-    let videos: Vec<_> = (0..3)
+    let mut videos: Vec<_> = (0..3)
         .map(|i| json!({"id":format!("video:{i}"),"title":format!("Episode {i}"),"season":1,"episode":i+1}))
         .collect();
+    videos.push(json!({"id":"video:season2:1","title":"Season two opener","season":2,"episode":1}));
     json!({"id":"series:original","type":"series","name":"Same title","releaseInfo":"2024","videos":videos})
 }
 
