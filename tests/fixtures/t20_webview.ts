@@ -1,4 +1,6 @@
 // Ordinary public Stremio metadata and JSON playback through the production App and Host.
+import { videoJsControl, videoJsControls } from './videojs_controls.ts';
+import { VERSION as VIDEOJS_VERSION } from '@videojs/html';
 import { createApp, h, nextTick } from 'vue';
 import App from '../../src/App.vue';
 import UiProvider from '../../src/ui/UiProvider.vue';
@@ -98,27 +100,41 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
 
       await until(() => appState.playback.phase === 'paused', 'Initial pause did not settle');
       await nextTick();
-      const actions = ['play', 'stop', 'next', 'episodes', 'fullscreen'];
-      const iconButtons = actions.map(action => {
-        const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
-        check(button && button.querySelector('svg') && !button.textContent?.trim(), `Playback ${action} must be icon-only`);
-        check(button.title && button.title === button.getAttribute('aria-label'), `Playback ${action} needs matching hover and accessible text`);
-        return { action, icon: true, tooltip: button.title, accessible: true, width: button.getBoundingClientRect().width };
+      check(VIDEOJS_VERSION === '10.3.0' && document.querySelectorAll('video-player').length === 1 && document.querySelectorAll('video').length === 1, 'Official Video.js version/single media owner differs');
+      check(!one('.playback-controls'), 'Application still renders the old control bar');
+      const shadow = videoJsControls();
+      const iconButtons = ['play', 'mute', 'fullscreen'].map(action => {
+        const button = videoJsControl(action as 'play' | 'mute' | 'fullscreen');
+        check(button instanceof customElements.get(button.localName)!, 'Control is not a registered official component');
+        const label = button.getAttribute('aria-label') ?? '';
+        check(label && button.querySelector('media-icon'), 'Official control needs an icon and accessible name');
+        check(shadow.querySelector(`media-tooltip[trigger="${button.id}"]`), 'Official hover tooltip missing');
+        return { action, icon: true, tooltip: label, accessible: true, width: button.getBoundingClientRect().width };
       });
-      const playButton = one<HTMLButtonElement>('[data-action="play"]')!;
-      playButton.focus();
-      check(document.activeElement === playButton, 'Playback icon button cannot receive keyboard focus');
-      playButton.click(); await until(() => !video.paused && playButton.title === '暂停', 'Icon play action or pause tooltip did not update');
-      playButton.click(); await until(() => video.paused && playButton.title === '播放', 'Icon pause action or play tooltip did not update');
-      const mute = one<HTMLInputElement>('input[aria-label="静音"]')!;
-      mute.click(); await until(() => video.muted && mute.parentElement!.title === '取消静音', 'Mute icon did not update its action');
-      mute.click(); await until(() => !video.muted, 'Mute icon did not restore audio');
-      await nextTick();
-      check(iconButtons.every(button => button.width >= 44), 'Playback icons must retain usable hit targets');
+      for (const action of ['next', 'episodes']) {
+        const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
+        check(button && button.title && button.querySelector('svg'), 'Business control missing');
+        iconButtons.push({ action, icon: true, tooltip: button.title, accessible: Boolean(button.getAttribute('aria-label')), width: button.getBoundingClientRect().width });
+      }
+      const playButton = videoJsControl('play');
+      playButton.focus(); check(shadow.activeElement === playButton, 'Official button cannot receive keyboard focus');
+      playButton.click(); await until(() => !video.paused && playButton.getAttribute('data-paused') === null, 'Official play did not update');
+      playButton.click(); await until(() => video.paused, 'Official pause did not update');
+      const mute = videoJsControl('mute');
+      mute.click(); await until(() => video.muted, 'Official mute did not update');
+      mute.click(); await until(() => !video.muted, 'Official unmute did not update');
+      const fullscreen = videoJsControl('fullscreen');
+      fullscreen.click(); await until(() => fullscreen.hasAttribute('data-fullscreen'), 'Official native fullscreen did not enter');
+      const entered = await original.invoke<{ fullscreen: boolean }>('t01_control', { action: 'identity' });
+      check(entered.fullscreen, 'Official control did not enter the native Tauri window');
+      fullscreen.click(); await until(() => !fullscreen.hasAttribute('data-fullscreen'), 'Official native fullscreen did not exit');
+      const exited = await original.invoke<{ fullscreen: boolean }>('t01_control', { action: 'identity' });
+      check(!exited.fullscreen, 'Native fullscreen remained active');
+      check(iconButtons.every(button => button.width >= 44), 'Playback hit targets became too small');
       const iconLayouts = [];
       for (const width of [960, 390]) {
         await original.invoke('t01_control', { action: 'width', value: width }); await delay(250);
-        const controls = one('.playback-controls')!;
+        const controls = videoJsControls().querySelector<HTMLElement>('media-container')!;
         const fits = document.documentElement.scrollWidth <= innerWidth + 1 && controls.scrollWidth <= controls.clientWidth + 1;
         check(fits, 'Playback icon controls overflowed the viewport');
         iconLayouts.push({ width: innerWidth, fits });
@@ -140,7 +156,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       const next = one<HTMLVideoElement>('video')!; await next.play(); const nextStart = next.currentTime;
       await until(() => next.currentTime > nextStart + 1, 'Public next did not advance'); next.pause(); await delay(200); await historyRepository.drain();
       const rows = await historyRepository.list();
-      result = { icon_layouts: iconLayouts, icon_buttons: iconButtons, icon_play_pause: true, icon_mute: true, keyboard_focus: true, title: card.title, line, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
+      result = { official_version: VIDEOJS_VERSION, official_controls: true, native_fullscreen: true, icon_layouts: iconLayouts, icon_buttons: iconButtons, icon_play_pause: true, icon_mute: true, keyboard_focus: true, title: card.title, line, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
         gateway: next.currentSrc === appState.playback.session!.media_url, saved: rows.some(r => r.record?.video_id === appState.playback.context!.metadata_video_id) };
       break;
     }

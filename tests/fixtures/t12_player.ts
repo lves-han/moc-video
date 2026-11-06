@@ -1,3 +1,4 @@
+import { videoJsAdapter } from "./videojs_adapter.ts";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
@@ -73,7 +74,7 @@ export function fixture(options: { mse?: boolean; native?: string; kind?: string
   } };
   const globals = { AbortController, performance: { now: () => now }, document, Error, crypto, console };
   const playerModule: Record<string, any> = {};
-  runInNewContext(playerSource, { ...globals, exports: playerModule, require: () => ({ default: Hls }) });
+  runInNewContext(playerSource, { ...globals, exports: playerModule, require: () => ({ Hls, HlsJsAdapter: videoJsAdapter(Hls, Target) }) });
   const stateModule: Record<string, any> = {};
   runInNewContext(stateSource, { ...globals, exports: stateModule, require: (path: string) =>
     path === "vue" ? vue : path.includes("api") ? apiModule : playerModule });

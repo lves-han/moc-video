@@ -168,6 +168,8 @@ def check_media():
 def prepare(run):
     run.command(["npm", "ci", "--no-audit", "--no-fund"], timeout=600)
     require(read_json(ROOT / "node_modules/hls.js/package.json")["version"] == "1.7.3", "hls.js installed version differs")
+    for package in ("@videojs/html", "@videojs/hlsjs-video", "@videojs/core"):
+        require(read_json(ROOT / "node_modules" / package / "package.json")["version"] == "10.3.0", "Video.js installed version differs")
     cargo_lock = ROOT / "src-tauri/Cargo.lock"
     if not cargo_lock.exists():
         run.command(["cargo", "generate-lockfile", "--manifest-path", "src-tauri/Cargo.toml"], timeout=600)

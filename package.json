@@ -11,9 +11,11 @@
     "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": {
+    "@videojs/core": "10.3.0",
+    "@videojs/hlsjs-video": "10.3.0",
+    "@videojs/html": "10.3.0",
     "naive-ui": "2.45.3",
-    "vue": "3.5.44",
-    "hls.js": "1.7.3"
+    "vue": "3.5.44"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.10",

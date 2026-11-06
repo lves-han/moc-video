@@ -28,9 +28,17 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
 
 #[cfg(not(mobile))]
 #[tauri::command]
-fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+fn player_fullscreen(
+    window: WebviewWindow,
+    target: Option<bool>,
+    query: Option<bool>,
+) -> Result<bool, String> {
     require_main(&window)?;
-    let target = !window.is_fullscreen().map_err(|e| e.to_string())?;
+    let current = window.is_fullscreen().map_err(|e| e.to_string())?;
+    if query == Some(true) {
+        return Ok(current);
+    }
+    let target = target.unwrap_or(!current);
     window.set_fullscreen(target).map_err(|e| e.to_string())?;
     Ok(target)
 }

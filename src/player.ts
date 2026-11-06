@@ -1,4 +1,4 @@
-import Hls from "hls.js";
+import { Hls, HlsJsAdapter } from "@videojs/hlsjs-video";
 import type { Bridge_ApiError, PlaybackViewSession, PlayerEvent as ProtocolEvent } from "./models.ts";
 
 export type PlayerState = "preparing" | "ready" | "playing" | "paused" | "buffering" | "position" | "ended" | "failed" | "stopped";
@@ -36,7 +36,8 @@ export function capabilities(video: HTMLVideoElement) {
 /** One controller owns one video element. stop() releases its whole loading attempt. */
 export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent) => void,
   protocol?: (event: ProtocolEvent) => void) {
-  let hls: Hls | undefined;
+  let fallback: HlsJsAdapter | undefined;
+  let provider: HlsJsAdapter | undefined;
   let listeners: AbortController | undefined;
   let listenerRegistrations = 0;
   let epoch = 0;
@@ -54,7 +55,12 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     else protocol?.({ ...binding, type: state });
   }
 
+  function safeMediaMessage(message: string) {
+    return message.replace(/https?:\/\/[^\s"'<>]+/gi, '<media-resource>')
+      .replace(/([?&](?:cap|token|capability|signature|key)=)[^\s"'<>]*/gi, '$1<redacted>');
+  }
   function mediaFailure(resource: string, message: string, code?: number, httpStatus?: number) {
+    message = safeMediaMessage(message);
     notify("failed", message, {
       code: code === 3 || code === 4 ? "MEDIA_UNSUPPORTED" : httpStatus === 401 ? "UNAUTHORIZED"
         : httpStatus === 410 ? "SESSION_EXPIRED" : httpStatus === 504 ? "UPSTREAM_TIMEOUT" : "UPSTREAM_FAILED",
@@ -70,8 +76,10 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     listeners = undefined;
     listenerRegistrations = 0;
     video.pause();
-    hls?.destroy();
-    hls = undefined;
+    if (provider) provider.source = null;
+    fallback?.destroy();
+    fallback = undefined;
+    provider = undefined;
     video.removeAttribute("src");
     Array.from(video.textTracks).forEach(track => { track.mode = "disabled"; });
     video.querySelectorAll("track").forEach(track => track.remove());
@@ -127,23 +135,26 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       });
       video.append(track);
     }
-    if (source.kind === "hls" && !video.canPlayType("application/vnd.apple.mpegurl")) {
-      if (!Hls.isSupported()) {
-        notify("failed", "MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
-        throw new UnsupportedMedia("MEDIA_UNSUPPORTED: HLS requires native HLS or MediaSource");
+    provider = video.closest?.('hlsjs-video') as unknown as HlsJsAdapter | undefined;
+    if (!provider && source.kind === 'hls') {
+      if (!video.canPlayType('application/vnd.apple.mpegurl') && !Hls.isSupported()) {
+        notify('failed', 'MEDIA_UNSUPPORTED: Video.js cannot play HLS on this device');
+        throw new UnsupportedMedia('MEDIA_UNSUPPORTED: Video.js cannot play HLS on this device');
       }
-      engine = "hls.js";
-      hls = new Hls({ enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (current === epoch && data.fatal) mediaFailure("video", `HLS ${data.type}: ${data.details}`,
-          data.type === Hls.ErrorTypes.MEDIA_ERROR ? 3 : 2, data.response?.code);
+      fallback = new HlsJsAdapter(); fallback.attach(video); provider = fallback;
+    }
+    if (provider) {
+      const original = provider;
+      listen(original, 'error', event => {
+        const error = original.error;
+        if (fresh(event) && error) mediaFailure('video', `Video.js: ${error.message}`, error.code, (error.data as { response?: { code?: number } } | undefined)?.response?.code);
       });
-      hls.attachMedia(video);
-      hls.loadSource(source.url);
+      original.preload = 'auto';
+      original.source = { src: source.url, type: source.kind === 'hls' ? 'application/vnd.apple.mpegurl' : 'video/mp4',
+        preferPlayback: 'native', engine: { hlsJs: { enableWorker: true, maxBufferLength: 30, maxMaxBufferLength: 60 } } };
+      engine = original.engineName === 'hlsjs' ? 'hls.js' : 'native';
     } else {
-      engine = "native";
-      video.src = source.url;
-      video.load();
+      engine = 'native'; video.src = source.url; video.load();
     }
     return { epoch, engine };
   }
@@ -156,7 +167,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       catch (error) {
         if (current !== epoch) return;
         const blocked = typeof error === "object" && error !== null && "name" in error && error.name === "NotAllowedError";
-        const message = blocked ? "AUTOPLAY_BLOCKED: 请点击继续播放" : String(error);
+        const message = blocked ? "AUTOPLAY_BLOCKED: 请点击继续播放" : safeMediaMessage(String(error));
         if (!blocked && video.error) mediaFailure("video", `MediaError ${video.error.code}: ${video.error.message ?? message}`, video.error.code);
         else notify("failed", message, { code: "UPSTREAM_FAILED", message, retryable: true, details: { reason: blocked ? "AUTOPLAY_BLOCKED" : "PLAY_FAILED" } });
         throw error;
@@ -180,7 +191,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       Array.from(video.textTracks).forEach((track, i) => { track.mode = i === index ? "showing" : "disabled"; });
     },
     fullscreen: () => window.__TAURI__ ? nativeInvoke<boolean>("player_fullscreen") : video.requestFullscreen().then(() => true),
-    diagnostics: () => ({ epoch, engine, hls_instances: hls ? 1 : 0, listening: Boolean(listeners), listener_registrations: listenerRegistrations,
+    diagnostics: () => ({ epoch, engine: provider?.engineName === "hlsjs" ? "hls.js" : engine, hls_instances: provider?.engine ? 1 : 0, videojs_version: "10.3.0", listening: Boolean(listeners), listener_registrations: listenerRegistrations,
       tracks: video.querySelectorAll("track").length }),
   };
 }

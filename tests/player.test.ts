@@ -1,3 +1,4 @@
+import { videoJsAdapter } from "./fixtures/videojs_adapter.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -37,7 +38,7 @@ function playerFixture(mse: boolean, nativeHls: string) {
       track: { mode: "disabled" }, remove() { video.tracks.splice(video.tracks.indexOf(this), 1); } });
     return track;
   } };
-  runInNewContext(moduleSource, { exports, require: () => ({ default: Hls }), AbortController, performance, document });
+  runInNewContext(moduleSource, { exports, require: () => ({ Hls, HlsJsAdapter: videoJsAdapter(Hls) }), AbortController, performance, document });
   const events: any[] = [];
   const player = exports.createPlayer(video, (event: unknown) => events.push(event));
   return { player, video, streams, events };

@@ -42,6 +42,7 @@ class Acceptance(t14.Acceptance):
         return t02.redact(output)
 def validate_public(e):
     p = e['public']
+    require(p['official_version'] == '10.3.0' and p['official_controls'] and p['native_fullscreen'], 'Official Video.js and native fullscreen controls must work')
     require(all(e['backup'][key] for key in ['registered','chinese_details','videos','primary_kept']), 'Backup must register and return Chinese video metadata without changing the primary')
     require(e['recommendations'] > 0 and all(p[k] is True for k in ['chinese','confirmed','played','next','gateway','saved','poster','label','icon_play_pause','icon_mute','keyboard_focus']), 'Public metadata-to-playback chain incomplete: '+str(p))
     require(len(p['icon_buttons']) == 5 and all(button['icon'] and button['tooltip'] and button['accessible'] and button['width'] >= 44 for button in p['icon_buttons']), 'Playback icon controls need hover text, accessible labels and usable hit targets')
@@ -74,6 +75,15 @@ def controlled_history(run):
         return t14.packaged(run, n02.LIVE_TEST, 't18', validate, 'history', lambda e: dict(cross_season=e['cross_season'], source_switch=e['source_switch'], eos=e['eos']), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=600, after_close=t18.closed_window_kept_everything)
     finally:
         os.environ.pop('T12_MIN_OPENS', None)
+def videojs_lifecycle(run):
+    previous = t01.DATA, t01.BUILD
+    t01.DATA = run.folder / 'packaged'
+    t01.DATA.mkdir()
+    t01.BUILD = t01.DATA / 'build.json'
+    try:
+        return t12.webview(run)
+    finally:
+        t01.DATA, t01.BUILD = previous
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--suite', choices=['all'], required=True)
@@ -82,7 +92,7 @@ def main():
     args = parser.parse_args()
     require(args.report.resolve() == ROOT/'evidence/acceptance/T20-all.json' and args.junit.resolve() == ROOT/'evidence/acceptance/T20-all.xml', 'Exact T20 report paths required')
     require(t01.native_gui_session()['screen_locked'] is not True, 'Unlock the desktop before T20 packaged acceptance')
-    t02.NATIVE |= CACHE_NATIVE | set(n02.REGRESSIONS) | t18.NATIVE | set(t18.SETTINGS) | set(t18.REGRESSIONS) | {n02.LIVE_TEST.split('::')[-1]}
+    t02.NATIVE |= CACHE_NATIVE | set(n02.REGRESSIONS) | t18.NATIVE | set(t18.SETTINGS) | set(t18.REGRESSIONS) | {n02.LIVE_TEST.split('::')[-1], t12.LIVE_TEST.split('::')[-1]}
     run = Acceptance(args.report, args.junit)
     if run.case('resource-ownership', ['REQ-T20'], 'project scope and resource ownership', lambda: resources(run, card='T0.24')):
         run.case('media-cache-storage-and-gateway', ['U09','R10','R16','REQ-T20'], 'real upstream request counts, disk files, ranges/context/auth, LRU, restart, in-flight clear and settings permissions', lambda: cache_native(run))
@@ -90,6 +100,7 @@ def main():
         run.case('history-behaviors', ['U09','R40','R41','R42','R43','REQ-T20'], 'history identity, queue, fractional episodes and transient metadata posters', lambda: t18.frontend(run))
         run.case('sqlite-regressions', ['U09','R40','R41','R42','R43','REQ-T20'], 'real SQLite, restart, failures and identity', lambda: t18.native(run))
         run.case('network-session-regressions', ['U02','U05','R07','R10','R16','R20','R50','R63','REQ-T20'], 'media formats, conditional DASH, subtitles, faults and source isolation', lambda: n02.native(run))
+        run.case('official-videojs-lifecycle', ['U08','U09','R10','R16','R50','REQ-T20'], 'official playback with fifty real switches, subtitles, recovery, stop and disposal', lambda: isolated(run, 'videojs-lifecycle', videojs_lifecycle))
         run.case('public-product-chain', ['U02','U03','U04','U08','R10','R16','R50','R62','R63','REQ-T20'], 'public metadata recommendation/details/confirmation/playback/next/history/poster', lambda: isolated(run, 'public-product', public))
         run.case('controlled-product-chain', ['U02','U03','U04','U05','U08','R07','R10','R16','R20','R50','R63','R66','R67','REQ-T20'], 'controlled source management, independent preferences, ambiguity and next pause', lambda: isolated(run, 'controlled-product', n02.webview))
         run.case('controlled-history-window', ['U09','R40','R41','R42','R43','REQ-T20'], 'real SQLite restart, resume and failed-save notice in product', lambda: isolated(run, 'controlled-history', controlled_history))
