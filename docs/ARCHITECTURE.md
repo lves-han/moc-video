@@ -22,7 +22,7 @@ U01..U09按TASKS覆盖表与ADR-048修订：U02改为可用SuperVod JSON来源�
 
 ### C3 线格式与角色（SPEC §7/§10.2/§18.1；DATA_STRUCTURES §2/§9/§13）
 
-归档bridge.openapi保留旧Android协议资料；工作protocol/中app.schema是17个invoke、事件、Settings和状态权威，复用HTTP DTO，snake_case统一。invoke(command,{request_id,input})；结果data/error互斥。Rust业务包络engine_epoch为host_epoch；ready必须UUID及health ready。固定命令和主WebView权限，拒绝任意进程/文件写入入口。空值/单位/UTF-8预算/有限数值按字典§6及schema。项目内protocol/已导入两份实际机器契约和原样例；T05据此生成/校验DTO。T18按C16既定设计补历史IPC/正负例后写宿主，保持既有17个命令兼容。偏离受审定义时按冻结修订与独立重审流程处理。
+归档bridge.openapi保留旧Android协议资料；工作protocol/中app.schema是17个invoke、事件、Settings和状态权威，复用HTTP DTO，snake_case统一。invoke(command,{request_id,input})；结果data/error互斥。Rust业务包络engine_epoch为host_epoch；ready必须UUID及health ready。固定命令和主WebView权限，拒绝任意进程/文件写入入口。空值/单位/UTF-8预算/有限数值按字典§6及schema。项目内protocol/已导入两份实际机器契约和原样例；T05据此生成/校验DTO。T18按C16既定设计补历史IPC/正负例后写宿主，保持既有17个命令兼容。T0.24按ADR-054新增C11的两项缓存IPC，既有21项继续兼容。偏离受审定义时按冻结修订与独立重审流程处理。
 
 ### C4 原生JSON来源与独立实现（ADR-048取代SPEC §2/§6原插件义务）
 
@@ -73,6 +73,10 @@ HLS主/子、key、map、音轨/字幕、相对地址、签名、byterange、重
 
 get_resource_status只读登记状态、3秒预算，ready/expired/failed；最近请求序号控制错误归并，同资源成功清旧错，其他资源成功保持原失败。未知ID同expired；查询不访问上游及不续租。前端一次加载尝试最多一次查询，验证request/epoch/revision/target；图片所属DTO最多刷新一次，播放过期resolve/open/ResumeSnapshot恢复一次。业务错误按error.code；保留原MediaError及查询失败诊断。
 
+媒体磁盘缓存（用户新增需求，ADR-054）：缓存只在网关完成现有Session/cap/source_revision鉴权之后查找，命中不创建或延长任何授权。仅缓存完整接收的HLS媒体分片/初始化片段及MP4完整响应或原样Range响应；动态清单、密钥、图片和字幕继续原路径。Range以精确请求为键，不拼接不同字节段；HEAD、条件请求与显式no-cache请求沿原网络路径。缓存键包含来源修订、上游URL、原生请求头和Range等全部上游表示上下文的哈希；磁盘只保留哈希、受限表示头和媒体字节，不持久化URL、Cookie、Authorization或本地cap。上游no-store/no-cache及Vary:*不存储；max-age/Expires扣除Age与Date后决定新鲜期，缺少显式期限的可缓存媒体采用最多60秒启发式新鲜期；过期重新走原网关请求，不返回过期内容，签名上下文及TLS/SSRF/访问控制门保持。
+
+缓存位于应用数据目录专用media-cache子目录，复用原有依赖。默认最大268435456字节（256MiB），0关闭并释放可回收内容；用户可在设置修改，旧设置缺字段按默认。按LRU淘汰，索引最多4096条；计入缓存文件头、完整正文和临时写入的逻辑字节，文件系统块/元数据开销由操作系统决定。每块写入先预留容量，超限/写错时停止该次缓存写入并回收临时文件，原播放流继续且缓存诊断可查询；完整响应原子发布，取消/断流不发布残片，启动删除本模块遗留临时与损坏条目并恢复有效条目。清理或降额先建立世代屏障，旧在途写入不得回填；已打开读取可以完成，待释放字节计入占用并显示pending_bytes，关闭后删除，未释放前不借用这部分容量。清理只操作自身目录内识别出的缓存条目，文件系统失败显式报告，设置页保留重试与实际占用，不误报清零。此处容量为缓存硬上限策略，原进程RSS/网络并发/背压预算保持。
+
 ### C10 状态与界面（SPEC §8/§10.3/§11.1）
 
 单AppState使用现有Vue页面与Naive唯一UiProvider。host重启全部失效，来源revision/generation变更仅影响所属来源。首页按全量/单栏重试/分页范围合并；index保留，空/错及部分失败分开；请求旧结果/旧EOS无副作用。前端原演示数据在真实接线验收时由invoke替换。
@@ -84,6 +88,10 @@ get_resource_status只读登记状态、3秒预算，ready/expired/failed；最�
 Settings v2原子JSON与v1迁移，单前端写队列+同宿主提交锁；未知提交暂停、取消/收尾后同锁重读，失败保持确认值。保存成功先发布设置/注册表及世代后释放锁；配置探测锁外。退出排空队列，损坏保留诊断副本。
 
 默认en与lime，en/zh-CN文案与Naive locale、文档lang/title/无障碍名称同步；中文变体→zh-CN，其余→en。Stremio扩展语言方式在N01实证，英文基础ID与有效同ID中文覆盖，缺失/失败逐字段回退并记录原因；原预算共享、分语言缓存、语言/页面世代抵御中英中乱序，播放会话保留。系统明暗useOsTheme，五色系×明暗分别验证，首帧恢复色系，旧ui_theme兼容读取并忽略显示效果，变更保留路由/播放/筛选，存储失败反馈。
+
+Settings v2新增可选media_cache_max_bytes（整数0..9007199254740991，缺省268435456），通过原单队列和原子写盘持久化；旧字段、schema_version及既有21项IPC保持兼容。保存失败沿原确认值保持规则；保存成功后缓存策略采用新上限，已在途读取/写入的延迟释放与缓存I/O诊断通过状态明确呈现。设置页提供最大容量（MiB）、已用容量、待释放占用、保存和清理按钮，覆盖中文/英文及窄屏，错误保留实际状态并可重试。
+
+新增两项固定主WebView IPC，合计23项（ADR-054），不接收路径或URL，沿原request_id/engine_epoch/data/error与请求预算/取消规则：get_media_cache input={}；clear_media_cache input={}；两者成功data均为MediaCacheStatus {max_bytes, used_bytes, pending_bytes, entry_count, last_error}，字节数/条目数为非负安全整数，last_error为ApiError|null。used_bytes含待释放内容；clear成功表示新查找不再命中被清条目，实际未释放字节由pending_bytes列明；删除失败走error且后续查询保留实际占用。缓存I/O失败不会阻断已有播放，last_error必须可在设置页展示。沿default_metadata的30秒预算，清理在实际文件变更前检查取消；一旦开始，完成屏障和状态发布，未知提交沿既有重读规则处理。
 
 ### C12 历史与数据完整性（SPEC §11.4）
 
@@ -101,7 +109,7 @@ T0.23复用设置提交锁、config_generation与sync_sequence：网络探测在
 
 ### C14 平台、性能与资源（SPEC §5.1/§13；moc-init运行约束）
 
-必需目标为本机macOS14+ arm64（ADR-005，macOS first）；构建与真实运行分别记录。原规格的macOS x86_64、Windows11 x86_64、Ubuntu24.04 X11/Wayland降为非阻断记录项：代码保持cfg可移植，报告写NOT RUN与复现命令，后续另行授权；移动机器在M00确认。个人使用包记录本机真实配置、下载大小与磁盘占用；16GB内存/12GB磁盘仅沿原资料作观察起点，Android镜像预算随路线取消。缓存128MiB/256MiB保持初始观察预算。
+必需目标为本机macOS14+ arm64（ADR-005，macOS first）；构建与真实运行分别记录。原规格的macOS x86_64、Windows11 x86_64、Ubuntu24.04 X11/Wayland降为非阻断记录项：代码保持cfg可移植，报告写NOT RUN与复现命令，后续另行授权；移动机器在M00确认。个人使用包记录本机真实配置、下载大小与磁盘占用；16GB内存/12GB磁盘仅沿原资料作观察起点，Android镜像预算随路线取消。缓存128MiB内存观察预算保持；媒体磁盘256MiB按ADR-054作为可调默认值，其他原资源预算保持。
 
 工作流当前模板值memory_mib=4096、jobs=2、command_seconds=7200、session_seconds=10800、max_sessions=2；这是保留的控制器默认配置，开发启动前核实用户预算及每卡完整长命令覆盖。宿主macOS使用RSS采样，Linux原cgroup；线程1。资源不足时准确报告所需预算与完整命令，预算调整走明确授权与重审。
 

@@ -1318,14 +1318,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 依赖：T0.14, T0.15, T0.16, T0.17, T0.18, T0.23, T0.22
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U02, U03, U04, U05, U08, U09, R07, R10, R16, R20, R40, R41, R42, R43, R50, R62, R63, R66, R67, REQ-T20 → A1（覆盖表含精确对应）
-- 范围：`src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 范围：`protocol/`, `scripts/check-contracts.py`, `src/`, `src-tauri/`, `docs/compatibility-report.json`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t20.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "本机macOS arm64真实Stremio→核准Rust JSON来源推荐/详情/匹配确认/内嵌播放切集；受控HTTP媒体完整正负例与单源故障隔离；每个支持来源按实际能力记录公开JSON和媒体链路，在线失败与fixture结果分列；真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px。缺真实公开来源闭环、macOS运行或只复制fixture摘要时失败。",
+    "description": "本机macOS arm64真实Stremio→核准Rust JSON来源推荐/详情/匹配确认/内嵌播放切集；受控HTTP媒体完整正负例与单源故障隔离；每个支持来源按实际能力记录公开JSON和媒体链路，在线失败与fixture结果分列；真实SQLite重启/跨季video/换源重匹配/当前集EOS/失败保留历史及双语明暗390px；媒体磁盘缓存真实命中减少上游请求、精确Range/来源修订/请求上下文隔离、cap失效不命中、过期与no-store/no-cache、LRU容量与临时字节核算、重启恢复、取消断流无残片、并发清理/降额屏障、设置页改容量/关闭/清理/失败反馈与播放继续。缺真实公开来源闭环、macOS运行或只复制fixture摘要时失败。",
     "argv": [
       "{python}",
       "-B",
@@ -1368,6 +1368,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 #### 修订义务（ADR-048取代归档原卡）
 
 - 工作与验收：真实Host+打包WebView验证元数据至播放/切集、独立选择/偏好、配置更新、历史续播/失败保存与资源回收；每个支持JSON来源逐项复核能力与原始公开响应证据。补受控网络错误、歧义确认、字幕/线路及自动下一集暂停/恢复；至少一个真实公开JSON来源完整短播。来源失败保留具体日期/环境/阶段与重试入口，禁止用原插件执行结果替代独立实现。
+
+
+- 用户新增缓存交付（ADR-054）：按C9/C11实现本地媒体磁盘缓存、Settings可选容量字段及get_media_cache/clear_media_cache IPC，缓存文件不含URL/凭据原文；真实设置按钮及受控HTTP请求计数/文件断言拒绝仅展示占位功能。旧协议正负例全部保留，并增加新两命令正负例；图标播放控制的悬浮说明、状态切换、键盘名称及390px行为一并验收。
 
 ### T0.25 T21 媒体网关与鉴权回归
 - [ ] 完成
