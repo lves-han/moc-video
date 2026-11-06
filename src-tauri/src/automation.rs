@@ -52,6 +52,15 @@ pub async fn t01_control(
             webview.set_focus().map_err(|e| e.to_string())?;
             eprintln!("T01_IPC:webview-focused");
         }
+        "minimum" => {
+            window.unmaximize().map_err(|e| e.to_string())?;
+            window
+                .set_min_size(Some(LogicalSize::new(960.0, 640.0)))
+                .map_err(|e| e.to_string())?;
+            window
+                .set_size(LogicalSize::new(960.0, 640.0))
+                .map_err(|e| e.to_string())?;
+        }
         "width" => {
             let width = value.ok_or("width required")?;
             if ![360.0, 390.0, 768.0, 960.0, 1200.0].contains(&width) {

@@ -144,6 +144,29 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   };
   async function execute(command: Command): Promise<unknown> {
     switch (command.op) {
+      case "t22-startup": {
+        const foregroundState = await foreground();
+        const window_ready_epoch_ms = performance.timeOrigin + performance.now();
+        const healthStarted = performance.now();
+        const request_id = crypto.randomUUID();
+        const health = await nativeInvoke<any>("runtime_prepare", { request_id, input: { target: "application" } });
+        assertCondition(health.request_id === request_id && !health.error && health.data?.phase === "ready"
+          && health.data.health?.media_gateway_ready === true, "Cold Rust host did not become healthy");
+        const health_ms = performance.now() - healthStarted;
+        const health_ready_epoch_ms = performance.timeOrigin + performance.now();
+        const responses = [];
+        for (let i = 0; i < 30; i++) {
+          const id = crypto.randomUUID(), begin = performance.now();
+          const reply = await nativeInvoke<any>("get_settings", { request_id: id, input: {} });
+          assertCondition(reply.request_id === id && !reply.error && reply.data, "Local native bridge response failed");
+          responses.push({ milliseconds: performance.now() - begin, request_id: id, command: "get_settings", valid: true });
+        }
+        return { foreground: foregroundState, origin: location.origin, user_agent: navigator.userAgent,
+          window_ready_epoch_ms, health_ready_epoch_ms, health_ms, host_ready: true, responses,
+          nonblank: Boolean(document.getElementById("app")?.textContent?.trim()),
+          framework_overlay: Boolean(document.querySelector("vite-error-overlay")), errors: [...errors],
+          native: await nativeInvoke("t01_control", { action: "identity" }) };
+      }
       case "t12": {
         const { formalPlayback } = await import("../t12_webview");
         await foreground();

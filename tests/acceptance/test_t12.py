@@ -321,18 +321,21 @@ class NativeOracleTests(unittest.TestCase):
                     name=lambda: "fixture-process", memory_info=lambda: SimpleNamespace(rss=pid * 10))
             with patch.object(t12.workflow.runtime, "process_for", side_effect=process_for), \
                     patch.object(t12.workflow.runtime, "identity", return_value="created:observer"), \
+                    patch.object(t12.workflow.runtime, "family", return_value=[
+                        dict(pid=60, identity="created:host"), dict(pid=70, identity="created:host-child")]) as family, \
                     patch.object(t12.os, "getpid", return_value=50):
                 result = t12.process_sample(session, SimpleNamespace(lines=["one", "two"], sequence=5,
                     process=SimpleNamespace(pid=60), token="created:host"))
             self.assertEqual(observations, [True])
-            self.assertEqual(calls, list(session.owned.items()) + [(50, "created:observer"), (60, "created:host")])
+            family.assert_called_once_with(60, "created:host")
+            self.assertEqual(calls, list(session.owned.items()) + [(50, "created:observer"), (60, "created:host"), (70, "created:host-child")])
             self.assertEqual(result["owned_rss_bytes"], 900)
             self.assertEqual(result["detail_rss_bytes"], 700)
             self.assertEqual(result["owned_cpu_seconds"], 4.5)
             self.assertEqual([row["role"] for row in result["processes"]], ["application", "renderer", "owned_child", "wake_guard"])
             self.assertEqual(result["processes"][2], dict(pid=30, identity="created:3", role="owned_child", alive=False, rss_bytes=None, cpu_seconds=None))
-            self.assertEqual([row["role"] for row in result["support_processes"]], ["python_observer", "real_host"])
-            self.assertEqual([row["rss_bytes"] for row in result["support_processes"]], [500, 600])
+            self.assertEqual([row["role"] for row in result["support_processes"]], ["python_observer", "real_host", "real_host_child"])
+            self.assertEqual([row["rss_bytes"] for row in result["support_processes"]], [500, 600, 700])
             self.assertEqual(result["observer"], dict(command_results=1, queued_commands=0, queued_results=0, queued_samples=0,
                 retained_samples=1, result_log_bytes=0, host_log_lines=2, host_requests=5))
 

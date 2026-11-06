@@ -150,7 +150,7 @@ class Bridge:
         self.record["exit"] = self.process.returncode
         require(self.process.returncode == 0 and not self.reader.is_alive(), "Real Host bridge did not finish cleanly")
         vectors = [json.loads(line.split("T12_VECTOR:", 1)[1]) for line in self.lines if "T12_VECTOR:" in line]
-        require(len(vectors) == 1 and vectors[0]["opens"] >= 51 and vectors[0]["closed"] is True and vectors[0]["active_requests"] == 0, "Real Host lifetime evidence missing")
+        require(len(vectors) == 1 and vectors[0]["opens"] >= getattr(self, "minimum_opens", 51) and vectors[0]["closed"] is True and vectors[0]["active_requests"] == 0, "Real Host lifetime evidence missing")
         require("test result: ok. 1 passed; 0 failed; 0 ignored;" in "".join(self.lines), "Actual named native test did not pass")
         require(not self.run.observed.get("host_log_sanitized"), "Native output contained credentials; stored log was sanitized")
         self.run.observed["host"] = vectors[0]
@@ -350,6 +350,9 @@ def process_sample(session, bridge=None):
     support = [detail(os.getpid(), workflow.runtime.identity(os.getpid()), "python_observer")]
     if bridge is not None:
         support.append(detail(bridge.process.pid, bridge.token, "real_host"))
+        for member in workflow.runtime.family(bridge.process.pid, bridge.token):
+            if member["pid"] != bridge.process.pid:
+                support.append(detail(member["pid"], member["identity"], "real_host_child"))
     result_log = session.run.folder / f"results-{session.record['index']}.jsonl"
     return dict(utc=dt.datetime.now(dt.timezone.utc).isoformat(), monotonic=time.monotonic(), owned_rss_bytes=rss, owned_cpu_seconds=cpu,
                 processes=processes, support_processes=support, detail_rss_bytes=sum(row["rss_bytes"] or 0 for row in processes),
@@ -430,11 +433,12 @@ def diagnose_rss_failure(run, session, bridge):
             break
 
 
-def webview(run, *, check_security=False):
+def webview(run, *, check_security=False, after_start=None, build=True):
     run.observed["gui_session"] = t01.native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     t01.check_media()
-    t01.build(run)
+    if build:
+        t01.build(run)
     receipt = t01.check_build(run.source)
     executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
     session, bridge = None, None
@@ -456,6 +460,8 @@ def webview(run, *, check_security=False):
                 session.record["commands"][-1]["args"] = dict(action="start", payload="actual Host contexts/DTO; capability URLs transient and redacted")
                 require(start["nonblank"] is True and start["framework_overlay"] is False and not start["errors"] and start["sample"]["video_count"] == 1, "Formal production App did not render")
                 run.observed["formal_entry"] = start
+                if after_start is not None:
+                    after_start(session, bridge)
                 samples = [process_sample(session, bridge)]
                 run.observed["process_samples"] = samples
                 cycles = []

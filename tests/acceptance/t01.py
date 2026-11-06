@@ -508,8 +508,10 @@ class NativeSession:
                 self.stream.close()
                 self.closed = True
                 lingering = [pid for pid, token in self.owned.items() if workflow.runtime.identity(pid) == token]
-                self.record.update(exit=self.process.returncode, seconds=time.monotonic() - self.started, lingering=lingering, forced_cleanup=forced,
-                    sample_log=str((self.run.folder / f"samples-{self.record['index']}.jsonl").relative_to(ROOT)))
+                self.record.update(exit=self.process.returncode, seconds=time.monotonic() - self.started, lingering=lingering, forced_cleanup=forced)
+                sample_log = self.run.folder / f"samples-{self.record['index']}.jsonl"
+                if sample_log.is_file():
+                    self.record["sample_log"] = str(sample_log.relative_to(ROOT))
                 require(not lingering, "owned native/WebKit processes remain")
                 require(not (graceful and forced), "native/WebKit processes required forced cleanup after normal shutdown")
 

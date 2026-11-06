@@ -249,6 +249,63 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
   const video = current.video;
   let result: Record<string, unknown> = {};
   switch (command.action) {
+    case "t22-observe": {
+      const official = current.container.querySelector('video-player') as HTMLElement & { store: { currentTime: number } };
+      const quality = video.getVideoPlaybackQuality();
+      result = { ui_position: official.store.currentTime, duration: video.duration,
+        total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames,
+        visibility: document.visibilityState, focused: document.hasFocus(),
+        session_id: appState.playback.session?.session_id, playback_rate: video.playbackRate,
+        actual_gateway: video.currentSrc === appState.playback.session?.media_url };
+      break;
+    }
+    case "t22-ui": {
+      const responses = [];
+      const metadata_responses = [];
+      for (let i = 0; i < 30; i++) {
+        const begin = performance.now(), id = crypto.randomUUID();
+        const dto = await api.call("get_details", { ref: current.details.details.ref }, id);
+        check(dto.details.title === current.details.details.title && dto.metadata_ref, "Owned local metadata response differs");
+        metadata_responses.push({ milliseconds: performance.now() - begin, request_id: id, command: "get_details", valid: true });
+      }
+      for (let i = 0; i < 10; i++) {
+        const paused = video.paused, begin = performance.now();
+        videoJsControl('play').click();
+        await until(() => video.paused !== paused, "Pause/play click did not respond");
+        await nextTick();
+        responses.push({ action: paused ? "play" : "pause", milliseconds: performance.now() - begin,
+          paused: video.paused, phase: appState.playback.phase });
+      }
+      const layouts = [];
+      await nativeInvoke("t01_control", { action: "minimum" });
+      for (const zoom of [1, 1.25, 1.5, 2]) {
+        await nativeInvoke("t01_control", { action: "zoom", value: zoom }); await delay(200);
+        const controls = [...current.container.querySelectorAll<HTMLElement>('button,input,select')].filter(el => el.getClientRects().length);
+        const rects = controls.map(el => el.getBoundingClientRect());
+        check(controls.length > 0 && document.documentElement.scrollWidth <= innerWidth + 1
+          && rects.every(r => r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= innerWidth + 1), "Scaled formal controls overflow or clip");
+        const official = (['play', 'mute', 'seek', 'fullscreen'] as const).map(videoJsControl);
+        const officialRects = official.map(el => el.getBoundingClientRect());
+        check(officialRects.every(r => r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= innerWidth + 1), "Scaled official skin controls overflow or vanish");
+        const play = videoJsControl('play');
+        play.scrollIntoView({ block: 'center' }); await delay(50);
+        const playRect = play.getBoundingClientRect();
+        check(playRect.top >= 0 && playRect.bottom <= innerHeight + 1, "Scaled play control is unreachable");
+        play.click(); await until(() => video.paused, "Scaled pause control failed");
+        play.click(); await until(() => !video.paused, "Scaled play control failed");
+        layouts.push({ zoom, width: innerWidth, height: innerHeight, controls: controls.length, no_overflow: true,
+          official_controls: official.length, play_pause: true,
+          native: await nativeInvoke("t01_control", { action: "identity" }) });
+      }
+      await nativeInvoke("t01_control", { action: "zoom", value: 1 });
+      await nativeInvoke("t01_control", { action: "width", value: 1200 });
+      const fullscreen = await nativeInvoke<boolean>("player_fullscreen"); await delay(300);
+      const full = await nativeInvoke<any>("t01_control", { action: "identity" });
+      const restored = await nativeInvoke<boolean>("player_fullscreen"); await delay(300);
+      check(fullscreen && full.fullscreen && !restored, "Native fullscreen/restore failed");
+      result = { responses, metadata_responses, layouts, fullscreen: full.fullscreen, restored: !restored };
+      break;
+    }
     case "profile-native": {
       // Diagnostic only: compare media/controller allocation with the official
       // UI detached. A1 never calls this operation and retains its full skin.

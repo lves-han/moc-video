@@ -2374,3 +2374,13 @@
 - 独立巡检：CLEAR；固定受验提交c9e9b38d4e53c9bb42fa0d4b0150f1a98fd3fc5c；原drive.py --review-only报告：`evidence/reviews/20261106T144143010831-T0.25/output.log`。核对35/35准确A1/JUnit51、六门verify、66Session/86请求原始追踪、51份RSS采样、9份登记运行/无重叠/日志与报告哈希、done和固定提交源码一致；无新确认高严重度缺陷，未accept-review。
 - 保留P2：t01.py无条件引用缺失samples-1.jsonl，51份原始切集样本已内嵌报告可重算。下一卡T0.26耐久与性能应按实际产物登记并核对完整采样；其他平台/条件性DASH实际播放NOT RUN，10分钟耐久归T0.26/A2。R62/海报过期定向证据仍沿既有记录。
 - 下一张：原task.py next=T0.26；按用户既有逐卡授权，以原drive --once和本聊天automation-2监管接续，保留全部历史/预算/阈值。
+
+## T0.26 T22性能与故障注入实现交接 2026-11-06T15:09:10+00:00
+- 实施状态：WIP；本卡第1/2会话。依ADR-010既定最小权限分工完成实现与静态核对，开发CLI退出后由外层通过原run.py代跑构建、验收与Git收尾。TASKS未勾选，未done/rebaseline，未写RESOLVED/AUTHORIZED/BLOCKED；原受保护文件、阈值和权限保持。
+- Changed：新增tests/acceptance/t22.py的startup-ui/macos-arm64准确入口及test_t22.py的10项独立证据正负例。A1定义5次真实打包Rust宿主新进程启动、每次30份原生本地IPC响应与启动/RSS/CPU/GPU样本；正式Vue/官方Video.js界面补30份自有loopback元数据响应、10次播放暂停响应、实际960x640最小窗口与1/1.25/1.5/2等效缩放下官方控件播放暂停、原生全屏恢复；复用网络超时/断开、来源撤销、SQLite路径不可写及同快照重试、原生媒体错误恢复与即时清理门。响应目标仅记录原值与差距（ADR-044）。
+- Changed：A2要求A1同source/protected/generation的原run成功收据、log/JUnit/原始文件SHA及5份启动JSONL重算，复用A1当前生产/自动化打包字节；实际生成620秒CC0自有1080p30 H264/AAC，定义至少600秒连续网关播放与5秒间隔PCM/帧/进度/进程/GPU原始JSONL，然后沿原T12执行真实50切集、51份RSS与原64MiB/512MiB窗口门、HLS/控制/过期/错误/停止卸载。新增tests/fixtures/t22_gateway.rs，以每10ms读取25kB的消费者对实际Rust网关持续施加20Mbps/180秒负载，逐字节验证450MB、逐秒吞吐/CPU/RSS/GPU、取消归零与端口可重新绑定；仅A2显式--ignored调用，普通Rust测试保留ignored标记。
+- Changed：T12入口增加默认不启用的长测回调及已验证构建复用参数，原51次打开默认门保持；进程细账补cargo下实际Rust测试宿主子进程。T01采样文件仅实际存在时登记sample_log，修复交接P2。src-tauri/src/automation.rs只在原自动化feature内增加固定960x640 minimum动作；未改正式产品播放后端。报告逐平台另写NOT RUN文件并记录实际RSS采样后端、GPU设备级计数、真实进程CPU及参考机/依赖。
+- Why：现有网关、官方播放器和生命周期能力足够，当前缺产品长测入口及原始证据闭环；复用原生夹具和清理机制，未增加依赖、后台服务或新播放后端。启动窗口数值为自动化原型窗口确认可见的上界，正式产品UI另实跑；OS文件缓存保留。GPU记录全设备原始利用率及WebKit GPU进程CPU/RSS，明确其他应用可能贡献设备级负载；物理扬声器未仪器化。
+- Verified：task.py check/start T0.26/check均exit0；4个变更Python文件AST解析exit0；3个变更Rust文件rustfmt --edition 2024 --config skip_children=true格式化exit0；git diff --check exit0。10项新Python测试仅已定义，执行NOT RUN；Rust编译、TypeScript类型检查、真实GPU/窗口/媒体/吞吐、准确A1/A2、完整verify及独立巡检均NOT RUN。调查时不存在路径/glob及补丁上下文匹配失败已按原note保留并改用实际路径/精确段落，未执行失败重试或改验收阈值。
+- 基线：source=37edd2b85d635794a3cdadf049c6f7119b7db499cbb9cbf04c963b266e4387bf；protected=b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af；generation0、sessions1、4096MiB/jobs2/测试线程1保持。未启动构建、服务或重任务，未重复探测已知sysctl/sccache/.git权限限制。
+- 下一步：已生成并读回准确argv清单evidence/acceptance/T22-session-1-outer-argv.json，A1/A2 payload首项保持字面量{python}。外层确认本CLI和旧重命令退出、源码稳定后代办WIP提交；先通过原run.py运行diag-t22-oracles、diag-t22-reused-oracles及diag-t22-environment（AGX实际计数器尚待实测），单独核对桌面已解锁，再按顺序完整A1、交接、完整A2、交接及直接verify.py all。A1后改源码须重新A1，A2拒绝旧源码/基线/构建/文件或环境改变。通过后原勾卡/PROGRESS/done/受验提交/独立CLEAR；实现失败先原note并交回本卡第2会话。不accept-review、不推送、不改历史。
