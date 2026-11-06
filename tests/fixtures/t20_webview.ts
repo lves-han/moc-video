@@ -86,6 +86,8 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       const video = one<HTMLVideoElement>('video')!; await video.play(); const start = video.currentTime;
       await until(() => video.currentTime >= start + 2, 'Public playback did not advance'); video.pause();
 
+      await until(() => appState.playback.phase === 'paused', 'Initial pause did not settle');
+      await nextTick();
       const actions = ['play', 'stop', 'next', 'episodes', 'fullscreen'];
       const iconButtons = actions.map(action => {
         const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
