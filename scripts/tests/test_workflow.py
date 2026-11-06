@@ -430,6 +430,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_controlled_recovery_preserves_history_and_refuses_repeat(self):
         frozen, before = self.prepare_controlled_recovery()
+        with (self.repo / "docs/PROGRESS.md").open("a", encoding="utf-8") as stream:
+            stream.write("\n\n## T0.1 文档独立审查\n- 文档结论：CLEAR\n")
         self.w.task(["resume-hard", "T0.1", "--protected", frozen])
         after = self.w.state("T0.1")
         self.assertEqual(after["sessions"], 2)

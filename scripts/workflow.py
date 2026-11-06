@@ -511,7 +511,8 @@ def rebaseline(cid, frozen, include_paused=None):
     outside = scope_problems(cid)
     if any(not is_protected(name) for name in outside):
         raise WorkflowError("存在非冻结文件的范围外修改；不能借更新基线放宽范围")
-    event = dict(time=utc(), previous=node["protected"], protected=frozen, approval=approval_hash)
+    event = dict(time=utc(), previous=node["protected"], protected=frozen, approval=approval_hash,
+                 approval_normalized=digest(approval.rstrip()))
     node.setdefault("rebaselines", []).append(event)
     node.update(protected=frozen, generation=node.get("generation", 0) + 1,
                 rebaseline_scope=sorted(set(node.get("rebaseline_scope", [])) | set(outside)))
@@ -541,7 +542,8 @@ def resume_hard(cid, frozen):
         if previous not in node.get("hard_sessions", []) or previous >= cfg["max_sessions"]:
             raise WorkflowError("需要已停止的STUCK-HARD会话及现有会话额度")
         events = node.get("rebaselines", [])
-        approvals = [entry for entry in progress_entries() if digest(entry) == (events[-1]["approval"] if events else None)]
+        approvals = [entry for entry in progress_entries() if events and
+                     digest(entry.rstrip()) == events[-1].get("approval_normalized")]
         marker = f"- 受控恢复：{previous}->{previous + 1}"
         if len(approvals) != 1 or marker not in approvals[0].splitlines():
             raise WorkflowError("需要经rebaseline绑定的明确单次恢复决定")
