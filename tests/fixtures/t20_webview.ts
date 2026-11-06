@@ -30,7 +30,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
   const onRejection = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
   window.addEventListener('error', onError); window.addEventListener('unhandledrejection', onRejection);
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === 't01_control' || name === 'player_fullscreen') return original.invoke<T>(name, args);
+    if (['t01_control', 'player_fullscreen', 'window_bounds_now', 'app_close_started', 'app_close_aborted', 'app_close_ready'].includes(name)) return original.invoke<T>(name, args);
     calls.push(name); return rpc({ command: name, args });
   } };
   location.hash = '#/home';
