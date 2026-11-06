@@ -134,7 +134,7 @@ test('REQ-T18: native writes read the Host sequence and keep order through one q
   assert.deepEqual(writes(), [5, 6, 7]);
   assert.deepEqual(calls.filter(call => call.command !== 'list_history').map(call => call.command), ['save_history', 'remove_history', 'clear_history']);
   assert.equal(entryFromRecord(nativeRecord).kind, 'series');
-  assert.equal(entryFromRecord(nativeRecord).episode, 3);
+  assert.equal(entryFromRecord(nativeRecord).episode, 2.5);
 });
 test('REQ-T18: a failed snapshot retries on its sequence and an unknown result rereads it', async () => {
   const { history, snapshot, failures, writes, calls } = nativeFixture();
@@ -213,4 +213,25 @@ test('R43/REQ-T18: closing waits for settings, keeps the window when they fail, 
   await assert.rejects(queue.update(value => value), /closing/);
   queue.reopen();
   assert.equal((await queue.update(value => ({ ...value, volume: .5 }))).volume, .5);
+});
+
+test('REQ-T20: native history preserves episode numbers and movie kinds', () => {
+  for (const episode of [0, 1, 2.5]) assert.equal(entryFromRecord({ ...nativeRecord as any, episode_number: episode }).episode, episode);
+  assert.equal(entryFromRecord({ ...nativeRecord as any, kind: 'movie', episode_number: null }).kind, 'movie');
+});
+
+test('REQ-T20: history poster rebuilds its metadata ref and keeps image access transient', async () => {
+  const { historyPoster } = await import('../src/data/history.ts');
+  const sources = [{ id: 'metadata', kind: 'stremio', source_revision: 'current', runtime_status: 'ready', origin: { config_id: 'c' } }] as any;
+  const calls: any[] = [];
+  const call = async (command: string, input: any) => {
+    calls.push({ command, input });
+    return { details: { id: 'a'.repeat(64), poster: { resource_id: 'poster' } }, images: { poster: { url: 'http://127.0.0.1/transient-image' } } };
+  };
+  assert.equal(await historyPoster(nativeRecord, sources, call as never), 'http://127.0.0.1/transient-image');
+  assert.deepEqual(JSON.parse(calls[0].input.ref.data), ['stremio', 'b'.repeat(64), 'series', 'm']);
+  assert.equal(calls[0].input.ref.source_revision, 'current');
+  assert.equal((nativeRecord as any).poster_cache_key, null);
+  assert.equal(await historyPoster(nativeRecord, [], call as never), null);
+  await assert.rejects(historyPoster(nativeRecord, sources, (async () => { throw new Error('metadata offline'); }) as never), /metadata offline/);
 });

@@ -4,7 +4,9 @@ import { NAlert, NButton, NEmpty, NModal, NProgress, NSkeleton, NTag } from 'nai
 import Icon from '../components/Icon.vue';
 import { films, localizeFilm, initialSources, sourceText } from '../data/demo';
 import { locale, t } from '../i18n';
-import { historyRepository } from '../data/history';
+import { historyRepository, historyPoster } from '../data/history';
+import { appState } from '../state';
+import { api } from '../api';
 import { historyContentId, historyProgress, historyTime, type HistoryEntry } from '../data/history-model';
 
 const native = Boolean(window.__TAURI__);
@@ -35,10 +37,23 @@ function displaySource(entry: HistoryEntry) { const source = initialSources.find
 function formatDate(value: number) {
   return new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }).format(value);
 }
+async function loadPosters(rows: HistoryEntry[], sequence: number) {
+  for (const row of rows) {
+    if (sequence !== loadSequence) return;
+    if (!row.record) continue;
+    try {
+      const poster = await historyPoster(row.record, appState.sources.data?.providers ?? [], (command, input, ...rest) => api.call(command, input, ...rest));
+      if (sequence !== loadSequence) return;
+      if (poster) row.poster = poster;
+    } catch (failure) {
+      if (sequence === loadSequence) error.value = failure instanceof Error ? failure.message : String(failure);
+    }
+  }
+}
 async function load() {
   const sequence = ++loadSequence;
   loading.value=true; error.value='';
-  try { const rows = await historyRepository.list(); if (sequence===loadSequence) { entries.value=rows; clock.value=Date.now(); } }
+  try { const rows = await historyRepository.list(); if (sequence===loadSequence) { entries.value=rows; clock.value=Date.now(); void loadPosters(entries.value, sequence); } }
   catch (failure) { if (sequence===loadSequence) error.value = failure instanceof Error ? failure.message : String(failure); }
   finally { if (sequence===loadSequence) loading.value=false; }
 }
@@ -78,8 +93,8 @@ onBeforeUnmount(() => { ++loadSequence; document.removeEventListener('visibility
     <p v-if="entries.length" class="history-count">{{ entries.length === 1 ? t('1 watched title') : t('{count} watched titles', { count: entries.length }) }}</p>
     <section v-for="group in groups" :key="group.label" class="history-group"><h2>{{ group.label }}</h2>
       <article v-for="entry in group.items" :key="entry.content_id" class="history-card">
-        <img class="history-poster" :src="entry.poster" alt="" loading="lazy" />
-        <div class="history-copy"><div class="history-title"><h3>{{ displayTitle(entry) }}</h3><NTag v-if="entry.completed" size="small" :bordered="false">{{ t(entry.episode_total > 1 ? 'Episode finished' : 'Completed') }}</NTag></div><p>{{ entry.episode_total > 1 ? t('Episode {number}', { number: entry.episode }) : t('Feature') }}<span>·</span>{{ displaySource(entry) }}</p><NProgress type="line" :percentage="entry.completed ? 100 : historyProgress(entry)" :height="4" :show-indicator="false" /><div class="history-progress"><span>{{ historyTime(entry.position_ms) }} / {{ historyTime(entry.duration_ms) }}</span><time :datetime="new Date(entry.updated_at).toISOString()">{{ formatDate(entry.updated_at) }}</time></div></div>
+        <img class="history-poster" :src="entry.poster" alt="" loading="lazy" @error="entry.poster = '/mark.svg'" />
+        <div class="history-copy"><div class="history-title"><h3>{{ displayTitle(entry) }}</h3><NTag v-if="entry.completed" size="small" :bordered="false">{{ t(entry.kind !== 'movie' ? 'Episode finished' : 'Completed') }}</NTag></div><p>{{ entry.kind !== 'movie' ? t('Episode {number}', { number: entry.episode }) : t('Feature') }}<span>·</span>{{ displaySource(entry) }}</p><NProgress type="line" :percentage="entry.completed ? 100 : historyProgress(entry)" :height="4" :show-indicator="false" /><div class="history-progress"><span>{{ historyTime(entry.position_ms) }} / {{ historyTime(entry.duration_ms) }}</span><time :datetime="new Date(entry.updated_at).toISOString()">{{ formatDate(entry.updated_at) }}</time></div></div>
         <div class="history-actions"><NButton type="primary" :disabled="busy" @click="emit('resume',entry)"><template #icon><Icon :name="entry.completed ? 'repeat' : 'play'" :size="16" /></template>{{ t(entry.completed ? 'Play again' : 'Continue watching') }}</NButton><NButton quaternary :aria-label="t('Remove {title} from history', { title: displayTitle(entry) })" :disabled="busy" @click="deletion = entry"><template #icon><Icon name="trash" :size="18" /></template></NButton></div>
       </article>
     </section>

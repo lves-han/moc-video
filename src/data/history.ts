@@ -1,5 +1,5 @@
 import { api, ApiFailure, UnknownCommit, type Api } from '../api.ts';
-import type { WatchHistoryRecord } from '../models.ts';
+import type { AppSource, WatchHistoryRecord } from '../models.ts';
 import { parseHistoryEntry, type HistoryEntry } from './history-model.ts';
 
 // About 5s between periodic snapshots; pause and end write immediately, as does an explicit seek (SPEC 11.4).
@@ -32,10 +32,21 @@ const preview = {
 };
 
 export function entryFromRecord(record: WatchHistoryRecord): HistoryEntry {
-  const episode = Math.max(1, Math.ceil(record.episode_number ?? 1));
+  const episode = record.episode_number ?? 1;
   return { content_id: record.content_id, title: record.title, poster: "/mark.svg", kind: record.kind === "other" ? "series" : record.kind,
     episode, episode_total: episode, source_id: record.source_id, source_name: record.source_name, position_ms: record.position_ms,
     duration_ms: record.duration_ms, completed: record.completed, updated_at: record.updated_at, record };
+}
+
+// Rebuild the metadata reference from durable identity; image access stays in memory.
+export async function historyPoster(record: WatchHistoryRecord, sources: AppSource[], call: Api["call"]): Promise<string | null> {
+  const identity = record.metadata_identity;
+  const source = sources.find(item => item.kind === "stremio" && item.runtime_status === "ready" && item.origin.config_id === identity.config_id);
+  if (!source) return null;
+  const data = await call("get_details", { ref: { source_id: source.id, source_revision: source.source_revision,
+    data: JSON.stringify(["stremio", identity.addon_key, identity.type, identity.meta_id]) } });
+  if (data.details.id !== record.content_id || !data.details.poster) return null;
+  return data.images[data.details.poster.resource_id]?.url ?? null;
 }
 
 // The Host refused for good: the Session ended or a newer change won, so retrying cannot help.
