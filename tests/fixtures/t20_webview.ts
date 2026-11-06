@@ -26,6 +26,9 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
     check(response.ok, 'Host transport failed'); return response.json();
   };
   const calls: string[] = [], errors: string[] = [];
+  const onError = (event: ErrorEvent) => errors.push(event.message);
+  const onRejection = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
+  window.addEventListener('error', onError); window.addEventListener('unhandledrejection', onRejection);
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === 't01_control' || name === 'player_fullscreen') return original.invoke<T>(name, args);
     calls.push(name); return rpc({ command: name, args });
@@ -102,5 +105,5 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
     await original.invoke('t01_control', { action: 'width', value: 1200 });
     await rpc({ operation: 'restart' });
     return { public: result, recommendations: recommendations.length, observations, layouts, errors };
-  } finally { app.unmount(); window.__TAURI__!.core = original; }
+  } finally { app.unmount(); window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onRejection); window.__TAURI__!.core = original; }
 }

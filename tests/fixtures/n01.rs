@@ -1528,9 +1528,17 @@ fn n01_live_selected_tmdb_en_zh_evidence() {
 
 #[test]
 fn t20_tmdb_opaque_configuration_is_preserved() {
-    let url = Url::parse("https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json").unwrap();
+    let url = Url::parse(
+        "https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json",
+    )
+    .unwrap();
     assert_eq!(language_url(&url, "en").unwrap(), url);
     assert_eq!(language_url(&url, "zh-CN").unwrap(), url);
     let legacy = Url::parse("https://tmdb.elfhosted.com/en-US/manifest.json").unwrap();
-    assert!(language_url(&legacy, "zh-CN").unwrap().path().ends_with("/zh-CN/manifest.json"));
+    assert!(
+        language_url(&legacy, "zh-CN")
+            .unwrap()
+            .path()
+            .ends_with("/zh-CN/manifest.json")
+    );
 }

@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 IDS = ['U02','U03','U04','U05','U08','U09','R07','R10','R16','R20','R40','R41','R42','R43','R50','R62','R63','R66','R67','REQ-T20']
 class Acceptance(t14.Acceptance):
     CARD, ORIGINAL, REQUIREMENTS = 'T0.24', 'T20', IDS
+    DEFERRED = [dict(target='macOS x86_64 / Windows / Linux', status='NOT RUN', reason='ADR-005/006 local macOS arm64')]
     DEPLOYMENT = 'real Host, SQLite and packaged WKWebView; public Chinese TMDB and supported JSON sources; controlled network/media regressions separately'
     def redact_output(self, output):
         return t02.redact(output)
