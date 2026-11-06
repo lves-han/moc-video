@@ -31,7 +31,9 @@ fn main() {
         "remove_history",
         "clear_history",
         "app_close_started",
+        "app_close_aborted",
         "app_close_ready",
+        "window_bounds_now",
         #[cfg(feature = "t01-automation")]
         "t01_control",
     ];

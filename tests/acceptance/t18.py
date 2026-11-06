@@ -22,6 +22,7 @@ NATIVE = {
     "t18_snapshot_must_match_the_session_identity",
     "t18_active_session_keeps_saving_after_match_records_are_collected",
     "t18_window_bounds_return_after_a_restart",
+    "t18_every_close_request_waits_for_the_same_save",
     "t18_non_uuid_match_id_is_carried_and_bad_handles_are_refused",
     "t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot",
     "t18_source_change_stops_new_snapshots_but_keeps_stored_history",
@@ -54,7 +55,7 @@ def validate(e):
     require(u["video"] is True and abs(u["at"] - u["saved_ms"] / 1000) < .8, "Resume must reach the saved position of the saved video")
     require(e["cleared"]["rows"] == 0, "Clear must empty the database")
     b = e["bounds"]
-    require(b["saved"]["width"] == b["width"] and b["saved"]["height"] == b["height"], "Saved bounds must hold the real window size: " + str(b))
+    require(b["saved"]["width"] == b["width"] and b["saved"]["height"] == b["height"], "Saved bounds must use the native size the Host restores: " + str(b))
     require(e["closing"]["rows_before"] == 0 and e["closing"]["video"], "The close test must start with no stored row")
     require(e["errors"] == [], "Pages raised errors: " + str(e["errors"]))
 
@@ -123,7 +124,7 @@ def main():
         run.case("protocol-positive-and-negative-cases", ["R38", "R64", "REQ-T18"], "four history commands in the working protocol with both kinds of cases", lambda: contracts(run))
         run.case("frontend-history-queue", ["R38", "R43", "REQ-T18"], "one queue, sequence reread, identical retry", lambda: frontend(run))
         run.case("sqlite-host-and-settings", IDS, "real file, migration rollback, sequences, barriers, Session identity, GC, 50 switches, settings failures", lambda: native(run))
-        run.case("packaged-history", IDS, "real snapshot, failure notice and retry, remove, restart, resume, clear, and a real window close keeping history and settings", lambda: webview(run))
+        run.case("packaged-history", IDS, "real snapshot, failure notice and retry, remove, restart, resume, clear, and two real close requests during slow saves keeping history and settings", lambda: webview(run))
     return run.save()
 
 

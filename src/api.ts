@@ -230,22 +230,19 @@ export class SettingsQueue {
   }
 }
 
-type WindowView = { screenX: number; screenY: number; innerWidth: number; innerHeight: number; outerWidth: number; outerHeight: number; screen: { availWidth: number; availHeight: number } };
-// Null below the supported minimum (an unusual test or split size): the saved bounds stay as they were.
-export function windowBounds(view: WindowView): WindowBounds | null {
-  const width = Math.round(view.innerWidth), height = Math.round(view.innerHeight);
-  if (width < 960 || height < 640) return null;
-  return { x: Math.round(view.screenX), y: Math.round(view.screenY), width, height,
-    maximized: view.outerWidth >= view.screen.availWidth && view.outerHeight >= view.screen.availHeight };
+// Measured natively, the same way the Host restores the window; null when unsupported or outside the app.
+export async function nativeWindowBounds(): Promise<WindowBounds | null> {
+  const core = (globalThis as typeof globalThis & { __TAURI__?: { core: { invoke: Invoke } } }).__TAURI__?.core;
+  return core ? await core.invoke("window_bounds_now", {} as never) as WindowBounds | null : null;
 }
 
 // History problems keep their own notice and never hold the window. Settings must land first;
 // if they cannot, the window stays open with the error, and closing it again exits.
 export async function finishBeforeClose(steps: { saveHistory: () => Promise<unknown>; saveSettings: () => Promise<unknown>;
-  settings: Pick<SettingsQueue, "close" | "reopen">; release: () => Promise<unknown> }) {
+  settings: Pick<SettingsQueue, "close" | "reopen">; release: () => Promise<unknown>; abort: () => Promise<unknown> }) {
   await steps.saveHistory().catch(() => {});
   try { await steps.saveSettings(); await steps.settings.close(); }
-  catch (error) { steps.settings.reopen(); throw error; }
+  catch (error) { steps.settings.reopen(); await steps.abort().catch(() => {}); throw error; }
   await steps.release();
 }
 

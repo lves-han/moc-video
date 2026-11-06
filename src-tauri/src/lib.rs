@@ -34,24 +34,85 @@ fn player_fullscreen(window: WebviewWindow) -> Result<bool, String> {
     Ok(target)
 }
 
+/// Window close with saving first. Every close request waits for the same save; only the page's
+/// release, the user's explicit "quit anyway", or a page that never answers lets the window go.
 #[cfg(not(mobile))]
-static CLOSE_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub(crate) mod closing {
+    use std::sync::atomic::{AtomicU8, Ordering::SeqCst};
+    pub const IDLE: u8 = 0;
+    pub const SIGNALLED: u8 = 1;
+    pub const SAVING: u8 = 2;
+    pub const RELEASED: u8 = 3;
+    pub static STATE: AtomicU8 = AtomicU8::new(IDLE);
 
-/// The page answered the closing signal, so only a page that never answers is closed by the timer.
+    /// (let the window go, ask the page to save)
+    pub fn request(state: &AtomicU8) -> (bool, bool) {
+        match state.compare_exchange(IDLE, SIGNALLED, SeqCst, SeqCst) {
+            Ok(_) => (false, true),
+            Err(RELEASED) => (true, false),
+            Err(_) => (false, false),
+        }
+    }
+
+    /// True when the page never answered the signal, so the timer may release the window.
+    pub fn unanswered(state: &AtomicU8) -> bool {
+        state
+            .compare_exchange(SIGNALLED, RELEASED, SeqCst, SeqCst)
+            .is_ok()
+    }
+}
+
 #[cfg(not(mobile))]
 #[tauri::command]
 fn app_close_started(window: WebviewWindow) -> Result<(), String> {
     require_main(&window)?;
-    CLOSE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
+    closing::STATE.store(closing::SAVING, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
 
-/// The page finished saving after being told the window is closing.
+/// Saving failed and the window stays; the next close request starts over.
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_close_aborted(window: WebviewWindow) -> Result<(), String> {
+    require_main(&window)?;
+    closing::STATE.store(closing::IDLE, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+/// Everything was saved, or the user chose to quit without it.
 #[cfg(not(mobile))]
 #[tauri::command]
 fn app_close_ready(window: WebviewWindow) -> Result<(), String> {
     require_main(&window)?;
+    closing::STATE.store(closing::RELEASED, std::sync::atomic::Ordering::SeqCst);
     window.destroy().map_err(|e| e.to_string())
+}
+
+/// Native logical inner size and outer position, the same measures used to restore the window.
+#[cfg(not(mobile))]
+#[tauri::command]
+fn window_bounds_now(window: WebviewWindow) -> Result<serde_json::Value, String> {
+    require_main(&window)?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale);
+    let position = window
+        .outer_position()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale);
+    if window.is_fullscreen().map_err(|e| e.to_string())?
+        || size.width < 960.0
+        || size.height < 640.0
+    {
+        return Ok(serde_json::Value::Null);
+    }
+    Ok(
+        serde_json::json!({"x": position.x.round() as i64, "y": position.y.round() as i64,
+        "width": size.width.round() as i64, "height": size.height.round() as i64,
+        "maximized": window.is_maximized().map_err(|e| e.to_string())?}),
+    )
 }
 
 #[cfg(all(not(mobile), feature = "t01-automation"))]
@@ -64,12 +125,19 @@ pub fn run() {
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
         player_fullscreen,
         app_close_started,
+        app_close_aborted,
         app_close_ready,
+        window_bounds_now,
         automation::t01_control
     ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
-    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool =
-        tauri::generate_handler![player_fullscreen, app_close_started, app_close_ready];
+    let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+        player_fullscreen,
+        app_close_started,
+        app_close_aborted,
+        app_close_ready,
+        window_bounds_now
+    ];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
     let business = commands::handler::<tauri::Wry>();
@@ -87,21 +155,23 @@ pub fn run() {
 
     #[cfg(not(mobile))]
     let builder = {
-        // The page saves before the window goes. A second close request always exits.
-        let closing = std::sync::atomic::AtomicBool::new(false);
-        builder.on_window_event(move |window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event
-                && !closing.swap(true, std::sync::atomic::Ordering::SeqCst)
-                && let Some(view) = window.app_handle().get_webview_window(window.label())
-            {
+        builder.on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let (allow, signal) = closing::request(&closing::STATE);
+                if allow {
+                    return;
+                }
                 api.prevent_close();
-                let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    if !CLOSE_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
-                        let _ = view.destroy();
-                    }
-                });
+                if signal && let Some(view) = window.app_handle().get_webview_window(window.label())
+                {
+                    let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                        if closing::unanswered(&closing::STATE) {
+                            let _ = view.destroy();
+                        }
+                    });
+                }
             }
         })
     };

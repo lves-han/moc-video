@@ -11,7 +11,7 @@ import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
-import { finishBeforeClose, settingsQueue, windowBounds } from "./api";
+import { finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
 import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
@@ -295,15 +295,16 @@ watch(() => appState.playback.playback_epoch, () => {
 function onPageHide() { void flushHistory(); }
 // Audio saved on a short timer and the window's last size go in with everything else still queued.
 async function saveLastSettings() {
-  const { volume, muted } = appState.playback, bounds = windowBounds(window), saved = appState.settings;
+  const bounds = await nativeWindowBounds().catch(() => null);
+  const { volume, muted } = appState.playback, saved = appState.settings;
   if (volume !== saved.volume || muted !== saved.muted || (bounds && JSON.stringify(bounds) !== JSON.stringify(saved.window_bounds)))
     await appController.updateSettings(settings => ({ ...settings, volume, muted, window_bounds: bounds ?? settings.window_bounds }));
 }
 let boundsTimer: ReturnType<typeof setTimeout> | undefined;
 function onResize() {
   clearTimeout(boundsTimer);
-  boundsTimer = setTimeout(() => {
-    const bounds = windowBounds(window);
+  boundsTimer = setTimeout(async () => {
+    const bounds = await nativeWindowBounds().catch(() => null);
     if (bounds && JSON.stringify(bounds) !== JSON.stringify(appState.settings.window_bounds))
       void appController.updateSettings(settings => ({ ...settings, window_bounds: bounds })).catch(error => { preferenceError.value = String(error); });
   }, 500);
@@ -314,8 +315,13 @@ async function onClosing() {
   await core?.invoke("app_close_started", {}).catch(() => {});
   try {
     await finishBeforeClose({ saveHistory: async () => { await flushHistory(); await historyRepository.drain(); }, saveSettings: saveLastSettings,
-      settings: settingsQueue, release: async () => core?.invoke("app_close_ready", {}) });
-  } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
+      settings: settingsQueue, release: async () => core?.invoke("app_close_ready", {}), abort: async () => core?.invoke("app_close_aborted", {}) });
+    closeFailed.value = false;
+  } catch (error) { closeFailed.value = true; preferenceError.value = error instanceof Error ? error.message : String(error); }
+}
+// The user's explicit choice to leave without the unsaved settings.
+const closeFailed = ref(false);
+function quitWithoutSaving() { void window.__TAURI__?.core.invoke("app_close_ready", {});
 }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
 onMounted(() => {
@@ -859,7 +865,7 @@ onBeforeUnmount(() => {
     </NModal>
   </div>
   </template>
-  <NAlert v-if="preferenceError" type="error" class="history-alert preference-alert" :title="t('Preference could not be saved')">{{ preferenceError }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
+  <NAlert v-if="preferenceError" type="error" class="history-alert preference-alert" :title="t('Preference could not be saved')">{{ preferenceError }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton><NButton v-if="closeFailed" class="quit-without-saving" @click="quitWithoutSaving">{{ locale === 'zh-CN' ? '不保存并退出' : 'Quit without saving' }}</NButton></NAlert>
   <NAlert v-for="(error, index) in appController.diagnostics" :key="index" type="error" class="history-alert" :title="t('Action failed')">{{ error.message }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
   <NModal v-model:show="appearanceOpen" preset="card" role="dialog" :aria-label="t('Appearance')" :title="t('Appearance')" :style="{ width: 'min(480px, calc(100vw - 32px))' }" @after-leave="paletteTrigger?.focus()">
     <p>{{ t('Choose your colors. Each palette adapts to light and dark mode.') }}</p>

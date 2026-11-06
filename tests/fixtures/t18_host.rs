@@ -425,6 +425,41 @@ fn t18_unusable_database_path_reports_and_recovers_with_the_same_snapshot() {
 }
 
 #[test]
+fn t18_every_close_request_waits_for_the_same_save() {
+    use crate::closing::{IDLE, RELEASED, SAVING, request, unanswered};
+    let state = std::sync::atomic::AtomicU8::new(IDLE);
+    assert_eq!(
+        request(&state),
+        (false, true),
+        "the first request asks the page to save"
+    );
+    assert_eq!(
+        request(&state),
+        (false, false),
+        "a repeat while signalled keeps waiting"
+    );
+    state.store(SAVING, Ordering::SeqCst);
+    assert!(
+        !unanswered(&state),
+        "an answering page is never cut off by the timer"
+    );
+    assert_eq!(
+        request(&state),
+        (false, false),
+        "a repeat while saving keeps waiting"
+    );
+    state.store(IDLE, Ordering::SeqCst);
+    assert_eq!(
+        request(&state),
+        (false, true),
+        "after a failed save the next close starts over"
+    );
+    assert!(unanswered(&state), "a page that never answers is released");
+    assert_eq!(state.load(Ordering::SeqCst), RELEASED);
+    assert_eq!(request(&state), (true, false));
+}
+
+#[test]
 fn t18_window_bounds_return_after_a_restart() {
     let temp = TempDir::new().unwrap();
     let path = temp.path().join("settings.json");

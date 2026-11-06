@@ -33,7 +33,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
     if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
-    if (name === "app_close_started" || name === "app_close_ready") return original.invoke<T>(name, args);
+    if (["app_close_started", "app_close_aborted", "app_close_ready", "window_bounds_now"].includes(name)) return original.invoke<T>(name, args);
     if (name === "save_settings" && slowSaves > 0) { slowSaves--; await delay(3500); }
     return await rpc({ command: name, args });
   } };
@@ -154,7 +154,8 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
 
     window.dispatchEvent(new Event("resize"));
     await until(() => appState.settings.window_bounds, "Window bounds were not saved");
-    evidence.bounds = { saved: appState.settings.window_bounds, width: window.innerWidth, height: window.innerHeight };
+    const native = await original.invoke<{ physical_width: number; physical_height: number; scale_factor: number }>("t01_control", { action: "identity" });
+    evidence.bounds = { saved: appState.settings.window_bounds, width: Math.round(native.physical_width / native.scale_factor), height: Math.round(native.physical_height / native.scale_factor), webview_height: window.innerHeight };
 
     // Left playing with no stored row and a settings change on its way: the real window close must keep both.
     await appController.updateSettings(settings => ({ ...settings, auto_next: false }));
@@ -169,6 +170,8 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     void appController.updateSettings(settings => ({ ...settings, volume: .42 }));
     void appController.updateSettings(settings => ({ ...settings, auto_next: true }));
     appState.playback.volume = .37;
+    // A second close request lands while the slow saves are still running; it must wait with the first.
+    setTimeout(() => { void original.invoke("t01_control", { action: "quit" }); }, 1500);
     evidence.errors = errors;
     keepOpen = true;
     return evidence;
