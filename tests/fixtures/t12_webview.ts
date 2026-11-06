@@ -132,8 +132,8 @@ export async function waitForEpisodeSample(read: () => ReturnType<typeof sample>
   }
 }
 async function gesture(current: Harness) {
-  const button = current.container.querySelector<HTMLButtonElement>('[data-action="continue"]') ?? current.container.querySelector<HTMLButtonElement>('[data-action="play"]');
-  check(button && !button.disabled, "Actual playback button is missing/disabled");
+  const button = current.container.querySelector<HTMLButtonElement>('[data-action="continue"]') ?? videoJsControl('play');
+  check(button && !button.hasAttribute('disabled') && button.getAttribute('aria-disabled') !== 'true', "Actual playback button is missing/disabled");
   button.click();
   await current.audio.resume();
 }
