@@ -74,7 +74,9 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
   const bins = new Float32Array(analyser.fftSize);
   const spectrum = new Float32Array(analyser.frequencyBinCount);
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
-  const drawing = canvas.getContext("2d");
+  // Every sample reads pixels back. Request the browser's readback surface so
+  // the observer does not retain GPU conversion surfaces across media changes.
+  const drawing = canvas.getContext("2d", { willReadFrequently: true });
   check(drawing, "Media observation requires a canvas 2D context");
   let reads = 0;
   return {
