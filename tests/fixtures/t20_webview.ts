@@ -86,6 +86,33 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       const video = one<HTMLVideoElement>('video')!; await video.play(); const start = video.currentTime;
       await until(() => video.currentTime >= start + 2, 'Public playback did not advance'); video.pause();
 
+      const actions = ['play', 'stop', 'next', 'episodes', 'fullscreen'];
+      const iconButtons = actions.map(action => {
+        const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
+        check(button && button.querySelector('svg') && !button.textContent?.trim(), `Playback ${action} must be icon-only`);
+        check(button.title && button.title === button.getAttribute('aria-label'), `Playback ${action} needs matching hover and accessible text`);
+        return { action, icon: true, tooltip: button.title, accessible: true, width: button.getBoundingClientRect().width };
+      });
+      const playButton = one<HTMLButtonElement>('[data-action="play"]')!;
+      playButton.focus();
+      check(document.activeElement === playButton, 'Playback icon button cannot receive keyboard focus');
+      playButton.click(); await until(() => !video.paused && playButton.title === '暂停', 'Icon play action or pause tooltip did not update');
+      playButton.click(); await until(() => video.paused && playButton.title === '播放', 'Icon pause action or play tooltip did not update');
+      const mute = one<HTMLInputElement>('input[aria-label="静音"]')!;
+      mute.click(); await until(() => video.muted && mute.parentElement!.title === '取消静音', 'Mute icon did not update its action');
+      mute.click(); await until(() => !video.muted, 'Mute icon did not restore audio');
+      await nextTick();
+      check(iconButtons.every(button => button.width >= 44), 'Playback icons must retain usable hit targets');
+      const iconLayouts = [];
+      for (const width of [960, 390]) {
+        await original.invoke('t01_control', { action: 'width', value: width }); await delay(250);
+        const controls = one('.playback-controls')!;
+        const fits = document.documentElement.scrollWidth <= innerWidth + 1 && controls.scrollWidth <= controls.clientWidth + 1;
+        check(fits, 'Playback icon controls overflowed the viewport');
+        iconLayouts.push({ width: innerWidth, fits });
+      }
+      await original.invoke('t01_control', { action: 'width', value: 1200 });
+
       await historyRepository.drain();
       const first = appState.playback.session!.session_id;
       one<HTMLButtonElement>('[data-action="next"]')!.click();
@@ -100,7 +127,7 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       const next = one<HTMLVideoElement>('video')!; await next.play(); const nextStart = next.currentTime;
       await until(() => next.currentTime > nextStart + 1, 'Public next did not advance'); next.pause(); await delay(200); await historyRepository.drain();
       const rows = await historyRepository.list();
-      result = { title: card.title, line, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
+      result = { icon_layouts: iconLayouts, icon_buttons: iconButtons, icon_play_pause: true, icon_mute: true, keyboard_focus: true, title: card.title, line, chinese: true, metadata_video: videoId, confirmed: true, played: true, next: appState.playback.context!.metadata_video_id !== videoId,
         gateway: next.currentSrc === appState.playback.session!.media_url, saved: rows.some(r => r.record?.video_id === appState.playback.context!.metadata_video_id) };
       break;
     }

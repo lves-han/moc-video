@@ -5,6 +5,7 @@ import { appState, appController, createPlaybackController, metadataVideoId } fr
 import { settingsQueue } from "../api.ts";
 import type { PlaybackContext, ResumeSnapshot } from "../models.ts";
 import { locale } from "../i18n";
+import Icon from "../components/Icon.vue";
 
 const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean }>();
 const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string]; "update:autoNext": [value: boolean]; seek: [] }>();
@@ -121,30 +122,30 @@ defineExpose({ playback });
 
 <template>
   <main id="main-content" ref="panel" class="playback-view" tabindex="-1" @keydown="keydown" @pointermove="showControls" @focusin="showControls">
-    <header><a :href="context ? native ? `#/details/${encodeURIComponent(JSON.stringify(context.metadata_ref.content_ref))}` : `#/film/${context.metadata_ref.identity.meta_id}` : '#/home'">{{ word('返回', 'Back') }}</a><h1>{{ word('正在播放', 'Now playing') }}</h1></header>
+    <header><a :href="context ? native ? `#/details/${encodeURIComponent(JSON.stringify(context.metadata_ref.content_ref))}` : `#/film/${context.metadata_ref.identity.meta_id}` : '#/home'" class="playback-icon-link" :aria-label="word('返回', 'Back')" :title="word('返回', 'Back')"><Icon name="back" /></a><h1>{{ word('正在播放', 'Now playing') }}</h1></header>
     <div v-if="poster" class="playback-title"><img :key="poster.key" :src="poster.url" :alt="poster.title" @error="poster.error" /><span>{{ poster.title }}</span></div>
     <p v-if="!context" role="status">{{ word('请从影片详情选择已确认的剧集。', 'Choose a confirmed episode from film details.') }}</p>
     <p v-if="nowPlaying" class="playback-now">{{ nowPlaying }}</p>
     <section class="playback-surface" :aria-label="word('视频播放器', 'Video player')">
       <video ref="video" playsinline :aria-label="word('视频', 'Video')" @click="toggle" />
       <div class="playback-controls" :class="{ concealed: !controlsVisible && playing }">
-        <NButton v-if="ui.autoplayBlocked" data-action="continue" type="primary" @click="playback.play()">{{ word('继续播放', 'Continue playback') }}</NButton>
-        <NButton data-action="play" :disabled="!state.session" @click="toggle">{{ playing ? word('暂停', 'Pause') : word('播放', 'Play') }}</NButton>
-        <NButton data-action="stop" @click="playback.stop()">{{ word('停止', 'Stop') }}</NButton>
-        <NButton v-if="groups.length" data-action="next" :disabled="!nextVideo || busy" @click="emit('play', nextVideo!)">{{ word('下一集', 'Next episode') }}</NButton>
-        <NButton v-if="groups.length" data-action="episodes" :aria-expanded="panelOpen" @click="panelOpen = !panelOpen">{{ word('选集', 'Episodes') }}</NButton>
-        <NButton data-action="fullscreen" :disabled="!state.session" @click="fullscreen">{{ word('全屏', 'Fullscreen') }}</NButton>
+        <NButton v-if="ui.autoplayBlocked" data-action="continue" type="primary" @click="playback.play()" class="playback-icon-button" :aria-label="word('继续播放', 'Continue playback')" :title="word('继续播放', 'Continue playback')"><Icon name="play" /></NButton>
+        <NButton data-action="play" :disabled="!state.session" @click="toggle" class="playback-icon-button" :aria-label="playing ? word('暂停', 'Pause') : word('播放', 'Play')" :title="playing ? word('暂停', 'Pause') : word('播放', 'Play')"><Icon :name="playing ? 'pause' : 'play'" /></NButton>
+        <NButton data-action="stop" @click="playback.stop()" class="playback-icon-button" :aria-label="word('停止', 'Stop')" :title="word('停止', 'Stop')"><Icon name="stop" /></NButton>
+        <NButton v-if="groups.length" data-action="next" :disabled="!nextVideo || busy" @click="emit('play', nextVideo!)" class="playback-icon-button" :aria-label="word('下一集', 'Next episode')" :title="word('下一集', 'Next episode')"><Icon name="next" /></NButton>
+        <NButton v-if="groups.length" data-action="episodes" :aria-expanded="panelOpen" @click="panelOpen = !panelOpen" class="playback-icon-button" :aria-label="word('选集', 'Episodes')" :title="word('选集', 'Episodes')"><Icon name="film" /></NButton>
+        <NButton data-action="fullscreen" :disabled="!state.session" @click="fullscreen" class="playback-icon-button" :aria-label="isFullscreen ? word('退出全屏', 'Exit fullscreen') : word('全屏', 'Fullscreen')" :title="isFullscreen ? word('退出全屏', 'Exit fullscreen') : word('全屏', 'Fullscreen')"><Icon :name="isFullscreen ? 'fullscreen-exit' : 'fullscreen'" /></NButton>
         <label class="playback-seek">{{ time(state.position_ms) }} / {{ time(state.duration_ms) }}
           <input :aria-label="word('播放进度', 'Playback position')" type="range" min="0" :max="(state.duration_ms ?? 0) / 1000" step="0.1" :disabled="state.duration_ms === null || !state.session" :value="state.position_ms / 1000" @input="seekTo(Number(($event.target as HTMLInputElement).value))" />
         </label>
-        <label>{{ word('音量', 'Volume') }} {{ Math.round(state.volume * 100) }}%
+        <label :title="word('音量', 'Volume')"><Icon name="volume" /> {{ Math.round(state.volume * 100) }}%
           <input :aria-label="word('音量', 'Volume')" type="range" min="0" max="1" step="0.01" :value="state.volume" @input="setVolume(Number(($event.target as HTMLInputElement).value))" />
         </label>
-        <label><input type="checkbox" :checked="state.muted" @change="setMuted(($event.target as HTMLInputElement).checked)" />{{ word('静音', 'Mute') }}</label>
-        <label v-if="groups.length"><input data-action="auto-next" type="checkbox" :checked="autoNext" @change="emit('update:autoNext', ($event.target as HTMLInputElement).checked)" />{{ word('自动下一集', 'Auto-play next') }}</label>
-        <label>{{ word('倍速', 'Speed') }}<select :value="state.speed" @change="playback.setSpeed(Number(($event.target as HTMLSelectElement).value))"><option v-for="rate in [0.5, 1, 1.25, 1.5, 2]" :key="rate" :value="rate">{{ rate }}×</option></select></label>
-        <label>{{ word('字幕', 'Subtitles') }}<select :value="state.subtitle_id ?? ''" @change="playback.selectSubtitle(($event.target as HTMLSelectElement).value || null)"><option value="">{{ word('关闭', 'Off') }}</option><option v-for="track in state.session?.subtitles ?? []" :key="track.id" :value="track.id">{{ track.label }}</option></select></label>
-        <label>{{ word('线路', 'Stream') }}<select :disabled="!state.session" :value="state.session?.stream_id ?? ''" @change="playback.selectStream(($event.target as HTMLSelectElement).value)"><option v-for="stream in state.resolution?.streams ?? []" :key="stream.id" :value="stream.id" :disabled="!stream.playable">{{ stream.label }}{{ stream.reason ? ` · ${stream.reason}` : '' }}</option></select></label>
+        <label class="playback-toggle" :class="{ active: state.muted }" :title="state.muted ? word('取消静音', 'Unmute') : word('静音', 'Mute')"><input type="checkbox" :aria-label="word('静音', 'Mute')" :checked="state.muted" @change="setMuted(($event.target as HTMLInputElement).checked)" /><Icon :name="state.muted ? 'muted' : 'volume'" /></label>
+        <label v-if="groups.length" class="playback-toggle" :class="{ active: autoNext }" :title="word('自动下一集', 'Auto-play next')"><input data-action="auto-next" type="checkbox" :aria-label="word('自动下一集', 'Auto-play next')" :checked="autoNext" @change="emit('update:autoNext', ($event.target as HTMLInputElement).checked)" /><Icon name="repeat" /></label>
+        <label :title="word('倍速', 'Speed')"><Icon name="speed" /><select :aria-label="word('倍速', 'Speed')" :value="state.speed" @change="playback.setSpeed(Number(($event.target as HTMLSelectElement).value))"><option v-for="rate in [0.5, 1, 1.25, 1.5, 2]" :key="rate" :value="rate">{{ rate }}×</option></select></label>
+        <label :title="word('字幕', 'Subtitles')"><Icon name="captions" /><select :aria-label="word('字幕', 'Subtitles')" :value="state.subtitle_id ?? ''" @change="playback.selectSubtitle(($event.target as HTMLSelectElement).value || null)"><option value="">{{ word('关闭', 'Off') }}</option><option v-for="track in state.session?.subtitles ?? []" :key="track.id" :value="track.id">{{ track.label }}</option></select></label>
+        <label :title="word('线路', 'Stream')"><Icon name="layers" /><select :aria-label="word('线路', 'Stream')" :disabled="!state.session" :value="state.session?.stream_id ?? ''" @change="playback.selectStream(($event.target as HTMLSelectElement).value)"><option v-for="stream in state.resolution?.streams ?? []" :key="stream.id" :value="stream.id" :disabled="!stream.playable">{{ stream.label }}{{ stream.reason ? ` · ${stream.reason}` : '' }}</option></select></label>
       </div>
     </section>
     <section v-if="panelOpen" class="playback-episodes" :aria-label="word('选集', 'Episodes')">
@@ -154,9 +155,9 @@ defineExpose({ playback });
     <NAlert v-if="state.error" class="playback-error" type="error" role="alert">{{ state.error.code }} · {{ state.error.message }}</NAlert>
     <p v-if="ui.diagnostic" role="alert">{{ ui.diagnostic }}</p>
     <p v-if="ui.imageError" role="alert">{{ ui.imageError }}</p>
-    <NButton v-if="ui.imageError" data-action="retry-images" @click="playback.retryImages()">{{ word('重试图片', 'Retry image') }}</NButton>
-    <NButton v-if="ui.action === 'retry'" data-action="retry" @click="playback.retry()">{{ word('重试', 'Retry') }}</NButton>
-    <NButton v-if="ui.action === 'reconnect'" data-action="reconnect" @click="playback.reconnect()">{{ word('重新连接', 'Reconnect') }}</NButton>
+    <NButton v-if="ui.imageError" data-action="retry-images" @click="playback.retryImages()" class="playback-icon-button" :aria-label="word('重试图片', 'Retry image')" :title="word('重试图片', 'Retry image')"><Icon name="repeat" /></NButton>
+    <NButton v-if="ui.action === 'retry'" data-action="retry" @click="playback.retry()" class="playback-icon-button" :aria-label="word('重试', 'Retry')" :title="word('重试', 'Retry')"><Icon name="repeat" /></NButton>
+    <NButton v-if="ui.action === 'reconnect'" data-action="reconnect" @click="playback.reconnect()" class="playback-icon-button" :aria-label="word('重新连接', 'Reconnect')" :title="word('重新连接', 'Reconnect')"><Icon name="link" /></NButton>
   </main>
 </template>
 
@@ -171,9 +172,16 @@ video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; 
 label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 44px; max-width: 100%; }
 .playback-seek, .playback-seek input { width: 100%; } input { max-width: 100%; } input[type=range] { min-height: 44px; }
 select, :deep(button) { min-height: 44px; } select { max-width: 100%; padding: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.playback-icon-link, .playback-toggle { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 8px; }
+.playback-icon-link { color: var(--text); } .playback-icon-link:hover { background: var(--surface); }
+.playback-icon-button { width: 44px; padding: 0; }
+.playback-toggle { position: relative; cursor: pointer; border: 1px solid var(--border); }
+.playback-toggle.active { color: var(--accent); border-color: var(--accent); }
+.playback-toggle input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.playback-toggle:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .playback-now { overflow-wrap: anywhere; margin-bottom: 12px; }
 .playback-episodes { margin-top: 16px; } .playback-episodes h2 { font-size: 16px; margin: 12px 0 8px; }
 .playback-episode-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 [role=alert] { overflow-wrap: anywhere; margin: 12px 0; } a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 420px) { .playback-controls { gap: 8px; padding: 12px; } label:not(.playback-seek) { width: 100%; } }
+@media (max-width: 420px) { .playback-controls { gap: 8px; padding: 12px; } label:not(.playback-seek):not(.playback-toggle) { width: 100%; } }
 </style>
