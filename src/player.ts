@@ -76,12 +76,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     listeners = undefined;
     listenerRegistrations = 0;
     video.pause();
-    if (provider) {
-      provider.source = null;
-      // source changes load in a microtask; detach first so the empty source
-      // cannot overwrite the synchronous native-media release below.
-      (provider as HlsJsAdapter & { adapter?: HlsJsAdapter }).adapter?.detach();
-    }
+    if (provider) provider.source = null;
     fallback?.destroy();
     fallback = undefined;
     provider = undefined;
@@ -140,7 +135,6 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
       });
       video.append(track);
     }
-    provider = video.closest?.('hlsjs-video') as unknown as HlsJsAdapter | undefined;
     if (!provider && source.kind === 'hls') {
       if (!video.canPlayType('application/vnd.apple.mpegurl') && !Hls.isSupported()) {
         notify('failed', 'MEDIA_UNSUPPORTED: Video.js cannot play HLS on this device');
@@ -150,8 +144,6 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     }
     if (provider) {
       const original = provider;
-      const adapter = (original as HlsJsAdapter & { adapter?: HlsJsAdapter }).adapter;
-      adapter?.attach(video);
       listen(original, 'error', event => {
         const error = original.error;
         if (fresh(event) && error) mediaFailure('video', `Video.js: ${error.message}`, error.code, (error.data as { response?: { code?: number } } | undefined)?.response?.code);

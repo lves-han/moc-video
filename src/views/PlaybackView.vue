@@ -111,9 +111,7 @@ defineExpose({ playback });
     <media-i18n :lang="locale">
     <video-player class="official-player" :lang="locale" default-playback-rates="0.5 1 1.25 1.5 2" ref="officialPlayer">
       <video-skin class="official-skin">
-        <hlsjs-video crossorigin="anonymous" playsinline>
-          <video slot="media" ref="video" playsinline :aria-label="word('视频', 'Video')" />
-        </hlsjs-video>
+        <video ref="video" crossorigin="anonymous" playsinline :aria-label="word('视频', 'Video')" />
       </video-skin>
     </video-player>
     </media-i18n>
@@ -156,8 +154,7 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid 
 
 <style scoped>
 .official-player { display: block; width: 100%; }
-/* The official skin directly slots the custom media host; size its native child too. */
-hlsjs-video, hlsjs-video > video { display: block; width: 100%; height: 100%; min-width: 0; object-fit: contain; }
+video { display: block; width: 100%; height: 100%; min-width: 0; object-fit: contain; }
 .official-skin { display: block; width: 100%; aspect-ratio: 16 / 9; --media-accent-color: var(--accent); --media-accent-text-color: var(--accent-ink); --media-scale-unit: 20px; }
 .playback-business-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
 .playback-business-controls :deep(button) { min-width: 44px; min-height: 44px; }

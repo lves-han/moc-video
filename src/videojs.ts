@@ -3,7 +3,6 @@ import { createPlayer as createVideoJsPlayer } from '@videojs/html';
 import { videoFeatures } from '@videojs/html/video';
 import { definePlayerFeature, fullscreenFeature } from '@videojs/core/dom';
 import '@videojs/html/video/skin';
-import '@videojs/html/media/hlsjs-video';
 import '@videojs/html/i18n/locales/zh-CN/register';
 import { nativeInvoke } from './player.ts';
 
