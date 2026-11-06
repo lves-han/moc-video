@@ -2133,3 +2133,11 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261106T022316272705-A1/output.log`；断言：exit0，4组required全过，15项原生事务回归全部通过，JUnit 9项0失败。
 - 完整verify：PASS；`evidence/verify/20261106T022344589266.json`，六门exit0。
 - Remaining：在线媒体NOT RUN，本卡fixture覆盖；T0.24用户已在当前聊天确认采用ElfHosted简体中文TMDB扩展，待本卡独立巡检CLEAR后继续。
+
+
+## T0.23 交接文档范围阻塞 2026-11-06T02:27:56.825264+00:00
+- 结果：BLOCKED
+- 事实：当前快照准确A1与完整verify六门通过，但task.py done T0.23以范围外修改docs/HANDOFF-CODEX-T0.24.md拒绝完成；前条DONE仅记录重验结果，收尾未成立。失败已task.py note，未修改状态或控制器。
+- 最小选项：仅在T0.23冻结范围加入docs/HANDOFF-CODEX-T0.24.md；待用户明确批准后修订任务范围、按原rebaseline迁移基线、重新准确A1及完整verify、done、提交和独立巡检。验收要求及产品源码保持。
+- 需要用户决定：批准上述冻结范围修订及原流程rebaseline。
+- T0.24决定：用户在当前聊天明确确认使用https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json；普通无认证请求核实zh-CN manifest、20条电影目录、蝙蝠侠：黑暗骑士电影详情、权力的游戏剧集详情与373条videos。未写入产品配置。
