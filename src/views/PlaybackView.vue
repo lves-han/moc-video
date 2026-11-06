@@ -75,6 +75,12 @@ onMounted(async () => {
     state.volume = video.value!.volume; state.muted = video.value!.muted; savePlaybackAudio();
   }, { signal: interaction.signal });
   video.value!.addEventListener('ratechange', () => { state.speed = video.value!.playbackRate; }, { signal: interaction.signal });
+  video.value!.textTracks.addEventListener('change', () => {
+    const media = video.value!, session = state.session;
+    if (!session || session.media_url !== media.currentSrc) return;
+    const selected = [...media.querySelectorAll('track')].find(track => track.track.mode === 'showing');
+    state.subtitle_id = session.subtitles.some(track => track.id === selected?.id) ? selected!.id : null;
+  }, { signal: interaction.signal });
   video.value!.addEventListener('seeked', () => {
     const media = video.value!;
     if (state.session?.media_url !== media.currentSrc || !Number.isFinite(media.currentTime)) return;

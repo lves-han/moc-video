@@ -314,8 +314,9 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       const controls = videoJsControls();
       const captions = controls.querySelector<HTMLElement>('media-captions-button')!;
       check(captions, 'Official captions button missing');
-      captions.click(); await until(() => [...video.textTracks].every(track => track.mode === 'disabled'), 'Official captions off failed');
-      captions.click(); await until(() => [...video.textTracks].some(track => track.mode === 'showing'), 'Official captions on failed');
+      captions.click(); await until(() => [...video.textTracks].every(track => track.mode === 'disabled') && appState.playback.subtitle_id === null, 'Official captions off failed');
+      captions.click(); await until(() => [...video.textTracks].some(track => track.mode === 'showing')
+        && appState.playback.subtitle_id === appState.playback.session!.subtitles[0]!.id, 'Official captions on failed');
       const mute = videoJsControl('mute');
       mute.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
       await until(() => Boolean(controls.querySelector('media-volume-popover[data-open]')), 'Official volume popup did not open');
