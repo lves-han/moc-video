@@ -2141,3 +2141,9 @@
 - 最小选项：仅在T0.23冻结范围加入docs/HANDOFF-CODEX-T0.24.md；待用户明确批准后修订任务范围、按原rebaseline迁移基线、重新准确A1及完整verify、done、提交和独立巡检。验收要求及产品源码保持。
 - 需要用户决定：批准上述冻结范围修订及原流程rebaseline。
 - T0.24决定：用户在当前聊天明确确认使用https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json；普通无认证请求核实zh-CN manifest、20条电影目录、蝙蝠侠：黑暗骑士电影详情、权力的游戏剧集详情与373条videos。未写入产品配置。
+
+
+## T0.23 交接文档范围修订决定 2026-11-06T02:30:42.339468+00:00
+- 结果：RESOLVED
+- 决定：用户原话：确认用这个作为备份。另外批准将交接文档加入 T0.23 范围并按原流程 rebaseline，完成重新验收和独立巡检后继续 T0.24。来源：当前聊天。修订仅增加交接文档范围，见ADR-053。
+- 批准摘要：934e88136cc0eb4a3bc4fe76271c35eb7a081e693d152f767dc442cc46d2ce7a

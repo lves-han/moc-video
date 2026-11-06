@@ -1277,7 +1277,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T0.20, T0.3, T0.22
 - 需求：R02, R04, R14, R44, REQ-T19 → A1（覆盖表含精确对应）
-- 范围：`src-tauri/src/`, `src/views/NativeSourcesView.vue`, `src/state.ts`, `src/api.ts`, `src/models.ts`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
+- 范围：`docs/HANDOFF-CODEX-T0.24.md`, `src-tauri/src/`, `src/views/NativeSourcesView.vue`, `src/state.ts`, `src/api.ts`, `src/models.ts`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t19.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
