@@ -145,11 +145,13 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     check(count('save_settings') === savesBeforeInvalid && !one('.media-cache-notice'), 'Invalid cache size saved or kept a success notice');
     cacheInput.value = '2'; cacheInput.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
     await rpc({ operation: 'lock_settings_files' });
+    const failedSaveCount = count('save_settings');
     try {
       one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
-      await until(() => one('.media-cache-error') && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Cache setting failure was not shown');
+      await nextTick();
+      await until(() => count('save_settings') > failedSaveCount && one('.media-cache-error') && one('.media-cache-settings')?.getAttribute('aria-busy') === 'false', 'Cache setting failure was not shown');
       const failedSetting = await rpc({ command: 'get_media_cache', args: { request_id: crypto.randomUUID(), input: {} } });
-      check(failedSetting.data.max_bytes === initialCache.data.max_bytes && (appState.settings.media_cache_max_bytes ?? 268435456) === initialCache.data.max_bytes, 'Failed cache setting changed the confirmed limit');
+      check(failedSetting.data.max_bytes === initialCache.data.max_bytes && (appState.settings.media_cache_max_bytes ?? 268435456) === initialCache.data.max_bytes, `Failed cache setting changed the confirmed limit: ${JSON.stringify({before: initialCache.data.max_bytes, cache: failedSetting.data.max_bytes, confirmed: appState.settings.media_cache_max_bytes})}`);
     } finally { await rpc({ operation: 'unlock_settings_files' }); }
     cacheInput.value = '1'; cacheInput.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
     one<HTMLButtonElement>('[data-action="cache-save"]')!.click();
