@@ -133,11 +133,14 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     // A second season reuses episode 1 but must retain its different metadata video.
     const metadataRef = appState.details.data!.details.ref;
     location.hash = `#/details/${encodeURIComponent(JSON.stringify(metadataRef))}`;
-    await until(() => appState.route.name === "details" && one(".details-group"), "Season controls missing");
+    await until(() => appState.route.name === "details" && appState.details.phase === "ready" && appState.details.request_id === null && one(".details-group"), "Season controls missing");
+    await nextTick();
     const secondSeason = appState.details.data!.details.groups.find(group => group.season_number === 2)!;
     check(secondSeason, "Cross-season fixture missing");
     all<HTMLButtonElement>(".details-group").find(button => button.dataset.groupId === secondSeason.id)!.click(); await nextTick();
-    one<HTMLButtonElement>(".details-episode")!.click(); await confirmFirst(); await pauseAndSave();
+    const crossEpisode = one<HTMLButtonElement>(".details-episode")!;
+    check(!crossEpisode.disabled && crossEpisode.dataset.videoId === "video:season2:1", "Cross-season episode is not ready");
+    crossEpisode.click(); await confirmFirst(); await pauseAndSave();
     await historyRepository.drain(); saved = (await list()).entries[0];
     check(saved.season_number === 2 && saved.episode_number === 1 && saved.video_id !== eosVideo && !saved.completed, "Cross-season history lost its video binding");
     evidence.cross_season = { season: saved.season_number, episode: saved.episode_number, distinct_video: saved.video_id !== eosVideo };
