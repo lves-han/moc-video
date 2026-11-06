@@ -2305,3 +2305,12 @@
 - 生命周期专项：PASS；日志evidence/runs/20261106T125848594620-diag-t24-videojs-official-lifecycle/output.log；实际50切集与独立HLS，RSS五切窗口313.0->360.4MiB，增长47.4MiB，原64/512门槛通过；官方字幕/音量/倍速/seek及暂停0.5秒换线保持、过期自动限次/手动重试、图片刷新、错误/自动播放、未知时长/EOS、stop/dispose与旧媒体隔离通过。
 - 公开产品专项：PASS；日志evidence/runs/20261106T130057242344-diag-t24-videojs-public-window/output.log；官方10.3.0单媒体/图标提示/键盘焦点/真实原生全屏往返，960/390宽布局，真实中文元数据推荐/详情/确认/来源播放/下一集/历史海报通过。
 - 当前源码05953c4；尚须准确A1、完整verify、done/完成提交及独立开发CLEAR，前述专项不替代完成门。
+
+
+## T0.24 内存增长定位与官方进度合并回归 2026-11-06T13:39:10.067981+00:00
+- 发现：完整A1 20261106T130306055954仅生命周期RSS失败（12场景11过），首末314.4/383.3MiB增长68.9MiB，其余缓存、契约、历史、公开/受控链路全部通过。换皮肤在完整场景被反证，已恢复官方Compat。
+- 定位与修复：同负载UI/原生对照显示UI更新额外分配；官方timeFeature.attach每RAF发送单字段currentTime。通过其官方导出feature保留state/seek/订阅与卸载，只把单字段进度通知合并到既有250ms；含metadata/seeking/pause的完整同步即时透传。保持官方10.3.0播放器、控制栏及皮肤、原64/512MiB门槛。
+- 回归：3项进度通知频率/暂停seek即时同步/新owner初值测试通过；evidence/runs/20261106T133049097842-diag-t24-official-position-regression/output.log；全前端169通过，evidence/runs/20261106T133118829416-diag-t24-official-position-all-tests/output.log；类型通过，evidence/runs/20261106T133224741655-diag-t24-official-subtitle-state-types/output.log。
+- 当前源码b602011真实生命周期专项PASS：evidence/runs/20261106T133241468274-diag-t24-videojs-position-lifecycle/output.log；50切集RSS305.5->316.5MiB（约11MiB），650ms内4次官方进度更新、暂停精确位置、字幕业务状态/音量/倍速/seek/暂停切线、HLS、过期恢复/错误/图片/自动播放/未知时长/EOS/释放全部通过。
+- 诊断专用对照PASS：evidence/runs/20261106T133531254298-diag-t24-videojs-memory-isolation/output.log；官方与native-only各50切集、5场景全过，媒体音频/Host清理及报告收尾完成。诊断路径不替代原A1，其余平台NOT RUN。
+- 下一步：固定源码重跑原准确A1、完整verify、done/完成提交及独立开发巡检CLEAR，前次失败全部保留。
