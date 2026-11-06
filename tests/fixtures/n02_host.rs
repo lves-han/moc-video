@@ -119,21 +119,14 @@ fn n02_host_sources_webview_bridge() {
                 history_lock = Some(connection);
                 json!({"ok":true})
             }
-            "lock_settings_files" | "unlock_settings_files" => {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let mode = if request["operation"] == "lock_settings_files" {
-                        0o500
-                    } else {
-                        0o700
-                    };
-                    std::fs::set_permissions(
-                        path.parent().unwrap(),
-                        std::fs::Permissions::from_mode(mode),
-                    )
-                    .unwrap();
-                }
+            "lock_settings_files" => {
+                std::fs::rename(&path, path.with_extension("cache-test-backup")).unwrap();
+                std::fs::create_dir(&path).unwrap();
+                json!({"ok":true})
+            }
+            "unlock_settings_files" => {
+                std::fs::remove_dir(&path).unwrap();
+                std::fs::rename(path.with_extension("cache-test-backup"), &path).unwrap();
                 json!({"ok":true})
             }
             "lock_cache_files" | "unlock_cache_files" => {
