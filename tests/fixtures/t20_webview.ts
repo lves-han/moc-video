@@ -120,7 +120,18 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       layouts.push({ width: innerWidth, language, theme, dark, overflow: document.documentElement.scrollWidth > innerWidth + 1 });
     }
     await original.invoke('t01_control', { action: 'width', value: 1200 });
+    const backupUrl = 'https://muthukumarkr-stremio-muthu.hf.space/H4sIAAAAAAAC_6tWyk0tSUxJLEkMzi8tSk5VslIqyU1JUtIBUz6Jeemliekg0aoMXWc_oHBxamJRcgZEcbGSVTREeWwtALGe9bRJAAAA/manifest.json';
+    const metadataBeforeBackup = appState.selected_metadata_source!.source_id;
+    await appController.saveSourceConfig({ config_id: null, kind: 'stremio', name: 'TMDB 中文备份', urls: backupUrl, enabled: true });
+    const backupSource = appState.sources.data!.providers.find(source => source.name === 'TMDB 中文备份')!;
+    check(backupSource?.runtime_status === 'ready', 'Backup metadata registration failed');
+    const backupDetail = await rpc({ command: 'get_details', args: { request_id: crypto.randomUUID(), input: { ref: {
+      source_id: backupSource.id, source_revision: backupSource.source_revision,
+      data: JSON.stringify(['stremio', 'bcbbd55c35fbd9e6d91b7f311bf0e51cfabe2f731f865db97a9cb7f9a73eccf0', 'series', 'tmdb:1399'])
+    } } } });
+    check(backupDetail.data?.details.title === '权力的游戏' && backupDetail.data.details.groups.some((group: any) => group.episodes.length > 0), 'Backup Chinese detail/videos failed');
+    const backup = { registered: true, chinese_details: true, videos: true, home: backupSource.capabilities.home, primary_kept: appState.selected_metadata_source!.source_id === metadataBeforeBackup };
     await rpc({ operation: 'restart' });
-    return { public: result, recommendations: recommendations.length, observations, layouts, errors };
+    return { public: result, recommendations: recommendations.length, observations, layouts, backup, errors };
   } finally { app.unmount(); window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onRejection); window.__TAURI__!.core = original; }
 }
