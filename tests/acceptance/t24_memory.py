@@ -11,6 +11,11 @@ import t12
 import t20
 
 
+class Profile(t20.Acceptance):
+    REQUIREMENTS = ('REQ-T20',)
+    ORIGINAL = 'T24-memory-profile-diagnostic'
+
+
 def profile(run, mode):
     previous = t01.DATA, t01.BUILD
     folder = run.folder / mode
@@ -67,7 +72,7 @@ def profile(run, mode):
 def main():
     t12.require(t01.native_gui_session()['screen_locked'] is not True, 'Unlock before native profiling')
     t02.NATIVE |= {t12.LIVE_TEST.split('::')[-1]}
-    run = t20.Acceptance(Path('evidence/acceptance/T24-memory-profile.json'), Path('evidence/acceptance/T24-memory-profile.xml'))
+    run = Profile(Path('evidence/acceptance/T24-memory-profile.json'), Path('evidence/acceptance/T24-memory-profile.xml'))
     for mode in ('official', 'native-only'):
         run.case('profile-' + mode, ['REQ-T20'], 'diagnostic isolation with fifty real decoded switches', lambda mode=mode: profile(run, mode))
     # Both runs retain the same numerical oracle. No profile can satisfy A1.
