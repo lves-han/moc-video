@@ -2125,3 +2125,11 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261106T015823848459-A1/output.log`；断言：无变更保存与探测失败保持确认来源和播放；编辑/禁用/删除只停所属来源的会话与引用，另一来源继续；写盘失败保持配置、注册表与播放，已停会话保持停止；超限、带凭据URL、重复UUID在改动前拒绝；产品内无插件索引/下载/ZIP安装路径
 - 完整verify：PASS；`evidence/verify/20261106T015847420616.json`，六门exit0。
 - Remaining：本卡仅fixture，在线闭环NOT RUN；配置界面的刷新失败提示沿用T0.22验收。
+
+
+## T0.23 交接文档新增后重新验收 2026-11-06T02:27:21.889896+00:00
+- 结果：DONE
+- 原因：8f1d393新增交接文档改变源码快照，按用户要求沿原流程重新验收；产品源码保持原状，失败历史保留。
+- 验收 A1：PASS；日志：`evidence/runs/20261106T022316272705-A1/output.log`；断言：exit0，4组required全过，15项原生事务回归全部通过，JUnit 9项0失败。
+- 完整verify：PASS；`evidence/verify/20261106T022344589266.json`，六门exit0。
+- Remaining：在线媒体NOT RUN，本卡fixture覆盖；T0.24用户已在当前聊天确认采用ElfHosted简体中文TMDB扩展，待本卡独立巡检CLEAR后继续。
