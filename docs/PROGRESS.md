@@ -2214,3 +2214,12 @@
 
 ## T0.24 缓存契约独立文档审查 2026-11-06T05:45:23.859280+00:00
 - 文档结论：DOC-REVIEW-VERDICT: CLEAR；独立只读cache_doc_review，原样报告`docs/reviews/doc-review/round-44.md`；受审提交845b5555504e13b833ca8563b2e41975b564ef95，protected83e9142b60eb7a36553556238cbea3e288eb1c3a4f6ffd8aae5ef26ed111a9af。实现验收NOT RUN。
+
+
+## T0.24 媒体缓存与播放图标统一完成 2026-11-06T07:26:20.427783+00:00
+- 结果：DONE
+- Changed：按ADR-054/C9/C11实现有界磁盘媒体缓存，默认256MiB、设置可改上限/查看占用/清理/0关闭；旧Settings可读，原21命令保留并新增两缓存IPC。缓存隔离来源修订/请求头/Range、完整原子发布、LRU/临时和在读字节计账、重启恢复、清理降额屏障及取消检查；HLS清单和密钥不落盘，HTTP策略无新鲜度依据不缓存，媒体流背压及鉴权保持。播放控制纯图标、双语title/aria-label、状态切换和44px目标。
+- 验收 A1：PASS；日志：`evidence/runs/20261106T071206085976-A1/output.log`；断言：exit0，11组必需/31项JUnit全部通过；缓存11项真实HTTP/磁盘/并发清理/隔离/权限/旧设置/活动Session回归、23命令213结构用例通过；真实窗口设置改上限并重启恢复、非法输入、原子保存失败保持旧值、清理失败保留占用与重试、0关闭及清理后播放通过；图标操作、键盘名称和960/390px布局通过；原公开TMDB→播放切集/历史及8源取证继续通过。
+- 完整verify：PASS；`evidence/verify/20261106T072235293039.json`，六门exit0；先前旧命令数21硬编码失败已保留并修正为23且原循环全部保留，修正后准确A1和完整verify均重跑。
+- 文档门：独立`docs/reviews/doc-review/round-44.md` CLEAR、原rebaseline完成，失败/额度历史保持。
+- Remaining：待独立代码巡检；仅macOS arm64真实验证，其他平台NOT RUN；备份扩展当前无首页推荐；原RSS样本缺失、历史海报过期恢复及R62定向证据P2继续保留。缓存按完整响应/精确Range复用，不拼接不同Range，不提供离线下载/导出。
