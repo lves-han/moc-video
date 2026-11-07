@@ -134,7 +134,9 @@ def notices(inventory):
             if row.get("source_url"):
                 parts.append(f"Provenance: {row['source_url']}\nMaterial kind: {row['kind']}\n")
             parts.append(row["text"] + "\n")
-    return "".join(parts)
+    # Preserve each source hash/text in the JSON inventory; use portable LF in
+    # the compiled notice so a normal Git checkout does not change its bytes.
+    return "".join(parts).replace("\r\n", "\n")
 
 
 def refresh(output_dir):
