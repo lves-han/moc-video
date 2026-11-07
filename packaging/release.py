@@ -270,7 +270,8 @@ def build():
 
     verify()
     command(["npm", "run", "build"], timeout=600)
-    command(["cargo", "tauri", "build", "--ci", "--bundles", "app", "--no-sign", "--", "--locked", "--offline"], timeout=6000)
+    # Exclude the development server URL from the embedded production context.
+    command(["cargo", "tauri", "build", "--ci", "--config", '{"build":{"devUrl":null}}', "--bundles", "app", "--no-sign", "--", "--locked", "--offline"], timeout=6000)
     image = folder / "image-root"
     image.mkdir()
     app = image / "映象视频.app"
