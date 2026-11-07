@@ -541,4 +541,13 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--probe-environment"]:
         print(json.dumps(environment_probe()))
     else:
-        raise SystemExit(main())
+        # Keep preflight/build phases awake too, before NativeSession owns its
+        # window guard. The helper belongs to this payload and exits on cleanup.
+        awake = subprocess.Popen(["/usr/bin/caffeinate", "-di", "-w", str(os.getpid())]) if sys.platform == "darwin" else None
+        try:
+            code = main()
+        finally:
+            if awake is not None:
+                awake.terminate()
+                awake.wait(timeout=10)
+        raise SystemExit(code)
