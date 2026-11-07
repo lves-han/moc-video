@@ -197,6 +197,23 @@ pub fn run() {
             let settings_path = app.path().app_data_dir()?.join("settings.json");
             let host = host::Host::open(settings_path)
                 .map_err(|error| std::io::Error::other(error.message))?;
+            // The ordinary entry queries runtime_status before mounting. Prepare
+            // its local gateway first, just as the acceptance bridge does.
+            #[cfg(not(mobile))]
+            {
+                let runtime = host.invoke(
+                    "runtime_prepare",
+                    serde_json::json!({"request_id": uuid::Uuid::new_v4().to_string(),
+                        "input": {"target": "application"}}),
+                    true,
+                );
+                if runtime["data"]["phase"] != "ready" {
+                    return Err(std::io::Error::other(format!(
+                        "Application runtime preparation failed: {runtime}"
+                    ))
+                    .into());
+                }
+            }
             #[cfg(not(mobile))]
             let bounds = host.window_bounds();
             app.manage(host);
