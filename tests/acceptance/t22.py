@@ -296,6 +296,7 @@ def startup_ui(run):
                                 start = session.command("t12", action="start", payload=ready, timeout=60)
                                 session.record["commands"][-1]["args"] = dict(action="start", payload="actual Host DTO; private URLs redacted")
                                 require(start["nonblank"] and not start["framework_overlay"] and not start["errors"], "Formal page failed")
+                                run.observed["confirmation_refresh_preflight"] = session.command("t12", action="t22-refresh-confirmations")
                                 run.observed["ui"] = session.command("t12", action="t22-ui", timeout=90)
                                 check_ui(run.observed["ui"])
                                 run.observed["faults"] = session.command("t12", action="errors", timeout=90)
@@ -380,6 +381,9 @@ def endurance(run, session, bridge):
         due = start + len(rows) * 5
         time.sleep(max(0, due - time.monotonic()))
     run.observed["endurance"] = check_endurance(rows)
+    # Provider inspection expires after five minutes. Reinspect through the real
+    # API before confirming the next episode, preserving the Host lease policy.
+    run.observed["confirmation_refresh"] = session.command("t12", action="t22-refresh-confirmations")
 
 
 def a1_evidence(run):

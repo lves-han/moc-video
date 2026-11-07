@@ -250,6 +250,19 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
   const video = current.video;
   let result: Record<string, unknown> = {};
   switch (command.action) {
+    case "t22-refresh-confirmations": {
+      const selection = current.matches[0]!.selection;
+      check(selection, 'Owned provider selection missing');
+      const fresh = await api.call('get_details', { ref: selection.content_ref });
+      check(JSON.stringify(fresh.details.ref) === JSON.stringify(selection.content_ref), 'Refreshed provider differs');
+      for (const input of current.matches) {
+        const selected = input.selection;
+        check(selected && fresh.details.groups.some(group => group.id === selected.group_id
+          && group.episodes.some(episode => episode.id === selected.episode_id)), 'Provider group/episode changed before confirmation');
+      }
+      result = { refreshed: true, selections: current.matches.length };
+      break;
+    }
     case "t22-ready": {
       result = await waitForEpisodeSample(() => sample(current), 0, performance.now() + 30000);
       await until(() => !video.seeking, 'Initial media seek did not settle');
