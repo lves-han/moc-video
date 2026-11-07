@@ -213,7 +213,7 @@ def check_payload(app, frontend):
         data = path.read_bytes()
         require(not any(marker in data for marker in forbidden), f"Development path/test bridge in {path.name}")
     for path in assets:
-        require(path.suffix in {".html", ".js", ".css", ".svg", ".png", ".webp", ".avif", ".jpg", ".jpeg", ".gif", ".woff", ".woff2", ".ico"}, "Unexpected frontend material")
+        require(path.suffix in {".html", ".js", ".css", ".svg", ".png", ".webp", ".avif", ".jpg", ".jpeg", ".gif", ".woff", ".woff2", ".ico", ".mp4", ".vtt"}, "Unexpected frontend material")
         if path.suffix in {".html", ".js", ".css"}:
             text = path.read_text(encoding="utf-8")
             if path.suffix == ".html":
