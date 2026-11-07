@@ -2,8 +2,8 @@
   "schema_version": 1,
   "target": "aarch64-apple-darwin",
   "locks": {
-    "package-lock.json": "492fbdece6a8ed766c23774657a6789dd1d7ca816286524e5ee501f913b7417e",
-    "src-tauri/Cargo.lock": "68d37004bf3f563e4955183e0665fc25f87385a30c6fb737817f1d03c4a1154f"
+    "package-lock.json": "649e36c51386f743b9c957fec297a3d6844b9a259016ccff3d1bca521c1d8b7e",
+    "src-tauri/Cargo.lock": "885296d97032d24f64fc5aecd5c1bf7624e7e460d9358c9e91fd98eb36731c89"
   },
   "cargo_metadata_argv": [
     "cargo",

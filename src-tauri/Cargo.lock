@@ -5190,7 +5190,7 @@ dependencies = [
 
 [[package]]
 name = "yingxiang-video"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "dom_query",

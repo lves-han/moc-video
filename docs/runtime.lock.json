@@ -924,5 +924,46 @@
   ],
   "plan_updated_utc": "2026-10-27T02:52:02.768924+00:00",
   "negative_suite_note": "commands.negatives is an optional isolated diagnostic. Exact A1 already runs all 28 regression cases, including rejection of rustup self-update preparation; a separate negative run is unnecessary when A1 succeeds.",
-  "command_expansion": "Replace only the first {python} in an outer command array with the project interpreter. Preserve the {python} after run.py -- exactly as declared by task.py show; the original executor expands it for the payload."
+  "command_expansion": "Replace only the first {python} in an outer command array with the project interpreter. Preserve the {python} after run.py -- exactly as declared by task.py show; the original executor expands it for the payload.",
+  "current_desktop_release": {
+    "card": "T0.27",
+    "status": "WIP: source prepared; final build/A1/clean-machine lifecycle NOT RUN",
+    "target": "macos-arm64",
+    "minimum_macos": "14.0",
+    "display_version": "0.1.0",
+    "macos_bundle_version": "2",
+    "runtime": "Independent Rust JSON sources; local frontend; macOS system WebKit/media frameworks",
+    "dependencies": {
+      "tauri": "2.12.5",
+      "tauri-build": "2.7.4",
+      "rusqlite": "0.32.1",
+      "SQLite": "3.46.0",
+      "@videojs/core": "10.3.0",
+      "hls.js": "1.7.3"
+    },
+    "locks": [
+      "package-lock.json",
+      "src-tauri/Cargo.lock"
+    ],
+    "inventory": "licenses/dependencies.json",
+    "notices": "licenses/THIRD_PARTY_NOTICES.txt",
+    "current_manifest_pointer": "evidence/releases/T23-current.json",
+    "acceptance_report": "evidence/acceptance/T23-all.json",
+    "signing_policy": "Local ad-hoc resource seal; Developer ID/notarization pending; actual Gatekeeper/stapler outputs in manifest/A1",
+    "excluded": [
+      "original cs3 plugins",
+      "Cloudstream engine APK",
+      "Android SDK/emulator/system images",
+      "development/test bridge"
+    ],
+    "distribution": "Personal use only; public release and third-party content rights require separate authorization",
+    "deferred_platforms": {
+      "macos-x86_64": "NOT RUN (ADR-005/006)",
+      "windows-x86_64": "NOT RUN (ADR-005/006)",
+      "linux-x11": "NOT RUN (ADR-005/006)",
+      "linux-wayland": "NOT RUN (ADR-005/006)"
+    },
+    "handoff": "packaging/T23.md",
+    "historical_sections": "Earlier candidate/Android observations above are retained as historical evidence (ADR-048)"
+  }
 }

@@ -54,7 +54,8 @@
   "current_desktop_release": {
     "card": "T0.27",
     "target": "macos-arm64",
-    "version": "0.1.1",
+    "version": "0.1.0",
+    "macos_bundle_version": "2",
     "inventory": "licenses/dependencies.json",
     "notices": "licenses/THIRD_PARTY_NOTICES.txt",
     "distribution": "personal use only; signing/notarization and clean-system lifecycle pending"
