@@ -2439,3 +2439,19 @@
 - 独立巡检：CLEAR；原drive.py --review-only，固定提交6bfd48f68e3c66a4b80270e2dc5fe5e8495bc496；报告：`evidence/reviews/20261107T124329948880-T0.26/output.log`。核对A1/A2/verify/done/构建/固定源一致、68份原始文件、33份运行收据/无重叠、121份耐久与51份切集采样/吞吐/取消/退出/端口释放；无新确认高严重度缺陷或改进建议。
 - 已修复：采样路径仅按实际文件登记的P2；全屏视口覆盖与退出恢复真实回归通过。PCM就绪/资料过期/锁屏/交互干扰及中断旧失败全部保留；其他平台NOT RUN，设备级GPU/未仪器化扬声器边界如实保持。
 - 用户最终边界：仅继续T0.27；完成其准确验收、完整verify、受验完成提交、固定独立CLEAR及干净树后停止，确认进程退出并删除automation-2，不启动T0.28及后续。只执行冻结必要门与直接相关最小检查，不追加无关测试。
+
+## T0.27 发行准备受宿主沙箱阻塞 2026-11-07T13:00:25+00:00
+- 结果：BLOCKED
+- Changed：已读AGENTS、当前卡/C15与验收契约、ADR-005/006/048、既有生产构建/报告入口及上一卡交接；初始工作树干净，原task.py check退出0、start T0.27退出0，sessions=1。新增未验证的许可收集草稿`packaging/release.py`及恢复/验证方案`packaging/T23.md`；未生成最终依赖许可清单，未修改生产源码、冻结契约或任务勾选框。
+- Why：T23缺安装包、当前依赖许可材料和验收入口；计划复用官方Tauri CLI与原资源/报告框架，按当前锁收集依赖全文，构建个人使用生产包，再验证资源排除、路径、签名及干净系统生命周期。已只读观察tauri-cli 2.9.6，查阅官方打包/签名资料；Apple凭据、Gatekeeper、公证均未验证。
+- 执行失败：原`run.py diag-t23-licenses`退出125；日志：`evidence/runs/20261107T125845267097-diag-t23-licenses/output.log`；收据状态cleanup_failed、raw_exit=null、tests=null。Darwin沙箱拒绝psutil/sysctl进程枚举，payload边界清理未确认；实际后端process-watchdog/RSS采样4096MiB/jobs2/thread1，无完整运行或通过断言。失败后已note，保留全部收据与历史，未重复启动重任务。
+- 恢复核对：原`task.py recover`退出2，报告无法确认payload session清理。执行器PID57266与payload PID57276的kill(pid,0)只读检查均为不存在；完整session后代核对仍受同一宿主限制，未据单PID结果解除屏障。现有cleanup_failed保持。
+- WIP提交受阻：先执行handoff后尝试`git add packaging/release.py packaging/T23.md`，退出128：沙箱拒绝创建`.git/index.lock`。当前.git只读、审批策略never；WIP提交未形成，保留草稿和工作树。此执行限制使“BLOCKED前WIP提交”无法完成，记录真实状态供外层处理。
+- 验收 A1：NOT RUN；`tests/acceptance/t23.py`尚未实现；安装包、初始化/首播/升级/卸载、许可一致性、签名/公证、完整verify与done全部NOT RUN。其他平台沿ADR-005/006为NOT RUN。
+- 环境待定：发现UTM已有macOS arm64配置（4096MiB），未启动或修改；其干净状态、登录/桌面和本次使用方式待用户确认。已通过本聊天询问；宿主预算仍保持原值，使用前需核实总资源与明确条件。
+- 下一步：由具备原进程树查询及Git写入能力的宿主核对PID+创建时间/session/重锁，执行原task.py recover；保留sessions/失败与全部现有基线，接续同卡。先完成并核验许可收集，再补生产包、冻结A1及全部生命周期行为；A1通过后原verify/done/受验提交/独立CLEAR。只处理T0.27，不启动T0.28。当前无用户决定，未写RESOLVED或AUTHORIZED，未扩大agent权限或改控制脚本。
+
+
+## T0.27 外层恢复原控制器屏障 2026-11-07T13:03:36.392576+00:00
+- 结果：RESOLVED
+- 决定：沿用户已有继续T0.27及ADR-010/045外层代验授权，外层以原runtime核对原57266/57276及登记后代PID/创建身份均退出、重锁空闲；原task.py recover成功将中断许可运行登记exit125并保留原日志/失败。技术性沙箱/Git屏障由外层已有能力接手，不扩CLI权限、不手改状态、不改冻结。干净系统设备条件仍待确认，先完成独立可做的许可与产物准备，不冒称环境已具备。
