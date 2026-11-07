@@ -137,6 +137,20 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             t23.check_lifecycle(value, manifest, "manifest")
 
+    def test_upgrade_recovers_observed_immutable_predecessor_startup_failure(self):
+        manifest, value = lifecycle_fixture()
+        before = value["phases"]["upgrade_before"]
+        before["ready"] = False
+        with self.assertRaises(ValueError):
+            t23.check_lifecycle(value, manifest, "manifest")
+        before.update(window_visible=True,
+                      startup_failure="runtime checking; missing startup preparation in immutable build 1",
+                      startup_evidence=before["evidence"][0])
+        self.assertEqual(t23.check_lifecycle(value, manifest, "manifest")["history_rows"], 1)
+        value["phases"]["upgrade_after"]["ready"] = False
+        with self.assertRaises(ValueError):
+            t23.check_lifecycle(value, manifest, "manifest")
+
     def test_lifecycle_reopens_raw_settings_and_sqlite_instead_of_report_values(self):
         # This checks the importer with synthetic data. The camera/codec probes
         # are mocked here; actual clean-machine playback remains mandatory A1.

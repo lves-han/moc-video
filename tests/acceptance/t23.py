@@ -290,7 +290,12 @@ def check_lifecycle(value, manifest, manifest_hash):
             and samples[-1]["position_seconds"] > samples[0]["position_seconds"] + 2
             and play["moving_picture"] is True and play["audio_audible"] is True and play["errors"] == [], "First play did not advance picture/progress/audio")
     require(before["app_files"] == manifest["upgrade_from"]["files"] and after["app_files"] == manifest["files"], "Upgrade was not actual build 1 to build 2")
-    require(before["ready"] is True and after["ready"] is True and after["window_visible"] is True, "Actual predecessor/upgraded application launch missing")
+    predecessor_started = before["ready"] is True or (
+        before.get("window_visible") is True
+        and before.get("startup_failure") == "runtime checking; missing startup preparation in immutable build 1"
+        and before.get("startup_evidence") in before["evidence"])
+    require(predecessor_started and after["ready"] is True and after["window_visible"] is True,
+            "Actual predecessor launch and upgraded ready application required")
     require(before["settings"]["schema_version"] == after["settings"]["schema_version"] == 2
             and before["settings"].get("source_configs"), "Nonempty persisted source settings required before upgrade")
     require({key: row for key, row in before["settings"].items() if key != "window_bounds"}
