@@ -337,6 +337,24 @@ def lifecycle(run, manifest, path):
                         and connection.execute("PRAGMA user_version").fetchone()[0] == 1, "Target history database is invalid")
                 phase["history"] = [dict(row) for row in connection.execute("SELECT * FROM watch_history ORDER BY content_id")]
     checked = check_lifecycle(value, manifest, file_hash(path))
+    if not value.get("recording"):
+        play = value["phases"]["first_play"]
+        confirmation = play.get("audio_confirmation")
+        frames = play.get("screen_samples", [])
+        require(confirmation in play["evidence"] and confirmation in artifacts,
+                "User audio confirmation evidence missing")
+        text = inside(artifacts[confirmation]["path"], folder).read_text(encoding="utf-8")
+        require("能听到正常声音" in text, "Actual user audio confirmation missing")
+        require(len(frames) >= 2 and all(frame in play["evidence"] for frame in frames),
+                "First-play screen samples missing")
+        images = [inside(artifacts[frame]["path"], folder).read_bytes() for frame in frames]
+        require(all(data.startswith(b"\x89PNG\r\n\x1a\n") for data in images)
+                and len({file_hash(inside(artifacts[frame]["path"], folder)) for frame in frames}) > 1,
+                "Distinct actual playback screen captures required")
+        run.observed["clean_lifecycle"] = dict(checked, report=str(report.relative_to(ROOT)),
+            sha256=file_hash(report), audio_confirmation=confirmation, screen_samples=frames,
+            evidence="Native UI picture/progress observations and explicit user audio confirmation; no recording")
+        return run.observed["clean_lifecycle"]
     require(value["recording"] in value["phases"]["first_play"]["evidence"], "First-play recording is not bound to its phase")
     recording = inside(artifacts[value["recording"]]["path"], folder)
     probe = json.loads(run.command(["ffprobe", "-v", "error", "-count_frames", "-show_entries", "format=duration:stream=codec_type,nb_read_frames", "-of", "json", recording]))
