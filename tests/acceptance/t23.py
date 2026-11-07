@@ -227,7 +227,9 @@ def archives(run, manifest, path):
                 previous_term = signal.signal(signal.SIGTERM, cancelled)
                 try:
                     output = run.command(["/usr/bin/hdiutil", "attach", "-readonly", "-nobrowse", "-plist", "-mountpoint", mount, archive])
-                    mounted = plistlib.loads(output[output.index("<?xml"):].encode("utf-8"))
+                    # hdiutil may append diagnostics after its complete plist.
+                    start, end = output.index("<?xml"), output.index("</plist>") + len("</plist>")
+                    mounted = plistlib.loads(output[start:end].encode("utf-8"))
                     require(any(Path(row.get("mount-point", "")) == mount for row in mounted["system-entities"]), "Owned DMG mount missing")
                     require(release.tree(mount / "映象视频.app") == manifest["files"], "DMG roundtrip tree differs")
                     require((mount / "Applications").is_symlink() and os.readlink(mount / "Applications") == "/Applications", "DMG install shortcut differs")
