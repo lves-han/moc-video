@@ -2455,3 +2455,12 @@
 ## T0.27 外层恢复原控制器屏障 2026-11-07T13:03:36.392576+00:00
 - 结果：RESOLVED
 - 决定：沿用户已有继续T0.27及ADR-010/045外层代验授权，外层以原runtime核对原57266/57276及登记后代PID/创建身份均退出、重锁空闲；原task.py recover成功将中断许可运行登记exit125并保留原日志/失败。技术性沙箱/Git屏障由外层已有能力接手，不扩CLI权限、不手改状态、不改冻结。干净系统设备条件仍待确认，先完成独立可做的许可与产物准备，不冒称环境已具备。
+
+
+## T0.27 个人使用发行包与必要生命周期验收完成 2026-11-08T09:11:00+00:00
+- 结果：DONE
+- Changed：生成0.1.0 build2 macOS arm64 ZIP/DMG，完整ad-hoc资源密封及430项实际锁定许可；修复普通主入口缺事件监听权限、未准备本地网关两处启动问题；生产构建移除devUrl，归档检查正确提取hdiutil完整plist。按用户明确缩减要求取消额外录制、双截图及固定首播时长门，仅保留任务卡必要行为与实际原始证据。
+- Why：交付个人可安装包并验证真实UTM专用机器中的安装/初始化/首播/旧build1至build2替换/卸载。旧包checking缺陷如实保留；当前升级后ready、发行树逐文件一致、全部非窗口设置和非空SQLite观看历史一致。卸载应用后设置/历史完整保留，显式移除测试profile采用虚拟机废纸篓可恢复方式，不宣称永久清空。
+- 验收 A1：PASS；日志：`evidence/runs/20261108T090426486909-A1/output.log`；断言：11/11必需行为、JUnit17/17；18项证据反例、430项许可、生产载荷/实际签名、两ZIP和只读DMG解包一致/清理、真实生命周期文件树/设置/SQLite与原生画面及用户正常声音确认均核对。原始材料：`evidence/releases/T23-clean-macos/observations.json`；当前manifest：`evidence/releases/T23-20261108T090305-6bea04f3/manifest.json`。测试脚本改动后的重建与实际安装载荷逐文件相同，观察时间保留真实历史，不伪造晚于重建的操作时间。
+- 完整 verify：PASS；收据：`evidence/verify/20261108T090545376359.json`；原完整六门exit0，工作流131项（124通过/7平台跳过）、前端169及Rust/协议/构建检查通过。source f81e787ce48695704bf7c3cc802c057c7b8b986dcbe9f5330929b13d66cb638d，protected b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af，generation0；验证后未改源码。
+- Remaining：Developer ID/公证未做，Gatekeeper评估拒绝如实报告；未使用Apple凭据，产物仅个人使用。其他桌面平台NOT RUN（ADR-005/006）。专用UTM的应用/数据初态为空，不冒称新OS快照；声音为用户实际确认，未仪器化采集。失败历史、原额度/阈值/4096MiB RSS采样/jobs2/thread1全部保留。待原done/受验提交和独立review-only CLEAR，之后停止并删除automation-2，绝不启动T0.28。不推送、不accept-review、不改写历史。
