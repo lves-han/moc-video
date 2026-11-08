@@ -2480,3 +2480,11 @@
 - 修改：首次启动或已有来源列表为空时自动保存中文 TMDB 和 8 个默认 JSON 播放源；非空配置和禁用选择保留。Rust 初始化与来源管理共用 src/data/defaultSources.json。每次启动同步 configured 来源，ready/disabled 来源跳过，失败保留诊断；同步期间先显示界面。新安装包保留新 Logo。全部删除来源后下次启动恢复默认，可通过禁用保留关闭选择。
 - 验证：Rust settings::preset_tests 2/2 PASS（初始化、重启无重复、空配置补齐、音量和禁用选择保留），日志 `evidence/runs/20261108T101119684975-diag-default-sources-settings/output.log`；前端定向来源同步回归 1/1 PASS，日志 `evidence/runs/20261108T101112567796-diag-default-sources-state/output.log`。首次类型构建失败已 note 并修正来源类型收窄；最终 npm run build 与正式 cargo tauri build PASS，包内 Logo、ad-hoc 密封、ZIP 解包签名及 DMG 校验 PASS，日志 `evidence/runs/20261108T101203115408-diag-default-sources-package/output.log`。
 - 交付：`/Users/eason/jp/deliverables/yingxiang-video/default-sources/`；未重跑真实窗口首播或完整历史任务验收，未启动后续卡。
+
+## T0.27 交付后默认来源真实窗口专项 2026-11-08T10:40:24.299016+00:00
+
+- 结果：BLOCKED
+- 范围：用户仅要求验证新版自动元数据及播放，不继续后续卡；未改产品源码。
+- 通过：从已交付新版 app 使用临时空配置启动，自动生成1个中文TMDB及8个播放配置，来源页全部 ready；首页中文片名、海报及详情真实显示，默认优质来源匹配《蝙蝠侠：黑暗骑士》(2008)，选择1080zyk HD中字版后实际播放，进度5.128562秒至23.39515秒，出现解码画面。声音 NOT VERIFIED。
+- 问题：原有8个MacCMS配置且无Stremio时，新版保留非空配置，未自动补TMDB。恢复原配置再次启动新版，来源页仍要求添加Stremio manifest。当前升级场景未满足免手工添加元数据。
+- 收尾：测试app正常退出；原设置/历史目录恢复，测试数据移至 evidence/tmp/default-sources-smoke/test-profile。观察汇总：`evidence/tmp/default-sources-smoke/result.json`，原始界面观察保留在本聊天工具记录。未追加其他验收。
