@@ -2464,3 +2464,11 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261108T090426486909-A1/output.log`；断言：11/11必需行为、JUnit17/17；18项证据反例、430项许可、生产载荷/实际签名、两ZIP和只读DMG解包一致/清理、真实生命周期文件树/设置/SQLite与原生画面及用户正常声音确认均核对。原始材料：`evidence/releases/T23-clean-macos/observations.json`；当前manifest：`evidence/releases/T23-20261108T090305-6bea04f3/manifest.json`。测试脚本改动后的重建与实际安装载荷逐文件相同，观察时间保留真实历史，不伪造晚于重建的操作时间。
 - 完整 verify：PASS；收据：`evidence/verify/20261108T090545376359.json`；原完整六门exit0，工作流131项（124通过/7平台跳过）、前端169及Rust/协议/构建检查通过。source f81e787ce48695704bf7c3cc802c057c7b8b986dcbe9f5330929b13d66cb638d，protected b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af，generation0；验证后未改源码。
 - Remaining：Developer ID/公证未做，Gatekeeper评估拒绝如实报告；未使用Apple凭据，产物仅个人使用。其他桌面平台NOT RUN（ADR-005/006）。专用UTM的应用/数据初态为空，不冒称新OS快照；声音为用户实际确认，未仪器化采集。失败历史、原额度/阈值/4096MiB RSS采样/jobs2/thread1全部保留。待原done/受验提交和独立review-only CLEAR，之后停止并删除automation-2，绝不启动T0.28。不推送、不accept-review、不改写历史。
+
+## T0.27 交付后图标补充 2026-11-08T09:54:32.247336+00:00
+
+- 结果：DONE
+- 授权：用户要求将新 Logo 嵌入程序并重新打包，仅做相关必要验证，不继续后续任务卡。
+- 修改：新增 src-tauri/icons/icon.icns 及 bundle.icon 配置；基于已验收的正式 app 添加图标和 CFBundleIconFile，重新 ad-hoc 签封并生成独立 DMG/ZIP，原发行证据及任务状态保留。
+- 验证：diag-logo-package 首次比较未排除真实主程序签名字节而失败，已先 note；修正后退出 0。验证 plist、图标字节、签名密封、移除签名后的主程序逐字节一致、其余原资源一致、ZIP 解包签名与图标、DMG 校验及 SHA256。日志：`evidence/runs/20261108T095408975888-diag-logo-package/output.log`。
+- 交付：`/Users/eason/jp/deliverables/yingxiang-video/logo-embedded/`。本次仅图标重打包专项验证，未重跑播放、生命周期及独立巡检；未启动后续卡。

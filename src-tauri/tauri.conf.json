@@ -14,6 +14,7 @@
   },
   "bundle": {
     "active": true,
+    "icon": ["icons/icon.icns"],
     "targets": ["app"],
     "macOS": { "minimumSystemVersion": "14.0", "infoPlist": "Info.plist", "bundleVersion": "2" },
     "resources": {
