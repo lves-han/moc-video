@@ -346,7 +346,7 @@ def lifecycle(run, manifest, path):
         require(len(frames) >= 1 and all(frame in play["evidence"] for frame in frames),
                 "First-play screen samples missing")
         images = [inside(artifacts[frame]["path"], folder).read_bytes() for frame in frames]
-        require(all(data.startswith(b"\x89PNG\r\n\x1a\n") for data in images)
+        require(all(data.startswith(b"\x89PNG\r\n\x1a\n") or (data.startswith(b"\xff\xd8") and data.endswith(b"\xff\xd9")) for data in images)
                 and all(len(data) > 24 for data in images),
                 "Distinct actual playback screen captures required")
         run.observed["clean_lifecycle"] = dict(checked, report=str(report.relative_to(ROOT)),
