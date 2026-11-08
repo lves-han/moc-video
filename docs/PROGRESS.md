@@ -2472,3 +2472,11 @@
 - 修改：新增 src-tauri/icons/icon.icns 及 bundle.icon 配置；基于已验收的正式 app 添加图标和 CFBundleIconFile，重新 ad-hoc 签封并生成独立 DMG/ZIP，原发行证据及任务状态保留。
 - 验证：diag-logo-package 首次比较未排除真实主程序签名字节而失败，已先 note；修正后退出 0。验证 plist、图标字节、签名密封、移除签名后的主程序逐字节一致、其余原资源一致、ZIP 解包签名与图标、DMG 校验及 SHA256。日志：`evidence/runs/20261108T095408975888-diag-logo-package/output.log`。
 - 交付：`/Users/eason/jp/deliverables/yingxiang-video/logo-embedded/`。本次仅图标重打包专项验证，未重跑播放、生命周期及独立巡检；未启动后续卡。
+
+## T0.27 交付后默认来源补充 2026-11-08T10:12:49.728347+00:00
+
+- 结果：DONE
+- 授权：用户要求把已确认中文 TMDB 和默认来源内置，免去手工添加；延续仅必要验证、停止后续任务卡的约束。
+- 修改：首次启动或已有来源列表为空时自动保存中文 TMDB 和 8 个默认 JSON 播放源；非空配置和禁用选择保留。Rust 初始化与来源管理共用 src/data/defaultSources.json。每次启动同步 configured 来源，ready/disabled 来源跳过，失败保留诊断；同步期间先显示界面。新安装包保留新 Logo。全部删除来源后下次启动恢复默认，可通过禁用保留关闭选择。
+- 验证：Rust settings::preset_tests 2/2 PASS（初始化、重启无重复、空配置补齐、音量和禁用选择保留），日志 `evidence/runs/20261108T101119684975-diag-default-sources-settings/output.log`；前端定向来源同步回归 1/1 PASS，日志 `evidence/runs/20261108T101112567796-diag-default-sources-state/output.log`。首次类型构建失败已 note 并修正来源类型收窄；最终 npm run build 与正式 cargo tauri build PASS，包内 Logo、ad-hoc 密封、ZIP 解包签名及 DMG 校验 PASS，日志 `evidence/runs/20261108T101203115408-diag-default-sources-package/output.log`。
+- 交付：`/Users/eason/jp/deliverables/yingxiang-video/default-sources/`；未重跑真实窗口首播或完整历史任务验收，未启动后续卡。

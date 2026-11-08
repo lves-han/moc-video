@@ -639,7 +639,16 @@ export class AppController {
     const ticket = this.ticket("sources", null, ++target.request_epoch);
     target.phase = "loading"; target.request_id = ticket.id; target.error = null;
     try {
-      const response = await this.api.call("get_sources", {}, ticket.id, ticket.host ?? undefined);
+      let response = await this.api.call("get_sources", {}, ticket.id, ticket.host ?? undefined);
+      // Configurations are persisted, while published catalogs belong to this host session.
+      const pending = response.providers.filter(source => source.runtime_status === "configured" && source.kind !== "cloudstream");
+      for (const source of pending) {
+        if (sequence !== this.sourceSequence || !this.current("sources", ticket)) return;
+        if (source.kind === "cloudstream") continue;
+        try { await this.syncConfig(source.kind, source.origin.config_id); }
+        catch (cause) { this.diagnostics.push(failure(cause)); }
+      }
+      if (pending.length) response = await this.api.call("get_sources", {}, crypto.randomUUID(), ticket.host ?? undefined);
       if (sequence !== this.sourceSequence || !this.current("sources", ticket)) return;
       const oldMetadata = this.state.selected_metadata_source, oldPlayback = this.state.selected_playback_source;
       target.data = clone(response);

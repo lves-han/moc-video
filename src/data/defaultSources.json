@@ -1,0 +1,67 @@
+[
+  {
+    "kind": "stremio",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355001",
+    "name": "TMDB 中文",
+    "enabled": true,
+    "manifest_urls": [
+      "https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json"
+    ]
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355002",
+    "name": "优质",
+    "enabled": true,
+    "api_url": "https://api.1080zyku.com/inc/apijson.php"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355003",
+    "name": "量子",
+    "enabled": true,
+    "api_url": "https://cj.lziapi.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355004",
+    "name": "红牛",
+    "enabled": true,
+    "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355005",
+    "name": "无尽",
+    "enabled": true,
+    "api_url": "https://api.wujinapi.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355006",
+    "name": "光速",
+    "enabled": true,
+    "api_url": "https://api.guangsuapi.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355007",
+    "name": "极速",
+    "enabled": true,
+    "api_url": "https://jszyapi.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355008",
+    "name": "豪华",
+    "enabled": true,
+    "api_url": "https://hhzyapi.com/api.php/provide/vod/"
+  },
+  {
+    "kind": "maccms",
+    "config_id": "e2065760-819f-4d7d-8f66-907198355009",
+    "name": "淘片",
+    "enabled": true,
+    "api_url": "https://taopianapi.com/cjapi/mc/vod/json/m3u8.html"
+  }
+]

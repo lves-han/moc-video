@@ -34,7 +34,7 @@ if (location.hash !== "#/prototype") {
   } catch (cause) {
     appController.diagnostics.push({ code: "INTERNAL_ERROR", message: `Settings: ${String(cause)}`, retryable: true });
   }
-  try { await appController.refreshRuntime(); await appController.loadSources(); }
+  try { await appController.refreshRuntime(); void appController.loadSources(); }
   catch (cause) { appController.diagnostics.push({ code: "ENGINE_NOT_READY", message: String(cause), retryable: true }); }
 }
 

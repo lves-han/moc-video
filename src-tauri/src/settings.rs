@@ -16,6 +16,13 @@ pub fn defaults() -> Value {
         "auto_next": true, "window_bounds": null, "source_configs": [], "ui_locale": "en", "color_palette": "lime"})
 }
 
+fn initial_defaults() -> Value {
+    let mut settings = defaults();
+    settings["source_configs"] = serde_json::from_str(include_str!("../../src/data/defaultSources.json"))
+        .expect("Bundled source defaults must be valid JSON");
+    settings
+}
+
 pub fn validate(settings: &Value) -> Result<(), ApiError> {
     Contracts::get().validate("Settings", settings)?;
     let mut ids = HashSet::new();
@@ -118,7 +125,12 @@ impl SettingsFile {
                         return Err(ApiError::bad("Unsupported settings schema_version"));
                     }
                     validate(&settings)?;
-                    if migrate {
+                    let seed_sources = settings["source_configs"].as_array().is_some_and(Vec::is_empty);
+                    if seed_sources {
+                        settings["source_configs"] = initial_defaults()["source_configs"].clone();
+                        validate(&settings)?;
+                    }
+                    if migrate || seed_sources {
                         store.save(&settings)?;
                     }
                     Ok(settings)
@@ -137,7 +149,12 @@ impl SettingsFile {
                     }
                 }
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((store, defaults())),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let settings = initial_defaults();
+                validate(&settings)?;
+                store.save(&settings)?;
+                Ok((store, settings))
+            },
             Err(_) => Err(ApiError::internal("Settings file open failed")),
         }
     }
@@ -177,5 +194,38 @@ impl SettingsFile {
             .persist(&self.path)
             .map_err(|_| ApiError::internal("Settings atomic replacement failed"))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod preset_tests {
+    use super::*;
+
+    #[test]
+    fn bundled_sources_are_valid_and_persist_without_duplication() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("settings.json");
+        let (_, first) = SettingsFile::load(path.clone()).unwrap();
+        validate(&first).unwrap();
+        assert_eq!(first["source_configs"].as_array().unwrap().len(), 9);
+        assert_eq!(first["source_configs"][0]["kind"], "stremio");
+        assert!(first["source_configs"][0]["manifest_urls"][0].as_str().unwrap().contains("tmdb.elfhosted.com"));
+        assert_eq!(SettingsFile::load(path).unwrap().1, first);
+    }
+
+    #[test]
+    fn empty_profile_is_seeded_and_existing_disabled_choices_are_preserved() {
+        let folder = tempfile::tempdir().unwrap();
+        let store = SettingsFile { path: folder.path().join("settings.json") };
+        let mut original = defaults();
+        original["volume"] = json!(0.25);
+        store.save(&original).unwrap();
+        let (_, mut seeded) = SettingsFile::load(store.path.clone()).unwrap();
+        assert_eq!(seeded["volume"], 0.25);
+        assert_eq!(seeded["source_configs"].as_array().unwrap().len(), 9);
+        seeded["source_configs"][0]["enabled"] = json!(false);
+        seeded["source_configs"].as_array_mut().unwrap().truncate(1);
+        store.save(&seeded).unwrap();
+        assert_eq!(SettingsFile::load(store.path).unwrap().1, seeded);
     }
 }

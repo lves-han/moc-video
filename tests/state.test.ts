@@ -346,3 +346,29 @@ test("R01/R31/REQ-T13: unhealthy ready runtime, foreign detail/config/episode an
   }
   await assert.rejects(f.app.loadDetails(ref("show", PLAY))); assert.throws(() => f.app.navigate({ name: "details", ref: ref("show", PLAY) }));
 });
+
+test("configured sources synchronize on load and ready sources are reused", async () => {
+  const root = createAppState();
+  let published = false;
+  const calls: string[] = [];
+  const client = new Api(async (command, args) => {
+    calls.push(command);
+    let data: unknown;
+    if (command === "get_sources") {
+      const rows = providers();
+      rows[0]!.runtime_status = published ? "ready" : "configured";
+      data = { providers: rows, plugins: [] };
+    } else if (command === "sync_catalog") {
+      published = true;
+      data = { ok: true };
+    } else throw new Error(`Unexpected command ${command}`);
+    return { request_id: args.request_id, engine_epoch: HOST, data };
+  });
+  const app = new AppController(client, new SettingsQueue(client), root);
+  await app.loadSources();
+  assert.equal(root.sources.phase, "ready");
+  assert.equal(root.selected_metadata_source?.source_id, META.source_id);
+  assert.deepEqual(calls, ["get_sources", "sync_catalog", "get_sources"]);
+  await app.loadSources();
+  assert.equal(calls.filter(command => command === "sync_catalog").length, 1);
+});
