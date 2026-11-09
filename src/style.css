@@ -8,6 +8,7 @@
   font-synthesis: none;
   font-weight: 400;
 }
+.tv-sidebar, .tv-drag-region, .tv-theme-note, .tv-page-title { display: none; }
 * {
   box-sizing: border-box;
 }
@@ -2353,3 +2354,71 @@ main {
 .quick-palette { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
 .poster-lettering { padding: 8px; border-radius: 6px; background-color: #07100be6; }
 .preference-alert { position: fixed; bottom: 96px; right: 16px; max-width: min(480px, calc(100vw - 32px)); z-index: 3000; }
+
+/* ADR-057 desktop shell. Narrow layouts keep the established rules above. */
+@media (min-width: 960px) {
+  :root { letter-spacing: 0; font-size: 15px; line-height: 1.5; }
+  .app-shell { --tv-sidebar-width: 220px; background: var(--tv-bg); color: var(--tv-text); }
+  .app-shell.tv-sidebar-collapsed { --tv-sidebar-width: 72px; }
+  .legacy-sidebar, .app-shell .topbar, .app-shell .mobile-nav { display: none; }
+  .tv-drag-region { display: block; position: fixed; inset: 0 0 auto; height: 44px; z-index: 20; }
+  .tv-sidebar { display: flex; flex-direction: column; position: fixed; inset: 12px auto 12px 12px; width: var(--tv-sidebar-width); padding: 52px 12px 12px; border: 1px solid var(--tv-hairline); border-radius: 20px; background: var(--tv-glass); -webkit-backdrop-filter: var(--tv-glass-filter); backdrop-filter: var(--tv-glass-filter); z-index: 21; overflow: hidden; transition: width 240ms var(--tv-ease); }
+  .tv-sidebar-toggle { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; margin: 0 0 16px 4px; border-radius: 10px; }
+  .tv-navigation { display: grid; gap: 4px; }
+  .tv-navigation a { display: flex; align-items: center; height: 36px; padding: 0 12px; gap: 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; font-weight: 500; white-space: nowrap; }
+  .tv-navigation a span { overflow: hidden; text-overflow: ellipsis; }
+  .tv-navigation a:hover, .tv-sidebar-toggle:hover { background: var(--tv-surface-1); }
+  .tv-navigation a[aria-current=page] { background: rgba(255,255,255,.14); color: var(--tv-text); }
+  .tv-sidebar-collapsed .tv-navigation a { padding: 0; justify-content: center; }
+  .tv-sidebar-collapsed .tv-navigation a span { display: none; }
+  .tv-sidebar-sources { display: grid; gap: 8px; margin-top: auto; padding-top: 20px; min-width: 0; }
+  .tv-sidebar-sources label, .tv-sidebar-sources > button { display: flex; align-items: center; gap: 8px; height: 32px; min-width: 0; padding: 0 10px; background: var(--tv-surface-2); border-radius: 999px; }
+  .tv-sidebar-sources select { background: transparent; color: var(--tv-text-2); border: 0; border-radius: 999px; font-size: 13px; line-height: 1.4; min-width: 0; width: 100%; height: 32px; text-overflow: ellipsis; }
+  .tv-sidebar-sources > button { justify-content: center; }
+  .tv-sidebar-sources label { transition: transform 200ms var(--tv-ease), opacity 200ms var(--tv-ease); }
+  .tv-sidebar-sources label:is(:hover,:focus-within) { transform: scale(1.04); }
+  .tv-sidebar-collapsed .tv-sidebar-sources { justify-content: center; }
+  .tv-sidebar-collapsed .tv-sidebar-sources > button { width: 36px; }
+  .app-shell .app-main { margin-left: 0; }
+  .app-shell main { max-width: none; margin: 0; padding: 64px 48px 40px calc(12px + var(--tv-sidebar-width) + 32px); }
+  .app-shell .catalog-sources > label { display: none; }
+  .tv-page-title { display: block; margin-bottom: 24px; }
+  .tv-theme-note { display: block; color: var(--tv-text-2); margin-bottom: 16px; }
+  .app-shell .system-mode-row { display: none; }
+  .app-shell h1, .tv-page-title { font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: 0; }
+  .app-shell .section-heading h2 { font-size: 22px; line-height: 1.25; font-weight: 600; letter-spacing: 0; }
+  .app-shell .feature h2, .tv-hero-title { font-size: clamp(40px,4.4vw,72px); line-height: 1.05; font-weight: 700; letter-spacing: 0; }
+  .app-shell .card-title { font-size: 14px; line-height: 1.3; font-weight: 500; letter-spacing: 0; }
+  .app-shell .film-card > p { font-size: 13px; line-height: 1.4; font-weight: 400; letter-spacing: 0; color: var(--tv-text-2); font-variant-numeric: tabular-nums; }
+  .app-shell .poster-kind, .tv-badge { font-size: 11px; line-height: 1.2; font-weight: 600; letter-spacing: 0; }
+  .app-shell .poster-link { border-radius: 12px; background: var(--tv-surface-1); transition: transform 200ms var(--tv-ease), opacity 200ms var(--tv-ease); }
+  .app-shell .poster-link:is(:hover,:focus-visible) { transform: scale(1.08); box-shadow: 0 18px 40px rgba(0,0,0,.55); z-index: 1; }
+  .app-shell .poster-link:is(:hover,:focus-visible) > img { transform: none; }
+  .app-shell .poster-link:focus-visible { outline: 2px solid var(--tv-text); outline-offset: -2px; }
+  .app-shell .poster-link::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(135deg,rgba(255,255,255,.18),transparent 65%); transition: opacity 200ms var(--tv-ease); }
+  .app-shell .poster-link:is(:hover,:focus-visible)::after { opacity: 1; }
+  .app-shell button, .app-shell select, .app-shell .button, .app-shell .n-button { border-radius: 999px; transition: transform 200ms var(--tv-ease), opacity 200ms var(--tv-ease); }
+  .app-shell button:is(:hover,:focus-visible), .app-shell .button:is(:hover,:focus-visible) { transform: scale(1.04); }
+  .app-shell .tv-sidebar-toggle { border-radius: 10px; }
+  .app-shell :is(button,a,select,input):focus-visible { outline-color: var(--tv-text); outline-width: 2px; outline-offset: -2px; }
+  .app-shell .settings-panel, .app-shell .source-panel { border-radius: 20px; }
+  .app-shell .source-card, .app-shell .history-card { border-radius: 14px; }
+  .app-shell .feature { border-radius: 20px; }
+  .app-shell .feature-image { animation: none; }
+  .app-shell .button-primary { color: var(--tv-button-ink); background: var(--tv-button); }
+  .app-shell svg { stroke-width: 1.75; }
+  .app-shell .film-grid { padding-block: 24px; }
+  .app-shell .home-section { margin-block: 40px; }
+  .app-shell .home-poster-missing { font-size: 15px; font-weight: 600; }
+  .app-shell .home-poster-missing strong { font-size: inherit; line-height: 1.5; font-weight: inherit; }
+  .app-shell .poster-lettering { background: transparent; border-radius: 12px; }
+}
+@media (min-width: 1440px) {
+  .app-shell main { padding-right: 64px; }
+}
+@media (min-width: 960px) and (prefers-reduced-motion: reduce) {
+  .tv-sidebar { transition: none; }
+  .app-shell :is(button,.button,.poster-link):is(:hover,:focus-visible) { transform: none; }
+  .tv-sidebar-sources label:is(:hover,:focus-within) { transform: none; }
+  .app-shell *, .app-shell *::before, .app-shell *::after { transition-property: opacity; animation: none; scroll-behavior: auto; }
+}

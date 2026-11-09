@@ -172,7 +172,33 @@ pub fn run() {
 
     #[cfg(not(mobile))]
     let builder = {
-        builder.on_window_event(|window, event| {
+        #[cfg(target_os = "macos")]
+        let overlay = std::sync::atomic::AtomicBool::new(true);
+        builder.on_window_event(move |window, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::Resized(size) = event
+                && window.label() == "main"
+            {
+                match window.scale_factor() {
+                    Ok(scale) => {
+                        let desktop = f64::from(size.width) / scale >= 960.0;
+                        // Preserve the legacy native content inset below the
+                        // desktop breakpoint; avoid recursive style changes.
+                        if overlay.swap(desktop, std::sync::atomic::Ordering::Relaxed) != desktop {
+                            let style = if desktop {
+                                tauri::TitleBarStyle::Overlay
+                            } else {
+                                tauri::TitleBarStyle::Visible
+                            };
+                            if let Err(error) = window.set_title_bar_style(style) {
+                                overlay.store(!desktop, std::sync::atomic::Ordering::Relaxed);
+                                eprintln!("Window titlebar breakpoint failed: {error}");
+                            }
+                        }
+                    }
+                    Err(error) => eprintln!("Window scale query failed: {error}"),
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let (allow, signal) = closing::request(&closing::STATE);
                 if allow {
@@ -227,6 +253,10 @@ pub fn run() {
                     (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
                         || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
                 });
+            #[cfg(target_os = "macos")]
+            let window = window
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
             #[cfg(not(mobile))]
             let window = window
                 .inner_size(

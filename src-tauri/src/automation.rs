@@ -34,6 +34,14 @@ pub async fn t01_control(
     eprintln!("T01_IPC:entered");
     super::require_main(&window)?;
     eprintln!("T01_IPC:authorized");
+    #[cfg(target_os = "macos")]
+    if action == "shell-style" {
+        return shell_style(&window);
+    }
+    #[cfg(target_os = "macos")]
+    if action == "motion" {
+        return motion_override(&window, value.ok_or("motion value required")?);
+    }
     match action.as_str() {
         "identity" => {}
         "foreground" => {
@@ -63,7 +71,7 @@ pub async fn t01_control(
         }
         "width" => {
             let width = value.ok_or("width required")?;
-            if ![360.0, 390.0, 768.0, 960.0, 1200.0].contains(&width) {
+            if ![360.0, 390.0, 768.0, 960.0, 1200.0, 1512.0].contains(&width) {
                 return Err("Unsupported acceptance width".into());
             }
             window
@@ -115,6 +123,114 @@ pub async fn t01_control(
     });
     eprintln!("T01_IPC:completed");
     Ok(result)
+}
+
+#[cfg(target_os = "macos")]
+fn motion_override(window: &WebviewWindow, value: f64) -> Result<serde_json::Value, String> {
+    use std::ffi::{c_char, c_void};
+    if value != 0.0 && value != 1.0 {
+        return Err("Unsupported test motion value".into());
+    }
+    #[link(name = "objc")]
+    unsafe extern "C" {
+        fn sel_registerName(name: *const c_char) -> *mut c_void;
+        fn objc_getClass(name: *const c_char) -> *mut c_void;
+        fn objc_msgSend();
+    }
+    let (send, receive) = std::sync::mpsc::channel();
+    window
+        .with_webview(move |webview| {
+            // Web Inspector Page.overrideUserPreference is scoped to this page
+            // and is removed on disconnect. No system preferences are written.
+            // https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/inspector/protocol/Page.json
+            let result = unsafe {
+                let get: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let call: unsafe extern "C" fn(*mut c_void, *mut c_void) =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let set_bool: unsafe extern "C" fn(*mut c_void, *mut c_void, bool) =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let responds: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> bool =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let view = webview.inner().cast::<c_void>();
+                let selector = sel_registerName(c"_inspector".as_ptr());
+                if !responds(view, sel_registerName(c"respondsToSelector:".as_ptr()), selector) {
+                    Err("WebKit test inspector unavailable".to_string())
+                } else {
+                    let inspector = get(view, selector);
+                    let configuration = get(view, sel_registerName(c"configuration".as_ptr()));
+                    let preferences = get(configuration, sel_registerName(c"preferences".as_ptr()));
+                    if value == 0.0 {
+                        call(inspector, sel_registerName(c"close".as_ptr()));
+                        set_bool(preferences, sel_registerName(c"_setDeveloperExtrasEnabled:".as_ptr()), false);
+                        Ok(serde_json::json!({"closed": true}))
+                    } else {
+                        // Release WebViews disable the inspector by default.
+                        // Enable it only in this feature-gated test instance.
+                        set_bool(preferences, sel_registerName(c"_setDeveloperExtrasEnabled:".as_ptr()), true);
+                        call(inspector, sel_registerName(c"connect".as_ptr()));
+                        let selector = sel_registerName(c"inspectorWebView".as_ptr());
+                        if !responds(inspector, sel_registerName(c"respondsToSelector:".as_ptr()), selector) {
+                            Err("WebKit inspectorWebView testing API unavailable".to_string())
+                        } else {
+                            let frontend = get(inspector, selector);
+                            if frontend.is_null() {
+                                Ok(serde_json::json!({"pending": true, "renderer": 0}))
+                            } else {
+                                let string: unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void =
+                                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                                let evaluate: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, *mut c_void) =
+                                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                                let pid: unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32 =
+                                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                                let script = string(objc_getClass(c"NSString".as_ptr()), sel_registerName(c"stringWithUTF8String:".as_ptr()), c"if(globalThis.WI?.mainTarget?.PageAgent?.overrideUserPreference)WI.mainTarget.PageAgent.overrideUserPreference.invoke({name:'PrefersReducedMotion',value:'Reduce'});".as_ptr());
+                                evaluate(frontend, sel_registerName(c"evaluateJavaScript:completionHandler:".as_ptr()), script, std::ptr::null_mut());
+                                Ok(serde_json::json!({"pending": false, "renderer": pid(frontend, sel_registerName(c"_webProcessIdentifier".as_ptr()))}))
+                            }
+                        }
+                    }
+                }
+            };
+            let _ = send.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+    receive
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())?
+}
+
+#[cfg(target_os = "macos")]
+fn shell_style(window: &WebviewWindow) -> Result<serde_json::Value, String> {
+    use std::ffi::{c_char, c_void};
+    #[link(name = "objc")]
+    unsafe extern "C" {
+        fn sel_registerName(name: *const c_char) -> *mut c_void;
+        fn objc_msgSend();
+    }
+    let (send, receive) = std::sync::mpsc::channel();
+    window
+        .with_webview(move |webview| {
+            // Observe the real NSWindow rather than infer title-bar style from CSS.
+            let value = unsafe {
+                let object: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let integer: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u64 =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let boolean: unsafe extern "C" fn(*mut c_void, *mut c_void) -> bool =
+                    std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                let native = object(webview.inner().cast(), sel_registerName(c"window".as_ptr()));
+                serde_json::json!({
+                    "full_size_content": integer(native, sel_registerName(c"styleMask".as_ptr())) & (1 << 15) != 0,
+                    "title_hidden": integer(native, sel_registerName(c"titleVisibility".as_ptr())) == 1,
+                    "transparent_titlebar": boolean(native, sel_registerName(c"titlebarAppearsTransparent".as_ptr()))
+                })
+            };
+            let _ = send.send(value);
+        })
+        .map_err(|e| e.to_string())?;
+    receive
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(target_os = "macos")]

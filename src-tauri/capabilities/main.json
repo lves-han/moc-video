@@ -2,7 +2,7 @@
   "identifier": "main",
   "description": "Packaged main WebView: fixed business commands and player fullscreen.",
   "windows": ["main"],
-  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "allow-player-fullscreen", "allow-runtime-status", "allow-runtime-prepare",
+  "permissions": ["core:window:allow-start-dragging", "core:event:allow-listen", "core:event:allow-unlisten", "allow-player-fullscreen", "allow-runtime-status", "allow-runtime-prepare",
     "allow-get-sources", "allow-sync-catalog", "allow-get-home", "allow-get-details",
     "allow-resolve-episode", "allow-open-playback", "allow-close-playback", "allow-cancel-request",
     "allow-start-interaction", "allow-finish-interaction", "allow-get-settings", "allow-save-settings",

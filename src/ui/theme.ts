@@ -91,7 +91,8 @@ export function setPalette(value: PaletteId): boolean {
   }
 }
 
-export function resolveTheme(id: PaletteId, dark: boolean) {
+export function resolveTheme(id: PaletteId, dark: boolean, desktop = false) {
+  dark = desktop || dark;
   const brand = paletteOptions.find((item) => item.value === id)!;
   const base = dark ? darkTheme : lightTheme;
   const primary = dark ? brand.night : brand.day;
@@ -106,7 +107,13 @@ export function resolveTheme(id: PaletteId, dark: boolean) {
       borderRadius: "8px",
       heightMedium: "40px",
       heightSmall: "34px",
-      bodyColor: dark ? base.common.bodyColor : "#f7f8fa",
+      bodyColor: desktop ? "#0b0b0d" : dark ? base.common.bodyColor : "#f7f8fa",
+      ...(desktop ? {
+        textColor1: "#f5f5f7", textColor2: "rgba(235,235,245,.62)", textColor3: "rgba(235,235,245,.38)",
+        cardColor: "rgba(255,255,255,.06)", inputColor: "rgba(255,255,255,.10)",
+        hoverColor: "rgba(255,255,255,.16)", borderColor: "rgba(255,255,255,.10)",
+        popoverColor: "#1e1e22", errorColor: "#ff453a", fontSize: "15px", borderRadius: "20px",
+      } : {}),
       placeholderColor: dark ? "#a3a8b0" : "#65707c",
       fontFamily:
         '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
@@ -125,6 +132,16 @@ export function resolveTheme(id: PaletteId, dark: boolean) {
     overrides,
     // Page-specific cinema layouts consume the same semantic values as the library.
     variables: {
+      ...(desktop ? {
+        "--tv-bg": "#0b0b0d", "--tv-surface-1": "rgba(255,255,255,.06)",
+        "--tv-surface-2": "rgba(255,255,255,.10)", "--tv-surface-hover": "rgba(255,255,255,.16)",
+        "--tv-glass": "rgba(30,30,34,.62)", "--tv-glass-filter": "blur(30px) saturate(160%)",
+        "--tv-hairline": "rgba(255,255,255,.10)", "--tv-text": "#f5f5f7",
+        "--tv-text-2": "rgba(235,235,245,.62)", "--tv-text-3": "rgba(235,235,245,.38)",
+        "--tv-button": "#f5f5f7", "--tv-button-ink": "#0b0b0d", "--tv-danger": "#ff453a",
+        "--tv-ease": "cubic-bezier(.2,.8,.2,1)", "--tv-focus-duration": "200ms",
+        "--tv-page-duration": "300ms", "--tv-hero-duration": "600ms", "--tv-focus-scale": "1.08",
+      } : {}),
       "--text": common.textColor1,
       "--background": common.bodyColor,
       "--surface": common.cardColor,

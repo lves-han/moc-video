@@ -1,6 +1,14 @@
 <script setup lang="ts">
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 });
 const paths: Record<string, string[]> = {
+  search: ["M21 21l-5-5", "M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"],
+  library: ["M4 3h4v18H4zM11 3h4v18h-4zM18 4l3 16"],
+  sidebar: ["M3 4h18v16H3zM9 4v16m7-12-4 4 4 4"],
+  variety: ["M3 6h18v14H3zM7 3l5 3 5-3M8 11v4m8-4v4"],
+  documentary: ["M3 5h13v14H3zM16 10l5-3v10l-5-3"],
+  short: ["M7 2h10v20H7zM10 8l5 4-5 4"],
+  sports: ["M16 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM4 9l6-3 4 4 6 1M7 21l4-8 4 3 2 5M10 6l-1 7-6 3"],
+  watchlist: ["M5 3h14v18l-7-4-7 4V3Z", "M9 9h6m-3-3v6"],
   history: ["M3 10a9 9 0 1 1 .7 7M3 4v6h6", "M12 7v5l3 2"],
   trash: ["M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"],
   compass: [

@@ -78,3 +78,17 @@ test("All palette presets share their accessible colors between Naive UI and the
   assert.equal(normalizePalette("unknown"), "lime");
   assert.equal(normalizePalette(null), "lime");
 });
+
+test("TV1 desktop remains dark with every night accent under both system appearances", () => {
+  for (const brand of paletteOptions) for (const systemDark of [false, true]) {
+    const result = resolveTheme(brand.value, systemDark, true);
+    assert.ok(result.theme);
+    assert.equal(result.variables["--accent"], brand.night);
+    assert.equal(result.variables["--background"], "#0b0b0d");
+    assert.equal(result.variables["--tv-text"], "#f5f5f7");
+    assert.equal(result.overrides.common?.bodyColor, result.variables["--tv-bg"]);
+    assert.equal(result.overrides.common?.textColor1, result.variables["--tv-text"]);
+  }
+  assert.equal("--tv-bg" in resolveTheme("lime", false).variables, false);
+  assert.equal(resolveTheme("lime", false).theme, null);
+});

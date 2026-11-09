@@ -2578,3 +2578,15 @@
 - 决定：用户本聊天明确授权“调整 0.28 的会话额度，请解决权限问题后继续实现”。本次将本卡会话上限由2调整至3，单次3小时及其他资源限制不变，保留历史与失败记录。
 - 进程条件：外层按身份核对第二次runner和payload及驱动、开发进程均已退出，原 task.py recover 已登记中断并保留 exit125。外层以原 run.py 执行同一环境探测 diag-tv1-outer-environment，exit0，日志 evidence/runs/20261109T025830672918-diag-tv1-outer-environment/output.log。开发会话权限限制仍在，须通过外层代验协作，不在受限会话重复执行重任务或访问 TV；开发者通过 task.py handoff 提出准确 argv 并保持会话、暂停写入，外层执行原 run.py 后回传结果，开发者读回结果并继续。Git 由外层收尾。
 - TV 对照：外层实际观察本机 TV 的左侧半透明侧栏和竖版卡片；焦点比例及动效时长未能精确测量，采用任务卡明确规定的初始 1.08、200ms 和最大倾斜4度作为本卡实现值，保留此测量限制，按任务卡检验实际样式及行为。
+
+## T0.28 桌面外壳、主题、焦点与 MediaRow 完成 2026-11-09T03:56:50+00:00
+- 结果：DONE
+- Changed：桌面 Overlay/隐藏标题及44px拖动区；12px悬浮玻璃侧栏，220/72px展开折叠、1200断点默认折叠、现有首页/历史/来源/设置入口与底部双来源；960断点固定深色并同步 Naive UI 和五色系。新增原生DOM方向键/Esc导航、离页焦点恢复与 MediaRow（海报/横版、吸附分页、箭头、缺图、加载及减弱动态）。窗口验收白名单增加1512，主权限仅追加 core:window:allow-start-dragging，CSP保持基线。
+- Why：复用现有路由、设置队列、来源角色、Host和原打包窗口夹具。窄屏原生标题栏保留 Visible 的32px内容inset；桌面使用 Overlay，避免沉浸窗口改变窄屏内容高度。未接入后续分类/搜索/资料库或首页内容排；MediaRow真实页面接线由T0.30负责。
+- 开工对照与最终规格：沿用本卡开工前外层TV实际观察（左侧半透明侧栏、竖版卡）；倍率与时长的实机定量测量限制保留，按已授权初始值落地。最终卡片放大1.08、焦点200ms、倾斜≤4°、按钮/来源胶囊1.04；阴影0 18px 40px rgba(0,0,0,.55)、2px内描边、曲线cubic-bezier(.2,.8,.2,1)。ADR-057颜色、字体、尺寸及圆角原值保持，18项 --tv-* 变量在960/1200/1512计算样式核对；侧栏240ms、共享页面300ms/Hero600ms变量保留供后续卡沿用。玻璃blur30px/saturate160%及WebKit前缀、间距16/20px与右边距48/64px按1440断点验证。
+- 基线校准证据：改造前4个窄屏样本保存在 `evidence/acceptance/TV1-narrow-baseline.json`，SHA256 ef92bef63e61bc7f835c62d3255a3393b59ad15f3356073dc63b93275849ebfd，始终未覆盖。原包复测证明原锚点颜色在系统明暗切换过渡期间出现rgb51/52及rgba251..255差异。最终A1同时校验原构建全量文件哈希并运行原始二进制（source 7017753920353411788f39ff5c8087d03963d5fa121678027f979000255e92c6），等待过渡完成后，新旧4组全部几何及全部计算样式（含颜色）逐项全等；最初基线的其余值继续精确核对。原始复测记录和构建绑定见本次目录 `original-narrow-reference.json`。页面标题行高实得39.099998px，按34×1.15以0.001px数值精度核对，字号/字重保持34px/700。
+- 验收 A1：PASS；日志：`evidence/runs/20261109T035033342976-A1/output.log`；断言：exit0，12/12实际检查、JUnit25/25及13项需求汇总全部通过。真实NSWindow Overlay/隐藏标题/拖动及按钮排除；三宽度侧栏、主题、18变量/字体/尺寸/海报/箭头中心；两系统明暗×五night强调色；768/390两明暗与原包一致；真实CG键盘方向/Esc/边界/滚动、实际首页卡片离页返回及来源select焦点、悬停/键盘1.08/阴影/高光/边缘倾斜均通过。
+- 减弱动态与清理：通过仅测试构建的Web Inspector Page.overrideUserPreference验证真实WebView matchMedia与逐元素transform/animation；焦点/悬停无缩放和倾斜，加载占位脉冲关闭。覆盖移除后媒体偏好恢复，未修改系统设置。原包/新包及Inspector renderer均纳入原RSS采样和身份限定清理；两个NativeSession均exit0、无lingering、无forced_cleanup，fixture活动请求归零。预检/构建期间复用owned caffeinate并finally释放。
+- 截图走查：已保存并实际查看 `evidence/acceptance/TV1-1c7c4c60e8764c30bdde6da412875430/desktop-960.png`、同目录 `desktop-1200.png`、`desktop-1512.png`；使用受控夹具图片，960为现有首页，1200/1512含MediaRow夹具。实际图片解码/淡入、缺图数量与输入、单行省略、加载透明度/周期、滚动吸附/隐藏滚动条及到头焦点保持通过。
+- 完整 verify：PASS；收据：`evidence/verify/20261109T035324149184.json`；六门exit0，工作流131项（124通过/7平台跳过）、前端171/171、原/实际协议、类型构建、Rust fmt/check/clippy及175通过/3原忽略、契约16/16通过。源码a68f45fbbe57d3adf470126b4b18f0bf3e200c71fd3dc5dbee432674f13ea6b6，protected d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5，generation0；验证后源码未改，git diff --check通过。
+- Remaining：仅macOS arm64实机已验；macos-x86_64/windows-x86_64/linux-x11/wayland及1920宽度NOT RUN（ADR-005/006/057）。原4096MiB进程树RSS采样、jobs2、测试线程1；无集群及硬内存隔离。重跑窄屏比较需保留上述冻结原包与原始证据；不重新生成基线。历史权限/锁屏/样式/Inspector/夹具及动画失败全部保留。待原done、受验完成提交及外层独立review-only；本会话仅处理T0.28，不accept-review、不推送、不改写历史。

@@ -29,6 +29,12 @@ export function setLocale(value: AppLocale): boolean {
 }
 
 export const chinese = {
+  "Collapse sidebar": "折叠侧栏",
+  "Expand sidebar": "展开侧栏",
+  "Playback source": "播放源",
+  "Desktop uses a dark appearance.": "桌面使用深色外观。",
+  "Previous items": "上一排内容",
+  "Next items": "下一排内容",
   "Media cache": "媒体缓存",
   "Played media is cached on this device. Older cache is removed automatically when the limit is reached.": "播放过的媒体会缓存在本机，达到上限时自动清理较久未使用的缓存。",
   "Manage media cache in the desktop app.": "请在桌面应用中管理媒体缓存。",

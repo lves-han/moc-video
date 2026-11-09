@@ -144,6 +144,14 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   };
   async function execute(command: Command): Promise<unknown> {
     switch (command.op) {
+      case "tv1-theme": return nativeInvoke("t01_control", { action: "theme", value: command.value });
+      case "tv1-shell-style": return nativeInvoke("t01_control", { action: "shell-style" });
+      case "tv1-motion": return nativeInvoke("t01_control", { action: "motion", value: command.value });
+      case "tv1": {
+        const { shellScenario } = await import("../tv1_webview");
+        await foreground();
+        return shellScenario(command.action!, { player, base, cap });
+      }
       case "t22-startup": {
         const foregroundState = await foreground();
         const window_ready_epoch_ms = performance.timeOrigin + performance.now();

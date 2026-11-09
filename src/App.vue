@@ -18,9 +18,55 @@ import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabel
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
 import { locale, t, type Message } from "./i18n";
 import { palette, paletteOptions, normalizePalette } from "./ui/theme";
+import { installFocusNavigation } from "./ui/focus";
 import type { AppSource, Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
 
 const native = Boolean(window.__TAURI__);
+const desktopQuery = matchMedia("(min-width: 960px)");
+const expandedQuery = matchMedia("(min-width: 1200px)");
+const sidebarCollapsed = ref(!expandedQuery.matches);
+const sidebarToggle = ref<HTMLButtonElement>();
+const shell = ref<HTMLElement>();
+const sidebarSources = ref<HTMLElement>();
+const desktopNavigation = computed(() => [
+  { page: "home", href: "#/home", icon: "compass", label: t("Discover") },
+  { page: "history", href: "#/history", icon: "history", label: t("Watch history") },
+  { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
+  { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
+]);
+const metadataProviders = computed(() => (appState.sources.data?.providers ?? []).filter(item => item.kind === "stremio" && item.runtime_status === "ready" && item.capabilities.home && item.capabilities.details));
+function resetSidebar() { sidebarCollapsed.value = !expandedQuery.matches; }
+async function expandSource(role: "metadata" | "playback") {
+  sidebarCollapsed.value = false;
+  await nextTick();
+  sidebarSources.value?.querySelector<HTMLSelectElement>(`[data-role="${role}"]`)?.focus();
+}
+async function dragWindow(event: MouseEvent) {
+  if (event.button !== 0 || (event.target as HTMLElement).closest("a,button,input,select,textarea,[role=button]")) return;
+  try { await window.__TAURI__?.core.invoke("plugin:window|start_dragging"); }
+  catch (error) { preferenceError.value = String(error); }
+}
+function escapeShell() {
+  if (appearanceOpen.value) { appearanceOpen.value = false; return true; }
+  if (aboutOpen.value) { aboutOpen.value = false; return true; }
+  if (route.value.page !== "home") { location.hash = "#/home"; return true; }
+  const active = document.activeElement;
+  if (!active?.closest(".tv-sidebar")) {
+    shell.value?.querySelector<HTMLAnchorElement>('.tv-sidebar [aria-current="page"]')?.focus();
+  } else if (!sidebarCollapsed.value) {
+    sidebarCollapsed.value = true;
+    sidebarToggle.value?.focus();
+  } else sidebarToggle.value?.focus();
+  return true;
+}
+let removeFocus: (() => void) | undefined;
+watch(shell, root => { removeFocus?.(); removeFocus = root ? installFocusNavigation(root, escapeShell) : undefined; });
+const routeFocus = new Map<string, string>();
+function rememberFocus(event: FocusEvent) {
+  const target = event.target as HTMLElement;
+  const link = target.closest<HTMLAnchorElement>("a[href]");
+  if (link?.closest("main")) routeFocus.set(location.hash, link.getAttribute("href")!);
+}
 const messages = useMessage();
 const preferenceError = ref("");
 const historySaveError = ref<string | null>(null);
@@ -132,7 +178,15 @@ async function playEpisode(videoId: string) {
 }
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;
-function focusMain() { document.getElementById("main-content")?.focus({ preventScroll: true }); }
+function focusMain() {
+  const main = document.getElementById("main-content");
+  if (desktopQuery.matches) {
+    const href = routeFocus.get(location.hash);
+    const previous = href && [...main?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []].find(link => link.getAttribute("href") === href);
+    if (previous) { previous.focus({ preventScroll: true }); return; }
+  }
+  main?.focus({ preventScroll: true });
+}
 async function onHashChange() {
   const current = ++sequence;
   await flushHistory();
@@ -325,6 +379,8 @@ function quitWithoutSaving() { void window.__TAURI__?.core.invoke("app_close_rea
 }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
 onMounted(() => {
+  expandedQuery.addEventListener("change", resetSidebar);
+  document.addEventListener("focusin", rememberFocus);
   // T12's formal harness supplies a Host-confirmed context before mounting App.
   if (readHash().name !== "playback") void onHashChange();
   window.addEventListener("hashchange", onHashChange);
@@ -334,6 +390,9 @@ onMounted(() => {
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
 onBeforeUnmount(() => {
+  expandedQuery.removeEventListener("change", resetSidebar);
+  removeFocus?.();
+  document.removeEventListener("focusin", rememberFocus);
   void flushHistory(); ++sequence;
   window.removeEventListener("hashchange", onHashChange);
   window.removeEventListener("pagehide", onPageHide);
@@ -356,8 +415,25 @@ onBeforeUnmount(() => {
   <a class="skip-link" href="#main-content" @click.prevent="focusMain">{{
     t("Skip to content")
   }}</a>
-  <div class="app-shell">
-    <aside class="sidebar" :aria-label="t('Main navigation')">
+  <div ref="shell" class="app-shell" :class="{ 'tv-sidebar-collapsed': sidebarCollapsed }">
+    <div class="tv-drag-region" @mousedown="dragWindow" />
+    <aside class="tv-sidebar" :aria-label="t('Main navigation')">
+      <button ref="sidebarToggle" class="tv-sidebar-toggle" :aria-expanded="!sidebarCollapsed" :aria-label="t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')" :title="t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')" @click="sidebarCollapsed = !sidebarCollapsed"><Icon name="sidebar" /></button>
+      <nav class="tv-navigation" data-focus-row>
+        <a v-for="item in desktopNavigation" :key="item.page" :href="item.href" :aria-label="item.label" :title="item.label" :aria-current="route.page === item.page ? 'page' : undefined"><Icon :name="item.icon" /><span>{{ item.label }}</span></a>
+      </nav>
+      <div ref="sidebarSources" class="tv-sidebar-sources" data-focus-row>
+        <template v-if="sidebarCollapsed">
+          <button :aria-label="t('Choose a metadata source')" :title="t('Choose a metadata source')" @click="expandSource('metadata')"><Icon name="library" /></button>
+          <button :aria-label="t('Choose a video source')" :title="t('Choose a video source')" @click="expandSource('playback')"><Icon name="layers" /></button>
+        </template>
+        <template v-else>
+          <label :title="t('Metadata provider')"><Icon name="library" :size="16" /><select data-role="metadata" :aria-label="t('Choose a metadata source')" :value="appState.selected_metadata_source?.source_id ?? ''" @change="selectNativeSource(($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="item in metadataProviders" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+          <label :title="t('Playback source')"><Icon name="layers" :size="16" /><select data-role="playback" :aria-label="t('Choose a video source')" :value="sourceId" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select></label>
+        </template>
+      </div>
+    </aside>
+    <aside class="sidebar legacy-sidebar" :aria-label="t('Main navigation')">
       <a class="brand" href="#/home" :aria-label="t('Yingxiang Video home')"
         ><img src="/mark.svg" alt="" width="38" height="38" /><span
           >{{ locale === "en" ? "Yingxiang" : t("Yingxiang Video")
@@ -491,6 +567,8 @@ onBeforeUnmount(() => {
       </header>
 
       <main id="main-content" tabindex="-1">
+        <h1 v-if="native && route.page === 'home'" class="tv-page-title">{{ title }}</h1>
+        <p v-if="route.page === 'settings'" class="tv-theme-note">{{ t('Desktop uses a dark appearance.') }}</p>
         <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" />
         <DetailsView v-else-if="native && route.page === 'film'" @open="openDetails" @play="playEpisode" />
         <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
