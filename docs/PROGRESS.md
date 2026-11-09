@@ -2508,3 +2508,12 @@
 - 受审基线：93897b046d1d72acb6bd76b679940521a74a0600；protected d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a。报告：`docs/reviews/doc-review/round-48.md`，结论 BLOCKING，6 项阻断已逐项核对并修订，待独立复审。
 - 2026-11-08 来源实测（支撑 ADR-057 卡片数据）：内置 TMDB 电影 19 种类型均满页 20 条；剧集 tmdb.latest 按类型剧情 25、悬疑 10、科幻 7、喜剧 6、动作冒险 5、动画 3、犯罪 3 条；组合过滤 5 页 100 条命中 8 至 95 条；MacCMS ac=detail 对 year、area 参数无过滤效果。
 - 显示器：系统报告内屏 3024×1964 Retina，Finder 桌面逻辑宽度 1512。
+
+## T0.27 round-48 修订待用户批准 2026-11-09T02:06:02.000000+00:00
+
+- 结果：BLOCKED
+- 事实：独立文档复审 round-49 结论 CLEAR，受审基线 b98473d9d32b63195cf616e30c2cdc5dd0a4336b，protected c20a76916c58a9c072fa655d3b73eb4aec45bfbcbfda25c71af06cc780e0133e，报告 `docs/reviews/doc-review/round-49.md`。round-48 修订改变了冻结文件，T0.27 状态基线仍为 d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a，旧用户决定已消费。
+- 已尝试：未写 RESOLVED，未执行第二次 rebaseline，未修改控制脚本或状态文件，T0.27 验收未开始。
+- 需要用户决定：是否批准 round-48 修订（范围、1512 验收宽度与 1440 断点、排序和地区规则、按类型与年份内容排、权限精确断言）并授权第二次 rebaseline。
+- 可选方案：1）批准并 rebaseline，随后重验 T0.27；2）提出修改，修改后须重新独立审查。
+- 备注：round-49 的 N2 已由 2026-11-08 清单实测回答：tmdb.top/year/language/trending/latest 的 genre 均非必填，仅 tmdb.search 必填 search。
