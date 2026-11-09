@@ -70,7 +70,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | U01 / §1.1 | Tauri/Rust、WebView、原生持久化 | T0.2/A1, T0.3/A1, T0.18/A1, T0.35/A1 | 按原规格完整保留 |
 | U02 / §1.1,2.1 | 首版可用SuperVod JSON来源的搜索、详情、选集及解析 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代给定索引与全部provider义务 |
 | U03 / §1.1,8 | 推荐/详情/选集/播放完整真实闭环 | T0.14/A1, T0.15/A1, T0.16/A1, T0.24/A1 | 按原规格完整保留 |
-| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.35/A1, T0.36/A2 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
+| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1（包级）, T0.35/A1, T0.36/A2 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
 | U05 / §1.1,2.2,6.3 | 依据公开行为独立实现的Rust来源，实际媒体闭环 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代原7包ART/DEX兼容；其余六站暂缓 |
 | U06 / §1.1,15 | 准确契约/依赖/错误与可复现交付 | T0.1/A1, T0.3/A1, T0.35/A1, T0.36/A1 | 按原规格完整保留 |
 | U07 / §1.1,16 | 桌面公共入口/cfg/响应式、后续移动真机MG | T0.13/A1, T0.35/A1, T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1, T1.5/A1, T1.6/A1 | 按原规格完整保留 |
@@ -171,7 +171,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | REQ-T20 / replica-spec/AI_TASKS.md T20 | ADR-048修订后的Rust来源与产品端到端工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.24/A1 | 桌面首版 |
 | REQ-T21 / replica-spec/AI_TASKS.md T21 | ADR-048修订后的T21工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.25/A1（功能）, T0.26/A1（网关长测采样/协议准备）, T0.26/A2（完整10分钟网关耐久） | 桌面首版 |
 | REQ-T22 / replica-spec/AI_TASKS.md T22 | ADR-048修订后的T22工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.26/A1, T0.26/A2 | 桌面首版 |
-| REQ-T23 / replica-spec/AI_TASKS.md T23 | ADR-048修订后的T23工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.27/A1 | 桌面首版 |
+| REQ-T23 / replica-spec/AI_TASKS.md T23 | ADR-048修订后的T23工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.27/A1（包级，生命周期由REQ-T25-LIFECYCLE接续） | 桌面首版 |
 | TV-SHELL / ADR-057 | 沉浸标题栏、悬浮可折叠侧栏、窄屏不变 | T0.28/A1 | 桌面Apple TV化 |
 | TV-THEME / ADR-057 | 桌面固定深色、色系作强调色 | T0.28/A1 | 桌面Apple TV化 |
 | TV-FOCUS / ADR-057 | 键盘空间导航、悬停与焦点一致、减弱动态 | T0.28/A1 | 桌面Apple TV化 |
@@ -1574,6 +1574,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 
 - 工作与验收：Tauri构建、本地资源、实际依赖和版本锁/许可通知；移除Android运行时/原包发行材料要求及产物。无开发机绝对路径；干净机器安装/首播/升级/卸载按ADR-058移至T0.36/A2；缺签名凭据如实列未签名与发行待办，公开发行另获用户授权。
 - `tests/acceptance/t23.py` 增加 `--suite package` 和 `--suite lifecycle`：package 运行资源、平台、当前构建、依赖、产物、归档、签名和反例检查，只输出 U04、R33、R45、REQ-T23 及具名行为用例；lifecycle 供 T0.36/A2 使用。`packaging/T23.md` 同步说明。
+- `t23.py` 移除 `--suite all`；`DEFERRED.reproduce_argv` 改为 `--suite package`；报告标明实际 suite；`save()` 的 limitations 写明生命周期由 T0.36/A2 执行。
 
 ### T0.28 TV1 桌面外壳、深色主题与焦点系统
 - [ ] 完成
@@ -2259,6 +2260,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 通过：另一开发AI可从全新目录按说明复现；任务状态与证据对应；实际平台材料和Rust来源支持清单可追溯。
 - 最终报告：Changed / Why / Verified / Remaining，附安装包、源码、版本锁和验收报告路径。
 - 干净系统生命周期（ADR-058）：`packaging/release.py --build` 生成最终安装包，按 `packaging/T23.md` 的流程在干净真机或专用虚拟机上完成观察，由用户确认声音，再运行 A2。`t23.py --suite lifecycle` 的资源归属使用当前卡 T0.36，并输出 U04、R30、R50、REQ-T25-LIFECYCLE。发现缺陷时在本卡修复后重新构建和观察。
+- 判据更新（ADR-058）：在 `release.py --build` 和人工观察之前完成。lifecycle 的数据库版本期望为 `upgrade_before` 1、`upgrade_after` 和 `uninstalled` 2；设置比较增加排除 `metadata_preset_applied`，升级前配置须已含 Stremio 以避免触发补 TMDB，其余字段逐项相等，`watch_history` 逐行相等；`release.py` 的 manifest `card`、`artifact()` 校验、构建收据和资源归属在本卡路径统一为 T0.36，并同步 `test_t23.py` 正负例。这些是跟随 C17 和 T0.29 的预期值更新，判据强度不变。
+- 新观察写入前保留 `evidence/releases/T23-clean-macos/` 的旧材料。A2 需要用户到场确认声音，开工时提前告知用户准备真机或虚拟机。
 
 ### T1.1 M00 Android / iOS 真机可行性与版本基线
 - [ ] 完成
