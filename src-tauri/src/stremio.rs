@@ -161,6 +161,81 @@ pub fn resource_url(
     Ok(url)
 }
 
+fn encode_extra(pairs: &[(String, String)]) -> String {
+    url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(pairs.iter().map(|(k, v)| (k, v)))
+        .finish()
+}
+
+fn placeholder(meta: &Value) -> bool {
+    meta["genres"]
+        .as_array()
+        .or_else(|| meta["genre"].as_array())
+        .is_some_and(|genres| {
+            genres.iter().any(|v| {
+                v.as_str()
+                    .is_some_and(|v| v.trim().eq_ignore_ascii_case("No Results"))
+            })
+        })
+}
+
+// TMDB genre names from the selected addon's en-US/zh-CN manifests. Arrays
+// have different sort orders; matching by index would select the wrong genre.
+fn chinese_genre(value: &str) -> &str {
+    match value {
+        "Action" => "动作",
+        "Adventure" => "冒险",
+        "Animation" => "动画",
+        "Comedy" => "喜剧",
+        "Crime" => "犯罪",
+        "Documentary" => "纪录",
+        "Drama" => "剧情",
+        "Family" => "家庭",
+        "Fantasy" => "奇幻",
+        "History" => "历史",
+        "Horror" => "恐怖",
+        "Music" => "音乐",
+        "Mystery" => "悬疑",
+        "Romance" => "爱情",
+        "Science Fiction" => "科幻",
+        "TV Movie" => "电视电影",
+        "Thriller" => "惊悚",
+        "War" => "战争",
+        "Western" => "西部",
+        "Action & Adventure" => "动作冒险",
+        "Kids" => "儿童",
+        "News" => "新闻",
+        "Reality" => "真人秀",
+        "Soap" => "肥皂剧",
+        "Talk" => "脱口秀",
+        _ => value,
+    }
+}
+
+fn meta_year(meta: &Value) -> Option<u64> {
+    meta["releaseInfo"]
+        .as_str()
+        .or_else(|| meta["year"].as_str())
+        .and_then(|s| s.get(..4))
+        .and_then(|s| s.parse().ok())
+        .or_else(|| meta["year"].as_u64())
+        .filter(|y| (1000..=9999).contains(y))
+}
+
+fn genre_options(catalog: &Value) -> Vec<String> {
+    catalog["extra"]
+        .as_array()
+        .and_then(|extras| extras.iter().find(|e| e["name"] == "genre"))
+        .and_then(|extra| extra["options"].as_array())
+        .map(|options| {
+            options
+                .iter()
+                .filter_map(|option| text(option).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[derive(Clone)]
 struct Addon {
     url: Url,
@@ -204,7 +279,6 @@ struct Section {
     kind: String,
     catalog_id: String,
     title: String,
-    skip: bool,
     id: String,
     handle: String,
     index: usize,
@@ -214,6 +288,7 @@ struct Section {
 struct Cursor {
     offset: usize,
     seen: HashSet<String>,
+    matched: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -230,7 +305,7 @@ struct State {
     cache: HashMap<String, Value>,
     cache_order: VecDeque<String>,
     cache_bytes: usize,
-    pages: HashMap<(String, String, u64), Cursor>,
+    pages: HashMap<(String, String, String, u64), Cursor>,
     pub images: HashMap<String, Image>,
     pub diagnostics: Vec<Value>,
 }
@@ -253,8 +328,8 @@ pub struct SyncFailure {
 pub struct Output {
     pub value: Value,
     cache: Vec<(String, Value)>,
-    pages: Vec<((String, String, u64), Cursor)>,
-    reset: Vec<(String, String)>,
+    pages: Vec<((String, String, String, u64), Cursor)>,
+    reset: Vec<(String, String, String)>,
     images: Vec<Image>,
     pub diagnostics: Vec<Value>,
 }
@@ -454,9 +529,6 @@ impl Catalog {
                     kind: kind.into(),
                     catalog_id: id.into(),
                     title: text(&catalog["name"]).unwrap_or(id).into(),
-                    skip: catalog["extra"]
-                        .as_array()
-                        .is_some_and(|extras| extras.iter().any(|e| e["name"] == "skip")),
                     handle: identity("stremio_section_ref", &[&captured.host_epoch, &section_id]),
                     id: section_id,
                     index,
@@ -492,9 +564,9 @@ impl Catalog {
             .lock()
             .map_err(|_| ApiError::internal("Stremio cache lock poisoned"))?;
         let mut next = state.clone();
-        for (handle, language) in &output.reset {
+        for (handle, language, filter) in &output.reset {
             next.pages
-                .retain(|(h, l, _), _| h != handle || l != language);
+                .retain(|(h, l, f, _), _| h != handle || l != language || f != filter);
         }
         for (key, cursor) in &output.pages {
             next.pages.insert(key.clone(), cursor.clone());
@@ -596,7 +668,18 @@ impl Catalog {
         } else {
             addon.url.clone()
         };
-        let url = resource_url(&url, resource, kind, id, extra)?;
+        let mut url = resource_url(&url, resource, kind, id, extra)?;
+        if let Some(extra) = extra {
+            // Catalog extras are already query-string encoded. The SDK reads
+            // the final segment from req.url, so preserve those escapes once.
+            if extra.contains(['/', '?', '#']) {
+                return Err(ApiError::bad(
+                    "Stremio extra must be an encoded path segment",
+                ));
+            }
+            let prefix = url.path().rsplit_once('/').expect("Resource path").0;
+            url.set_path(&format!("{prefix}/{extra}.json"));
+        }
         let response = fetch(http, url, job, false)?;
         let mut value: Value = serde_json::from_slice(&response.body)
             .map_err(|_| upstream("Stremio resource is not JSON"))?;
@@ -607,6 +690,7 @@ impl Catalog {
             if metas.len() > 4096 {
                 return Err(limited("Stremio catalog item limit reached"));
             }
+            metas.retain(|meta| !placeholder(meta));
             for meta in metas {
                 valid_meta(meta, kind, None, language == "en")?;
                 normalize_display(meta);
@@ -624,7 +708,9 @@ impl Catalog {
             }
             normalize_display(&mut value["meta"]);
         }
-        output.cache.push((key, value.clone()));
+        if resource != "catalog" || value["metas"].as_array().is_some_and(|a| !a.is_empty()) {
+            output.cache.push((key, value.clone()));
+        }
         Ok(value)
     }
 
@@ -688,12 +774,14 @@ impl Catalog {
         }
         let diagnostic_start = output.diagnostics.len();
         let value = self.localize_resource(http, request, language, job, output)?;
-        output.cache.push((
+        if resource != "catalog" || value["metas"].as_array().is_some_and(|a| !a.is_empty()) {
+            output.cache.push((
             key,
             json!({"payload": value, "requested_locale": language,
                 "effective_locale": if language == "en" || output.diagnostics[diagnostic_start..].iter().any(|d| d["reason"] == "unverified_language_mapping" || d["reason"] == "localized_identity_mismatch" || d["reason"].as_str().is_some_and(|r| r.starts_with("localized_request_"))) {"en"} else {"zh-CN"},
                 "diagnostics": &output.diagnostics[diagnostic_start..]}),
         ));
+        }
         Ok(value)
     }
 
@@ -718,7 +806,26 @@ impl Catalog {
             Self::diagnostic(output, addon, resource, "unverified_language_mapping", "en");
             return Ok(base);
         }
-        let local = match self.raw(http, request, language, job, output) {
+        // TMDB translates its genre parameter as well as the returned genres.
+        // Stable English option values must reach the matching Chinese category.
+        let local_extra = request.extra.map(|extra| {
+            let mut pairs: Vec<_> = url::form_urlencoded::parse(extra.as_bytes())
+                .into_owned()
+                .collect();
+            if !matches!(request.id, "tmdb.year" | "tmdb.language" | "tmdb.trending") {
+                for (key, value) in &mut pairs {
+                    if key == "genre" {
+                        *value = chinese_genre(value).to_owned();
+                    }
+                }
+            }
+            encode_extra(&pairs)
+        });
+        let local_request = Resource {
+            extra: local_extra.as_deref(),
+            ..request
+        };
+        let local = match self.raw(http, local_request, language, job, output) {
             Ok(value) => value,
             Err(error) if matches!(error.code.as_str(), "CANCELLED" | "RESOURCE_LIMIT") => {
                 return Err(error);
@@ -803,6 +910,8 @@ impl Catalog {
             ));
         }
         let mut output = Output::default();
+        let display_manifests = self.display_manifests(http, language, job, &mut output)?;
+        let display_manifests = &display_manifests;
         let mut success = Value::Array(Vec::new());
         let mut failed = Vec::new();
         let mut first_error = None;
@@ -813,7 +922,14 @@ impl Catalog {
                     .map(|section| {
                         scope.spawn(move || {
                             crate::home::column(job, handle.is_none(), |child| {
-                                self.column(http, section, page, language, child)
+                                self.column(
+                                    http,
+                                    section,
+                                    input,
+                                    language,
+                                    &display_manifests[section.addon],
+                                    child,
+                                )
                             })
                         })
                     })
@@ -873,12 +989,158 @@ impl Catalog {
         Ok(output)
     }
 
+    fn display_manifests(
+        &self,
+        http: &Http,
+        language: &str,
+        job: &Job,
+        output: &mut Output,
+    ) -> Result<Vec<Value>, ApiError> {
+        self.addons
+            .iter()
+            .enumerate()
+            .map(|(index, addon)| {
+                if language == "en" || !addon.localized {
+                    return Ok(addon.manifest.clone());
+                }
+                let key = identity("stremio_facets", &[&addon.key, language]);
+                if let Some(value) = self.state.lock().expect("Stremio state").cache.get(&key) {
+                    return Ok(value.clone());
+                }
+                let result = (|| {
+                    let response = fetch(http, language_url(&addon.url, language)?, job, true)?;
+                    let manifest: Value = serde_json::from_slice(&response.body)
+                        .map_err(|_| upstream("Localized manifest is not JSON"))?;
+                    Contracts::get().validate("StremioManifest", &manifest)?;
+                    if manifest["id"] != addon.manifest["id"] {
+                        return Err(upstream("Localized manifest identity differs"));
+                    }
+                    Ok(manifest)
+                })();
+                match result {
+                    Ok(manifest) => {
+                        output.cache.push((key, manifest.clone()));
+                        Ok(manifest)
+                    }
+                    Err(error) if matches!(error.code.as_str(), "CANCELLED" | "RESOURCE_LIMIT") => {
+                        Err(error)
+                    }
+                    Err(error) => {
+                        Self::diagnostic(
+                            output,
+                            index,
+                            "manifest",
+                            &format!("localized_request_{}", error.code.to_ascii_lowercase()),
+                            "en",
+                        );
+                        Ok(addon.manifest.clone())
+                    }
+                }
+            })
+            .collect()
+    }
+
+    fn catalog_definition<'a>(&'a self, section: &Section, id: &str) -> Option<&'a Value> {
+        self.addons[section.addon].manifest["catalogs"]
+            .as_array()?
+            .iter()
+            .find(|c| {
+                c["type"] == section.kind
+                    && c["id"] == id
+                    && self.sections.iter().any(|s| {
+                        s.addon == section.addon && s.kind == section.kind && s.catalog_id == id
+                    })
+            })
+    }
+
+    fn facets(&self, section: &Section, input: &Value, display: &Value, language: &str) -> Value {
+        let addon = &self.addons[section.addon];
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let mut facets = crate::home::unavailable_filters();
+        for dimension in ["genre", "year", "language"] {
+            let id = if tmdb {
+                match dimension {
+                    "year" => "tmdb.year",
+                    "language" => "tmdb.language",
+                    _ if section.kind == "series" => "tmdb.latest",
+                    _ => "tmdb.top",
+                }
+            } else if dimension == "genre" {
+                &section.catalog_id
+            } else {
+                continue;
+            };
+            let Some(catalog) = self.catalog_definition(section, id) else {
+                continue;
+            };
+            let local = display["catalogs"].as_array().and_then(|catalogs| {
+                catalogs
+                    .iter()
+                    .find(|c| c["id"] == id && c["type"] == section.kind)
+            });
+            let options = genre_options(catalog);
+            let local_options = local.map(genre_options).unwrap_or_default();
+            let values: Vec<_> = options
+                .into_iter()
+                .map(|value| {
+                    let translated =
+                        if tmdb && addon.localized && language == "zh-CN" && dimension == "genre" {
+                            chinese_genre(&value)
+                        } else {
+                            &value
+                        };
+                    let name = if local_options.iter().any(|o| o == translated) {
+                        translated
+                    } else {
+                        &value
+                    };
+                    json!({"value":value,"name":name})
+                })
+                .collect();
+            facets[dimension] = json!({"available":!values.is_empty(),"options":values});
+        }
+        if tmdb && input["filter"]["language"].is_null() && input["filter"]["year"].is_null() {
+            let mut sorts = Vec::new();
+            for (value, id, extra, en, zh) in [
+                (
+                    "trending_day",
+                    "tmdb.trending",
+                    Some("Day"),
+                    "Trending today",
+                    "今日趋势",
+                ),
+                (
+                    "trending_week",
+                    "tmdb.trending",
+                    Some("Week"),
+                    "Trending this week",
+                    "本周趋势",
+                ),
+                ("popular", "tmdb.top", None, "Popular", "热门"),
+                ("latest", "tmdb.latest", None, "Latest", "最新"),
+            ] {
+                if value == "popular" && section.kind == "series" {
+                    continue;
+                }
+                if self
+                    .catalog_definition(section, id)
+                    .is_some_and(|c| extra.is_none_or(|e| genre_options(c).iter().any(|o| o == e)))
+                {
+                    sorts.push(json!({"value":value,"name":if language == "zh-CN" {zh} else {en}}));
+                }
+            }
+            facets["sort"] = json!({"available":!sorts.is_empty(),"options":sorts});
+        }
+        facets
+    }
+
     fn column(
         &self,
         http: &Http,
         section: &Section,
-        page: u64,
+        input: &Value,
         language: &str,
+        display: &Value,
         job: &Job,
     ) -> Result<Output, ApiError> {
         if job.budget.max_concurrency > 1 && job.aggregate_remaining_ms()? == 0 {
@@ -887,61 +1149,197 @@ impl Catalog {
                 "Stremio home reached its cleanup reserve",
             ));
         }
-        let cursor = if page == 1 {
+        let page = input["page"].as_u64().expect("Validated page");
+        let facets = self.facets(section, input, display, language);
+        let mut filter = serde_json::Map::new();
+        if let Some(requested) = input["filter"].as_object() {
+            for (key, value) in requested {
+                let facet = &facets[key];
+                if facet["available"] != true {
+                    return Err(ApiError::bad(&format!(
+                        "Filter dimension {key} is unavailable for this catalog"
+                    )));
+                }
+                let option = facet["options"]
+                    .as_array()
+                    .expect("Facet options")
+                    .iter()
+                    .find(|o| o["value"] == *value || o["name"] == *value)
+                    .ok_or_else(|| {
+                        ApiError::bad(&format!("Filter value is not declared for {key}"))
+                    })?;
+                filter.insert(key.clone(), option["value"].clone());
+            }
+        }
+        let filter_key = Value::Object(filter.clone()).to_string();
+        let selected = |key: &str| filter.get(key).and_then(Value::as_str);
+        let addon = &self.addons[section.addon];
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let mut catalog_id = section.catalog_id.as_str();
+        let mut server_genre = None;
+        let mut server_dimension = "";
+        if tmdb {
+            if let Some(value) = selected("language") {
+                catalog_id = "tmdb.language";
+                server_genre = Some(value);
+                server_dimension = "language";
+            } else if let Some(value) = selected("year") {
+                catalog_id = "tmdb.year";
+                server_genre = Some(value);
+                server_dimension = "year";
+            } else if let Some(sort) = selected("sort") {
+                match sort {
+                    "trending_day" | "trending_week" => {
+                        catalog_id = "tmdb.trending";
+                        server_genre = Some(if sort == "trending_day" {
+                            "Day"
+                        } else {
+                            "Week"
+                        });
+                    }
+                    "popular" => catalog_id = "tmdb.top",
+                    "latest" => catalog_id = "tmdb.latest",
+                    _ => unreachable!("Validated sort"),
+                }
+            } else if selected("genre").is_some() {
+                catalog_id = if section.kind == "series" {
+                    "tmdb.latest"
+                } else {
+                    "tmdb.top"
+                };
+            }
+        }
+        let definition = self
+            .catalog_definition(section, catalog_id)
+            .ok_or_else(|| ApiError::bad("Filter catalog is unavailable"))?;
+        if server_genre.is_none()
+            && let Some(genre) = selected("genre")
+            && genre_options(definition).iter().any(|o| o == genre)
+        {
+            server_genre = Some(genre);
+            server_dimension = "genre";
+        }
+        let skip = definition["extra"]
+            .as_array()
+            .is_some_and(|extras| extras.iter().any(|e| e["name"] == "skip"));
+        let screen_size = definition["pageSize"]
+            .as_u64()
+            .filter(|n| (1..=4096).contains(n))
+            .unwrap_or(20) as usize;
+        let client_filter = selected("genre").is_some() && server_dimension != "genre"
+            || selected("year").is_some() && server_dimension != "year";
+        let mut cursor = if page == 1 {
             Cursor {
                 offset: 0,
                 seen: HashSet::new(),
+                matched: 0,
             }
         } else {
             self.state
                 .lock()
                 .expect("Stremio state")
                 .pages
-                .get(&(section.handle.clone(), language.into(), page))
+                .get(&(
+                    section.handle.clone(),
+                    language.into(),
+                    filter_key.clone(),
+                    page,
+                ))
                 .cloned()
-                .ok_or_else(|| ApiError::bad("Stremio page has no registered offset"))?
+                .ok_or_else(|| {
+                    ApiError::bad("Stremio page has no registered offset for this filter")
+                })?
         };
-        let extra = (page > 1).then(|| format!("skip={}", cursor.offset));
         let mut output = Output::default();
-        let response = self.localized(
-            http,
-            Resource {
+        let mut items = Vec::new();
+        let mut has_next = false;
+        for _ in 0..if client_filter { 5 } else { 1 } {
+            let mut pairs = Vec::new();
+            if let Some(genre) = server_genre {
+                pairs.push(("genre".into(), genre.to_owned()));
+            }
+            if skip && (cursor.offset > 0 || !filter.is_empty()) {
+                pairs.push(("skip".into(), cursor.offset.to_string()));
+            }
+            let extra = (!pairs.is_empty()).then(|| encode_extra(&pairs));
+            let request = Resource {
                 addon: section.addon,
                 operation: "catalog",
                 kind: &section.kind,
-                id: &section.catalog_id,
+                id: catalog_id,
                 extra: extra.as_deref(),
-            },
-            language,
-            job,
-            &mut output,
-        )?;
-        let metas = response["metas"].as_array().expect("Validated metas");
-        let mut seen = cursor.seen;
-        let mut items = Vec::new();
-        for meta in metas {
-            let card = self.card(section.addon, section.addon, meta, &mut output)?;
-            if seen.insert(card["id"].as_str().expect("Content id").into()) {
-                items.push(card);
+            };
+            // Conditions are checked against English base genres before display
+            // overlay. Capture it before localization consumes the child budget,
+            // so a timed-out translation can still publish the English page.
+            let base = self.raw(http, request, "en", job, &mut output)?;
+            let response = if base["metas"].as_array().is_some_and(Vec::is_empty) {
+                base.clone()
+            } else {
+                self.localized(http, request, language, job, &mut output)?
+            };
+            let metas = base["metas"].as_array().expect("Validated metas");
+            let before = cursor.seen.len();
+            for meta in metas {
+                let key = format!("{}:{}", meta["type"], meta["id"]);
+                if !cursor.seen.insert(key) {
+                    continue;
+                }
+                if selected("genre").is_some_and(|genre| {
+                    !meta["genres"]
+                        .as_array()
+                        .is_some_and(|genres| genres.iter().any(|v| v == genre))
+                }) || selected("year").is_some_and(|year| {
+                    meta_year(meta).map(|y| y.to_string()).as_deref() != Some(year)
+                }) {
+                    continue;
+                }
+                let local = response["metas"]
+                    .as_array()
+                    .expect("Localized metas")
+                    .iter()
+                    .find(|m| m["id"] == meta["id"] && m["type"] == meta["type"])
+                    .unwrap_or(meta);
+                items.push(self.card(section.addon, section.addon, local, &mut output)?);
+            }
+            cursor.offset += metas.len();
+            if cursor.seen.len() > 65536 {
+                return Err(limited("Stremio pagination seen-ID limit reached"));
+            }
+            has_next = skip && !metas.is_empty() && cursor.seen.len() > before && page < 10000;
+            if !has_next || items.len() >= screen_size {
+                break;
             }
         }
-        if seen.len() > 65536 {
-            return Err(limited("Stremio pagination seen-ID limit reached"));
-        }
-        let has_next = section.skip && !metas.is_empty() && !items.is_empty() && page < 10000;
+        cursor.matched += items.len();
         if page == 1 {
-            output.reset.push((section.handle.clone(), language.into()));
+            output
+                .reset
+                .push((section.handle.clone(), language.into(), filter_key.clone()));
         }
         if has_next {
             output.pages.push((
-                (section.handle.clone(), language.into(), page + 1),
-                Cursor {
-                    offset: cursor.offset + metas.len(),
-                    seen,
-                },
+                (
+                    section.handle.clone(),
+                    language.into(),
+                    filter_key,
+                    page + 1,
+                ),
+                cursor.clone(),
             ));
         }
-        output.value = json!({"id": section.id, "title": section.title, "section_ref": section.handle, "index": section.index,
+        let title = display["catalogs"]
+            .as_array()
+            .and_then(|catalogs| {
+                catalogs
+                    .iter()
+                    .find(|c| c["id"] == section.catalog_id && c["type"] == section.kind)
+            })
+            .and_then(|c| text(&c["name"]))
+            .unwrap_or(&section.title);
+        output.value = json!({"id": section.id, "title": title, "section_ref": section.handle, "index": section.index,
+            "kind": match section.kind.as_str() {"movie"=>"movie", "series"=>"series", "anime"=>"anime", _=>"other"},
+            "filters":facets, "scanned_count":cursor.offset, "matched_count":cursor.matched,
             "items": items, "has_next": has_next, "next_page": if has_next {Some(page+1)} else {None}, "page": page});
         Ok(output)
     }
@@ -990,19 +1388,27 @@ impl Catalog {
             ],
         );
         let data = json!(["stremio", self.addons[addon].key, meta["type"], meta["id"]]).to_string();
-        let year = meta["releaseInfo"]
-            .as_str()
-            .or_else(|| meta["year"].as_str())
-            .and_then(|s| s.get(..4))
-            .and_then(|s| s.parse::<u64>().ok())
-            .or_else(|| meta["year"].as_u64())
-            .filter(|y| (1000..=9999).contains(y));
+        let year = meta_year(meta);
         let rating = meta["imdbRating"]
             .as_f64()
             .or_else(|| meta["imdbRating"].as_str()?.parse::<f64>().ok())
             .filter(|r| r.is_finite() && (0.0..=10.0).contains(r))
             .map(|r| json!({"value": r, "scale": 10}));
         let poster = self.image(image_addon, text(&meta["poster"]), output)?;
+        let backdrop = self.image(image_addon, text(&meta["background"]), output)?;
+        let plot = text(&meta["description"])
+            .map(plain)
+            .filter(|s| !s.is_empty());
+        let genres = meta["genres"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(text)
+                    .map(plain)
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|a| !a.is_empty());
         let kind = match meta["type"].as_str().expect("Type") {
             "movie" => "movie",
             "series" => "series",
@@ -1011,7 +1417,7 @@ impl Catalog {
         };
         Ok(
             json!({"id": id, "ref": self.media_ref(data), "title": plain(text(&meta["name"]).ok_or_else(|| upstream("Stremio title is missing"))?),
-            "kind": kind, "poster": poster, "year": year, "rating": rating, "status": "unknown", "update_label": null, "provider_type": meta["type"], "episode_count": null}),
+            "kind": kind, "poster": poster, "backdrop":backdrop, "plot":plot, "genres":genres, "year": year, "rating": rating, "status": "unknown", "update_label": null, "provider_type": meta["type"], "episode_count": null}),
         )
     }
 
@@ -1225,6 +1631,12 @@ impl Catalog {
         output: &mut Output,
     ) -> Result<Value, ApiError> {
         let mut details = self.card(owner, served, meta, output)?;
+        // The archived detail DTO exposes genres as tags; only cards gained
+        // the optional genres field in TV2.
+        details
+            .as_object_mut()
+            .expect("Mapped card")
+            .remove("genres");
         details["ref"] = reference.clone();
         details["plot"] = text(&meta["description"])
             .map(plain)

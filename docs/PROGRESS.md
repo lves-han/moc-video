@@ -2590,3 +2590,16 @@
 - 截图走查：已保存并实际查看 `evidence/acceptance/TV1-1c7c4c60e8764c30bdde6da412875430/desktop-960.png`、同目录 `desktop-1200.png`、`desktop-1512.png`；使用受控夹具图片，960为现有首页，1200/1512含MediaRow夹具。实际图片解码/淡入、缺图数量与输入、单行省略、加载透明度/周期、滚动吸附/隐藏滚动条及到头焦点保持通过。
 - 完整 verify：PASS；收据：`evidence/verify/20261109T035324149184.json`；六门exit0，工作流131项（124通过/7平台跳过）、前端171/171、原/实际协议、类型构建、Rust fmt/check/clippy及175通过/3原忽略、契约16/16通过。源码a68f45fbbe57d3adf470126b4b18f0bf3e200c71fd3dc5dbee432674f13ea6b6，protected d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5，generation0；验证后源码未改，git diff --check通过。
 - Remaining：仅macOS arm64实机已验；macos-x86_64/windows-x86_64/linux-x11/wayland及1920宽度NOT RUN（ADR-005/006/057）。原4096MiB进程树RSS采样、jobs2、测试线程1；无集群及硬内存隔离。重跑窄屏比较需保留上述冻结原包与原始证据；不重新生成基线。历史权限/锁屏/样式/Inspector/夹具及动画失败全部保留。待原done、受验完成提交及外层独立review-only；本会话仅处理T0.28，不accept-review、不推送、不改写历史。
+
+
+## T0.29 TV2 目录协议、TMDB筛选与默认来源完成 2026-11-09T05:00:41.196003+00:00
+- 结果：DONE
+- Changed：工作协议增加可选卡片backdrop/plot/genres、栏目kind/五维filters/scanned_count/matched_count、HomeRequest.filter和Settings.metadata_preset_applied；通过原生成器重生成models.ts。Stremio按来源清单校验值，语言→年份→类型路由，趋势Day/Week、热门、最新映射及剧集排序限制明确；其余条件在英文基础数据上过滤、中文按同身份覆盖，最多连续扫描5页、够一屏停止，累计扫描与命中并隔离栏目/语言/规范化筛选游标。No Results（genre/genres）作为空目录，不缓存空页，恢复内容后再次加载可显示。卡片缺失展示字段返回null，背景图沿原网关登记并由前端合并保留。
+- Changed：旧配置缺标记时按既有设置原子存储补一次中文TMDB；已有Stremio及禁用选择保留；默认来源采用可验证语言路径。当前设置工厂携带已应用标记，已初始化用户删除TMDB或删空列表后重启保持删除；32配置无空位时明确RESOURCE_LIMIT。原完整Settings保存/确认与取消语义保持，现有前端队列从已确认对象克隆保留标记。MacCMS本卡五维声明暂禁用并拒绝请求，由T0.31声明实际维度。
+- Why：复用Catalog缓存/来源快照/子预算、现有Home DTO/Host网关和设置事务；未引入依赖或新服务。归档原字段逐项精确相等，仅剥离列名的可选TV2字段及原缓存字段后比较；不放行其他字段漂移。详情继续原tags协议，card专属genres在详情映射去除；先捕获英文基础数据再请求中文覆盖，保持原30秒共享子预算及可用英文回退。
+- 验收 A1：PASS；日志：`evidence/runs/20261109T045513902289-A1/output.log`；断言：exit0，16/16检查、JUnit33/33、17/17必需汇总ID通过。8项原生Host/HTTP行为、32个真实Host首页响应独立跨语言校验；3项前端传参/分页隔离/旧结果拒绝/背景图保留；7项输出oracle反例、8项归档契约漂移拒绝、213结构/89语义/6生命周期检查；原t06共享30秒预算回归1/1通过。稀疏组合每次扫描100条命中2条、分页累计200/4与300/6，其他筛选及语言游标互不串用；中文显示名与请求分类、排序与禁用维度、占位恢复、缺字段null、首页→详情原tags及实际Host删除来源后重启均通过。
+- 在线样本：同次A1通过生产Http获取内置TMDB实际9请求/180条元数据，覆盖电影Drama的skip0/20、中文剧情、年份2024、Mandarin、剧集latest/Drama及趋势Day/Week和电影latest；逐条核对类型/年份与非占位，原始响应、SHA256、URL/时间保存于`evidence/acceptance/TV2-`本次报告所指目录的live-tmdb/。fixture与在线样本分别统计。工具与依赖版本、Cargo锁摘要已在`evidence/acceptance/TV2-all.json`记录；实际rustc/cargo1.98.1、Node26.11.1、Python3.12.14、Vue3.5.44、TypeScript5.9.3。
+- 完整verify：PASS；收据：`evidence/verify/20261109T045541586699.json`；六门exit0。工作流131项（124通过/7平台跳过），归档/工作协议通过，前端174/174、类型及生产构建通过，Rust fmt/check/Clippy通过、183单元通过/3原忽略、t05契约集成16/16通过；零用例doc-test未计作业务通过。定向旧Stremio35/35与旧设置16/16亦真实执行，最终全量再次覆盖。
+- 失败历史：保留首次sysctl权限拒绝exit125及外层原recover/代验、原基线2项失败；在线测试genre/genres字段假设、测试就绪/页号/异常类型、fixture Clippy/格式、详情DTO复用与预算回退、设置工厂迁移语义的全部失败/日志及note。旧断言、资源预算、冻结契约和额度未放宽；未修改范围外t05集成测试。开发受限会话的重任务均按开工交接由外层经原run代验，完整verify由外层直接执行。
+- 基线与资源：source=56b08bfc0248f20a7f1c3d4a3b744289e12ff5df6e69d8a17d97ca169b3bef93，protected=d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5，generation0、会话1。实际process-watchdog、4096MiB进程树RSS采样、jobs2、测试线程1；采样允许瞬时超限，无cgroup硬内存隔离/CPU quota；普通受控HTTP fixture及公开请求，无集群。最终verify后源码保持，git diff --check通过。
+- Remaining：必需macOS arm64已验；macos-x86_64/windows-x86_64/linux-x11/wayland为NOT RUN（ADR-005/006）。本卡目录/设置验收未打开WebView，实际页面样式由T0.30落实。待原task.py done、外层受验完成提交及独立review-only；本会话不accept-review、不推送、不进入后续卡。

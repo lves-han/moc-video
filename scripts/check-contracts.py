@@ -22,10 +22,43 @@ def check(directory):
     bridge, app, fixture = (read(name) for name in ('bridge.openapi.json', 'app.schema.json', 'examples/contract-cases.json'))
     baseline_app = original.read('app.schema.json')
     baseline_fixture = original.read('examples/contract-cases.json')
-    assert bridge == original.read('bridge.openapi.json'), 'Existing Android bridge contract changed'
+    # Only these optional TV2 fields may differ from the archived bridge.
+    nonempty = {'type': 'string', 'minLength': 1, 'maxLength': 128, 'pattern': r'\S'}
+    option = {'type': 'object', 'properties': {'value': nonempty, 'name': nonempty},
+              'required': ['value', 'name'], 'additionalProperties': False}
+    facet = {'type': 'object', 'properties': {'available': {'type': 'boolean'},
+             'options': {'type': 'array', 'items': option}}, 'required': ['available', 'options'], 'additionalProperties': False}
+    dimensions = ['genre', 'year', 'language', 'region', 'sort']
+    count = {'type': 'integer', 'minimum': 0, 'maximum': 9007199254740991}
+    allowed = {
+        'MediaCard': {
+            'backdrop': {'anyOf': [{'$ref': '#/components/schemas/ImageRef'}, {'type': 'null'}]},
+            'plot': {'anyOf': [{'type': 'string', 'minLength': 1, 'pattern': r'\S'}, {'type': 'null'}]},
+            'genres': {'anyOf': [{'type': 'array', 'minItems': 1, 'items': nonempty}, {'type': 'null'}]},
+        },
+        'HomeSection': {
+            'kind': {'type': 'string', 'enum': ['movie', 'series', 'anime', 'other']},
+            'filters': {'type': 'object', 'properties': {key: facet for key in dimensions},
+                        'required': dimensions, 'additionalProperties': False},
+            'scanned_count': count, 'matched_count': count,
+        },
+        'HomeRequest': {'filter': {'anyOf': [
+            {'type': 'object', 'properties': {**{key: nonempty for key in dimensions if key != 'sort'},
+                'sort': {'type': 'string', 'enum': ['trending_day', 'trending_week', 'popular', 'latest']}},
+                'additionalProperties': False}, {'type': 'null'}]}},
+    }
+    archived_bridge = json.loads(json.dumps(bridge))
+    for name, fields in allowed.items():
+        actual = archived_bridge['components']['schemas'][name]
+        for field, definition in fields.items():
+            assert field not in actual['required'], f'TV2 field must remain optional: {name}.{field}'
+            assert actual['properties'].pop(field, None) == definition, f'TV2 field changed: {name}.{field}'
+    assert archived_bridge == original.read('bridge.openapi.json'), 'Existing bridge field or definition changed'
     for name, definition in baseline_app['$defs'].items():
         actual = json.loads(json.dumps(app['$defs'][name]))
         if name == 'Settings':
+            assert 'metadata_preset_applied' not in actual['required'], 'Preset marker must remain optional'
+            assert actual['properties'].pop('metadata_preset_applied', None) == {'type': 'boolean'}, 'Preset marker contract changed'
             assert actual['properties'].pop('media_cache_max_bytes', None) == {'type': 'integer', 'minimum': 0, 'maximum': 9007199254740991, 'default': 268435456}, 'Cache setting contract changed'
         assert actual == definition, f'Existing DTO changed: {name}'
     for key in ('x-command-contracts', 'x-event-contracts', 'x-request-budgets', 'x-stremio-capability-rule'):

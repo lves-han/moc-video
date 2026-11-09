@@ -775,6 +775,14 @@ impl Host {
                 drop(committed);
                 let http = maccms::Http::default();
                 let result = if capability == "home" {
+                    if key["filter"]
+                        .as_object()
+                        .is_some_and(|filter| !filter.is_empty())
+                    {
+                        return Err(ApiError::bad(
+                            "MacCMS filter dimensions are unavailable for this catalog",
+                        ));
+                    }
                     catalog.home(&http, key, job).map(|home| {
                         (
                             home.mapped,
@@ -795,6 +803,15 @@ impl Host {
                     .sources
                     .check_snapshot(&captured, &self.host_epoch, None, false)?;
                 let (mut mapped, sections) = result?;
+                if capability == "home" {
+                    for section in mapped.value["page"]["sections"]
+                        .as_array_mut()
+                        .expect("Home sections")
+                    {
+                        section["kind"] = json!("other");
+                        section["filters"] = crate::home::unavailable_filters();
+                    }
+                }
                 let current = committed
                     .maccms
                     .get_mut(&captured.source_id)

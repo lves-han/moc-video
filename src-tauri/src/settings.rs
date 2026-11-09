@@ -12,8 +12,10 @@ use uuid::Uuid;
 pub const SETTINGS_LIMIT: u64 = 1024 * 1024;
 
 pub fn defaults() -> Value {
+    // Newly constructed settings belong to the current preset generation.
+    // Stored profiles without this marker take the one-time upgrade path.
     json!({"schema_version": 2, "last_source_key": null, "volume": 1.0, "muted": false,
-        "auto_next": true, "window_bounds": null, "source_configs": [], "ui_locale": "en", "color_palette": "lime"})
+        "auto_next": true, "window_bounds": null, "source_configs": [], "ui_locale": "en", "color_palette": "lime", "metadata_preset_applied": true})
 }
 
 fn initial_defaults() -> Value {
@@ -126,14 +128,36 @@ impl SettingsFile {
                         return Err(ApiError::bad("Unsupported settings schema_version"));
                     }
                     validate(&settings)?;
-                    let seed_sources = settings["source_configs"]
-                        .as_array()
-                        .is_some_and(Vec::is_empty);
-                    if seed_sources {
-                        settings["source_configs"] = initial_defaults()["source_configs"].clone();
+                    let apply_preset = settings["metadata_preset_applied"] != true;
+                    if apply_preset {
+                        let configs = settings["source_configs"]
+                            .as_array_mut()
+                            .expect("Validated configs");
+                        if configs.is_empty() {
+                            *configs = initial_defaults()["source_configs"]
+                                .as_array()
+                                .expect("Defaults")
+                                .clone();
+                        } else if !configs.iter().any(|c| c["kind"] == "stremio") {
+                            if configs.len() >= 32 {
+                                return Err(ApiError::new(
+                                    "RESOURCE_LIMIT",
+                                    "TMDB preset requires one free source configuration slot",
+                                ));
+                            }
+                            let mut metadata = initial_defaults()["source_configs"][0].clone();
+                            if configs
+                                .iter()
+                                .any(|c| c["config_id"] == metadata["config_id"])
+                            {
+                                metadata["config_id"] = json!(Uuid::new_v4().to_string());
+                            }
+                            configs.push(metadata);
+                        }
+                        settings["metadata_preset_applied"] = json!(true);
                         validate(&settings)?;
                     }
-                    if migrate || seed_sources {
+                    if migrate || apply_preset {
                         store.save(&settings)?;
                     }
                     Ok(settings)
@@ -228,6 +252,10 @@ mod preset_tests {
             path: folder.path().join("settings.json"),
         };
         let mut original = defaults();
+        original
+            .as_object_mut()
+            .unwrap()
+            .remove("metadata_preset_applied");
         original["volume"] = json!(0.25);
         store.save(&original).unwrap();
         let (_, mut seeded) = SettingsFile::load(store.path.clone()).unwrap();

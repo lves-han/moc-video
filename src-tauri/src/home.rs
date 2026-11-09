@@ -8,6 +8,14 @@ use crate::{
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::Mutex, time::Duration};
 
+pub fn unavailable_filters() -> Value {
+    let mut filters = json!({});
+    for key in ["genre", "year", "language", "region", "sort"] {
+        filters[key] = json!({"available":false,"options":[]});
+    }
+    filters
+}
+
 pub fn operation(kind: &str, input: &Value) -> String {
     if input["page"] == 1 && input["section_ref"].is_null() {
         format!("{kind}_home")

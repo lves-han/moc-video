@@ -5,7 +5,7 @@
     "name": "TMDB 中文",
     "enabled": true,
     "manifest_urls": [
-      "https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json"
+      "https://tmdb.elfhosted.com/zh-CN/manifest.json"
     ]
   },
   {

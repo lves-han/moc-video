@@ -502,7 +502,8 @@ export function mergeHome(current: HomeViewData | null, incoming: HomeViewData, 
   }
   result.page.sections.sort((a, b) => a.index - b.index);
   result.page.failed_sections.sort((a, b) => a.index - b.index);
-  const images = new Set(result.page.sections.flatMap(section => section.items.flatMap(item => item.poster ? [item.poster.resource_id] : [])));
+  const images = new Set(result.page.sections.flatMap(section => section.items.flatMap(item =>
+    [item.poster, item.backdrop].flatMap(image => image ? [image.resource_id] : []))));
   result.images = Object.fromEntries(Object.entries(result.images).filter(([key]) => images.has(key)));
   return result;
 }
@@ -511,6 +512,7 @@ export function mergeHome(current: HomeViewData | null, incoming: HomeViewData, 
 type Ticket = { id: string; source: SourceKey | null; host: string | null; guest: string | null | undefined; locale: string; epoch: number };
 type LocalRequest = { request_id: string | null; phase: "loading" | "ready" | "failed"; error: Bridge_ApiError | null };
 export class AppController {
+  private homeFilters = new Map<string, Bridge_HomeRequest["filter"]>();
   readonly state: AppState;
   readonly sections = reactive<Record<string, LocalRequest>>({});
   readonly diagnostics = reactive<Bridge_ApiError[]>([]);
@@ -719,11 +721,14 @@ export class AppController {
     this.cancelPages();
     this.state.route = clone(route);
   }
-  async loadHome(sectionRef: string | null = null, pageNumber = 1) {
+  async loadHome(sectionRef: string | null = null, pageNumber = 1, filter?: Bridge_HomeRequest["filter"]) {
     const source = this.state.selected_metadata_source;
     requireBinding(source && this.state.runtime.engine_epoch, "Home requires a metadata source and host epoch");
     const full = sectionRef === null && pageNumber === 1;
     requireBinding(sectionRef !== null || full, "Pagination requires a section reference");
+    const selectedFilter = filter === undefined ? this.homeFilters.get(sectionRef ?? "") ?? null : filter;
+    const filterKey = (value: Bridge_HomeRequest["filter"]) => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+    if (pageNumber >= 2) requireBinding(filterKey(selectedFilter) === filterKey(this.homeFilters.get(sectionRef!)), "Pagination requires the current section filter");
     if (full) {
       this.imageAttempts.home.refreshed = false; this.homeImage.error = "";
       for (const scope of [...this.requests.keys()]) if (scope.startsWith("section:")) this.cancel(scope);
@@ -732,7 +737,7 @@ export class AppController {
     }
     const scope = full ? "home" : `section:${sectionRef}`;
     const ticket = this.ticket(scope, source, this.state.home.request_epoch);
-    const input = { ...clone(source), section_ref: sectionRef, page: pageNumber };
+    const input = { ...clone(source), section_ref: sectionRef, page: pageNumber, ...(selectedFilter ? { filter: clone(selectedFilter) } : {}) };
     if (full) { this.state.home.phase = "loading"; this.state.home.request_id = ticket.id; this.state.home.error = null; }
     else this.sections[sectionRef!] = { request_id: ticket.id, phase: "loading", error: null };
     const valid = () => this.current(scope, ticket) && ticket.epoch === this.state.home.request_epoch;
@@ -741,6 +746,8 @@ export class AppController {
       if (!valid()) return;
       const next = mergeHome(this.state.home.data, response, input);
       this.state.home.data = next;
+      if (full) this.homeFilters.clear();
+      for (const section of response.page.sections) this.homeFilters.set(section.section_ref, clone(selectedFilter));
       if (full) {
         this.state.home.phase = next.page.sections.some(section => section.items.length) ? "ready" : next.page.failed_sections.length ? "failed" : "empty";
         this.state.home.error = this.state.home.phase === "failed" ? next.page.failed_sections[0]!.error : null;

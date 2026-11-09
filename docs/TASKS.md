@@ -1681,7 +1681,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 **加载与缺图。** 占位为 `--tv-surface-1`，透明度在.5至.8之间1.2秒循环；图片加载后淡入200ms；缺图时显示居中片名，15/600。
 
 ### T0.29 TV2 目录协议、TMDB筛选与默认来源修复
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.27
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-CATALOG-DTO, TV-FILTER, TV-SOURCE-UPGRADE, REQ-TV2 → A1（覆盖表含精确对应）

@@ -4,6 +4,8 @@
 mod t06;
 #[path = "t07_stremio.rs"]
 mod t07;
+#[path = "tv2.rs"]
+mod tv2;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
