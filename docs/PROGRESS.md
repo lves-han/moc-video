@@ -2603,3 +2603,20 @@
 - 失败历史：保留首次sysctl权限拒绝exit125及外层原recover/代验、原基线2项失败；在线测试genre/genres字段假设、测试就绪/页号/异常类型、fixture Clippy/格式、详情DTO复用与预算回退、设置工厂迁移语义的全部失败/日志及note。旧断言、资源预算、冻结契约和额度未放宽；未修改范围外t05集成测试。开发受限会话的重任务均按开工交接由外层经原run代验，完整verify由外层直接执行。
 - 基线与资源：source=56b08bfc0248f20a7f1c3d4a3b744289e12ff5df6e69d8a17d97ca169b3bef93，protected=d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5，generation0、会话1。实际process-watchdog、4096MiB进程树RSS采样、jobs2、测试线程1；采样允许瞬时超限，无cgroup硬内存隔离/CPU quota；普通受控HTTP fixture及公开请求，无集群。最终verify后源码保持，git diff --check通过。
 - Remaining：必需macOS arm64已验；macos-x86_64/windows-x86_64/linux-x11/wayland为NOT RUN（ADR-005/006）。本卡目录/设置验收未打开WebView，实际页面样式由T0.30落实。待原task.py done、外层受验完成提交及独立review-only；本会话不accept-review、不推送、不进入后续卡。
+
+## T0.30 第一会话调查与最小方案 2026-11-09T05:16:00+00:00
+- 已完成：按用户顺序读取 AGENTS.md，以指定 `.venv/bin/python` 执行 `scripts/task.py check`、`start T0.30`，均退出0；初始工作树干净。当前卡会话1/2、base=ffd3e93e057596aa7d3b6b3ccc36bf24be40f318、protected=d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5。已读 C1..C17、ADR-057/058、T0.28/29交接、App/HomeView/MediaRow、历史仓库、状态控制器、TV1/TV2及真实打包窗口夹具。
+- 现象与证据：T0.30/A1要求内容排进入视口才请求，并拒绝首屏一次请求全部内容排。`src-tauri/src/stremio.rs:896` 在未传section_ref时选出全部已登记栏目，`:927` 起按4列并发逐批执行column并抓取内容；`:532` 的section_ref由宿主epoch和来源栏目身份生成。`protocol/bridge.openapi.json:3208` 的HomeRequest只有来源、section_ref、page和filter且additionalProperties=false；`src/models.ts:118` 的AppSource不提供栏目清单。`src/state.ts:480` 又要求单栏请求的引用先存在于当前首页快照。当前首次获取引用必经全量内容请求，前端IntersectionObserver只能推迟渲染或后续附加请求。
+- 待批准的最小契约方案：HomeRequest追加可选布尔字段 `catalog_only`，缺省/false保持现有行为；true仅接受page=1、section_ref为空且无filter，返回现有HomeViewData结构的栏目描述（id/title/section_ref/index/kind/filters、items=[]、page=1、has_next=false、next_page=null、计数0），不请求catalog内容、不登记图片、不推进内容分页游标。仍由宿主生成和验证引用，错误/取消/来源修订及语言世代规则保持。Stremio之外来源应明确拒绝该模式；具体分发校验位置随批准后的最小实现核实。
+- 需外层批准并纳入范围：`protocol/bridge.openapi.json`、`protocol/examples/contract-cases.json`、`src/models.ts`、`src-tauri/src/stremio.rs`、必要的来源分发校验文件和 `scripts/check-contracts.py`；冻结的TASKS范围及C17需相应修订，并追加新ADR、独立文档复审CLEAR和明确授权的rebaseline。保留原A1、全部16项cases、资源与会话上限。此次只提出方案，尚未修改这些文件或写入用户决定。
+- 页面最小方案：复用MediaRow、Icon、现有theme和历史仓库；Hero组件承载8秒交叉淡入/推镜/暂停/视差；HomeView以栏目描述规划指定类型、年份及语言内容排，按视口调用现有单栏筛选；BrowseView和FilterBar复用同一单栏能力，URL承载单选条件，按页面键保存分页/筛选/滚动并隔离异步结果；继续观看沿list_history/historyPoster和App原续播入口。不新增依赖。
+- 验证计划：先以真实Host受控fixture断言仅列栏目时catalog请求数0、已有全量行为兼容、非法组合拒绝；单栏首次进入视口才产生对应请求。再按原A1通过真实打包窗口分别接内置TMDB和fixture，逐项检查Hero/历史/不同分类/组合与排序冲突/分页/返回恢复/空态、精确计算样式及960/1200/1512截图；完整A1通过后直接verify.py all，随后done和受验提交。当前A1、构建、测试、完整verify均NOT RUN。
+
+## T0.30 首次按视口请求所需接口缺失与范围阻塞 2026-11-09T05:16:15+00:00
+- 结果：BLOCKED
+- 事实：上条调查已定位首次请求全部栏目内容与A1懒加载要求的直接冲突；缺少仅取宿主已登记栏目描述的API。当前HomeRequest拒绝额外字段，Rust实现及协议、生成模型、契约检查均在本卡冻结范围之外。已通过本聊天工具向用户提出最小catalog_only方案及保持冻结范围的选项，截至本条记录尚无用户决定。
+- 已尝试方案：核查原全量/单栏请求、AppSource来源信息、来源栏目引用生成、mergeHome合并约束及现有TV1/TV2测试；仅给当前前端增加观察器仍会在取得引用前抓取全部来源栏目，违反原A1。没有复制宿主引用算法、猜测栏目身份、放宽断言或把延迟渲染记为请求懒加载。产品源码及冻结文件保持原样。
+- 需要用户决定：批准上条最小接口扩展和必要的范围/C17修订，由外层完成追加ADR、独立文档复审CLEAR及明确授权的原rebaseline后恢复本卡；或维持冻结范围并保留本卡阻塞。原验收强度、16项必需ID、资源限制、失败历史及会话计数保持。
+- WIP提交：已先尝试 `git add docs/PROGRESS.md` 及 `git commit --allow-empty -m 'WIP T0.30: 首页懒加载接口前提与最小修订交接'`，均exit128，原因均为创建 `.git/index.lock` 被 Operation not permitted 拒绝；当前权限配置的.git为只读，未产生提交。失败后分别执行原task.py note，保留本条未提交文档供外层Git收尾。
+- 验收 A1：NOT RUN；完整verify：NOT RUN；本次只执行调查、原check/start/show/status/note和交接，未启动构建、测试或真实窗口。macos-arm64本卡行为及其余平台均NOT RUN。未勾选、未done、未改控制脚本或状态、未rebaseline，未写RESOLVED或AUTHORIZED。
+- 交接：当前会话1/2，deadline=2026-11-09T08:13:01.063870+00:00；protected=d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5。后续先处理本卡契约和Git前提，沿原状态及收据恢复T0.30；此次没有重任务或本流程创建的服务需要清理。
