@@ -2571,3 +2571,10 @@
 - WIP与交接：停止前先执行原 task.py handoff，再尝试 `git commit --allow-empty -m 'WIP T0.28: 第二会话环境阻塞交接'`，exit128，`.git/index.lock` 创建仍被 Operation not permitted 拒绝，未生成提交；失败已 note。当前只追加本条文档，产品源码保持原样，Git收尾需要外层已有写入能力。
 - 验收 A1：NOT RUN；完整 verify：NOT RUN；macos-arm64行为未验证，其他平台及1920宽度NOT RUN。未勾选、未done，未自行RESOLVED、AUTHORIZED、rebaseline或accept-review；保留2/2会话和两次运行失败证据。
 - 下一步/所需条件：具备权限的外层核对新runner/payload身份、session及重锁，经原recover恢复；补齐TV实机校准并提供原执行器所需进程查询及Git写入条件。会话额度已到2/2，接续方式需由外层依原规则处理；本会话不重置额度或另起开发会话。
+
+## T0.28 外层代验与额度授权 2026-11-09
+
+- 结果：RESOLVED
+- 决定：用户本聊天明确授权“调整 0.28 的会话额度，请解决权限问题后继续实现”。本次将本卡会话上限由2调整至3，单次3小时及其他资源限制不变，保留历史与失败记录。
+- 进程条件：外层按身份核对第二次runner和payload及驱动、开发进程均已退出，原 task.py recover 已登记中断并保留 exit125。外层以原 run.py 执行同一环境探测 diag-tv1-outer-environment，exit0，日志 evidence/runs/20261109T025830672918-diag-tv1-outer-environment/output.log。开发会话权限限制仍在，须通过外层代验协作，不在受限会话重复执行重任务或访问 TV；开发者通过 task.py handoff 提出准确 argv 并保持会话、暂停写入，外层执行原 run.py 后回传结果，开发者读回结果并继续。Git 由外层收尾。
+- TV 对照：外层实际观察本机 TV 的左侧半透明侧栏和竖版卡片；焦点比例及动效时长未能精确测量，采用任务卡明确规定的初始 1.08、200ms 和最大倾斜4度作为本卡实现值，保留此测量限制，按任务卡检验实际样式及行为。
