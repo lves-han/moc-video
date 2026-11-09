@@ -75,7 +75,7 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
   const bins = new Float32Array(analyser.fftSize);
   const spectrum = new Float32Array(analyser.frequencyBinCount);
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
-  const drawing = canvas.getContext("2d");
+  const drawing = canvas.getContext("2d", { colorSpace: "srgb", willReadFrequently: true });
   check(drawing, "Media observation requires a canvas 2D context");
   let reads = 0;
   return {
@@ -374,6 +374,33 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     }
     case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
       framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
+    case "color-diagnostic": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
+      video.loop=true; await playing(current); await delay(200);
+      const rows=[];
+      for(const paused of [false,true]) {
+        if(paused) {video.pause();video.currentTime=.5;await until(()=>!video.seeking,'Diagnostic seek did not settle');}
+        const before=sample(current);
+        for(const settings of [undefined,{colorSpace:'srgb' as const},{colorSpace:'srgb' as const,willReadFrequently:true}]) for(const crop of [false,true]) {
+          const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+          const ctx=canvas.getContext('2d',settings) as CanvasRenderingContext2D;
+          if(crop)ctx.drawImage(video,960,540,1,1,0,0,1,1);else ctx.drawImage(video,0,0,1,1);
+          const pixel=[...ctx.getImageData(0,0,1,1).data];
+          ctx.fillStyle='blue';ctx.fillRect(0,0,1,1);
+          rows.push({paused,settings:settings??'default',crop,pixel,reference:[...ctx.getImageData(0,0,1,1).data],before:before.pixel});
+          canvas.width=canvas.height=0;
+        }
+      }
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>Boolean(video.textTracks[0]?.activeCues?.length),'Diagnostic native cue missing');
+      let colorSpace:unknown=null;
+      if('VideoFrame' in window) {const frame=new VideoFrame(video);colorSpace=frame.colorSpace.toJSON();frame.close();}
+      result={rows,colorSpace,phase:appState.playback.phase,error:appState.playback.error,diagnostic:current.controller.ui.diagnostic,videoRect:video.getBoundingClientRect().toJSON(),sample:sample(current)};
+      break;
+    }
     case "switch": {
       const index = Number(command.payload);
       check(index >= 1 && index <= 51, "Episode index outside fixture");
@@ -430,23 +457,20 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       captions.click(); await until(() => [...video.textTracks].some(track => track.mode === 'showing')
         && appState.playback.subtitle_id === appState.playback.session!.subtitles[0]!.id, 'Official captions on failed');
       const mute = videoJsControl('mute');
-      mute.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
-      await until(() => Boolean(controls.querySelector('media-volume-popover[data-open]')), 'Official volume popup did not open');
       const volumeThumb = videoJsControl('volume').querySelector<HTMLElement>('media-slider-thumb')!;
+      mute.focus();
+      await until(() => videoJsControl('volume').getBoundingClientRect().width >= 96, 'Composed official volume slider did not expand on focus');
       volumeThumb.focus();
       volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
       await until(() => video.volume === 0 && appState.playback.volume === 0, 'Official volume did not reach state');
       volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
       await until(() => video.volume === 1 && appState.playback.volume === 1, 'Official volume did not restore');
-      mute.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
-      const settings = controls.querySelector('media-icon[name=gear]')!.closest<HTMLButtonElement>('button')!;
+      const settings = controls.querySelector<HTMLElement>('media-playback-rate-button')!;
       const rates = controls.querySelector<HTMLElement>('media-playback-rate-radio-group')!;
       check(settings && rates, 'Official playback-rate menu missing');
       for (const rate of [1.5, 1]) {
         settings.click();
-        const content = rates.closest('media-menu-content')!;
-        const trigger = controls.querySelector<HTMLElement>(`media-menu-item[commandfor="${content.id}"]`)!;
-        await until(() => trigger.getClientRects().length > 0, 'Official settings menu did not open'); trigger.click();
+        await until(() => Boolean(rates.closest('media-menu[data-open]')), 'Official playback-rate menu did not open');
         const item = rates.querySelector<HTMLElement>(`media-menu-radio-item[data-rate="${rate}"]`)!;
         await until(() => Boolean(item?.getClientRects().length), 'Official playback-rate option did not open'); item.click();
         await until(() => video.playbackRate === rate && appState.playback.speed === rate, 'Official playback-rate did not reach media/state');
@@ -562,7 +586,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       const core = window.__TAURI__!.core;
       const observe = (event: Event) => {
         const image = event.target;
-        if (!(image instanceof HTMLImageElement) || !image.matches(".playback-title img")) return;
+        if (!(image instanceof HTMLImageElement) || !image.matches(".playback-backdrop")) return;
         const owner = appState.details.data;
         const ownerId = owner?.details.poster?.resource_id;
         events.push({ type: event.type, trusted: event.isTrusted, resource_id: new URL(image.currentSrc || image.src).pathname.split("/").at(-1),
@@ -592,7 +616,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
         return response;
       } };
       try {
-        check(appState.details.data === null && !current.container.querySelector(".playback-title img"), "Poster was already published/cached by the formal view");
+        check(appState.details.data === null && !current.container.querySelector(".playback-backdrop"), "Poster was already published/cached by the formal view");
         evidence.before = await current.rpc({ operation: "observe" }); stages.push("before-eviction");
         await current.rpc({ operation: "evict-images" }); stages.push("4096-lru-evicted");
         const response = await fetch(access.url, { cache: "no-store", signal: abort.signal });
@@ -604,7 +628,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
         await until(() => appState.details.data !== dto || Boolean(current.controller.ui.imageError), "Image error did not query/refresh its DTO", Math.min(20000, deadline - performance.now()));
         stages.push("dto-recovery-finished"); await nextTick();
         await until(() => events.some(event => event.type === "load" && event.trusted === true && event.original_dto === false), "Refreshed image did not emit native load", Math.min(20000, deadline - performance.now()));
-        const image = current.container.querySelector<HTMLImageElement>(".playback-title img");
+        const image = current.container.querySelector<HTMLImageElement>(".playback-backdrop");
         check(image, "Refreshed image element is missing"); await image.decode();
         stages.push("refreshed-image-decoded");
         evidence.after = await current.rpc({ operation: "observe" });

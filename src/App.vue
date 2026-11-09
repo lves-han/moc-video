@@ -322,18 +322,9 @@ function continueHistory(entry: HistoryEntry) {
 }
 function onEnded(context: PlaybackContext, epoch: number) {
   if (epoch !== appState.playback.playback_epoch) return;
-  const saved = flushHistory(true);
+  void flushHistory(true);
   latestHistory = null;
-  // Only a real EOS of the current session reaches here, so errors and manual stops keep the episode.
-  if (native && appState.settings.auto_next) {
-    const next = appController.nextVideo(context.metadata_video_id);
-    if (next) void saved.then(() => playEpisode(next));
-  }
-  if (!native && appState.settings.auto_next) {
-    const film = baseFilms.find(film => film.id === context.metadata_ref.identity.meta_id);
-    const episode = Number(context.metadata_video_id.split(":").at(-1));
-    if (film && episode < film.episodes) location.hash = `#/watch/${film.id}/${episode + 1}`;
-  }
+  // PlaybackView owns the cancellable EOS countdown; playEpisode saves before rematching.
 }
 // load/stop reset position with the epoch, so the old episode's last snapshot is kept to commit on switch.
 let latestHistory: HistoryEntry | null = null;
@@ -404,13 +395,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="formalPlayback" class="playback-preferences">
+  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @seek="flushHistory()" @update:auto-next="autoNext = $event">
+  <template #preferences><div class="playback-preferences">
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
     <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
     <select class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
-  </div>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @seek="flushHistory()" @update:auto-next="autoNext = $event" />
+  </div></template>
+  </PlaybackView>
   <template v-else>
   <a class="skip-link" href="#main-content" @click.prevent="focusMain">{{
     t("Skip to content")

@@ -53,6 +53,31 @@ test("T12 unknown duration is null, seeking fails explicitly, later metadata ena
   await f.controller.stop();
 });
 
+test("TV6 initial zero resume can pause without a redundant seek aborting native play", async () => {
+  const f = fixture(); await f.controller.load(context());
+  let position = f.video.currentTime, seekInterruptedStart = false;
+  const pending = deferred<void>();
+  // Model the recorded WK sequence: assigning the current time to itself
+  // starts a seek, leaves play pending, and pause then rejects it with AbortError.
+  Object.defineProperty(f.video, "currentTime", { configurable: true,
+    get: () => position, set: value => { seekInterruptedStart ||= value === position; position = value; } });
+  f.setPlay(async () => {
+    f.video.paused = false;
+    if (seekInterruptedStart) return pending.promise;
+    f.video.dispatchEvent(new Event("playing"));
+  });
+  try {
+    f.ready(); await flush();
+    f.controller.pause();
+    if (seekInterruptedStart) pending.reject(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
+    await flush();
+    assert.equal(f.video.currentTime, 0);
+    assert.equal(f.video.paused, true);
+    assert.equal(f.root.playback.phase, "paused");
+    assert.equal(f.root.playback.error, null);
+  } finally { await f.controller.stop(); }
+});
+
 test("T12 position events coalesce to at most one update every 250ms", async () => {
   const f = fixture(); await f.controller.load(context()); f.ready(); await flush();
   f.video.currentTime = 1; f.video.dispatchEvent(new Event("timeupdate"));

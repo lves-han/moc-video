@@ -111,11 +111,13 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
         check(shadow.querySelector(`media-tooltip[trigger="${button.id}"]`), 'Official hover tooltip missing');
         return { action, icon: true, tooltip: label, accessible: true, width: button.getBoundingClientRect().width };
       });
+      one<HTMLButtonElement>('[data-player-tray]')!.click(); await nextTick();
       for (const action of ['next', 'episodes']) {
         const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
         check(button && button.title && button.querySelector('svg'), 'Business control missing');
         iconButtons.push({ action, icon: true, tooltip: button.title, accessible: Boolean(button.getAttribute('aria-label')), width: button.getBoundingClientRect().width });
       }
+      one<HTMLButtonElement>('.playback-tray-close')!.click(); await nextTick();
       const playButton = videoJsControl('play');
       playButton.focus(); check(shadow.activeElement === playButton, 'Official button cannot receive keyboard focus');
       playButton.click(); await until(() => !video.paused && playButton.getAttribute('data-paused') === null, 'Official play did not update');

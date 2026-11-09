@@ -1,8 +1,40 @@
 // Official Video.js controls and media. The only custom feature bridges desktop-window fullscreen.
 import { createPlayer as createVideoJsPlayer } from '@videojs/html';
 import { videoFeatures } from '@videojs/html/video';
-import { definePlayerFeature, fullscreenFeature, timeFeature } from '@videojs/core/dom';
-import '@videojs/html/video/compat-skin';
+import { controlsFeature, definePlayerFeature, fullscreenFeature, timeFeature } from '@videojs/core/dom';
+import '@videojs/html/ui/container';
+import '@videojs/html/ui/controls';
+import '@videojs/html/ui/controls-content';
+import '@videojs/html/ui/play-button';
+import '@videojs/html/ui/seek-button';
+import '@videojs/html/ui/time-slider';
+import '@videojs/html/ui/slider-track';
+import '@videojs/html/ui/slider-buffer';
+import '@videojs/html/ui/slider-fill';
+import '@videojs/html/ui/slider-thumb';
+import '@videojs/html/ui/slider-preview';
+import '@videojs/html/ui/slider-value';
+import '@videojs/html/ui/time';
+import '@videojs/html/ui/mute-button';
+import '@videojs/html/ui/volume-slider';
+import '@videojs/html/ui/playback-rate-button';
+import '@videojs/html/ui/fullscreen-button';
+import '@videojs/html/ui/captions-button';
+import '@videojs/html/ui/captions-radio-group';
+import '@videojs/html/ui/audio-track-radio-group';
+import '@videojs/html/ui/playback-rate-radio-group';
+import '@videojs/html/ui/menu';
+import '@videojs/html/ui/menu-content';
+import '@videojs/html/ui/menu-radio-item';
+import '@videojs/html/ui/buffering-indicator';
+import '@videojs/html/ui/hotkey';
+import '@videojs/html/ui/gesture';
+import '@videojs/html/ui/status-announcer';
+import '@videojs/html/icons/element/compat';
+import '@videojs/html/ui/tooltip';
+import '@videojs/html/ui/tooltip-label';
+import '@videojs/html/ui/tooltip-group';
+import '@videojs/html/i18n';
 import '@videojs/html/i18n/locales/zh-CN/register';
 import { nativeInvoke } from './player.ts';
 
@@ -20,6 +52,30 @@ const coalescedTime: typeof timeFeature = {
       }
       context.set(update);
     } });
+  },
+};
+
+// 10.3.0 fixes the official idle delay at 2s. A one-second activity lock
+// extends it to the product's 3s while retaining menu/drag/touch ownership.
+const immersiveControls: typeof controlsFeature = {
+  ...controlsFeature,
+  attach(context) {
+    const cleanup = controlsFeature.attach!(context);
+    const { target, signal, get } = context;
+    let release: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const activity = (event?: Event) => {
+      if (event instanceof PointerEvent && event.pointerType === 'touch') return;
+      clearTimeout(timer);
+      release ??= get().requestControlsLock();
+      timer = setTimeout(() => { release?.(); release = undefined; }, 1000);
+    };
+    for (const type of ['pointermove', 'pointerup', 'keydown', 'keyup', 'focusin']) {
+      target.container?.addEventListener(type, activity, { signal });
+    }
+    signal.addEventListener('abort', () => { clearTimeout(timer); release?.(); }, { once: true });
+    activity();
+    return cleanup;
   },
 };
 
@@ -59,6 +115,7 @@ const desktopFullscreen: typeof fullscreenFeature = definePlayerFeature({
 });
 const { PlayerElement } = createVideoJsPlayer({
   features: videoFeatures.map(feature => feature === timeFeature ? coalescedTime
+    : feature === controlsFeature ? immersiveControls
     : feature === fullscreenFeature && window.__TAURI__ ? desktopFullscreen : feature) as typeof videoFeatures,
 });
 if (!customElements.get('video-player')) customElements.define('video-player', PlayerElement);

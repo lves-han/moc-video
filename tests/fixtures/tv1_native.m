@@ -47,7 +47,7 @@ int main(int argc, const char **argv) {
             } else if ([action isEqual:@"key"]) {
                 if (argc != 4) return 2;
                 int code = atoi(argv[3]);
-                if (code != 123 && code != 124 && code != 125 && code != 126 && code != 53 && code != 48 && code != 36) return 2;
+                if (code != 123 && code != 124 && code != 125 && code != 126 && code != 53 && code != 48 && code != 36 && code != 49 && code != 3 && code != 46) return 2;
                 for (int down=1; down>=0; down--) {
                     CGEventRef event = CGEventCreateKeyboardEvent(NULL, code, down);
                     CGEventPostToPid(pid, event); CFRelease(event); usleep(100000);

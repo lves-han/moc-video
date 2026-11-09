@@ -25,7 +25,7 @@ function fixture() {
       if (name === '@videojs/html/video') return { videoFeatures: [time, fullscreen, other] };
       if (name === '@videojs/core/dom') return { timeFeature: time, fullscreenFeature: fullscreen, definePlayerFeature: (value: any) => value };
       if (name === './player.ts') return { nativeInvoke() { throw new Error('Unexpected native action'); } };
-      if (name.includes('/skin') || name.includes('/compat-skin') || name.includes('/register')) return {};
+      if (name.startsWith('@videojs/html/ui/') || name.startsWith('@videojs/html/icons/') || name === '@videojs/html/i18n' || name.includes('/register')) return {};
       throw new Error(`Unexpected dependency: ${name}`);
     },
   });

@@ -88,18 +88,19 @@ def frontend(run):
     return run.observed["frontend_tests"]
 
 
-def owned_media(run, folder):
+def owned_media(run, folder, *, seconds=2):
     for name, color, frequency in (("a", "red", 440), ("b", "blue", 880)):
         run.command(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"color=c={color}:size=1920x1080:rate=30",
-                     "-f", "lavfi", "-i", f"sine=frequency={frequency}:sample_rate=48000", "-t", "2", "-c:v", "libx264", "-preset", "ultrafast",
-                     "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-movflags", "+faststart", str(folder / f"{name}.mp4")], timeout=120)
+                     "-f", "lavfi", "-i", f"sine=frequency={frequency}:sample_rate=48000", "-t", str(seconds), "-c:v", "libx264", "-preset", "ultrafast",
+                     "-pix_fmt", "yuv420p",
+                     "-g", "30", "-c:a", "aac", "-movflags", "+faststart", str(folder / f"{name}.mp4")], timeout=120)
     run.command(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(folder / "a.mp4"), "-map", "0", "-c", "copy", "-f", "hls",
                  "-hls_time", "1", "-hls_list_size", "0", "-hls_segment_filename", str(folder / "seg-%d.ts"), str(folder / "index.m3u8")], timeout=120)
     inventory = []
     for path in sorted(folder.iterdir()):
         inventory.append(dict(name=path.name, bytes=path.stat().st_size, sha256=file_hash(path)))
     require(len(inventory) >= 5, "own H264/AAC/HLS inventory incomplete")
-    run.observed["media"] = dict(license="CC0-1.0; generated solid color and sine", width=1920, height=1080, fps=30, seconds=2,
+    run.observed["media"] = dict(license="CC0-1.0; generated solid color and sine", width=1920, height=1080, fps=30, seconds=seconds,
                                 frequencies_hz=[440, 880], files=inventory)
 
 
@@ -433,7 +434,7 @@ def diagnose_rss_failure(run, session, bridge):
             break
 
 
-def webview(run, *, check_security=False, after_start=None, build=True):
+def webview(run, *, check_security=False, after_start=None, build=True, before_identity=None):
     run.observed["gui_session"] = t01.native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     t01.check_media()
@@ -452,6 +453,8 @@ def webview(run, *, check_security=False, after_start=None, build=True):
             with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                 session = t01.NativeSession(run, fixture, executable, 1)
                 session.wait(0, 30)
+                if before_identity is not None:
+                    before_identity(session)
                 if check_security:
                     run.observed["webview_security"] = session.command("security")
                 identity = session.command("identity")
