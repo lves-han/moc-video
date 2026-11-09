@@ -518,6 +518,13 @@ impl Host {
             }
             // Committed history must report its result, whatever arrives after the write.
             "list_history" => return committed.history.list(),
+            "list_watchlist" => return committed.history.list_watchlist(),
+            "add_watchlist" => return committed.history.add_watchlist(input),
+            "remove_watchlist" => {
+                return committed
+                    .history
+                    .remove_watchlist(input["content_id"].as_str().expect("Content ID"));
+            }
             "save_history" => return save_history(&mut committed, input),
             "remove_history" => {
                 return committed.history.remove(

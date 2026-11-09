@@ -921,7 +921,24 @@ export class AppController {
       const provider = this.state.sources.data?.providers.find(source => source.id === ref.source_id);
       requireBinding(provider && (provider.kind === 'stremio' || provider.kind === 'maccms' && sameMacCmsSource(this.state, ref)
         && response.metadata_ref.identity.namespace === 'maccms') && provider.origin.config_id === response.metadata_ref.identity.config_id, "Details metadata configuration differs");
-      target.data = clone(response); target.phase = "ready";
+      const next = clone(response);
+      // Existing JSON providers have no recommendation endpoint. Reuse already
+      // loaded titles of the same kind/genre from this source and revision.
+      if (!next.details.related.length) {
+        const catalogs = [this.state.home.data, ...Object.values(this.rows).map(row => row.data)]
+          .filter((catalog): catalog is HomeViewData => !!catalog && sameSource(catalog.page, ref));
+        const related = new Map<string, import('./models').Bridge_MediaCard>();
+        for (const catalog of catalogs) for (const section of catalog.page.sections) for (const card of section.items) {
+          if (card.id !== next.details.id && card.kind === next.details.kind && sameSource(card.ref, ref)
+            && (!next.details.tags.length || (card.genres ?? []).some(genre => next.details.tags.includes(genre)))) {
+            related.set(card.id, card);
+            const image = card.poster?.resource_id;
+            if (image && catalog.images[image]) next.images[image] = clone(catalog.images[image]);
+          }
+        }
+        next.details.related = [...related.values()].slice(0, 12);
+      }
+      target.data = next; target.phase = "ready";
     } catch (error) { if (this.current("details", ticket)) { target.phase = "failed"; target.error = failure(error); } }
     finally { if (this.requests.get("details") === ticket) { this.requests.delete("details"); target.request_id = null; } }
   }

@@ -12,6 +12,7 @@ from referencing import Registry, Resource
 ROOT = Path(__file__).resolve().parents[1]
 HISTORY = {'list_history', 'save_history', 'remove_history', 'clear_history'}
 CACHE = {'get_media_cache', 'clear_media_cache'}
+WATCHLIST = {'list_watchlist', 'add_watchlist', 'remove_watchlist'}
 
 
 def check(directory):
@@ -66,7 +67,7 @@ def check(directory):
             assert app[key][name] == definition, f'Existing {key} changed: {name}'
     commands = app['x-command-contracts']
     additions = set(commands) - set(baseline_app['x-command-contracts'])
-    assert additions == HISTORY | CACHE, 'History and media cache commands must have their complete contracts'
+    assert additions == HISTORY | CACHE | WATCHLIST, 'History, media cache and watchlist commands must have their complete contracts'
     if (ROOT / 'src-tauri/src/history.rs').exists():
         assert HISTORY <= additions, 'Native history requires all four IPC contracts'
     for command in CACHE:

@@ -38,14 +38,17 @@ export function entryFromRecord(record: WatchHistoryRecord): HistoryEntry {
     duration_ms: record.duration_ms, completed: record.completed, updated_at: record.updated_at, record };
 }
 
-// Rebuild the metadata reference from durable identity; image access stays in memory.
-export async function historyPoster(record: WatchHistoryRecord, sources: AppSource[], call: Api["call"]): Promise<string | null> {
-  const identity = record.metadata_identity;
-  const direct = identity.namespace === 'maccms';
-  const source = sources.find(item => item.kind === (direct ? 'maccms' : 'stremio') && item.runtime_status === "ready" && item.origin.config_id === identity.config_id);
-  if (!source) return null;
-  const data = await call("get_details", { ref: { source_id: source.id, source_revision: source.source_revision,
-    data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) } });
+// Rebuild references from durable identity; image access stays in memory.
+export function metadataReference(record: Pick<WatchHistoryRecord, 'metadata_identity'>, sources: AppSource[]) {
+  const identity = record.metadata_identity, direct = identity.namespace === 'maccms';
+  const source = sources.find(item => item.kind === (direct ? 'maccms' : 'stremio') && item.runtime_status === 'ready' && item.origin.config_id === identity.config_id);
+  return source ? { source_id: source.id, source_revision: source.source_revision,
+    data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ['stremio', identity.addon_key, identity.type, identity.meta_id]) } : null;
+}
+export async function historyPoster(record: Pick<WatchHistoryRecord, 'metadata_identity' | 'content_id'>, sources: AppSource[], call: Api['call']): Promise<string | null> {
+  const ref = metadataReference(record, sources);
+  if (!ref) return null;
+  const data = await call('get_details', { ref });
   if (data.details.id !== record.content_id || !data.details.poster) return null;
   return data.images[data.details.poster.resource_id]?.url ?? null;
 }

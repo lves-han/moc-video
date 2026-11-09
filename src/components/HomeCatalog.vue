@@ -5,6 +5,7 @@ import CatalogRow from './CatalogRow.vue';
 import FilterBar from './FilterBar.vue';
 import MediaRow from './MediaRow.vue';
 import Icon from './Icon.vue';
+import WatchlistRow from './WatchlistRow.vue';
 import { appController as app, appState as state, type HomeFilter } from '../state';
 import { historyRepository, historyPoster } from '../data/history';
 import type { HistoryEntry } from '../data/history-model';
@@ -107,6 +108,7 @@ onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => 
     </div>
     <div v-else class="home-content-rows">
       <section v-if="!category && (history.length || historyError)" class="continue-watching home-section"><h2>{{ word('继续观看', 'Continue watching') }}</h2><p v-if="historyError" role="alert">{{ historyError }} <button class="glass-pill" @click="loadHistory">{{ t('Retry') }}</button></p><div class="continue-track" data-focus-row><article v-for="entry in history" :key="entry.content_id" class="continue-card"><button class="continue-poster" :aria-label="entry.title" @click="emit('resume', entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]" alt="" /><span class="continue-episode">{{ word(`第 ${entry.episode} 集`, `Episode ${entry.episode}`) }}</span><span class="continue-play"><Icon name="play" :size="28" /></span><span class="continue-progress"><span :style="{ width: `${Math.min(100, entry.position_ms / (entry.duration_ms || 1) * 100)}%` }" /></span></button><p>{{ entry.title }}</p><p class="continue-remaining">{{ entry.duration_ms ? word(`剩 ${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} 分钟`, `${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} min left`) : word('继续观看', 'Continue watching') }}</p></article></div></section>
+      <WatchlistRow v-if="!category" @open="emit('open', $event)" />
       <CatalogRow v-for="row in rows" :key="app.rowKey(row.section.section_ref, row.filter)" :title="row.title" :section-ref="row.section.section_ref" :filter="row.filter" :href="href(row.category, row.section.section_ref, row.filter)" @open="emit('open', $event)" />
       <p v-if="category && !rows.length && state.home.phase === 'ready'" class="catalog-empty">{{ word('当前来源未提供此分类', 'This category is unavailable from this source') }}</p>
     </div>

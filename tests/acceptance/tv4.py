@@ -120,6 +120,14 @@ def windows(run):
             bridge = t14.Bridge(run, folder, media); bridge.wait(folder / "ready.json", timeout=180)
             with t01.Fixture(t01.MEDIA, invoke=bridge.invoke) as fixture:
                 session = t01.NativeSession(run, fixture, executable, 1); session.wait(0, 30); session.command("identity")
+                regression = session.command("tv4", action="filter-pagination", timeout=180); run.observed["filter_pagination"] = regression
+                case(run, "TV-MACCMS-CAT", "client-filter", "a failed new-filter first page closes old pagination; explicit retry starts page one and replaces old results", lambda: require(
+                    regression["before"] == dict(count=5, more=True) and regression["failed"]["message"]
+                    and not regression["failed"]["more_enabled"] and regression["continued"]["calls"] == []
+                    and regression["continued"]["alert"] and regression["retried"]["count"] == 0 and not regression["retried"]["alert"]
+                    and len(regression["retried"]["calls"]) == 1 and regression["retried"]["calls"][0]["page"] == 1
+                    and regression["retried"]["calls"][0]["filter"] == dict(year="1900") and not regression["errors"],
+                    "new-filter first-page failure retained old pagination or skipped its first-page retry: " + json.dumps(regression, ensure_ascii=False)))
                 layouts, screenshots = [], []
                 for width in [960, 1200, 1512]:
                     session.command("layout", value=width); row = session.command("tv4", action="styles", timeout=90); layouts.append(row)
@@ -165,7 +173,9 @@ def windows(run):
 
 def main():
     parser = argparse.ArgumentParser(); parser.add_argument("--suite", choices=["all", "native", "window"], required=True)
+    parser.add_argument("--workflow-card", choices=["T0.31", "T0.32"], default="T0.31", help="resource receipt owner for the authorized T0.32 diagnostic rerun")
     parser.add_argument("--report", type=Path, required=True); parser.add_argument("--junit", type=Path, required=True); args = parser.parse_args()
+    Acceptance.CARD = args.workflow_card
     run = Acceptance(args.report, args.junit)
     if args.suite != 'all': run.REQUIREMENTS = ['REQ-TV4']
     if run.case("resource-ownership", ["REQ-TV4"], "original runner, actual macOS arm64 and approved RSS budget", lambda: resources(run, card=run.CARD)):

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted, onBeforeUnmount } from "vue";
 import HomeCatalog from '../components/HomeCatalog.vue';
+import WatchlistRow from '../components/WatchlistRow.vue';
 import type { HistoryEntry } from '../data/history-model';
 import { NAlert, NButton, NEmpty } from "naive-ui";
 import { appState as state, appController as app } from "../state";
@@ -51,6 +52,7 @@ async function refresh() {
   <NAlert v-else-if="app.homeImage.error" class="home-image-error" type="error">{{ app.homeImage.error }}<NButton size="small" @click="app.loadHome()">{{ t('Retry') }}</NButton></NAlert>
   <div v-if="firstLoad" class="film-grid home-grid" role="status" aria-busy="true" :aria-label="t('Loading catalog')"><div v-for="n in 12" :key="n" class="skeleton-card"><div /><span /></div></div>
   <div v-else-if="state.home.phase === 'empty'" class="home-empty"><NEmpty :description="word('该源暂无内容', 'This source has no content')" /><NButton class="home-retry" @click="app.loadHome()">{{ t('Retry') }}</NButton></div>
+  <WatchlistRow @open="emit('open', $event)" />
   <section v-for="row in rows" :key="row.index" class="catalog-section home-section" :data-section-index="row.index">
     <div class="section-heading"><h2>{{ row.title }}</h2></div>
     <NAlert v-if="row.failed || app.sections[row.ref ?? '']?.error" class="home-section-error" type="error" role="alert">{{ app.sections[row.ref ?? '']?.error?.message ?? (row.failed && describeError(row.failed.error)) }}<NButton class="home-section-retry" size="small" :loading="app.sections[row.ref ?? '']?.phase === 'loading'" :disabled="!row.ref" @click="app.loadHome(row.ref)">{{ t('Retry') }}</NButton></NAlert>

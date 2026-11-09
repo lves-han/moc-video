@@ -5,7 +5,7 @@ use rusqlite::{Connection, ErrorCode, params};
 use serde_json::{Value, json};
 use std::{path::PathBuf, time::Duration};
 
-const VERSION: i64 = 1;
+const VERSION: i64 = 2;
 const COLUMNS: &str = "content_id, metadata_config_id, metadata_addon_key, metadata_namespace, metadata_type, metadata_id, canonical_id, video_id, season_number, episode_number, title, kind, poster_cache_key, source_id, source_name, position_ms, duration_ms, completed, updated_at";
 
 pub fn superseded() -> ApiError {
@@ -62,7 +62,10 @@ impl History {
             connection
                 .busy_timeout(Duration::from_millis(200))
                 .map_err(failure)?;
-            migrate(&mut connection)?;
+            migrate(&mut connection).map_err(|mut error| {
+                error.message = format!("History database migration failed: {}", error.message);
+                error
+            })?;
             self.connection = Some(connection);
         }
         Ok(self.connection.as_mut().expect("Opened history"))
@@ -103,6 +106,60 @@ impl History {
             entries.push(row);
         }
         Ok(json!({"entries":entries,"write_sequence":committed}))
+    }
+
+    pub fn list_watchlist(&mut self) -> Result<Value, ApiError> {
+        let mut statement = self
+            .connection()?
+            .prepare(
+                "SELECT content_id, metadata_config_id, metadata_addon_key, metadata_namespace,
+            metadata_type, metadata_id, canonical_id, title, kind, poster_cache_key
+            FROM watchlist ORDER BY rowid DESC",
+            )
+            .map_err(failure)?;
+        let rows = statement.query_map([], |row| Ok(json!({
+            "content_id":row.get::<_, String>(0)?,
+            "metadata_identity":{"config_id":row.get::<_, String>(1)?, "addon_key":row.get::<_, String>(2)?,
+                "namespace":row.get::<_, String>(3)?, "type":row.get::<_, String>(4)?,
+                "meta_id":row.get::<_, String>(5)?, "canonical_id":row.get::<_, String>(6)?},
+            "title":row.get::<_, String>(7)?, "kind":row.get::<_, String>(8)?,
+            "poster_cache_key":row.get::<_, Option<String>>(9)?
+        }))).map_err(failure)?;
+        let mut entries = Vec::new();
+        for row in rows {
+            let row = row.map_err(failure)?;
+            validate_watchlist(&row)?;
+            entries.push(row);
+        }
+        Ok(json!({"entries":entries}))
+    }
+
+    pub fn add_watchlist(&mut self, entry: &Value) -> Result<Value, ApiError> {
+        validate_watchlist(entry)?;
+        let identity = &entry["metadata_identity"];
+        self.connection()?.execute(
+            "INSERT INTO watchlist (content_id, metadata_config_id, metadata_addon_key, metadata_namespace,
+            metadata_type, metadata_id, canonical_id, title, kind, poster_cache_key)
+            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+            ON CONFLICT(content_id) DO UPDATE SET metadata_config_id=excluded.metadata_config_id,
+            metadata_addon_key=excluded.metadata_addon_key, metadata_namespace=excluded.metadata_namespace,
+            metadata_type=excluded.metadata_type, metadata_id=excluded.metadata_id, canonical_id=excluded.canonical_id,
+            title=excluded.title, kind=excluded.kind, poster_cache_key=excluded.poster_cache_key",
+            params![entry["content_id"].as_str(), identity["config_id"].as_str(), identity["addon_key"].as_str(),
+                identity["namespace"].as_str(), identity["type"].as_str(), identity["meta_id"].as_str(),
+                identity["canonical_id"].as_str(), entry["title"].as_str(), entry["kind"].as_str(), entry["poster_cache_key"].as_str()],
+        ).map_err(failure)?;
+        Ok(entry.clone())
+    }
+
+    pub fn remove_watchlist(&mut self, content_id: &str) -> Result<Value, ApiError> {
+        self.connection()?
+            .execute(
+                "DELETE FROM watchlist WHERE content_id = ?1",
+                params![content_id],
+            )
+            .map_err(failure)?;
+        Ok(json!({"ok":true}))
     }
 
     /// True when this call repeats the pending snapshot; a different payload on its sequence is refused.
@@ -199,6 +256,23 @@ impl History {
     }
 }
 
+fn validate_watchlist(entry: &Value) -> Result<(), ApiError> {
+    Contracts::get().validate("WatchlistEntry", entry)?;
+    let identity = &entry["metadata_identity"];
+    let text = |key: &str| identity[key].as_str().unwrap_or("");
+    if entry["content_id"]
+        != crate::source_dispatch::identity(
+            "metadata",
+            &[text("namespace"), text("type"), text("canonical_id")],
+        )
+    {
+        return Err(ApiError::bad(
+            "Watchlist content ID differs from its metadata identity",
+        ));
+    }
+    Ok(())
+}
+
 /// One transaction per version: a failed migration leaves the previous file contents.
 fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
     let version: i64 = connection
@@ -213,9 +287,10 @@ fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
         return Ok(());
     }
     let transaction = connection.transaction().map_err(failure)?;
-    transaction
-        .execute_batch(
-            "CREATE TABLE watch_history (
+    if version == 0 {
+        transaction
+            .execute_batch(
+                "CREATE TABLE watch_history (
                 content_id TEXT PRIMARY KEY NOT NULL,
                 metadata_config_id TEXT NOT NULL,
                 metadata_addon_key TEXT NOT NULL,
@@ -238,6 +313,19 @@ fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
             );
             CREATE INDEX watch_history_recent ON watch_history (updated_at DESC, content_id);
             PRAGMA user_version = 1;",
+            )
+            .map_err(failure)?;
+    }
+    transaction
+        .execute_batch(
+            "CREATE TABLE watchlist (
+            content_id TEXT PRIMARY KEY NOT NULL,
+            metadata_config_id TEXT NOT NULL, metadata_addon_key TEXT NOT NULL,
+            metadata_namespace TEXT NOT NULL, metadata_type TEXT NOT NULL,
+            metadata_id TEXT NOT NULL, canonical_id TEXT NOT NULL,
+            title TEXT NOT NULL, kind TEXT NOT NULL, poster_cache_key TEXT
+        );
+        PRAGMA user_version = 2;",
         )
         .map_err(failure)?;
     transaction.commit().map_err(failure)

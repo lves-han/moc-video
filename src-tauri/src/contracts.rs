@@ -30,6 +30,9 @@ pub const COMMANDS: &[&str] = &[
     "clear_history",
     "get_media_cache",
     "clear_media_cache",
+    "list_watchlist",
+    "add_watchlist",
+    "remove_watchlist",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

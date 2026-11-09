@@ -9601,6 +9601,305 @@
           "media_cache_max_bytes": 9007199254740992
         }
       }
+    },
+    {
+      "name": "args_list_watchlist",
+      "document": "app",
+      "schema": "Args_list_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {}
+      }
+    },
+    {
+      "name": "Args_list_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Args_list_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "result_list_watchlist",
+      "document": "app",
+      "schema": "Result_list_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "entries": [
+            {
+              "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "metadata_identity": {
+                "config_id": "11111111-1111-4111-8111-111111111111",
+                "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "namespace": "tmdb",
+                "type": "series",
+                "meta_id": "series:1",
+                "canonical_id": "series:1"
+              },
+              "title": "示例",
+              "kind": "series",
+              "poster_cache_key": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Result_list_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Result_list_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "entries": [
+            {
+              "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "metadata_identity": {
+                "config_id": "11111111-1111-4111-8111-111111111111",
+                "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "namespace": "tmdb",
+                "type": "series",
+                "meta_id": "series:1",
+                "canonical_id": "series:1"
+              },
+              "title": "示例",
+              "kind": "series",
+              "poster_cache_key": null
+            }
+          ],
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "args_add_watchlist",
+      "document": "app",
+      "schema": "Args_add_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null
+        }
+      }
+    },
+    {
+      "name": "Args_add_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Args_add_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "result_add_watchlist",
+      "document": "app",
+      "schema": "Result_add_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null
+        }
+      }
+    },
+    {
+      "name": "Result_add_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Result_add_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "args_remove_watchlist",
+      "document": "app",
+      "schema": "Args_remove_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "Args_remove_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Args_remove_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "result_remove_watchlist",
+      "document": "app",
+      "schema": "Result_remove_watchlist",
+      "expected_valid": true,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "Result_remove_watchlist_rejects_url",
+      "document": "app",
+      "schema": "Result_remove_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true,
+          "url": "https://example.invalid/private"
+        }
+      }
+    },
+    {
+      "name": "watchlist_rejects_cap",
+      "document": "app",
+      "schema": "Args_add_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "cap": "transient"
+        }
+      }
+    },
+    {
+      "name": "watchlist_rejects_cookie",
+      "document": "app",
+      "schema": "Args_add_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "cookie": "transient"
+        }
+      }
+    },
+    {
+      "name": "watchlist_rejects_session_id",
+      "document": "app",
+      "schema": "Args_add_watchlist",
+      "expected_valid": false,
+      "value": {
+        "request_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "input": {
+          "content_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "metadata_identity": {
+            "config_id": "11111111-1111-4111-8111-111111111111",
+            "addon_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "namespace": "tmdb",
+            "type": "series",
+            "meta_id": "series:1",
+            "canonical_id": "series:1"
+          },
+          "title": "示例",
+          "kind": "series",
+          "poster_cache_key": null,
+          "session_id": "transient"
+        }
+      }
     }
   ],
   "semantic_cases": [

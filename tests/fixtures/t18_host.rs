@@ -69,7 +69,7 @@ fn t18_sqlite_file_columns_index_restart_and_parameter_binding() {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
     let mut statement = connection
         .prepare("PRAGMA table_info(watch_history)")
         .unwrap();

@@ -1,40 +1,84 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { NAlert, NButton, NEmpty, NModal } from "naive-ui";
 import { appState as state, appController as app, metadataVideoId as videoId } from "../state";
+import { api } from "../api";
+import Icon from '../components/Icon.vue';
+import MediaRow from '../components/MediaRow.vue';
 import { locale, t } from "../i18n";
-import type { Bridge_Episode, Bridge_ImageRef, Bridge_MediaCard, Bridge_MediaRef, PlaybackMatchSelection } from "../models";
+import type { Bridge_Episode, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
 
-const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; play: [video: string] }>();
+const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string]; resume: [record: WatchHistoryRecord]; back: [] }>();
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
 const data = computed(() => state.details.data);
 const details = computed(() => data.value?.details ?? null);
 const kindLabel = computed(() => ({ movie: word("电影", "Movie"), series: word("剧集", "Series"), anime: word("动画", "Anime"), other: "" })[details.value?.kind ?? "other"]);
-
-const PLOT_LIMIT = 280;
-const expanded = ref(false);
-const longPlot = computed(() => (details.value?.plot?.length ?? 0) > PLOT_LIMIT);
-const plot = computed(() => !longPlot.value || expanded.value ? details.value?.plot ?? "" : `${details.value!.plot!.slice(0, PLOT_LIMIT)}…`);
-
-const chosenGroup = ref<string | null>(null);
-// App reuses this view between titles; refreshing the same title keeps its state.
-watch(() => details.value?.ref.data, () => { expanded.value = false; chosenGroup.value = null; });
+const expanded = ref(false), chosenGroup = ref<string | null>(null);
+const plotElement = ref<HTMLElement>(), longPlot = ref(false);
+let observer: ResizeObserver | undefined;
+watch(plotElement, element => {
+  observer?.disconnect();
+  if (element) { observer = new ResizeObserver(() => { longPlot.value = element.scrollHeight > element.clientHeight + 1; }); observer.observe(element); }
+});
 const groups = computed(() => details.value?.groups ?? []);
 const group = computed(() => groups.value.find(item => item.id === chosenGroup.value) ?? groups.value[0] ?? null);
 const episodes = computed(() => groups.value.flatMap(item => item.episodes));
 const single = computed(() => episodes.value.length === 1 ? episodes.value[0]! : null);
 const canPlay = (episode: Bridge_Episode) => Boolean(videoId(episode.ref) && state.selected_playback_source && !app.matching.pending && state.details.phase === "ready");
-const label = (episode: Bridge_Episode) => episode.number != null && !episode.label.includes(String(episode.number)) ? `${episode.number}. ${episode.label}` : episode.label;
-
+const label = (episode: Bridge_Episode) => `${episode.number ?? episode.index + 1}. ${episode.title ?? episode.label}`;
+const minutes = (ms: number) => Math.max(0, Math.ceil(ms / 60000));
+const history = ref<WatchHistoryRecord | null>(null), listed = ref(false), watchlistPending = ref(false), savedError = ref('');
+let savedGeneration = 0;
+async function loadSaved() {
+  const current = ++savedGeneration, title = details.value; history.value = null; listed.value = false; savedError.value = '';
+  if (!title) return;
+  try {
+    const [past, watchlist] = await Promise.all([api.call('list_history', {}), api.call('list_watchlist', {})]);
+    if (current !== savedGeneration) return;
+    history.value = past.entries.find(entry => entry.content_id === title.id && JSON.stringify(entry.metadata_identity) === JSON.stringify(data.value?.metadata_ref?.identity))
+      ?? past.entries.find(entry => entry.content_id === title.id) ?? null;
+    listed.value = watchlist.entries.some(entry => entry.content_id === title.id);
+    await nextTick(); if (current === savedGeneration && plotElement.value) longPlot.value = plotElement.value.scrollHeight > plotElement.value.clientHeight + 1;
+  } catch (cause) { if (current === savedGeneration) savedError.value = String(cause); }
+}
+watch([() => details.value?.id, () => state.details.request_epoch, () => state.runtime.engine_epoch], () => {
+  expanded.value = false; chosenGroup.value = null; void loadSaved();
+}, { immediate: true });
+const resumeEpisode = computed(() => history.value && !history.value.completed && history.value.position_ms > 0
+  ? episodes.value.find(episode => videoId(episode.ref) === history.value!.video_id) : undefined);
+const primary = computed(() => resumeEpisode.value ?? single.value ?? group.value?.episodes[0]);
+const primaryLabel = computed(() => {
+  const saved = history.value;
+  if (!resumeEpisode.value || !saved) return t('Play');
+  const episode = saved.episode_number ?? resumeEpisode.value.number ?? resumeEpisode.value.index + 1;
+  const left = saved.duration_ms ? Math.max(0, saved.duration_ms - saved.position_ms) : null;
+  return word(`继续播放 · 第 ${episode} 集${left === null ? '' : ` · 剩 ${minutes(left)} 分钟`}`,
+    `Continue playing · Episode ${episode}${left === null ? '' : ` · ${minutes(left)} min left`}`);
+});
+const progress = (episode: Bridge_Episode | undefined) => episode && history.value?.video_id === videoId(episode.ref) && history.value.duration_ms
+  ? Math.min(100, history.value.position_ms / history.value.duration_ms * 100) : 0;
+function playPrimary() { if (resumeEpisode.value && history.value) emit('resume', history.value); else if (primary.value) emit('play', videoId(primary.value.ref)); }
+async function toggleWatchlist() {
+  const snapshot = data.value, current = savedGeneration;
+  if (!snapshot?.metadata_ref || watchlistPending.value) return;
+  watchlistPending.value = true; savedError.value = '';
+  try {
+    if (listed.value) await api.call('remove_watchlist', { content_id: snapshot.details.id });
+    else await api.call('add_watchlist', { content_id: snapshot.details.id, metadata_identity: snapshot.metadata_ref.identity,
+      title: snapshot.details.title, kind: snapshot.details.kind, poster_cache_key: null });
+    if (current === savedGeneration) listed.value = !listed.value;
+  } catch (cause) { if (current === savedGeneration) savedError.value = String(cause); }
+  finally { watchlistPending.value = false; }
+}
 const broken = reactive(new Set<string>());
-// The epoch recreates <img> after a refreshed DTO, even when its URL is unchanged.
 const image = (reference: Bridge_ImageRef | null | undefined) => {
   const id = reference?.resource_id, access = id ? data.value?.images[id] : undefined, key = `${state.details.request_epoch}:${id}`;
   return id && access && !broken.has(key) ? { id, url: access.url, key } : null;
 };
 function imageFailed(id: string) { broken.add(`${state.details.request_epoch}:${id}`); void app.detailsImageError(id); }
-const relatedPoster = (card: Bridge_MediaCard) => image(card.poster);
-
+// Current providers publish the title; a provider-supplied logo takes precedence when present.
+const logo = computed(() => image((details.value as typeof details.value & { logo?: Bridge_ImageRef })?.logo));
+const backdrop = computed(() => image(details.value?.backdrop) ?? image(details.value?.poster));
 const candidate = computed(() => app.matching.details?.details ?? null);
 async function confirm(selection: PlaybackMatchSelection) {
   const result = app.matching.result;
@@ -44,66 +88,55 @@ async function confirm(selection: PlaybackMatchSelection) {
 }
 function updateMatchingModal(show: boolean) { if (!show) app.invalidatePlayback(); }
 function retry() { if (state.route.name === "details") void app.loadDetails(state.route.ref); }
+onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
 </script>
 
 <template>
-  <a class="details-back" href="#/home">{{ word('返回首页', 'Back to home') }}</a>
+  <div class="tv-details">
+  <a class="details-back" href="#/home" @click.prevent="emit('back')">{{ word('返回', 'Back') }}</a>
   <p v-if="state.details.phase === 'loading' && !details" class="details-loading" role="status" aria-busy="true">{{ t('Loading catalog') }}</p>
   <NAlert v-if="state.details.phase === 'failed'" class="details-failed" type="error">{{ state.details.error?.message }}<NButton class="details-retry" size="small" @click="retry">{{ t('Retry') }}</NButton></NAlert>
   <NAlert v-if="app.detailsImage.error" class="details-image-error" type="error">{{ app.detailsImage.error }}<NButton class="details-retry" size="small" @click="retry">{{ t('Retry') }}</NButton></NAlert>
   <template v-if="details">
-    <section class="details-head">
-      <div class="details-poster">
-        <img v-if="image(details.poster)" :key="image(details.poster)!.key" :src="image(details.poster)!.url" alt="" @error="imageFailed(image(details.poster)!.id)" />
-        <span v-else class="details-poster-missing">{{ details.title }}</span>
-      </div>
+    <section class="details-head" :class="{ 'details-backdrop-fallback': !details.backdrop }">
+      <img v-if="backdrop" :key="backdrop.key" class="details-backdrop" :src="backdrop.url" alt="" @error="imageFailed(backdrop.id)" />
+      <div class="details-bottom-mask" /><div class="details-left-mask" />
       <div class="details-copy">
-        <h1>{{ details.title }}</h1>
-        <p v-if="details.year || kindLabel || details.tags.length" class="details-meta">{{ [details.year, kindLabel, ...details.tags].filter(Boolean).join(' · ') }}</p>
-        <p v-if="plot" class="details-plot">{{ plot }}</p>
-        <NButton v-if="longPlot" class="details-plot-toggle" text :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? word('收起', 'Show less') : word('展开', 'Show more') }}</NButton>
-        <div v-if="single" class="details-actions"><NButton class="details-play" type="primary" :disabled="!canPlay(single)" :loading="app.matching.pending === videoId(single.ref)" @click="emit('play', videoId(single.ref))">{{ t('Play') }}</NButton></div>
+        <img v-if="logo" class="details-logo" :src="logo.url" :alt="details.title" @error="imageFailed(logo.id)" />
+        <h1 v-else>{{ details.title }}</h1>
+        <p class="details-meta"><span v-if="details.rating?.value" class="details-rating">{{ details.rating.value }} ★</span><span v-if="details.year">{{ details.year }}</span><span v-if="details.tags.length || kindLabel">{{ details.tags.join(' / ') || kindLabel }}</span><span v-if="details.duration_ms">{{ minutes(details.duration_ms) }} {{ word('分钟', 'min') }}</span><span v-if="details.regions?.length">{{ details.regions.join(' / ') }}</span></p>
+        <div v-if="details.plot" class="details-synopsis"><p ref="plotElement" class="details-plot">{{ details.plot }}</p><button v-if="longPlot" class="details-plot-toggle" :aria-expanded="expanded" @click="expanded = true">{{ word('更多', 'More') }}</button></div>
+        <div class="details-actions">
+          <NButton v-if="primary" class="details-play" :disabled="!canPlay(primary)" :loading="app.matching.pending === videoId(primary.ref)" @click="playPrimary"><Icon name="play" :size="20" />{{ primaryLabel }}<span v-if="progress(primary)" class="details-play-progress" :style="{ width: `${progress(primary)}%` }" /></NButton>
+          <button class="details-watchlist glass-pill" :disabled="watchlistPending || !data?.metadata_ref" :aria-pressed="listed" :aria-label="listed ? word('移出待播清单', 'Remove from watchlist') : word('加入待播清单', 'Add to watchlist')" @click="toggleWatchlist"><span :key="String(listed)" class="watchlist-symbol">{{ listed ? '✓' : '+' }}</span></button>
+        </div>
         <p v-if="!state.selected_playback_source" role="status">{{ word('请先选择播放源', 'Choose a playback source first') }}</p>
       </div>
     </section>
+    <p v-if="savedError" class="details-saved-error" role="alert">{{ savedError }} <button class="glass-pill" @click="loadSaved">{{ t('Retry') }}</button></p>
     <NAlert v-if="state.playback.error" class="details-play-error" type="error">{{ state.playback.error.message }}</NAlert>
     <p v-if="app.matching.result?.status === 'not_found'" class="details-not-found" role="status">{{ t('No matching playback found') }}</p>
     <NEmpty v-if="!episodes.length" class="details-no-episodes" :description="word('暂无可选剧集', 'No episodes available')" />
-    <section v-else-if="!single" class="details-episodes">
+    <section v-else-if="!single" class="details-episodes details-content">
       <h2>{{ t('Episodes') }}</h2>
-      <div v-if="groups.length > 1" class="details-groups" role="group" :aria-label="t('Episodes')"><NButton v-for="item in groups" :key="item.id" class="details-group" :data-group-id="item.id" :aria-pressed="item.id === group?.id" :type="item.id === group?.id ? 'primary' : 'default'" @click="chosenGroup = item.id">{{ item.title }}</NButton></div>
-      <div class="details-episode-grid"><NButton v-for="episode in group?.episodes ?? []" :key="episode.id" class="details-episode" :data-episode-id="episode.id" :data-video-id="videoId(episode.ref)" :disabled="!canPlay(episode)" :loading="app.matching.pending === videoId(episode.ref)" :title="episode.title ?? episode.label" @click="emit('play', videoId(episode.ref))">{{ label(episode) }}</NButton></div>
+      <div v-if="groups.length > 1" class="details-groups" role="group" :aria-label="t('Episodes')" data-focus-row><button v-for="item in groups" :key="item.id" class="details-group filter-pill" :class="{ selected: item.id === group?.id }" :data-group-id="item.id" :aria-pressed="item.id === group?.id" @click="chosenGroup = item.id">{{ item.title }}</button></div>
+      <div class="details-episode-grid" data-focus-row><button v-for="episode in group?.episodes ?? []" :key="episode.id" class="details-episode" :data-episode-id="episode.id" :data-video-id="videoId(episode.ref)" :disabled="!canPlay(episode)" :aria-busy="app.matching.pending === videoId(episode.ref)" @click="emit('play', videoId(episode.ref))">
+        <span class="details-episode-art"><img v-if="image(episode.poster)" :key="image(episode.poster)!.key" :src="image(episode.poster)!.url" alt="" loading="lazy" @error="imageFailed(image(episode.poster)!.id)" /><template v-else><img v-if="backdrop" class="details-episode-fallback" :src="backdrop.url" alt="" /><span class="details-episode-number">{{ episode.number ?? episode.index + 1 }}</span></template><span v-if="resumeEpisode?.id === episode.id" class="details-watching">{{ word('正在观看', 'Watching') }}</span><span v-if="progress(episode)" class="details-episode-progress"><span :style="{ width: `${progress(episode)}%` }" /></span></span>
+        <strong>{{ label(episode) }}</strong><span v-if="episode.plot" class="details-episode-plot">{{ episode.plot }}</span><span v-if="episode.duration_ms" class="details-episode-duration">{{ minutes(episode.duration_ms) }} {{ word('分钟', 'min') }}</span>
+      </button></div>
     </section>
-    <section v-if="details.related.length" class="details-related">
-      <h2>{{ word('相关内容', 'Related') }}</h2>
-      <div class="details-related-grid"><a v-for="card in details.related" :key="card.id" class="details-related-card" :href="`#/details/${encodeURIComponent(JSON.stringify(card.ref))}`" @click.prevent="emit('open', card.ref)"><img v-if="relatedPoster(card)" :key="relatedPoster(card)!.key" :src="relatedPoster(card)!.url" alt="" loading="lazy" @error="imageFailed(relatedPoster(card)!.id)" /><span>{{ card.title }}</span></a></div>
-    </section>
+    <section v-if="details.actors?.length" class="details-cast details-content"><h2>{{ word('演员与角色', 'Cast & crew') }}</h2><div class="details-cast-track"><article v-for="(actor, index) in details.actors" :key="index" class="details-actor"><img v-if="image(actor.image)" :src="image(actor.image)!.url" alt="" loading="lazy" @error="imageFailed(image(actor.image)!.id)" /><span v-else class="details-actor-initial">{{ actor.name.slice(0, 1) }}</span><p>{{ actor.name }}</p><span v-if="actor.role" class="details-actor-role">{{ actor.role }}</span></article></div></section>
+    <section v-if="details.related.length" class="details-related details-content"><MediaRow :title="word('相关内容', 'Related')" :items="details.related" :images="data?.images" @open="emit('open', $event)" @image-error="imageFailed" /></section>
+    <section class="details-information details-content"><h2>{{ word('关于', 'About') }}</h2><dl>
+      <div><dt>{{ word('类型', 'Genre') }}</dt><dd>{{ details.tags.join(' / ') || kindLabel || '—' }}</dd></div><div><dt>{{ word('年份', 'Year') }}</dt><dd>{{ details.year ?? '—' }}</dd></div><div><dt>{{ word('地区', 'Region') }}</dt><dd>{{ details.regions?.join(' / ') || '—' }}</dd></div><div><dt>{{ word('语言', 'Language') }}</dt><dd>{{ details.languages?.join(' / ') || '—' }}</dd></div><div><dt>{{ word('导演', 'Director') }}</dt><dd>{{ details.directors?.map(person => person.name).join(' / ') || '—' }}</dd></div><div><dt>{{ word('时长', 'Duration') }}</dt><dd>{{ details.duration_ms ? `${minutes(details.duration_ms)} ${word('分钟', 'min')}` : '—' }}</dd></div>
+    </dl></section>
+    <NModal v-model:show="expanded" preset="card" role="dialog" class="details-plot-modal" :title="details.title" :style="{ width: 'min(640px, calc(100vw - 32px))' }"><p>{{ details.plot }}</p></NModal>
   </template>
   <NModal :show="app.matching.result?.status === 'needs_confirmation'" preset="card" role="dialog" class="details-confirm" :title="t('Confirm episode')" :aria-label="t('Confirm episode')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateMatchingModal">
-    <div class="details-candidates"><NButton v-for="item in app.matching.result?.candidates ?? []" :key="item.content_ref.data" class="details-candidate" :loading="app.matching.loading" @click="app.loadCandidate(item.content_ref)">{{ item.title }}<template v-if="item.year"> ({{ item.year }})</template></NButton></div>
+    <div class="details-candidates"><NButton v-for="item in app.matching.result?.candidates ?? []" :key="item.content_ref.data" class="details-candidate" :class="{ selected: candidate?.ref.data === item.content_ref.data }" :loading="app.matching.loading" @click="app.loadCandidate(item.content_ref)">{{ item.title }}<template v-if="item.year"> ({{ item.year }})</template></NButton></div>
     <NAlert v-if="app.matching.error" type="error">{{ app.matching.error.message }}</NAlert>
     <section v-for="item in candidate?.groups ?? []" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in item.episodes" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
     <NButton class="details-confirm-cancel" @click="app.invalidatePlayback()">{{ t('Cancel') }}</NButton>
   </NModal>
+  </div>
 </template>
-
-<style scoped>
-.details-back { display: inline-block; margin-bottom: 20px; }
-.details-head { display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 28px; margin-bottom: 32px; }
-.details-poster { aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; background: var(--control-surface); }
-.details-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.details-poster-missing { display: flex; height: 100%; align-items: center; justify-content: center; padding: 16px; text-align: center; overflow-wrap: anywhere; }
-.details-copy h1, .details-plot { overflow-wrap: anywhere; }
-.details-plot { white-space: pre-line; }
-.details-actions { margin-top: 20px; }
-.details-groups, .details-episode-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
-.details-episode-grid :deep(.n-button) { min-width: 96px; }
-.details-candidates { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-.details-candidate-group h3 { margin: 12px 0 8px; }
-.details-confirm-cancel { margin-top: 12px; }
-.details-retry { margin-inline-start: 12px; }
-.details-related-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; max-width: 1325px; }
-.details-related-card { display: block; max-width: 180px; overflow-wrap: anywhere; }
-.details-related-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; display: block; }
-@media (max-width: 600px) { .details-head { grid-template-columns: minmax(0, 1fr); } .details-poster { max-width: 200px; } }
-</style>

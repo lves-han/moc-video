@@ -74,7 +74,7 @@ fn configured(host: &Host, configs: Vec<Value>) -> Value {
 fn t05_contract_commands_and_envelopes() {
     let (_temp, host) = setup();
     let schema: Value = serde_json::from_str(APP).unwrap();
-    assert_eq!(COMMANDS.len(), 23);
+    assert_eq!(COMMANDS.len(), 26);
     assert!(COMMANDS.contains(&"get_media_cache"));
     assert!(COMMANDS.contains(&"clear_media_cache"));
     assert_eq!(

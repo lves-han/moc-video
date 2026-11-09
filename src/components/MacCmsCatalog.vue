@@ -20,6 +20,10 @@ const filters = computed<HomeFilter>(() => {
   for (const key of ['genre', 'year', 'language', 'region'] as const) { const text = params.get(key); if (text) value[key] = text; }
   return value;
 });
+const queryIdentity = computed(() => JSON.stringify([source.value?.id, source.value?.source_revision,
+  state.runtime.engine_epoch, locale.value, props.category, props.query]));
+const snapshotIdentity = ref<string | null>(null);
+const currentSnapshot = computed(() => snapshotIdentity.value === queryIdentity.value);
 function belongs(section: Pick<Bridge_HomeSection, 'title'>) {
   return props.category === 'variety' ? /综艺/.test(section.title) : props.category === 'sports'
     ? /体育|足球|篮球|网球|斯诺克|台球|赛事|电竞/.test(section.title)
@@ -33,10 +37,14 @@ let requestId: string | null = null, generation = 0;
 let queried = new Set<string>(), refreshed = false;
 function cancel() { generation++; if (requestId) void api.cancel(requestId).catch(cause => { error.value = String(cause); }); requestId = null; }
 async function load(target: Pick<Bridge_HomeSection, 'section_ref'> | null = null, page = 1, recovery = false) {
+  // A cursor is valid only after this query's first page succeeds. A failed
+  // replacement may retain facets for retry, but must never reuse the old cursor.
+  if (page > 1 && (!currentSnapshot.value || loading.value)) return;
   const selected = source.value, host = state.runtime.engine_epoch;
   cancel();
+  if (page === 1) snapshotIdentity.value = null;
   if (!selected || !host) { data.value = null; loading.value = false; return; }
-  const sequence = generation, id = crypto.randomUUID(); requestId = id;
+  const sequence = generation, identity = queryIdentity.value, id = crypto.randomUUID(); requestId = id;
   const input = { source_id: selected.id, source_revision: selected.source_revision, page,
     ...(target ? { section_ref: target.section_ref, filter: { ...filters.value } } : {}) };
   loading.value = true; error.value = ''; queried = new Set(); if (!recovery) refreshed = false;
@@ -52,6 +60,8 @@ async function load(target: Pick<Bridge_HomeSection, 'section_ref'> | null = nul
       appended.matched_count = appended.items.length;
     }
     data.value = merged;
+    if (target ? response.page.sections.some(item => item.section_ref === target.section_ref)
+      : !Object.keys(filters.value).length) snapshotIdentity.value = identity;
   } catch (cause) { if (sequence === generation) error.value = cause instanceof ApiFailure ? cause.error.message : String(cause); }
   finally { if (sequence === generation) { loading.value = false; requestId = null; } }
 }
@@ -83,7 +93,7 @@ onBeforeUnmount(cancel);
 
 <template>
   <div class="home-catalog browse-catalog maccms-catalog" :data-category="category" :data-source="source?.id" :data-query="query">
-    <div class="hero-observer"><CatalogHero :items="section?.items ?? []" :images="data?.images ?? {}" :category="title" :compact="Object.keys(filters).length > 0" @open="emit('open', $event)" @image-error="imageError" /></div>
+    <div class="hero-observer"><CatalogHero :items="currentSnapshot ? section?.items ?? [] : []" :images="data?.images ?? {}" :category="title" :compact="Object.keys(filters).length > 0" @open="emit('open', $event)" @image-error="imageError" /></div>
     <div class="maccms-subcategories" role="group" :aria-label="word('子分类', 'Subcategories')" data-focus-row>
       <button v-for="name in subcategories" :key="name" class="filter-pill" :class="{ selected: name === section?.title }" :aria-pressed="name === section?.title" @click="change(filters, name)">{{ name }}</button>
     </div>
@@ -91,9 +101,9 @@ onBeforeUnmount(cancel);
     <p v-if="error" class="catalog-row-error" role="alert">{{ error }} <button class="glass-pill maccms-retry" @click="section ? load(section) : refresh()">{{ word('重试', 'Retry') }}</button></p>
     <p v-for="failure in failures" :key="failure.section_ref!" class="catalog-row-error" role="alert">{{ failure.title }} · {{ failure.error.message }} <button class="glass-pill maccms-retry" @click="failure.section_ref && load({ section_ref: failure.section_ref })">{{ word('重试', 'Retry') }}</button></p>
     <p v-if="loading" class="catalog-status" role="status">{{ word('加载中', 'Loading catalog') }}</p>
-    <p class="wall-progress" role="status">{{ word('已查找', 'Scanned') }} {{ section?.scanned_count ?? 0 }} · {{ word('找到', 'Found') }} {{ section?.matched_count ?? 0 }}</p>
-    <div class="poster-wall home-grid"><MediaRow :title="section?.title ?? title" :items="section?.items ?? []" :images="data?.images" :landscape="category === 'sports'" :loading="loading && !section" @open="emit('open', $event)" @image-error="imageError" /></div>
-    <div v-if="!loading && !error && !failures.length && !section?.items.length" class="catalog-empty"><h2>{{ word('没有找到影片', 'No titles found') }}</h2><p>{{ word('试试减少筛选条件，或选择其他播放源。', 'Remove a filter or choose another playback source.') }}</p><button v-if="Object.keys(filters).length" class="glass-pill" @click="change({})">{{ word('清除全部', 'Clear all') }}</button></div>
-    <button v-if="section?.has_next" class="glass-pill wall-more" :disabled="loading" @click="load(section, section.next_page!)">{{ word('继续查找', 'Keep looking') }}</button>
+    <p class="wall-progress" role="status">{{ word('已查找', 'Scanned') }} {{ currentSnapshot ? section?.scanned_count ?? 0 : 0 }} · {{ word('找到', 'Found') }} {{ currentSnapshot ? section?.matched_count ?? 0 : 0 }}</p>
+    <div class="poster-wall home-grid"><MediaRow :title="section?.title ?? title" :items="currentSnapshot ? section?.items ?? [] : []" :images="data?.images" :landscape="category === 'sports'" :loading="loading && !currentSnapshot" @open="emit('open', $event)" @image-error="imageError" /></div>
+    <div v-if="currentSnapshot && !loading && !error && !failures.length && !section?.items.length" class="catalog-empty"><h2>{{ word('没有找到影片', 'No titles found') }}</h2><p>{{ word('试试减少筛选条件，或选择其他播放源。', 'Remove a filter or choose another playback source.') }}</p><button v-if="Object.keys(filters).length" class="glass-pill" @click="change({})">{{ word('清除全部', 'Clear all') }}</button></div>
+    <button v-if="currentSnapshot && section?.has_next" class="glass-pill wall-more" :disabled="loading" @click="load(section, section.next_page!)">{{ word('继续查找', 'Keep looking') }}</button>
   </div>
 </template>

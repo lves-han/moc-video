@@ -159,6 +159,14 @@ export type Args_get_media_cache = { "request_id": string; "input": {  } };
 export type Result_get_media_cache = ({ "request_id": string; "engine_epoch": string; "data": MediaCacheStatus } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type Args_clear_media_cache = { "request_id": string; "input": {  } };
 export type Result_clear_media_cache = ({ "request_id": string; "engine_epoch": string; "data": MediaCacheStatus } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type WatchlistEntry = { "content_id": string; "metadata_identity": MetadataIdentity; "title": string; "kind": "movie" | "series" | "anime" | "other"; "poster_cache_key": (string | null) };
+export type Watchlist = { "entries": Array<WatchlistEntry> };
+export type Args_list_watchlist = { "request_id": string; "input": EmptyInput };
+export type Result_list_watchlist = ({ "request_id": string; "engine_epoch": string; "data": Watchlist } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_add_watchlist = { "request_id": string; "input": WatchlistEntry };
+export type Result_add_watchlist = ({ "request_id": string; "engine_epoch": string; "data": WatchlistEntry } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_remove_watchlist = { "request_id": string; "input": { "content_id": string } };
+export type Result_remove_watchlist = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type CommandArgs = {
   "runtime_status": Args_runtime_status;
   "runtime_prepare": Args_runtime_prepare;
@@ -183,6 +191,9 @@ export type CommandArgs = {
   "clear_history": Args_clear_history;
   "get_media_cache": Args_get_media_cache;
   "clear_media_cache": Args_clear_media_cache;
+  "list_watchlist": Args_list_watchlist;
+  "add_watchlist": Args_add_watchlist;
+  "remove_watchlist": Args_remove_watchlist;
 };
 export type CommandResults = {
   "runtime_status": Result_runtime_status;
@@ -208,6 +219,9 @@ export type CommandResults = {
   "clear_history": Result_clear_history;
   "get_media_cache": Result_get_media_cache;
   "clear_media_cache": Result_clear_media_cache;
+  "list_watchlist": Result_list_watchlist;
+  "add_watchlist": Result_add_watchlist;
+  "remove_watchlist": Result_remove_watchlist;
 };
 export type Command = keyof CommandArgs;
 export type CommandInput<C extends Command> = CommandArgs[C]['input'];

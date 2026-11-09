@@ -2714,3 +2714,10 @@
 - Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland及1920宽度NOT RUN（ADR-005/006/057）。当前.git只读，按既有交接在本写入者退出后由外层保存受验完成提交并执行独立review-only。本会话随后执行原task.py done核对，不accept-review、不推送、不进入其他卡。
 
 - 收尾：原task.py done T0.31已实际exit0。首次收尾git diff --check发现本条末尾新增空行，按只追加规则补本行后复查；源码及受验摘要保持，Git与独立巡检由外层在本写入者退出后收尾。
+
+## T0.32 第一会话锁屏交接 2026-11-09
+- 结果：WIP
+- 先行修复：T0.31 筛选首批失败后旧分页混入问题已在真实窗口复现并修复；修复后 14/14 场景通过，日志 `evidence/runs/20261109T150533312315-diag-tv4-filter-after/output.log`。
+- 实现：待播 SQLite v2、三项命令、详情及首页接线和转场已形成初稿。前端构建 exit0；原生待播 CRUD/重启/迁移失败回滚及权限/CSP 检查 exit0，日志 `evidence/runs/20261109T152635402504-diag-tv5-native-2/output.log`。
+- 验证：外层前端测试 197/197 exit0，日志 `evidence/runs/20261109T153614301665-diag-tv5-frontend-tests/output.log`；工作契约检查 exit0，日志 `evidence/runs/20261109T153641521245-diag-tv5-contracts/output.log`。A1 因桌面锁定 exit1，真实窗口尚未验收，日志 `evidence/runs/20261109T152708610061-A1/output.log`；完整 verify、done、独立巡检均 NOT RUN。
+- 待办：用户解锁后恢复原会话额度内的开发；核对待播图片错误的既有 C9 保护以及详情样式，完成原 A1、完整 verify 和独立巡检。保留原阈值及全部失败历史；本次交接非用户暂停。

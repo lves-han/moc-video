@@ -62,3 +62,26 @@ test("R22/REQ-T15: an old poster failing while newer details load cannot take ov
   release(); await newer;
   assert.equal(f.state.details.data!.details.title, "Other");
 });
+
+test('TV5: related titles reuse loaded same-source/revision/kind/genre cards and transient poster access', async () => {
+  const f = fixture(() => ({}));
+  const ref = (source_id = SOURCE.source_id, source_revision = SOURCE.source_revision) => ({ source_id, source_revision, data: 'related' });
+  const card = (id: string, overrides: Record<string, unknown> = {}) => ({ id, ref: ref(), title: id, kind: 'series', genres: ['Drama'], poster: { resource_id: id }, ...overrides });
+  const cards = [card('accepted'), card('wrong-source', { ref: ref('other') }), card('old-revision', { ref: ref('meta', 'old') }), card('movie', { kind: 'movie' }), card('duplicate')];
+  f.state.home.data = { page: { ...SOURCE, sections: [{ items: cards }], failed_sections: [] },
+    images: Object.fromEntries(cards.map(card => [card.id, { resource_id: card.id, url: `http://127.0.0.1/${card.id}`, expires_at: 'transient' }])) } as never;
+  await f.app.loadDetails(REF);
+  assert.equal(f.state.details.phase, 'ready', f.state.details.error?.message);
+  assert.deepEqual(f.state.details.data!.details.related.map(card => card.id), ['accepted', 'duplicate']);
+  assert.equal(f.state.details.data!.images.accepted!.url, 'http://127.0.0.1/accepted');
+  assert.equal(f.state.details.data!.images['wrong-source'], undefined);
+  assert.equal(f.count('get_details'), 1, 'reuse must not request another catalog');
+});
+
+test('TV5: a different catalog revision supplies no related cards or image access', async () => {
+  const f = fixture(() => ({}));
+  f.state.home.data = { page: { ...SOURCE, source_revision: 'old', sections: [{ items: [{ id: 'old', ref: REF, kind: 'series' }] }], failed_sections: [] }, images: { old: { url: 'http://127.0.0.1/old' } } } as never;
+  await f.app.loadDetails(REF);
+  assert.deepEqual(f.state.details.data!.details.related, []);
+  assert.equal(f.state.details.data!.images.old, undefined);
+});

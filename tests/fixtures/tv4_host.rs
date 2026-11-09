@@ -1,5 +1,7 @@
 //! TV4 exercises real classification mapping, HTTP filtering and same-source matches.
 use super::*;
+#[path = "tv5_host.rs"]
+mod tv5;
 
 const LIMITED: &str = "88888888-8888-4888-8888-888888888888";
 fn classes4(limited: bool) -> Value {

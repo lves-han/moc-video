@@ -65,7 +65,7 @@ export async function maccmsScenario(action: string, prototype: { player: Player
     rpc = async value => { const response = await fetch(`${prototype.base}control/invoke?cap=${prototype.cap}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
       check(response.ok, 'TV4 Host transport failed'); return response.json(); };
     const commands = new Set(['runtime_status','runtime_prepare','get_settings','save_settings','get_sources','sync_catalog','get_home','get_details','get_resource_status',
-      'get_media_cache','clear_media_cache','list_history','save_history','remove_history','clear_history','cancel_request','match_playback','resolve_episode',
+      'get_media_cache','clear_media_cache','list_watchlist','add_watchlist','remove_watchlist','list_history','save_history','remove_history','clear_history','cancel_request','match_playback','resolve_episode',
       'open_playback','close_playback','release_resolution','start_interaction','finish_interaction']);
     window.__TAURI__!.core = { ...original, invoke: async <T>(command: string, args?: Record<string, any>): Promise<T> => {
       if (!commands.has(command)) return original.invoke<T>(command, args);
@@ -97,6 +97,37 @@ export async function maccmsScenario(action: string, prototype: { player: Player
   if (action === 'hover') return measure('.maccms-subcategories .filter-pill:not(.selected)');
   if (action === 'sports') { await browse('sports'); return { poster: measure('.maccms-catalog .media-poster'), cards: all('.maccms-catalog .home-card').length, errors: [...errors] }; }
   if (action === 'short') { await browse('short'); return { poster: measure('.maccms-catalog .media-poster'), cards: all('.maccms-catalog .home-card').length, errors: [...errors] }; }
+  if (action === 'filter-pagination') {
+    await browse(); await filter('year', '2026');
+    const before = { count: all('.maccms-catalog .home-card').length, more: !!document.querySelector('.maccms-catalog .wall-more') };
+    await rpc({ operation: 'mode', value: 1 });
+    try {
+      await filter('year', '1900');
+      await until(() => !!document.querySelector('.maccms-catalog [role="alert"]') && !document.querySelector('.maccms-catalog .catalog-status'), '1900 first-page 503 did not settle');
+      const failed = { message: one('.maccms-catalog [role="alert"]').textContent, count: all('.maccms-catalog .home-card').length,
+        more_enabled: all<HTMLButtonElement>('.maccms-catalog .wall-more').some(button => !button.disabled) };
+      await rpc({ operation: 'mode', value: 0 });
+      const offset = calls.length, more = document.querySelector<HTMLButtonElement>('.maccms-catalog .wall-more');
+      if (more && !more.disabled) {
+        more.click();
+        await until(() => calls.slice(offset).some(call => call.command === 'get_home' && call.completed)
+          && !document.querySelector('.maccms-catalog .catalog-status'), 'Stale pagination did not settle');
+      }
+      const continued = { count: all('.maccms-catalog .home-card').length, alert: !!document.querySelector('.maccms-catalog [role="alert"]'),
+        calls: calls.slice(offset).filter(call => call.command === 'get_home').map(call => call.input) };
+      // Reach the same valid first page in both the unfixed reproduction and the regression.
+      if (!document.querySelector('.maccms-retry')) {
+        await filter('year', '2026'); await rpc({ operation: 'mode', value: 1 }); await filter('year', '1900');
+        await until(() => !!document.querySelector('.maccms-retry'), 'Repeat first-page error did not settle');
+        await rpc({ operation: 'mode', value: 0 });
+      }
+      const retryOffset = calls.length; one<HTMLButtonElement>('.maccms-retry').click();
+      await until(() => !!document.querySelector('.maccms-catalog .catalog-empty') && !document.querySelector('.maccms-catalog .catalog-status'), 'Retry did not replace the old results with the empty 1900 first page');
+      const retried = { count: all('.maccms-catalog .home-card').length, alert: !!document.querySelector('.maccms-catalog [role="alert"]'),
+        calls: calls.slice(retryOffset).filter(call => call.command === 'get_home').map(call => call.input) };
+      return { before, failed, continued, retried, errors: [...errors] };
+    } finally { await rpc({ operation: 'mode', value: 0 }); }
+  }
   if (action === 'filters') {
     await browse(); await filter('year', '2026'); await filter('region', '中国大陆'); await filter('language', '国语');
     const filtered = { count: all('.maccms-catalog .home-card').length, titles: all('.maccms-catalog .media-card-title').map(e => e.textContent),

@@ -5358,6 +5358,291 @@
           "additionalProperties": false
         }
       ]
+    },
+    "WatchlistEntry": {
+      "type": "object",
+      "properties": {
+        "content_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "metadata_identity": {
+          "$ref": "#/$defs/MetadataIdentity"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "kind": {
+          "enum": [
+            "movie",
+            "series",
+            "anime",
+            "other"
+          ]
+        },
+        "poster_cache_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "content_id",
+        "metadata_identity",
+        "title",
+        "kind",
+        "poster_cache_key"
+      ],
+      "additionalProperties": false
+    },
+    "Watchlist": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WatchlistEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "Args_list_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/EmptyInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_list_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/Watchlist"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_add_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/WatchlistEntry"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_add_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/WatchlistEntry"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_remove_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "content_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "content_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_remove_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "x-command-contracts": {
@@ -5543,6 +5828,30 @@
       },
       "result": {
         "$ref": "#/$defs/Result_clear_media_cache"
+      }
+    },
+    "list_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_list_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_list_watchlist"
+      }
+    },
+    "add_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_add_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_add_watchlist"
+      }
+    },
+    "remove_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_remove_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_remove_watchlist"
       }
     }
   },

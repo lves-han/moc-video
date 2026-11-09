@@ -12,7 +12,7 @@ const GENRES: [&str; 6] = [
     "Documentary",
 ];
 
-fn manifest3() -> Value {
+pub(super) fn manifest3() -> Value {
     let year = OffsetDateTime::now_utc().year();
     let catalogs: Vec<_> = ["movie", "series"]
         .into_iter()
@@ -41,7 +41,14 @@ fn manifest3() -> Value {
         "types":["movie","series"],"resources":["catalog","meta"],"catalogs":catalogs})
 }
 
-fn media3(kind: &str, index: usize, genre: &str, year: i32, label: &str, port: u16) -> Value {
+pub(super) fn media3(
+    kind: &str,
+    index: usize,
+    genre: &str,
+    year: i32,
+    label: &str,
+    port: u16,
+) -> Value {
     json!({"id":format!("tmdb:{}", index + 1),"type":kind,"name":format!("{label} {kind} {genre} {index}"),
         "releaseInfo":year.to_string(),"genres":[genre],"description":"A controlled story for the TV3 real-window behavior checks. Discover characters, places and ideas.",
         "imdbRating":"8.2","poster":format!("http://maccms.fixture.test:{port}/poster.png?i={index}"),

@@ -188,7 +188,51 @@ async function changeSource(id: string) {
 }
 function addSource(value: Source) { previewSources.value.push(value); notify(t("Source added to this preview. Live connections will follow.")); }
 function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
-function openDetails(ref: Bridge_MediaRef) { location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`; }
+const detailsOrigins = new Map<string, string>();
+function openDetails(ref: Bridge_MediaRef) {
+  const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
+  detailsOrigins.set(target, location.hash);
+  location.hash = target;
+}
+function backFromDetails() { location.hash = detailsOrigins.get(location.hash) ?? '#/home'; }
+function markTransitionPoster(target: string) {
+  const candidates = [...document.querySelectorAll<HTMLElement>('.poster-link[href]')].filter(element => element.getAttribute('href') === target);
+  const element = candidates.find(element => { const r = element.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; }) ?? candidates[0];
+  if (element) element.style.viewTransitionName = 'details-art';
+  return element;
+}
+async function onHashChange() {
+  const leaving = lastHash, target = location.hash;
+  const detailsChange = native && desktopQuery.matches && (leaving.startsWith('#/details/') || target.startsWith('#/details/'))
+    && !leaving.startsWith('#/playback') && !target.startsWith('#/playback');
+  if (!detailsChange || matchMedia('(prefers-reduced-motion: reduce)').matches) { await updateRoute(); return; }
+  const poster = target.startsWith('#/details/') ? markTransitionPoster(target) : null;
+  const update = async () => {
+    await updateRoute();
+    if (leaving.startsWith('#/details/') && location.hash === target) markTransitionPoster(leaving);
+  };
+  try {
+    if (document.startViewTransition) {
+      const transition = document.startViewTransition(update);
+      // The update still completes when the platform skips an interrupted transition.
+      await Promise.allSettled([transition.ready, transition.finished, transition.updateCallbackDone]);
+    } else {
+      const main = document.getElementById('main-content'), old = main?.cloneNode(true) as HTMLElement | undefined;
+      if (main && old) {
+        const rect = main.getBoundingClientRect(); old.removeAttribute('id'); old.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+        old.classList.add('page-transition-old'); old.inert = true; old.setAttribute('aria-hidden', 'true');
+        Object.assign(old.style, { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, margin: '0', pointerEvents: 'none', zIndex: '10' });
+        main.after(old);
+      }
+      try {
+        await update();
+        await Promise.all([old?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' }).finished,
+          main?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 }).finished]);
+      } finally { old?.remove(); }
+    }
+  } catch (error) { preferenceError.value = String(error); }
+  finally { poster?.style.removeProperty('view-transition-name'); document.querySelectorAll<HTMLElement>('.poster-link').forEach(element => element.style.removeProperty('view-transition-name')); }
+}
 async function playEpisode(videoId: string) {
   try {
     await flushHistory();
@@ -207,7 +251,7 @@ function focusMain() {
   }
   main?.focus({ preventScroll: true });
 }
-async function onHashChange() {
+async function updateRoute() {
   const current = ++sequence;
   await flushHistory();
   if (current !== sequence) return;
@@ -254,6 +298,13 @@ async function onHashChange() {
     if (route.value.page === "home") { activeGenre.value = home?.genre ?? "All"; expanded.value = home?.expanded ?? false; heroIndex.value = home?.hero ?? 0; }
     await nextTick();
     if (current !== sequence) return;
+    // A returning MacCMS wall remounts and fetches its first page before it has
+    // enough height to restore scroll. Wait for that existing load to settle.
+    if (route.value.page === 'browse' && browseScroll.has(location.hash)) {
+      while (current === sequence && document.querySelector('.browse-catalog .catalog-status')) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      if (current !== sequence) return;
+      await nextTick();
+    }
     scrollTo({ top: route.value.page === 'browse' ? browseScroll.get(location.hash) ?? 0 : home?.scroll ?? 0, behavior: "instant" }); focusMain();
   } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
 }
@@ -330,7 +381,10 @@ async function continueNativeHistory(record: WatchHistoryRecord) {
     if (direct && metadata.id !== playback.id) throw new Error(t('This title is unavailable in the current catalog.'));
     const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) };
     wantedResume = record.video_id ? { video_id: record.video_id, position_ms: record.completed ? 0 : record.position_ms } : null;
-    location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
+    const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
+    if (location.hash === target && appState.details.phase === 'ready') {
+      if (wantedResume) await playEpisode(wantedResume.video_id);
+    } else location.hash = target;
   } catch (error) { preferenceError.value = String(error); }
 }
 watch(() => appState.route, route => {
@@ -588,7 +642,7 @@ onBeforeUnmount(() => {
         <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
-          <DetailsView @open="openDetails" @play="playEpisode" />
+          <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
           <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
         </div>
         <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
