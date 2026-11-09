@@ -895,8 +895,12 @@ impl Catalog {
             .ok_or_else(|| ApiError::bad("Invalid Stremio page"))?;
         let handle = input["section_ref"].as_str();
         let catalog_only = input["catalog_only"] == true;
-        if catalog_only && (page != 1 || !input["section_ref"].is_null() || !input["filter"].is_null()) {
-            return Err(ApiError::bad("catalog_only requires page 1 without section_ref or filter"));
+        if catalog_only
+            && (page != 1 || !input["section_ref"].is_null() || !input["filter"].is_null())
+        {
+            return Err(ApiError::bad(
+                "catalog_only requires page 1 without section_ref or filter",
+            ));
         }
         if page > 1 && handle.is_none() {
             return Err(ApiError::bad(
@@ -927,7 +931,8 @@ impl Catalog {
                     "filters":self.facets(section,input,display,language),"items":[],"page":1,
                     "has_next":false,"next_page":null,"scanned_count":0,"matched_count":0})
             }).collect();
-            output.value = json!({"page":crate::home::page(input,descriptions,vec![],None)?,"images":{}});
+            output.value =
+                json!({"page":crate::home::page(input,descriptions,vec![],None)?,"images":{}});
             job.check()?;
             wire_size(&output.value, LIMIT)?;
             Contracts::get().validate("HomeViewData", &output.value)?;

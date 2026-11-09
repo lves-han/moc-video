@@ -23,7 +23,17 @@ int main(int argc, const char **argv) {
         NSString *action = @(argv[1]);
         pid_t pid = atoi(argv[2]);
         NSMutableDictionary *result = [@{@"accessibility": @(AXIsProcessTrusted()), @"screen_recording": @(CGPreflightScreenCaptureAccess())} mutableCopy];
-        if ([action isEqual:@"permissions"]) {
+        if ([action isEqual:@"minimize"]) {
+            AXUIElementRef owned = AXUIElementCreateApplication(pid);
+            CFTypeRef mainWindow = NULL;
+            AXError status = AXUIElementCopyAttributeValue(owned, kAXMainWindowAttribute, &mainWindow);
+            if (status == kAXErrorSuccess && mainWindow) status = AXUIElementSetAttributeValue((AXUIElementRef)mainWindow, kAXMinimizedAttribute, kCFBooleanTrue);
+            else status = kAXErrorNoValue;
+            if (mainWindow) CFRelease(mainWindow);
+            CFRelease(owned);
+            if (status != kAXErrorSuccess) { fprintf(stderr, "Owned window minimize rejected: %d\n", status); return 4; }
+            result[@"minimized"] = @YES;
+        } else if ([action isEqual:@"permissions"]) {
             // A diagnostic only; input is validated by the receiving WebView.
         } else {
             if ([action isEqual:@"click"]) {

@@ -63,6 +63,9 @@ const rows = computed<Row[]>(() => {
 });
 const heroRow = computed(() => rows.value[0]);
 const heroData = computed(() => heroRow.value ? app.catalogRow(heroRow.value.section.section_ref, heroRow.value.filter).data : null);
+function imageError(sectionRef: string, filter: HomeFilter, id: string) {
+  void app.rowImageError(sectionRef, filter, id).catch(error => app.diagnostics.push({ code: 'UPSTREAM_FAILED', message: String(error), retryable: true }));
+}
 const history = ref<HistoryEntry[]>([]), posters = ref<Record<string, string>>({}), historyError = ref('');
 let historyGeneration = 0;
 async function loadHistory() {
@@ -84,20 +87,20 @@ async function observe() {
   } }, { rootMargin: '0px' });
   root.value?.querySelectorAll('.hero-observer,.poster-wall,.wall-sentinel').forEach(element => observer.observe(element));
 }
-watch([rows, wall, () => props.query, () => state.home.request_epoch], observe, { flush: 'post' });
+watch([rows, wall, () => props.query, () => state.home.request_epoch, () => wallSection.value?.next_page], observe, { flush: 'post' });
 watch(() => state.selected_metadata_source, loadHistory);
 onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => { observer?.disconnect(); historyGeneration++; });
 </script>
 <template>
-  <div ref="root" class="home-catalog" :class="{ 'browse-catalog': category }">
-    <div class="hero-observer"><CatalogHero :items="heroData?.page.sections[0]?.items ?? []" :images="heroData?.images ?? {}" :category="categoryTitle" :compact="wall" @open="emit('open', $event)" @image-error="heroRow && app.rowImageError(heroRow.section.section_ref, heroRow.filter, $event).catch(error => app.diagnostics.push({ code: 'UPSTREAM_FAILED', message: String(error), retryable: true }))" /></div>
+  <div ref="root" class="home-catalog" :class="{ 'browse-catalog': category }" :data-category="category" :data-query="query">
+    <div class="hero-observer"><CatalogHero :items="heroData?.page.sections[0]?.items ?? []" :images="heroData?.images ?? {}" :category="categoryTitle" :compact="wall" @open="emit('open', $event)" @image-error="heroRow && imageError(heroRow.section.section_ref, heroRow.filter, $event)" /></div>
     <p v-if="state.home.phase === 'loading'" class="catalog-status" role="status">{{ t('Loading catalog') }}</p>
     <p v-if="state.home.error" class="home-failed" role="alert">{{ state.home.error.message }} <button class="home-retry glass-pill" @click="app.loadCatalog()">{{ t('Retry') }}</button></p>
     <p v-if="state.home.phase === 'empty'" class="home-empty">{{ word('该来源暂无栏目', 'No catalogs from this source') }}</p>
     <FilterBar v-if="category" :model-value="selected" :facets="base?.filters" :locked-genre="lockedGenre" @update:model-value="filters" />
     <div v-if="wall" class="catalog-wall-container">
       <p class="wall-progress" role="status">{{ word('已查找', 'Scanned') }} {{ wallSection?.scanned_count ?? 0 }} · {{ word('找到', 'Found') }} {{ wallSection?.matched_count ?? 0 }}</p>
-      <div :key="JSON.stringify(wallFilter)" class="poster-wall home-grid"><MediaRow :title="categoryTitle" :items="wallSection?.items ?? []" :images="wallRow?.data?.images" :loading="wallRow?.phase === 'loading' && !wallSection" @open="emit('open', $event)" @image-error="wallRef && app.rowImageError(wallRef, wallFilter, $event).catch(error => app.diagnostics.push({ code: 'UPSTREAM_FAILED', message: String(error), retryable: true }))" /></div>
+      <div :key="JSON.stringify(wallFilter)" class="poster-wall home-grid"><MediaRow :title="categoryTitle" :items="wallSection?.items ?? []" :images="wallRow?.data?.images" :loading="wallRow?.phase === 'loading' && !wallSection" @open="emit('open', $event)" @image-error="wallRef && imageError(wallRef, wallFilter, $event)" /></div>
       <p v-if="wallRow?.error" class="catalog-row-error" role="alert">{{ wallRow.error.message }} <button class="glass-pill home-section-retry" @click="loadWall()">{{ t('Retry') }}</button></p>
       <div v-if="wallRow?.phase === 'ready' && !wallSection?.items.length" class="catalog-empty"><Icon name="search" :size="40" /><h2>{{ word('没有找到影片', 'No titles found') }}</h2><p>{{ word('试试减少筛选条件，发现更多故事。', 'Remove a filter to discover more stories.') }}</p><button v-for="(_, key) in selected" :key="key" class="glass-pill empty-remove" @click="filters(Object.fromEntries(Object.entries(selected).filter(([name]) => name !== key)))">{{ word('去掉', 'Remove') }} {{ selected[key] }}</button><button class="glass-pill" @click="filters({})">{{ word('清除全部', 'Clear all') }}</button></div>
       <div v-if="wallSection?.has_next" class="wall-sentinel"><button class="glass-pill wall-more" :disabled="wallRow?.phase === 'loading'" @click="loadWall(true)">{{ word('继续查找', 'Keep looking') }}</button></div>

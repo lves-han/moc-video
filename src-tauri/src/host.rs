@@ -701,7 +701,9 @@ impl Host {
             .clone();
         job.bind_source(source["id"].as_str().expect("Source id"));
         if capability == "home" && key["catalog_only"] == true && source["kind"] != "stremio" {
-            return Err(ApiError::bad("catalog_only is supported only by Stremio sources"));
+            return Err(ApiError::bad(
+                "catalog_only is supported only by Stremio sources",
+            ));
         }
         match SourceKind::parse(&source["kind"])? {
             SourceKind::Stremio if capability == "resolve" => Err(ApiError::new(
