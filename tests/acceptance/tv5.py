@@ -72,6 +72,8 @@ def styles(row):
     tv1.near(head['rect']['height'], max(520, min(height * .78, 820)), 'header height')
     tv1.near(s['.details-bottom-mask']['rect']['height'], head['rect']['height'] * .65, 'bottom fade 65%')
     tv1.near(head['rect']['bottom'] - copy['rect']['bottom'], 56, 'copy bottom inset')
+    back = s['.details-back']['rect']
+    require(back['top'] >= 44 and back['bottom'] < head['rect']['bottom'], 'Back action must remain visible below the drag region')
     require(copy['max-width'] == '620px' and copy['rect']['width'] <= 620.1, 'copy max width')
     require('rgb(11, 11, 13)' in s['.details-bottom-mask']['background-image'] and 'rgba(11, 11, 13, 0.75)' in s['.details-left-mask']['background-image'], 'Hero mask colors changed')
     tv1.near(s['.details-copy h1']['font-size'], max(40, min(width * .044, 72)), 'Hero title size')
@@ -149,6 +151,8 @@ def window(run):
                 added = session.command('tv5', action='add', payload=ready, timeout=120); run.observed['added'] = added
                 case(run, 'TV-WATCHLIST', 'add-remove', 'real add persists one durable entry and fades to check', lambda: require(len(added['saved']['entries']) == 1 and added['saved']['entries'][0]['content_id'] == ready['record']['content_id'] and added['icon']['animation-duration'] == '0.2s', 'add/check or entry identity'))
                 case(run, 'TV-WATCHLIST', 'home-row', 'watchlist follows continue watching and uses vertical posters', lambda: require(added['count'] == 1 and added['after_history'] and abs(added['poster']['rect']['height'] / added['poster']['rect']['width'] - 1.5) < .01, 'watchlist home placement/poster'))
+                image_recovery = session.command('tv5', action='watchlist-images', payload=ready, timeout=120); run.observed['watchlist_images'] = image_recovery
+                case(run, 'TV-WATCHLIST', 'home-row', 'real LRU eviction triggers one diagnostic/owning-DTO recovery, second expiry stays explicit, manual retry resets the attempt', lambda: require(image_recovery['recovered'] == dict(details=1, queries=1) and image_recovery['refused']['details'] == 1 and image_recovery['refused']['queries'] == 2 and image_recovery['refused']['fallback'] and image_recovery['retried'] == dict(details=2, queries=2) and image_recovery['native_image_errors'] == [True, True] and image_recovery['expired_http_status'] == [410, 410] and not image_recovery['errors'], 'watchlist image recovery/limit/retry differs'))
                 session.command('identity'); session.close()
                 require(session.record.get('exit') == 0 and session.record.get('lingering') == [], 'first owned App/WebKit session did not clean up')
                 restarted = bridge.invoke(dict(operation='restart')); run.observed['restarted'] = restarted

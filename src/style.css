@@ -2662,7 +2662,7 @@ main {
 @media (prefers-reduced-motion: reduce) { .catalog-hero-slide img,.filter-panel,.poster-wall { animation: none !important; } .catalog-hero,.catalog-hero-slide { transition: none; } .catalog-hero-visual { transform: none !important; } }
 
 /* TV5 details reuse the shell palette and the Hero artwork masks. */
-.tv-details { position: relative; }
+.tv-details { position: relative; display: flow-root; }
 .details-back { display: inline-flex; margin-bottom: 20px; }
 .details-head { position: relative; isolation: isolate; min-height: 360px; overflow: hidden; border-radius: 12px; background: var(--surface); }
 .details-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -3; }
@@ -2730,6 +2730,7 @@ main {
   .details-back { position: absolute; top: -8px; left: 0; z-index: 2; background: var(--tv-glass); -webkit-backdrop-filter: var(--tv-glass-filter); backdrop-filter: var(--tv-glass-filter); border-radius: 999px; padding: 8px 16px; }
   .details-backdrop-fallback .details-backdrop { filter: blur(40px); transform: scale(1.2); }
   .app-shell .details-episode { border-radius: 0; }
+  .app-shell .details-watchlist { border-radius: 50%; }
   .app-shell .details-episode:hover { transform: none; }
   .details-episode:hover .details-episode-art { opacity: .88; }
   .details-content { animation: details-content-in 300ms 100ms both; }

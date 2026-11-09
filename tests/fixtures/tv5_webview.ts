@@ -55,7 +55,7 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
     locale.value = 'en'; await open(ready); scrollTo({ top: 0, behavior: 'instant' });
     await until(() => one<HTMLImageElement>('.details-backdrop').complete && one<HTMLImageElement>('.details-backdrop').naturalWidth > 0, 'Backdrop did not decode');
     const selectors = ['.details-head','.details-backdrop','.details-bottom-mask','.details-left-mask','.details-copy','.details-copy h1','.details-meta','.details-rating','.details-plot','.details-play','.details-play-progress','.details-watchlist','.watchlist-symbol',
-      '.details-groups','.details-group[aria-pressed="true"]','.details-group[aria-pressed="false"]','.details-episode','.details-episode-art','.details-episode strong','.details-episode-plot','.details-episode-duration','.details-watching','.details-episode-progress',
+      '.details-back','.details-groups','.details-group[aria-pressed="true"]','.details-group[aria-pressed="false"]','.details-episode','.details-episode-art','.details-episode strong','.details-episode-plot','.details-episode-duration','.details-watching','.details-episode-progress',
       '.details-episode-fallback','.details-episode-number','.details-actor img','.details-actor-initial','.details-actor p','.details-actor-role','.details-information dl','.details-information dt','.details-information dd','.details-related .media-poster','.details-content'];
     return { width: innerWidth, height: innerHeight, styles: Object.fromEntries(selectors.map(selector => [selector, measure(selector)])),
       label: one('.details-play').textContent, history: (await api.call('list_history',{})).entries.find(e => e.content_id === ready.record.content_id),
@@ -98,6 +98,46 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
     one<HTMLButtonElement>('.details-watchlist').click(); await until(() => one('.details-watchlist').getAttribute('aria-pressed') === 'false','Watchlist removal failed');
     await home(); await until(() => !all('.watchlist-row').length,'Empty watchlist row remains');
     return { before, label, after: await api.call('list_watchlist',{}), hidden: !all('.watchlist-row').length };
+  }
+  if (action === 'watchlist-images') {
+    await settled();
+    const core = window.__TAURI__!.core, calls: { command: string; input: any; response: any }[] = [], imageErrors: boolean[] = [], expiredStatuses: number[] = [];
+    window.__TAURI__!.core = { ...core, invoke: async <T>(command: string, args?: Record<string, any>): Promise<T> => {
+      const response = await core.invoke<T>(command, args);
+      if (command === 'get_details' || command === 'get_resource_status') calls.push({ command, input: args?.input, response });
+      return response;
+    } };
+    const details = () => calls.filter(c => c.command === 'get_details' && c.input.ref.data === ready.ref.data).length;
+    const statuses = () => calls.filter(c => c.command === 'get_resource_status' && c.input.kind === 'image');
+    const fail = async () => {
+      const response = await fetch(`${prototype.base}control/invoke?cap=${prototype.cap}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({operation:'evict-images'}) });
+      check(response.ok && (await response.json()).ok, 'Image LRU eviction failed');
+      const image = one<HTMLImageElement>('.watchlist-poster img');
+      const source = image.src, expired = await fetch(source, {cache:'no-store'});
+      expiredStatuses.push(expired.status);
+      await expired.arrayBuffer(); check(expired.status === 410, 'Evicted watchlist image must return real HTTP 410');
+      image.src = '/mark.svg'; await image.decode();
+      image.addEventListener('error', event => imageErrors.push(event.isTrusted), {once:true});
+      // Change the current request before retrying the exact no-store gateway URL.
+      image.src = source;
+    };
+    try {
+      const href = one('.watchlist-poster').getAttribute('href')!;
+      check(href.startsWith('#/details/'), 'Watchlist transition link missing');
+      const ref = JSON.parse(decodeURIComponent(href.slice('#/details/'.length)));
+      check(['source_id','source_revision','data'].every(key => ref[key] === ready.ref[key]), 'Watchlist transition reference differs');
+      await fail();
+      await until(() => details() === 1 && statuses().length === 1 && all<HTMLImageElement>('.watchlist-poster img').some(img => img.complete && img.naturalWidth > 0), 'Expired watchlist poster did not refresh its owning DTO once');
+      const recovered = { details:details(), queries:statuses().length };
+      await fail();
+      await until(() => statuses().length === 2 && !all('.watchlist-poster img').length && !!all('.watchlist-row [role="alert"]').length, 'Second expiry did not retain an explicit error/fallback');
+      await delay(200);
+      check(details() === 1 && imageErrors.length === 2 && imageErrors.every(Boolean) && statuses().every(c => c.response.data?.target_id === c.input.target_id && c.response.data?.error?.code === 'SESSION_EXPIRED'), 'Image recovery repeated, lacked native failures or queried another target');
+      const refused = { details:details(), queries:statuses().length, fallback:one('.watchlist-poster').textContent };
+      one<HTMLButtonElement>('.watchlist-row [role="alert"] button').click();
+      await until(() => details() === 2 && all<HTMLImageElement>('.watchlist-poster img').some(img => img.complete && img.naturalWidth > 0) && !all('.watchlist-row [role="alert"]').length, 'Explicit watchlist retry did not start a new attempt');
+      return { recovered, refused, retried:{details:details(),queries:statuses().length}, native_image_errors:imageErrors, expired_http_status:expiredStatuses, errors:await maccmsScenario('errors',prototype) };
+    } finally { window.__TAURI__!.core = core; }
   }
   if (action === 'resume') {
     await open(ready); const label = one('.details-play').textContent; one<HTMLButtonElement>('.details-play').click();

@@ -332,6 +332,21 @@ fn tv5_packaged_host_bridge() {
                 sync5(&host);
                 json!({"old_epoch":old,"new_epoch":ok(&host,"runtime_status",json!({}))["engine_epoch"],"watchlist":ok(&host,"list_watchlist",json!({})),"history":ok(&host,"list_history",json!({}))})
             }
+            "evict-images" => {
+                // Exercise the production 4096-entry LRU, as in the T12 fixture.
+                let mut committed = host.committed.lock().unwrap();
+                let catalog = committed.maccms[provider["id"].as_str().unwrap()].clone();
+                let image = catalog.images.values().next().unwrap().clone();
+                let gateway = committed.gateway.as_mut().unwrap();
+                for _ in 0..4096 {
+                    let mut image = image.clone();
+                    let id = Uuid::new_v4().to_string();
+                    image.reference["resource_id"] = json!(id);
+                    image.reference["path"] = json!(format!("/images/{id}"));
+                    gateway.image(provider["id"].as_str().unwrap(), image).unwrap();
+                }
+                json!({"ok":true})
+            }
             "invoke" => {
                 let command = request["command"].as_str().unwrap();
                 homes += usize::from(command == "get_home");
