@@ -2558,3 +2558,16 @@
 - 结果：RESOLVED
 - 决定：依据本聊天用户授权，在当前聊天跟进原单卡流程；外层核对原 runner、payload、驱动及开发进程身份均已退出，原 task.py recover 登记中断并保留 exit 125 和日志。外层可执行 Git 收尾，沿用原资源与会话额度。
 - 外层可读取本机 TV 应用，观察到左侧半透明侧栏和竖版内容卡；当前系统为浅色外观。键盘方向键作用于内容集合，未能从静态观察准确测量焦点放大倍率及动效时长，继续以任务卡初始值为实现基准，具体校准结果待进一步观察，未声称完成测量。
+
+## T0.28 第二会话环境复核与停止交接 2026-11-09T02:55:30+00:00
+
+- 结果：BLOCKED
+- 已完成：按用户顺序读取 AGENTS.md，指定解释器执行 task.py check（exit0，42卡）及 start T0.28（exit0）；确认工作树初始干净，当前会话2/2、generation0、protected d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5。读取外层 RESOLVED、相关 C1..C17、ADR-057/058、App、UiProvider/theme、FilmCard/Icon、窗口代码及 t01/t14 真实打包窗口测试路径。上次运行由外层 recover 登记 finished/exit125，原失败仍保留。
+- 校准：本会话调用 cua.getApp("TV") 再次返回 `Computer Use was not approved to use TV`。外层已有静态观察证明半透明侧栏及竖版内容卡，焦点倍率和动效时长仍缺实机校准；已通过本聊天工具请求可访问 TV 的外层补充结果。未推测测量值，未开始产品源码修改。
+- 最小修改方案：沿用第一会话方案，在 resolveTheme/UiProvider 按960断点固定桌面深色并同步 Naive 变量；App 保留窄屏结构，桌面使用可折叠浮层侧栏和44px拖动区；复用原路由、来源选择与设置页入口；按卡新增 focus.ts 和 MediaRow.vue。lib.rs 使用 Overlay/隐藏标题，main capability 只增加 allow-start-dragging，automation.rs 宽度白名单只增加1512。当前代码核实白名单仍为360/390/768/960/1200，Icon描边仍为1.65，实施时按本卡规格调整。无后续卡接线或额外依赖。
+- 验证计划：校准及执行器条件恢复后，先保存改造前768/390真实窗口布局证据；复用原 t01 构建/NativeSession、受控夹具与身份限定清理，新增 tv1.py。A1真实检查方向键/Esc/焦点恢复、悬停一致、减弱动态、原生拖动、侧栏/来源入口、精确计算样式及960/1200/1512截图，权限和CSP按基线精确比较。完整A1通过后原 verify.py all、done及受验提交。未创建空验收脚本或预填通过报告。
+- 复现与根因：外层恢复后，原 run.py diag-tv1-environment-session2 在 payload 边界清理阶段再次遇到 `Operation not permitted (originated from sysctl() malloc 1/3)`，exit125，raw_exit=null、tests=null、status=cleanup_failed。此时原执行器已建立禁止重复启动/验收的屏障；当前执行环境进程查询权限仍不足，尚未取得GUI探测结果。日志及收据：`evidence/runs/20261109T025506616739-diag-tv1-environment-session2/output.log`、同目录 receipt.json。已先 note，停止全部重任务，未修改原执行器、状态、权限或预算。
+- 资源与待核对身份：真实后端 process-watchdog，RSS采样4096MiB、jobs2、测试线程1；runner PID57205、identity created:1794192906.624928；payload PID57210、identity created:1794192906.896581；scope_started=false。本会话未证明新payload/session已清理，须外层按PID和创建时间核对，再走原 task.py recover。
+- WIP与交接：停止前先执行原 task.py handoff，再尝试 `git commit --allow-empty -m 'WIP T0.28: 第二会话环境阻塞交接'`，exit128，`.git/index.lock` 创建仍被 Operation not permitted 拒绝，未生成提交；失败已 note。当前只追加本条文档，产品源码保持原样，Git收尾需要外层已有写入能力。
+- 验收 A1：NOT RUN；完整 verify：NOT RUN；macos-arm64行为未验证，其他平台及1920宽度NOT RUN。未勾选、未done，未自行RESOLVED、AUTHORIZED、rebaseline或accept-review；保留2/2会话和两次运行失败证据。
+- 下一步/所需条件：具备权限的外层核对新runner/payload身份、session及重锁，经原recover恢复；补齐TV实机校准并提供原执行器所需进程查询及Git写入条件。会话额度已到2/2，接续方式需由外层依原规则处理；本会话不重置额度或另起开发会话。
