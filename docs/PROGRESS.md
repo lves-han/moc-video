@@ -2539,3 +2539,22 @@
 - 完整 verify：PASS；收据：`evidence/verify/20261109T023805644334.json`；工作流 131 项、前端 170 项、Rust 库 175 项与 t05 16 项，source 9ced7a7f6fb692f0771fe35e3fb80fb3414fe6b0c98c94cb14c871a7359b7512，generation 2。
 - 过程失败：release.py 白名单缺图标（exit1）、sources.test.ts 加载失败、cargo fmt、t05 两项预期，均已 note 并修复，日志保留在 evidence/runs。
 - Remaining：干净系统安装、初始化、首播、升级、卸载本次 NOT RUN，由 T0.36/A2 执行；Developer ID 和公证未做，产物为 ad-hoc 签名，仅个人使用；其他平台 NOT RUN（ADR-005/006）。升级配置缺 TMDB 的问题由 T0.29 修复。
+
+## T0.28 开工调查与环境阻塞 2026-11-09T02:52:02+00:00
+
+- 结果：BLOCKED
+- 已完成：确认唯一根目录和指定 venv；工作树初始干净；原 task.py check 退出0（42卡），start T0.28 退出0，会话1、generation0。读取当前卡、C1至C17相关契约、ADR-057/058、App、UiProvider/theme、Icon/FilmCard、现有打包窗口自动化及验收入口。产品源码未改。
+- 校准：调用电脑工具 cua.getApp("TV") 返回 `Computer Use was not approved to use TV`，尚未读取本机 TV App，侧栏位置、焦点比例与动效时长均未完成实机校准；已向用户说明访问条件，未写入推测的校准结果。
+- 最小方案：复用 App 路由、来源选择、SettingsView 语言/色系入口和 UiProvider/theme；仅在宽度不小于960时应用固定深色与 --tv-*，App 接入 Overlay 拖动区和可折叠浮层侧栏，保留窄屏现状；按卡新增 src/ui/focus.ts 和 MediaRow.vue；lib.rs 使用 Overlay 并隐藏标题，main capability 仅新增 allow-start-dragging，automation.rs 仅扩充1512宽度。校准完成后再实施。
+- 验证方案：复用当前 t01/t14 的真实打包 WKWebView 和身份限定清理；在 tests 范围挂载 MediaRow 夹具，真实断言方向键/Esc、原生焦点、悬停一致、减弱动态、窗口拖动、侧栏与来源入口；计算样式精确核对规格，保存960/1200/1512截图，对照改造前768/390布局；权限集合和CSP精确比对基线。准确A1全部通过后直接 verify.py all，再按原done与提交流程收尾。尚未创建验收入口，未提前实现后续卡。
+- 失败证据：原 run.py diag-tv1-environment 在 payload 边界清理阶段遇到 `Operation not permitted (originated from sysctl() malloc 1/3)`，退出125，tests=null、raw_exit=null，状态 cleanup_failed；日志 `evidence/runs/20261109T025130291383-diag-tv1-environment/output.log`，收据为同目录 receipt.json。未取得GUI探测结果，原执行器明确禁止重复启动或验收；已先 note 假设和下一步，停止重任务。
+- 资源：收据真实后端 process-watchdog，RSS采样4096MiB、jobs2、测试线程1；payload PID54673、identity created:1794192690.562544，runner PID54668、identity created:1794192690.299839；scope_started=false，清理状态尚待宿主核实，不宣称进程已退出或硬隔离。
+- WIP与交接：按要求先尝试 `git commit --allow-empty -m "WIP T0.28: 开工校准和原执行器权限阻塞交接"`，退出128，`.git/index.lock` 创建被拒绝（Operation not permitted），未产生提交。已执行原 task.py handoff；本条记录保留在工作树，Git写入条件待恢复。
+- 验收 A1：NOT RUN；完整 verify：NOT RUN；macos-arm64行为未验证，其他平台及1920宽度NOT RUN。未勾选本卡，未调用done、rebaseline或accept-review，未写RESOLVED或AUTHORIZED，未改控制脚本、权限配置、预算或状态文件。
+- 下一步/所需条件：由具备原进程查询和Git写入能力的外层核对上述PID+创建时间、session与重锁，经原 task.py recover 恢复未完成运行；开放本机TV App读取后完成开工校准，再恢复同卡实施。保留本次失败历史、会话额度和当前protected摘要 d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5；当前环境无可验证的本地替代路径。
+
+## T0.28 外层恢复与 TV 应用观察 2026-11-09
+
+- 结果：RESOLVED
+- 决定：依据本聊天用户授权，在当前聊天跟进原单卡流程；外层核对原 runner、payload、驱动及开发进程身份均已退出，原 task.py recover 登记中断并保留 exit 125 和日志。外层可执行 Git 收尾，沿用原资源与会话额度。
+- 外层可读取本机 TV 应用，观察到左侧半透明侧栏和竖版内容卡；当前系统为浅色外观。键盘方向键作用于内容集合，未能从静态观察准确测量焦点放大倍率及动效时长，继续以任务卡初始值为实现基准，具体校准结果待进一步观察，未声称完成测量。
