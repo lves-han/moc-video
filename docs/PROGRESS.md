@@ -2530,3 +2530,12 @@
 - 结果：RESOLVED
 - 决定：用户原话“批准并执行”：批准 round-48 修订（范围、1512 验收宽度与 1440 断点、排序和地区规则、按类型与年份内容排、权限精确断言）和 ADR-058（用户原话“0.27重验不走UTM虚拟机测试，简化一下0.27验收标准，真机或虚拟机测试在0.36做”），授权第二次 rebaseline；T0.27 按 --suite package 完整重验，失败历史和会话额度保留。
 - 批准摘要：d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5
+
+## T0.27 发行安装包按 ADR-058 重验完成 2026-11-09T02:41:28.000000+00:00
+- 结果：DONE
+- Changed：t23.py 拆出 package 和 lifecycle 两种 suite；release.py 白名单加入 Contents/Resources/icon.icns 并校验其与项目图标一致；sourcePresets.ts 的 JSON 导入加 import attribute；settings.rs 按 rustfmt 排版；t05.rs 的来源预期更新为内置默认来源；packaging/T23.md 同步。
+- Why：T0.27 交付后的 Logo 和默认来源提交未经完整验收，用户选择纳入 T0.27 范围并重验；ADR-058 把干净系统生命周期移至 T0.36/A2。
+- 验收 A1：PASS；日志：`evidence/runs/20261109T023759126708-A1/output.log`；断言：--suite package 退出 0，10 项行为用例全部通过，JUnit 14/14，U04、R33、R45、REQ-T23 汇总 PASS。
+- 完整 verify：PASS；收据：`evidence/verify/20261109T023805644334.json`；工作流 131 项、前端 170 项、Rust 库 175 项与 t05 16 项，source 9ced7a7f6fb692f0771fe35e3fb80fb3414fe6b0c98c94cb14c871a7359b7512，generation 2。
+- 过程失败：release.py 白名单缺图标（exit1）、sources.test.ts 加载失败、cargo fmt、t05 两项预期，均已 note 并修复，日志保留在 evidence/runs。
+- Remaining：干净系统安装、初始化、首播、升级、卸载本次 NOT RUN，由 T0.36/A2 执行；Developer ID 和公证未做，产物为 ad-hoc 签名，仅个人使用；其他平台 NOT RUN（ADR-005/006）。升级配置缺 TMDB 的问题由 T0.29 修复。

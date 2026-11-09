@@ -20,6 +20,7 @@ use yingxiang_video::{
     source_dispatch::{SourceDispatch, identity},
 };
 
+const DEFAULT_SOURCES: &str = include_str!("../../src/data/defaultSources.json");
 const CONFIG: &str = "11111111-1111-4111-8111-111111111111";
 const SECOND: &str = "22222222-2222-4222-8222-222222222222";
 fn id() -> String {
@@ -154,10 +155,17 @@ fn t05_http_only_preparation_and_gateway() {
         "CAPABILITY_UNAVAILABLE",
     );
     assert_eq!(ok(&host, "runtime_status", json!({})), ready);
-    assert_eq!(
-        ok(&host, "get_sources", json!({})),
-        json!({"providers": [], "plugins": []})
-    );
+    // A fresh install seeds the bundled TMDB and MacCMS presets; no Cloudstream provider appears.
+    let sources = ok(&host, "get_sources", json!({}));
+    assert_eq!(sources["plugins"], json!([]));
+    let presets: Vec<Value> = serde_json::from_str(DEFAULT_SOURCES).unwrap();
+    let providers = sources["providers"].as_array().unwrap();
+    assert_eq!(providers.len(), presets.len());
+    for (provider, preset) in providers.iter().zip(&presets) {
+        assert_eq!(provider["name"], preset["name"]);
+        assert_eq!(provider["kind"], preset["kind"]);
+        assert_ne!(provider["kind"], "cloudstream");
+    }
     drop(host);
     assert!(TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_err());
 }
@@ -304,7 +312,8 @@ fn t05_migration_corruption_and_unknown_version() {
     let host = Host::open(path.clone()).unwrap();
     let migrated = ok(&host, "get_settings", json!({}));
     assert_eq!(migrated["schema_version"], 2);
-    assert_eq!(migrated["source_configs"], json!([]));
+    let presets: Value = serde_json::from_str(DEFAULT_SOURCES).unwrap();
+    assert_eq!(migrated["source_configs"], presets);
     for key in [
         "last_source_key",
         "volume",

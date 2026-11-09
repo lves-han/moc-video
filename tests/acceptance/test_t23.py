@@ -228,6 +228,26 @@ class EvidenceTests(unittest.TestCase):
             self.assertTrue(all(row["result"] == "FAIL" for row in report["summaries"]))
             self.assertEqual({row["id"] for row in report["summaries"]}, set(t23.IDS))
 
+    def test_package_suite_excludes_lifecycle_and_lifecycle_requires_it(self):
+        package, lifecycle = t23.SUITES["package"], t23.SUITES["lifecycle"]
+        self.assertNotIn("clean-macos-lifecycle", package["behaviors"])
+        self.assertIn("clean-macos-lifecycle", lifecycle["behaviors"])
+        self.assertEqual(package["requirements"], ["U04", "R33", "R45", "REQ-T23"])
+        self.assertEqual(lifecycle["requirements"], ["U04", "R30", "R50", "REQ-T25-LIFECYCLE"])
+        self.assertEqual((package["card"], lifecycle["card"]), ("T0.27", "T0.36"))
+
+    def test_report_and_junit_name_the_suite_that_ran(self):
+        with tempfile.TemporaryDirectory(prefix="t23-suite-", dir=t23.ROOT / "evidence") as temporary:
+            run = t23.Acceptance.__new__(t23.Acceptance)
+            run.folder = Path(temporary)
+            run.report_path, run.junit_path = run.folder / "out.json", run.folder / "out.xml"
+            run.source, run.started = "source", "2026-11-07T00:00:00+00:00"
+            run.cases, run.commands, run.observed = [], [], {}
+            with mock.patch.object(t23.workflow, "snapshot", return_value="source"), mock.patch.object(t23.workflow, "protected_hash", return_value="protected"):
+                run.save()
+            self.assertEqual(t23.read_json(run.report_path)["suite"], "package")
+            self.assertIn('name="T23-package"', run.junit_path.read_text(encoding="utf-8"))
+
     def test_relative_report_arguments_resolve_from_project_root(self):
         report, junit = Path("evidence/acceptance/T23-all.json"), Path("evidence/acceptance/T23-all.xml")
         run = t23.Acceptance(report, junit)
@@ -289,14 +309,20 @@ class EvidenceTests(unittest.TestCase):
             seal.parent.mkdir()
             seal.write_text("seal")
             config = dict(identifier="app.yingxiang.video", version="0.1.0", bundle=dict(macOS=dict(bundleVersion="2")))
-            (root / "src-tauri").mkdir()
+            (root / "src-tauri/icons").mkdir(parents=True)
             (root / "src-tauri/tauri.conf.json").write_text(json.dumps(config))
+            (root / "src-tauri/icons/icon.icns").write_bytes(b"project icon")
+            (app / "Contents/Resources/icon.icns").write_bytes(b"project icon")
             info = dict(CFBundleIdentifier="app.yingxiang.video", CFBundleShortVersionString="0.1.0", CFBundleVersion="2",
                 CFBundleExecutable="yingxiang-video", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True,
-                NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True))
+                NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True), CFBundleIconFile="icon.icns")
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
             with mock.patch.object(t23.release, "ROOT", root), mock.patch.object(t23.release, "INVENTORY", licenses / "dependencies.json"), mock.patch.object(t23.release, "NOTICES", licenses / "THIRD_PARTY_NOTICES.txt"):
                 self.assertEqual(t23.release.check_payload(app, frontend)["bundle_version"], "2")
+                (app / "Contents/Resources/icon.icns").write_bytes(b"other icon")
+                with self.assertRaises(ValueError):
+                    t23.release.check_payload(app, frontend)
+                (app / "Contents/Resources/icon.icns").write_bytes(b"project icon")
                 for text in ('<script src="https://cdn.invalid/app.js"></script>', '<link rel="stylesheet" href="https://cdn.invalid/app.css">'):
                     (frontend / "index.html").write_text(text)
                     with self.subTest(text=text), self.assertRaises(ValueError):

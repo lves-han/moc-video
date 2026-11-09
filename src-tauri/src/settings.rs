@@ -18,8 +18,9 @@ pub fn defaults() -> Value {
 
 fn initial_defaults() -> Value {
     let mut settings = defaults();
-    settings["source_configs"] = serde_json::from_str(include_str!("../../src/data/defaultSources.json"))
-        .expect("Bundled source defaults must be valid JSON");
+    settings["source_configs"] =
+        serde_json::from_str(include_str!("../../src/data/defaultSources.json"))
+            .expect("Bundled source defaults must be valid JSON");
     settings
 }
 
@@ -125,7 +126,9 @@ impl SettingsFile {
                         return Err(ApiError::bad("Unsupported settings schema_version"));
                     }
                     validate(&settings)?;
-                    let seed_sources = settings["source_configs"].as_array().is_some_and(Vec::is_empty);
+                    let seed_sources = settings["source_configs"]
+                        .as_array()
+                        .is_some_and(Vec::is_empty);
                     if seed_sources {
                         settings["source_configs"] = initial_defaults()["source_configs"].clone();
                         validate(&settings)?;
@@ -154,7 +157,7 @@ impl SettingsFile {
                 validate(&settings)?;
                 store.save(&settings)?;
                 Ok((store, settings))
-            },
+            }
             Err(_) => Err(ApiError::internal("Settings file open failed")),
         }
     }
@@ -209,14 +212,21 @@ mod preset_tests {
         validate(&first).unwrap();
         assert_eq!(first["source_configs"].as_array().unwrap().len(), 9);
         assert_eq!(first["source_configs"][0]["kind"], "stremio");
-        assert!(first["source_configs"][0]["manifest_urls"][0].as_str().unwrap().contains("tmdb.elfhosted.com"));
+        assert!(
+            first["source_configs"][0]["manifest_urls"][0]
+                .as_str()
+                .unwrap()
+                .contains("tmdb.elfhosted.com")
+        );
         assert_eq!(SettingsFile::load(path).unwrap().1, first);
     }
 
     #[test]
     fn empty_profile_is_seeded_and_existing_disabled_choices_are_preserved() {
         let folder = tempfile::tempdir().unwrap();
-        let store = SettingsFile { path: folder.path().join("settings.json") };
+        let store = SettingsFile {
+            path: folder.path().join("settings.json"),
+        };
         let mut original = defaults();
         original["volume"] = json!(0.25);
         store.save(&original).unwrap();

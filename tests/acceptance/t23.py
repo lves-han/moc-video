@@ -1,7 +1,9 @@
-"""T23: verify the current personal installer and raw clean-machine evidence.
+"""T23: verify the current personal installer, and raw clean-machine evidence.
 
-Only original run.py executes this suite. The clean target is supplied by the
-human; a developer HOME or an existing test app never supplies that evidence.
+Only original run.py executes these suites. `package` inspects the installer
+without launching it (T0.27/A1). `lifecycle` rechecks a human clean-machine run
+(T0.36/A2, ADR-058); a developer HOME or an existing test app never supplies
+that evidence.
 """
 import argparse
 from contextlib import closing
@@ -32,10 +34,18 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "packaging"))
 import release
 
-IDS = ["U04", "R30", "R33", "R45", "R50", "REQ-T23"]
-BEHAVIORS = {"resource-ownership", "reference-platform", "current-build-receipt", "dependency-notices",
-             "production-payload", "archive-roundtrip", "actual-signing-status", "clean-macos-lifecycle",
-             "independent-oracle-negatives"}
+COMMON = {"resource-ownership", "reference-platform", "current-build-receipt", "independent-oracle-negatives"}
+SUITES = {
+    "package": dict(card="T0.27", original="T23", requirements=["U04", "R33", "R45", "REQ-T23"],
+                    behaviors=COMMON | {"dependency-notices", "production-payload", "archive-roundtrip", "actual-signing-status"},
+                    deployment="Local archive/signature inspection; no app window, cluster or VM launched",
+                    lifecycle="Clean-machine install/first play/upgrade/uninstall runs in T0.36/A2 (ADR-058); NOT RUN by this suite"),
+    "lifecycle": dict(card="T0.36", original="T25", requirements=["U04", "R30", "R50", "REQ-T25-LIFECYCLE"],
+                      behaviors=COMMON | {"clean-macos-lifecycle"},
+                      deployment="Local recheck of hash-bound human clean-macOS observations; no cluster or VM launched",
+                      lifecycle="Human executes the documented clean-machine procedure; this run rechecks raw files, app trees, data and recording, not saved PASS flags"),
+}
+IDS = SUITES["package"]["requirements"]
 
 
 def inside(name, folder):
@@ -48,14 +58,18 @@ def inside(name, folder):
 
 class Acceptance(t14.Acceptance):
     CARD, ORIGINAL, REQUIREMENTS = "T0.27", "T23", IDS
-    DEPLOYMENT = "Local archive/signature inspection; hash-bound human clean-macOS observations; no cluster or VM launched"
+    SUITE = "package"
+    DEPLOYMENT = SUITES["package"]["deployment"]
     DEFERRED = [dict(target=target, status="NOT RUN", reason="ADR-005/006; no target machine",
-        reproduce_argv=["{python}", "-B", "tests/acceptance/t23.py", "--suite", "all",
-                        "--report", "evidence/acceptance/T23-all.json", "--junit", "evidence/acceptance/T23-all.xml"],
+        reproduce_argv=["{python}", "-B", "tests/acceptance/t23.py", "--suite", "package",
+                        "--report", "evidence/acceptance/T23-package.json", "--junit", "evidence/acceptance/T23-package.xml"],
         prerequisites="Authorized C1 target/venv/lock rebinding and a target-specific installer/lifecycle run; current inspector requires macOS arm64")
         for target in t01.DEFERRED]
 
-    def __init__(self, report, junit):
+    def __init__(self, report, junit, suite="package"):
+        config = SUITES[suite]
+        self.SUITE, self.CARD, self.ORIGINAL = suite, config["card"], config["original"]
+        self.REQUIREMENTS, self.DEPLOYMENT = config["requirements"], config["deployment"]
         super().__init__(report.resolve(), junit.resolve())
 
     def command(self, argv, timeout=300, accepted=(0,)):
@@ -86,12 +100,19 @@ class Acceptance(t14.Acceptance):
 
     def save(self):
         actual = {row["id"].split("/", 1)[1] for row in self.cases}
-        self.case("required-behavior-inventory", IDS, sorted(BEHAVIORS),
-                  lambda: require(BEHAVIORS <= actual, "Missing required behavior cases: " + str(sorted(BEHAVIORS - actual))))
+        behaviors = SUITES[self.SUITE]["behaviors"]
+        self.case("required-behavior-inventory", self.REQUIREMENTS, sorted(behaviors),
+                  lambda: require(behaviors <= actual, "Missing required behavior cases: " + str(sorted(behaviors - actual))))
         self.observed["limitations"] = dict(resource_backend="Original process-tree RSS sampling; transient overage possible; jobs2/thread1",
-            lifecycle="Human executes the documented clean-machine procedure; this run rechecks raw files, app trees, data and recording, not saved PASS flags",
+            lifecycle=SUITES[self.SUITE]["lifecycle"],
             signing="Ad-hoc only; Developer ID and notarization pending; default system security/quarantine retained")
         result = super().save()
+        # The shared base labels every report "all"; record which suite actually ran.
+        report = read_json(self.report_path)
+        report["suite"] = self.SUITE
+        self.report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        junit = self.junit_path.read_text(encoding="utf-8")
+        self.junit_path.write_text(junit.replace(f'name="{self.ORIGINAL}-all"', f'name="{self.ORIGINAL}-{self.SUITE}"', 1), encoding="utf-8")
         immutable = self.folder / "report.json"
         if self.report_path != immutable:
             immutable.write_bytes(self.report_path.read_bytes())
@@ -384,25 +405,32 @@ def oracles(run):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", choices=["all"], required=True)
+    parser.add_argument("--suite", choices=sorted(SUITES), required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    run = Acceptance(args.report, args.junit)
-    ready = run.case("resource-ownership", IDS, "Original run.py receipt and approved macOS resource backend", lambda: t10.resources(run, card="T0.27"))
-    run.case("reference-platform", ["U04", "R30", "REQ-T23"], "Actual macOS14+ arm64/WebKit/tool versions", lambda: environment(run) if ready else require(False, "NOT RUN: original resource owner missing"))
-    run.case("independent-oracle-negatives", IDS, "Corrupt/stale/empty/missing/unsealed evidence fails", lambda: oracles(run) if ready else require(False, "NOT RUN: original resource owner missing"))
+    run = Acceptance(args.report, args.junit, args.suite)
+    def ids(*names):
+        mapped = ["REQ-T25-LIFECYCLE" if name == "REQ-T23" and args.suite == "lifecycle" else name for name in names]
+        return [name for name in mapped if name in run.REQUIREMENTS]
+    missing_owner = lambda: require(False, "NOT RUN: original resource owner missing")
+    ready = run.case("resource-ownership", run.REQUIREMENTS, "Original run.py receipt and approved macOS resource backend", lambda: t10.resources(run, card=run.CARD))
+    run.case("reference-platform", ids("U04", "R30", "REQ-T23"), "Actual macOS14+ arm64/WebKit/tool versions", lambda: environment(run) if ready else missing_owner())
+    run.case("independent-oracle-negatives", run.REQUIREMENTS, "Corrupt/stale/empty/missing/unsealed evidence fails", lambda: oracles(run) if ready else missing_owner())
     bound = []
     def bind():
         bound.extend(artifact(run))
         return run.observed["release"]
-    run.case("current-build-receipt", IDS, "Same-source/protected generation, immutable manifest and original successful build", lambda: bind() if ready else require(False, "NOT RUN: original resource owner missing"))
-    run.case("dependency-notices", ["R33", "R45", "REQ-T23"], "Recollect exact 430 installed locked npm/Cargo/SQLite notices and compare bytes", lambda: run.command(["{python}", "-B", "packaging/release.py", "--verify-licenses"]) if ready else require(False, "NOT RUN: original resource owner missing"))
-    for name, requirements, expected, action in [
-        ("production-payload", ["R33", "R45", "REQ-T23"], "Current local frontend, system-only dependencies, no Android materials/dev paths/test bridge", lambda: payload(*bound)),
-        ("archive-roundtrip", ["U04", "R33", "R45", "REQ-T23"], "ZIP and read-only DMG payloads/signatures roundtrip; actual predecessor preserved", lambda: archives(run, *bound)),
-        ("actual-signing-status", ["U04", "R45", "REQ-T23"], "Complete ad-hoc seal; actual Gatekeeper/stapler status; explicit unsigned release tasks", lambda: signing(run, *bound)),
-        ("clean-macos-lifecycle", ["U04", "R30", "R50", "REQ-T23"], "Clean target/default security/current installer initialize/play/upgrade/data-preserving uninstall/explicit cleanup", lambda: lifecycle(run, *bound))]:
+    run.case("current-build-receipt", run.REQUIREMENTS, "Same-source/protected generation, immutable manifest and original successful build", lambda: bind() if ready else missing_owner())
+    if args.suite == "package":
+        run.case("dependency-notices", ids("R33", "R45", "REQ-T23"), "Recollect exact 430 installed locked npm/Cargo/SQLite notices and compare bytes", lambda: run.command(["{python}", "-B", "packaging/release.py", "--verify-licenses"]) if ready else missing_owner())
+        checks = [
+            ("production-payload", ids("R33", "R45", "REQ-T23"), "Current local frontend, system-only dependencies, no Android materials/dev paths/test bridge", lambda: payload(*bound)),
+            ("archive-roundtrip", ids("U04", "R33", "R45", "REQ-T23"), "ZIP and read-only DMG payloads/signatures roundtrip; actual predecessor preserved", lambda: archives(run, *bound)),
+            ("actual-signing-status", ids("U04", "R45", "REQ-T23"), "Complete ad-hoc seal; actual Gatekeeper/stapler status; explicit unsigned release tasks", lambda: signing(run, *bound))]
+    else:
+        checks = [("clean-macos-lifecycle", ids("U04", "R30", "R50", "REQ-T23"), "Clean target/default security/current installer initialize/play/upgrade/data-preserving uninstall/explicit cleanup", lambda: lifecycle(run, *bound))]
+    for name, requirements, expected, action in checks:
         run.case(name, requirements, expected, lambda action=action: action() if bound else require(False, "NOT RUN: current installer/build receipt missing"))
     return run.save()
 

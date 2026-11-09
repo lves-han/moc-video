@@ -196,9 +196,11 @@ def check_payload(app, frontend):
     executable = app / "Contents/MacOS" / info["CFBundleExecutable"]
     require(executable.name == "yingxiang-video" and os.access(executable, os.X_OK), "Shipping executable missing")
     allowed = {"Contents/Info.plist", "Contents/MacOS/yingxiang-video", "Contents/_CodeSignature/CodeResources",
-               "Contents/Resources/licenses/dependencies.json", "Contents/Resources/licenses/THIRD_PARTY_NOTICES.txt"}
+               "Contents/Resources/icon.icns", "Contents/Resources/licenses/dependencies.json", "Contents/Resources/licenses/THIRD_PARTY_NOTICES.txt"}
     files = tree(app)
     require(set(files) == allowed, "Unexpected or missing shipping files: " + str(sorted(set(files) ^ allowed)))
+    require(info["CFBundleIconFile"] == "icon.icns"
+            and (app / "Contents/Resources/icon.icns").read_bytes() == (ROOT / "src-tauri/icons/icon.icns").read_bytes(), "Bundled icon differs from the project icon")
     for path in (INVENTORY, NOTICES):
         require((app / "Contents/Resources/licenses" / path.name).read_bytes() == path.read_bytes(), "Bundled license bytes differ")
     forbidden = (str(ROOT).encode(), str(Path.home()).encode() + b"/", b"/Users/", b"/home/", b"C:\\Users\\",
