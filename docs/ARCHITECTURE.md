@@ -134,7 +134,7 @@ T0.23复用设置提交锁、config_generation与sync_sequence：网络探测在
 
 桌面lib.rs移动公共入口/cfg隔离；移动后续复用DTO/状态/页面/Rust HTTP、匹配及SQLite。Android/iOS各自本地执行共用Rust来源与网关，按真机网络策略验证TLS、来源/Session/cap隔离及断线恢复；Android单应用，iOS无需远程Android设备。360/390/768、44px触控目标、safe area/playsinline/系统返回、旋转、音频中断、前后台暂停及进程回收真机验收。最低OS/工具链M00实测，MG0..3逐项证据。
 
-macOS arm64个人使用包干净安装、初始化、升级/卸载、实际签名公证状态、实际依赖许可与版本锁、离线打包资源按T23/T24；原插件/引擎APK/SDK镜像排除打包。公开发行须另获用户授权。WebView2/WebKitGTK/GStreamer等其他平台项列NOT RUN。缺Apple签名凭据时产出未签名包并列为发行待办；真实源失败按当前公开请求记录日期/环境/阶段，访问控制停止报告，在线与fixture结果分别列明。
+macOS arm64个人使用包实际签名公证状态、实际依赖许可与版本锁、离线打包资源按T23/T24，干净安装、初始化、首播、升级/卸载按ADR-058由T0.36/A2执行；原插件/引擎APK/SDK镜像排除打包。公开发行须另获用户授权。WebView2/WebKitGTK/GStreamer等其他平台项列NOT RUN。缺Apple签名凭据时产出未签名包并列为发行待办；真实源失败按当前公开请求记录日期/环境/阶段，访问控制停止报告，在线与fixture结果分别列明。
 
 ### C16 历史IPC的最小实现契约（SPEC §11.4/§18.6的规划细化）
 
@@ -165,7 +165,7 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 界面：沉浸标题栏与悬浮侧栏；首页及分类页使用横向内容排，竖版海报，每排数量随窗口宽度变化，取代C10的“4..7卡/行”；筛选后使用海报墙。桌面固定深色，五种色系继续作为强调色，取代C11对桌面明暗跟随系统的要求。
 播放器：沿用Video.js 10.3.0内核及官方元素，以官方元素组合的自定义皮肤取代`video-compat-skin`，修订ADR-055的“官方皮肤”；网关Session、单媒体所有权、250ms位置、旧epoch丢弃、焦点恢复、原生全屏和50次切集回收继续有效。
 目录：`Bridge_MediaCard`、`Bridge_HomeSection`、`Bridge_HomeRequest`按T0.29扩展可选字段；Stremio组合筛选由Rust完成，服务端条件优先级为语言、年份、类型，单次最多扫描5页。MacCMS的服务端条件限于分类ID、分页和关键词。筛选含类型、年份、语言、地区、排序，每个栏目返回各维度可用性。TMDB的地区禁用；排序只在无语言和年份条件时可用。
-契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节列名的可选字段；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
+契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节及T0.29列名的可选字段（含`Settings.metadata_preset_applied`）；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
 同源播放：`metadata_ref.identity.namespace`为`maccms`时，元数据与播放可来自同一MacCMS来源；Stremio元数据的跨源匹配和绑定校验保持。
 IPC与权限：在C11的23项基础上增加`list_watchlist`、`add_watchlist`、`remove_watchlist`、`search_catalog`，合计27项，沿用request_id、engine_epoch、预算和取消规则；`list_watchlist`输入为空，返回`{entries}`；`add_watchlist`输入观看身份字段、title、kind、poster_cache_key，`remove_watchlist`输入`{content_id}`；`search_catalog`输入`{source_id,source_revision,query}`，返回`{items}`，按default_metadata预算、每来源串行，界面取消旧请求；四项都拒绝URL、cap和Cookie；主窗口权限只增加这4项及`core:window:allow-start-dragging`。CSP、CORS、TLS和媒体网关策略保持。
 数据：SQLite版本升至2，新增watchlist表，`watch_history`结构保持。

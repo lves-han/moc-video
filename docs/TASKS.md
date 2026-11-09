@@ -70,7 +70,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | U01 / §1.1 | Tauri/Rust、WebView、原生持久化 | T0.2/A1, T0.3/A1, T0.18/A1, T0.35/A1 | 按原规格完整保留 |
 | U02 / §1.1,2.1 | 首版可用SuperVod JSON来源的搜索、详情、选集及解析 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代给定索引与全部provider义务 |
 | U03 / §1.1,8 | 推荐/详情/选集/播放完整真实闭环 | T0.14/A1, T0.15/A1, T0.16/A1, T0.24/A1 | 按原规格完整保留 |
-| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.35/A1 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
+| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.35/A1, T0.36/A2 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
 | U05 / §1.1,2.2,6.3 | 依据公开行为独立实现的Rust来源，实际媒体闭环 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代原7包ART/DEX兼容；其余六站暂缓 |
 | U06 / §1.1,15 | 准确契约/依赖/错误与可复现交付 | T0.1/A1, T0.3/A1, T0.35/A1, T0.36/A1 | 按原规格完整保留 |
 | U07 / §1.1,16 | 桌面公共入口/cfg/响应式、后续移动真机MG | T0.13/A1, T0.35/A1, T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1, T1.5/A1, T1.6/A1 | 按原规格完整保留 |
@@ -105,7 +105,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R27 / §9.2 | 原生来源请求上下文保真、Range200/206/416、压缩头、64KiB流/8MiB清单 | T0.9/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
 | R28 / §9.3 | HLS URI行/属性/key/map/音字幕/相对签名/序列与全部子资源 | T0.10/A1, T0.25/A1 | 按原规格完整保留 |
 | R29 / §9.4 | 字幕结构化VTT、DASH条件性全基线模板/SIDX、DRM明确拒绝 | T0.11/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
-| R30 / §10.1 | 系统WebView真实H264/AAC/HLS/MSE、平台依赖与安全传输 | T0.2/A1, T0.12/A1, T0.27/A1, T0.35/A1 | 按原规格完整保留 |
+| R30 / §10.1 | 系统WebView真实H264/AAC/HLS/MSE、平台依赖与安全传输 | T0.2/A1, T0.12/A1, T0.35/A1, T0.36/A2 | 按原规格完整保留 |
 | R31 / §10.2 | 17invoke形状/权限/host_epoch/包装DTO/递归图片与事件卸载、旧cloudstream明确未支持 | T0.3/A1, T0.7/A1, T0.9/A1, T0.13/A1, T0.22/A1 | ADR-048保留线格式兼容，移除guest执行 |
 | R32 / §10.3 | 一个video/player生命周期/250ms位置/旧epoch/自动播放提示/CORS/CSP | T0.2/A1, T0.12/A1, T0.16/A1, T0.35/A1 | 按原规格完整保留 |
 | R33 / §10.4 | 锁文件、npm ci/type/build、Rustfmt/check/clippy/test与发行依赖 | T0.1/A1, T0.27/A1, T0.36/A1 | 按原规格完整保留 |
@@ -125,7 +125,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R47 / §13 | 1.5秒壳/100ms UI/本地p95<100ms/60秒宿主冷启为记录目标，5次启动 | T0.26/A1, T0.26/A2 | ADR-044/048；无Android启动样本 |
 | R48 / §13 | 1080p30 H264AAC10分钟、20Mbps3分钟、50切集无泄漏与DPI125/150/200 | T0.2/A1（功能）, T0.12/A1, T0.25/A1（功能）, T0.26/A1, T0.26/A2（网关耐久）, T0.35/A1（播放器耐久） | ADR-044放宽 |
 | R49 / §14.1 | 公开行为fixture/自有媒体，测试替身与正式构建隔离 | T0.2/A1, T0.4/A1, T0.5/A1, T0.19/A1, T0.22/A1, T0.25/A1, T0.35/A1 | ADR-048取代原DEX网络替身 |
-| R50 / §14.2,14.3 | G0-Core及Rust来源G2、G1/G3/G4/G5实际桌面闭环 | T0.1/A1（历史）, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.27/A1, T0.35/A1 | ADR-048取消G0-CS、取代原包G2 |
+| R50 / §14.2,14.3 | G0-Core及Rust来源G2、G1/G3/G4/G5实际桌面闭环 | T0.1/A1（历史）, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.35/A1, T0.36/A2 | ADR-048取消G0-CS、取代原包G2 |
 | R51 / §15 | 先机器契约、真命令/日志/报告、复现/回归/数据及发布材料 | T0.3/A1, T0.35/A1, T0.36/A1 | 按原规格完整保留 |
 | R52 / §16.1,16.2 | 桌面后移动分期与Rust/DTO/页面/cfg复用 | T0.13/A1, T1.1/A1, T1.6/A1 | 按原规格完整保留 |
 | R53 / §16.3 | Android本地Rust来源、单应用、生命周期/权限隔离 | T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1 | ADR-048；移动阶段另获授权 |
@@ -197,6 +197,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | REQ-TV7 / ADR-057 | 搜索、资料库、来源与设置 | T0.34/A1 | 桌面Apple TV化 |
 | REQ-T24 / replica-spec/AI_TASKS.md T24 | ADR-048修订后的T24工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.35/A1 | 桌面首版 |
 | REQ-T25 / replica-spec/AI_TASKS.md T25 | ADR-048修订后的T25工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.36/A1 | 桌面首版 |
+| REQ-T25-LIFECYCLE / ADR-058 | 干净真机或专用虚拟机上的安装、初始化、首播、升级、卸载 | T0.36/A2 | 桌面首版 |
 | REQ-M00 / replica-spec/AI_TASKS.md M00 | ADR-048修订后的M00工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.1/A1 | 后续移动 |
 | REQ-M01 / replica-spec/AI_TASKS.md M01 | ADR-048修订后的Android本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.2/A1 | 后续移动 |
 | REQ-M02 / replica-spec/AI_TASKS.md M02 | ADR-048修订后的M02工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.3/A1 | 后续移动 |
@@ -1537,7 +1538,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [x] 完成
 - 依赖：T0.26
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
-- 需求：U04, R30, R33, R45, R50, REQ-T23 → A1（覆盖表含精确对应）
+- 需求：U04, R33, R45, REQ-T23 → A1（覆盖表含精确对应）
 - 范围：`packaging/`, `src-tauri/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `src/data/defaultSources.json`, `src/data/sourcePresets.ts`, `src/main.ts`, `src/state.ts`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t23.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
@@ -1545,26 +1546,24 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "macOS arm64个人使用安装包干净系统安装/初始化/首播/升级/卸载；本地前端无运行CDN/开发绝对路径、实际依赖许可/版本锁对应；安装包不含原插件、引擎APK或SDK镜像。签名公证如实记录；缺Apple凭据产出未签名包并列待办。其他平台NOT RUN，个人使用范围及第三方来源限制清楚，未签名冒通过或依赖证据缺失时失败。",
+    "description": "当前源码构建的macOS arm64个人使用安装包 → 期望：本地前端无运行CDN和开发绝对路径，实际依赖许可与版本锁一一对应，安装包不含原插件、引擎APK或SDK镜像，ZIP和DMG解包及ad-hoc签名密封复验通过，Developer ID和公证状态如实记录，缺Apple凭据时列入待办。本验收只检查安装包，不启动应用窗口、虚拟机或其他机器；干净系统安装、初始化、首播、升级、卸载由T0.36/A2执行（ADR-058）。其他平台NOT RUN。会被拒绝：产物与当前源码不对应、未签名包声称已签名或公证、依赖证据缺失、包内含禁止材料。",
     "argv": [
       "{python}",
       "-B",
       "tests/acceptance/t23.py",
       "--suite",
-      "all",
+      "package",
       "--report",
-      "evidence/acceptance/T23-all.json",
+      "evidence/acceptance/T23-package.json",
       "--junit",
-      "evidence/acceptance/T23-all.xml"
+      "evidence/acceptance/T23-package.xml"
     ],
     "kind": "test",
-    "report": "junit:evidence/acceptance/T23-all.xml",
+    "report": "junit:evidence/acceptance/T23-package.xml",
     "cases": [
       "U04",
-      "R30",
       "R33",
       "R45",
-      "R50",
       "REQ-T23"
     ],
     "timeout_seconds": 7200
@@ -1573,7 +1572,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 #### 修订义务（ADR-048取代归档原卡）
 
-- 工作与验收：Tauri构建、本地资源、实际依赖和版本锁/许可通知；移除Android运行时/原包发行材料要求及产物。干净机器安装/首播/升级/卸载，使用默认系统安全设置，无开发机绝对路径；缺签名凭据如实列未签名与发行待办，公开发行另获用户授权。
+- 工作与验收：Tauri构建、本地资源、实际依赖和版本锁/许可通知；移除Android运行时/原包发行材料要求及产物。无开发机绝对路径；干净机器安装/首播/升级/卸载按ADR-058移至T0.36/A2；缺签名凭据如实列未签名与发行待办，公开发行另获用户授权。
+- `tests/acceptance/t23.py` 增加 `--suite package` 和 `--suite lifecycle`：package 运行资源、平台、当前构建、依赖、产物、归档、签名和反例检查，只输出 U04、R33、R45、REQ-T23 及具名行为用例；lifecycle 供 T0.36/A2 使用。`packaging/T23.md` 同步说明。
 
 ### T0.28 TV1 桌面外壳、深色主题与焦点系统
 - [ ] 完成
@@ -1769,7 +1769,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口接内置TMDB及受控fixture → 期望：首页显示可轮播Hero、继续观看和按分类的横向内容排；电影、电视剧、动画、纪录片入口显示各自内容；TMDB 分类下类型、年份、语言可组合，排序在无语言和年份时可用，地区按来源声明禁用并显示原因，选中后切换海报墙并滚动加载，条件写入地址，返回详情后恢复筛选和位置；内容排进入视口才请求；空结果给出去掉条件的快捷入口。会被拒绝：各分类显示相同内容、筛选后结果与条件不符、返回后丢失状态、首屏一次请求全部内容排。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1512宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。首页内容排在真实页面按 T0.28 的 MediaRow 规格核对海报宽度、留白和翻页按钮。",
+    "description": "环境：真实打包窗口接内置TMDB及受控fixture → 期望：首页显示可轮播Hero、继续观看和按分类的横向内容排；电影、电视剧、动画、纪录片入口显示各自内容；TMDB 分类下类型、年份、语言可组合，排序在无语言和年份时可用，地区按来源声明禁用并显示原因，选中后切换海报墙并滚动加载，条件写入地址，返回详情后恢复筛选和位置；内容排进入视口才请求；空结果给出去掉条件的快捷入口。会被拒绝：各分类显示相同内容、筛选后结果与条件不符、返回后丢失状态、首屏一次请求全部内容排、缺少按类型或按年份内容排。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1512宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。首页内容排在真实页面按 T0.28 的 MediaRow 规格核对海报宽度、留白和翻页按钮。",
     "argv": [
       "{python}",
       "-B",
@@ -1811,7 +1811,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 继续观看使用 `list_history` 和现有 `historyPoster`，横版卡带进度条。
 - 首页依次为 Hero、继续观看、本周趋势电影与剧集、最新上线与热门电影、按类型（动作、喜剧、科幻、剧情，来自 `tmdb.top` 的 `genre`）、按年份（今年、去年，来自 `tmdb.year` 的 `genre`）、华语韩语日语精选；分类页默认依次为趋势、最新、今年、去年和该分类的类型排；首页和分类页的 `.home-card`、`.home-section` 等现有测试选择器保留。
 - 新增 `BrowseView.vue` 和 `FilterBar.vue`，路由 `#/browse/<分类>?genre=…`，电影、电视剧、动画、纪录片四个分类共用该视图并接入侧栏。
-- 筛选维度为类型、年份、语言、地区、排序，每维单选；毛玻璃面板支持方向键；内容排标题进入该排的海报墙。
+- 筛选维度为类型、年份、语言、地区、排序，每维单选；已选排序后再选语言或年份时自动清除排序并提示；毛玻璃面板支持方向键；内容排标题进入该排的海报墙。
 
 #### 页面风格规格（ADR-057）
 
@@ -2136,6 +2136,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 依赖：T0.33, T0.34
 - 需求：U01, U04, R30, R32, R48, R49, REQ-T01, U06, U07, R01, R07, R50, R51, R57, REQ-T24 → A1（覆盖表含精确对应）
 - 范围：`src/`, `src-tauri/`, `packaging/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
+- 安装生命周期（ADR-058）：干净系统安装、初始化、首播、升级、卸载由 T0.36/A2 执行，本卡的真实运行证据核对不包含这部分。
 - 交付物：落实下列修订义务；提供`tests/acceptance/t24.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 独立验收：本卡必须由独立只读审阅者审查固定构建及受验提交，作者按报告修复后再次复审。审阅原始报告保存于`docs/reviews/T24/round-<N>.md`（随文档提交），正文写明所审提交SHA与源码摘要，末行`ACCEPTANCE-VERDICT: CLEAR`或`ACCEPTANCE-VERDICT: BLOCKING`；t24.py只读取N数值最大的轮次，提交/摘要与本次构建不一致、末行缺失或为BLOCKING时失败。 本卡先经原run执行同源码/构建/protected/generation的t24-endurance前置实跑并保存原始样本，payload在原日志输出证据manifest SHA以由收据log_hash绑定；独立只读报告复核本批原始证据及固定WIP构建，记录文件SHA，再执行A1完整重算同批所有长播/生命周期断言并核对原收据/日志/manifest/独立报告，拒绝仅passed摘要、缺失或改写证据及旧源码/基线。报告允许先于最终A1，绑定受验构建提交与源码；其后仅docs提交保持证据绑定。
 - 验收：
@@ -2192,8 +2193,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T0.35
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
-- 需求：U06, R33, R51, C-PATH, REQ-T25 → A1（覆盖表含精确对应）
-- 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
+- 需求：U06, R33, R51, C-PATH, REQ-T25 → A1；U04, R30, R50, REQ-T25-LIFECYCLE → A2（覆盖表含精确对应）
+- 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `packaging/`, `src-tauri/`, `src/`, `tests/`, `docs/PROGRESS.md`
 - 移动阶段：本卡完成并独立巡检CLEAR后停止桌面监管，报告移动清单；T1.1的阶段门由控制器拦截，等待人类授权（ADR-007）。
 - 交付物：落实下列修订义务；提供`tests/acceptance/t25.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
@@ -2223,6 +2224,30 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "REQ-T25"
     ],
     "timeout_seconds": 7200
+  },
+  {
+    "id": "A2",
+    "description": "用当前最终源码构建的安装包，在干净的真机或专用虚拟机（macOS 14+ arm64、默认安全设置）上由用户执行安装、初始化、首播、升级、保留数据卸载和显式清理 → 期望：观察记录的安装包摘要、source、protected与当前构建一致，首播有画面和进度，用户确认能听到声音，升级保留设置和历史，卸载后数据按约定保留。会被拒绝：观察记录属于其他构建、系统不干净、修改系统安全设置或移除quarantine、缺用户声音确认。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/t23.py",
+      "--suite",
+      "lifecycle",
+      "--report",
+      "evidence/acceptance/T25-lifecycle.json",
+      "--junit",
+      "evidence/acceptance/T25-lifecycle.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T25-lifecycle.xml",
+    "cases": [
+      "U04",
+      "R30",
+      "R50",
+      "REQ-T25-LIFECYCLE"
+    ],
+    "timeout_seconds": 7200
   }
 ]
 ```
@@ -2233,6 +2258,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 工作：重写README围绕最终实现给出构建、运行、测试、依赖初始化、诊断及发布状态；列出实际保留限制。
 - 通过：另一开发AI可从全新目录按说明复现；任务状态与证据对应；实际平台材料和Rust来源支持清单可追溯。
 - 最终报告：Changed / Why / Verified / Remaining，附安装包、源码、版本锁和验收报告路径。
+- 干净系统生命周期（ADR-058）：`packaging/release.py --build` 生成最终安装包，按 `packaging/T23.md` 的流程在干净真机或专用虚拟机上完成观察，由用户确认声音，再运行 A2。`t23.py --suite lifecycle` 的资源归属使用当前卡 T0.36，并输出 U04、R30、R50、REQ-T25-LIFECYCLE。发现缺陷时在本卡修复后重新构建和观察。
 
 ### T1.1 M00 Android / iOS 真机可行性与版本基线
 - [ ] 完成
