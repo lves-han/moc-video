@@ -2679,3 +2679,8 @@
 - 事实：外层确认 runner PID18047、payload PID18052 及其记录身份已退出，原 task.py recover 将 tv3-frontend-check 中断登记 exit125 并保留原证据。此前会话的 BLOCKED 记录中“尚待外层 recover”已经处理，原限制与失败历史保留。
 - 定向检查：外层原 run.py tv3-frontend-check 实际 exit2，vue-tsc 报 CatalogRow.vue:20、HomeCatalog.vue:93/100 的 AppController.value 类型错误；日志 `evidence/runs/20261109T080004096650-tv3-frontend-check/output.log`。产品代码尚未通过类型检查，准确A1和完整verify仍 NOT RUN。
 - 后续：两次原会话均已使用，已向用户询问是否增加一次本卡会话以修复并完成既有验收；未扩大预算或验收标准。
+
+## T0.30 额外会话授权与代验恢复 2026-11-09
+- 结果：RESOLVED
+- 决定：用户在本聊天明确指示“批准为 0.30 增加一次开发会话”。仅本卡上限由2调整为3；原会话时长、资源限制、验收标准与失败历史保持。此前进程清理已由外层核对并经原 recover 完成；外层通过原 run.py 代执行受管检查并在开发会话暂停写入时回传结果，Git 收尾沿既有授权执行。
+- 依据：当前 protected 656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e，已知初稿类型检查失败见 evidence/runs/20261109T080004096650-tv3-frontend-check/output.log；先修复并复验，再完成已批准的单卡验收和完整验证。
