@@ -1763,7 +1763,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 依赖：T0.28, T0.29
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-HOME, TV-BROWSE, REQ-TV3 → A1（覆盖表含精确对应）
-- 范围：`src/App.vue`, `src/views/HomeView.vue`, `src/views/BrowseView.vue`, `src/components/`, `src/style.css`, `src/i18n.ts`, `src/state.ts`, `src/data/history.ts`, `tests/`, `docs/PROGRESS.md`
+- 范围：`src/App.vue`, `src/views/HomeView.vue`, `src/views/BrowseView.vue`, `src/components/`, `src/style.css`, `src/i18n.ts`, `src/state.ts`, `src/data/history.ts`, `protocol/`, `src/models.ts`, `src-tauri/src/stremio.rs`, `src-tauri/src/home.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `scripts/check-contracts.py`, `tests/`, `docs/PROGRESS.md`
 - 交付物：完成Apple TV式首页、分类页、筛选栏与海报墙。提供`tests/acceptance/tv3.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
 - 验收：
 ```json
@@ -1808,6 +1808,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 #### 工作义务（ADR-057）
 
+- 按 ADR-059 增加 `HomeRequest.catalog_only`；真实 Host 断言仅列栏目时内容请求为零、旧全量请求兼容、非法参数组合及不支持的来源明确报错；首页仅在栏目进入视口后请求其内容，沿用原引用、取消和分页规则。
 - Hero 取本周趋势前5部，8秒交叉淡入并缓慢推镜，悬停、获得焦点或窗口隐藏时暂停。
 - 继续观看使用 `list_history` 和现有 `historyPoster`，横版卡带进度条。
 - 首页依次为 Hero、继续观看、本周趋势电影与剧集、最新上线与热门电影、按类型（动作、喜剧、科幻、剧情，来自 `tmdb.top` 的 `genre`）、按年份（今年、去年，来自 `tmdb.year` 的 `genre`）、华语韩语日语精选；分类页默认依次为趋势、最新、今年、去年和该分类的类型排；首页和分类页的 `.home-card`、`.home-section` 等现有测试选择器保留。
@@ -1988,7 +1989,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 依赖：T0.28
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-PLAYER, REQ-TV6 → A1（覆盖表含精确对应）
-- 范围：`src/views/PlaybackView.vue`, `src/videojs.ts`, `src/style.css`, `src/i18n.ts`, `src/App.vue`, `src/ui/`, `tests/`, `docs/PROGRESS.md`
+- 范围：`src/views/PlaybackView.vue`, `src/videojs.ts`, `src/style.css`, `src/i18n.ts`, `src/App.vue`, `src/ui/`, `src/state.ts`, `tests/`, `docs/PROGRESS.md`
 - 交付物：完成全窗口沉浸播放界面，播放内核和业务链路保持。提供`tests/acceptance/tv6.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
 - 验收：
 ```json
@@ -2029,6 +2030,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 #### 工作义务（ADR-057）
 
 - 用 Video.js 10.3.0 官方元素（控制层、时间滑块与预览、快进、字幕、缓冲指示、手势、热键）组合自定义皮肤，取代 `video-compat-skin`，内核、网关 Session、历史和原生全屏适配保持。
+- 按 ADR-059 仅在恢复目标与当前媒体时间不同时执行定位；验证零位置暂停不会将取消中的播放请求误报为故障，非零恢复、时长限制及会话身份保持原契约。
 - `data-action` 业务按钮收进底部托盘并保留属性；状态文字改为视觉隐藏的无障碍文本。
 - 同步修改 `tests/fixtures/videojs_controls.ts` 等绑定官方皮肤的夹具，断言强度保持。
 - 键盘：左右10秒、上下音量、空格播放暂停、F全屏、M静音。
