@@ -1,12 +1,12 @@
 # 映象视频任务路线
 
-状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。29张桌面、6张后续移动沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
+状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。36张桌面、6张后续移动：T0.28至T0.34为ADR-057新增的Apple TV化改造卡，原T0.28、T0.29按ADR-057顺延为T0.35、T0.36，已完成卡正文及其验收脚本中的“T0.28/A1”指顺延后的T0.35/A1；其余沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
 
 平台范围（ADR-005/ADR-006，macOS first）：桌面必需验收目标只有macOS arm64（本机）。各卡“原始义务”及覆盖表中的macOS x86_64、Windows、Ubuntu X11/Wayland运行、安装、性能与签名要求降为非阻断记录项：代码保持cfg可移植，验收报告列为NOT RUN并给出复现命令，后续另行授权；本机macOS arm64缺测、失败或伪称其他平台通过时验收失败。
 
 ## 路线与执行前提
 
-当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.29桌面验收交付。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
+当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.27桌面验收→T0.28至T0.34桌面Apple TV化改造→T0.35至T0.36独立验收与交付。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
 
 M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌面T25完成后外层监管停止并交付移动待办；M00执行前须明确移动授权。验收入口只做当卡行为断言，任务状态、冻结与完成资格沿原脚本。未完成卡脚本由当卡交付，当前业务验收NOT RUN；已有验收入口及完成证据保持，运行缺入口必然失败。
 
@@ -45,8 +45,15 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | T21 | T0.25 | 媒体网关与鉴权回归 | 桌面 |
 | T22 | T0.26 | 三平台性能与故障注入 | 桌面 |
 | T23 | T0.27 | 发行安装包 | 桌面 |
-| T24 | T0.28 | 独立验收与问题修复 | 桌面 |
-| T25 | T0.29 | 开发交付与最终说明 | 桌面 |
+| TV1 | T0.28 | 桌面外壳、深色主题与焦点系统 | 桌面 |
+| TV2 | T0.29 | 目录协议、TMDB筛选与默认来源修复 | 桌面 |
+| TV3 | T0.30 | 首页与分类页 | 桌面 |
+| TV4 | T0.31 | MacCMS分类与同源直通播放 | 桌面 |
+| TV5 | T0.32 | 详情页、转场与待播清单 | 桌面 |
+| TV6 | T0.33 | 沉浸播放器 | 桌面 |
+| TV7 | T0.34 | 搜索、资料库、来源与设置 | 桌面 |
+| T24 | T0.35 | 独立验收与问题修复 | 桌面 |
+| T25 | T0.36 | 开发交付与最终说明 | 桌面 |
 | M00 | T1.1 | Android / iOS 真机可行性与版本基线 | 后续移动 |
 | M01 | T1.2 | Android本地Rust来源接入 | 后续移动 |
 | M02 | T1.3 | 移动页面与播放器适配 | 后续移动 |
@@ -60,22 +67,22 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 
 | 需求 ID / 原文位置 | 可观察要求 | 卡 / 验收 ID | 范围或待决定 |
 | --- | --- | --- | --- |
-| U01 / §1.1 | Tauri/Rust、WebView、原生持久化 | T0.2/A1, T0.3/A1, T0.18/A1, T0.28/A1 | 按原规格完整保留 |
+| U01 / §1.1 | Tauri/Rust、WebView、原生持久化 | T0.2/A1, T0.3/A1, T0.18/A1, T0.35/A1 | 按原规格完整保留 |
 | U02 / §1.1,2.1 | 首版可用SuperVod JSON来源的搜索、详情、选集及解析 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代给定索引与全部provider义务 |
 | U03 / §1.1,8 | 推荐/详情/选集/播放完整真实闭环 | T0.14/A1, T0.15/A1, T0.16/A1, T0.24/A1 | 按原规格完整保留 |
-| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.28/A1 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
+| U04 / §1.1,5.1 | macOS arm64真实安装运行 | T0.2/A1, T0.21/A1, T0.24/A1, T0.27/A1, T0.35/A1 | ADR-005：macOS x86_64/Windows/Linux为非阻断记录项 |
 | U05 / §1.1,2.2,6.3 | 依据公开行为独立实现的Rust来源，实际媒体闭环 | T0.19/A1, T0.20/A1, T0.22/A1, T0.24/A1 | ADR-048取代原7包ART/DEX兼容；其余六站暂缓 |
-| U06 / §1.1,15 | 准确契约/依赖/错误与可复现交付 | T0.1/A1, T0.3/A1, T0.28/A1, T0.29/A1 | 按原规格完整保留 |
-| U07 / §1.1,16 | 桌面公共入口/cfg/响应式、后续移动真机MG | T0.13/A1, T0.28/A1, T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1, T1.5/A1, T1.6/A1 | 按原规格完整保留 |
+| U06 / §1.1,15 | 准确契约/依赖/错误与可复现交付 | T0.1/A1, T0.3/A1, T0.35/A1, T0.36/A1 | 按原规格完整保留 |
+| U07 / §1.1,16 | 桌面公共入口/cfg/响应式、后续移动真机MG | T0.13/A1, T0.35/A1, T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1, T1.5/A1, T1.6/A1 | 按原规格完整保留 |
 | U08 / §1.1,18 | Stremio元数据与Rust MacCMS播放来源独立选择、跨源匹配 | T0.4/A1, T0.5/A1, T0.8/A1, T0.22/A1, T0.24/A1 | ADR-048取代Cloudstream主播放 |
 | U09 / §1.1,11.4 | 历史及SQLite跨重启/续播/失败完整性 | T0.13/A1, T0.16/A1, T0.18/A1, T0.24/A1 | 按原规格完整保留 |
-| R01 / §1.2,1.3 | 独立恢复元数据/播放偏好，初版页面；来源可用后由用户选择 | T0.3/A1, T0.13/A1, T0.14/A1, T0.17/A1, T0.22/A1, T0.28/A1 | ADR-048移除准备Android默认流程 |
+| R01 / §1.2,1.3 | 独立恢复元数据/播放偏好，初版页面；来源可用后由用户选择 | T0.3/A1, T0.13/A1, T0.14/A1, T0.17/A1, T0.22/A1, T0.35/A1 | ADR-048移除准备Android默认流程 |
 | R02 / §2.1 | 旧索引/制品只留历史；首版候选列表及实际支持状态可追溯 | T0.1/A1（历史）, T0.19/A1, T0.23/A1 | ADR-048移除插件下载/锁更新 |
 | R03 / §2.2 | Rust宿主/公开JSON适配器运行，无Android环境前提 | T0.19/A1, T0.22/A1 | ADR-048取代原Application/加载器 |
 | R04 / §2.3 | 每个核准JSON来源独立身份/revision、配置UUID稳定 | T0.20/A1, T0.23/A1 | ADR-048取代包→provider全集 |
 | R05 / §2.4 | 原生媒体请求头/Referer与来源上下文保持、敏感字段留Rust | T0.7/A1, T0.8/A1, T0.21/A1, T0.25/A1 | ADR-048移除原插件interceptor语义 |
 | R06 / §2.5,3,3.1 | 单Rust crate、类型分发、原生HTTP与共用媒体路径 | T0.3/A1, T0.4/A1, T0.5/A1, T0.9/A1, T0.22/A1 | ADR-048移除Android执行分支 |
-| R07 / §3.2 | 核准Rust来源、内嵌视频、macOS arm64及真实数据交付 | T0.24/A1, T0.28/A1 | ADR-005/048；原包7/7与全集义务取代 |
+| R07 / §3.2 | 核准Rust来源、内嵌视频、macOS arm64及真实数据交付 | T0.24/A1, T0.35/A1 | ADR-005/048；原包7/7与全集义务取代 |
 | R08 / §4 | 复用已有前端、api/models/player单入口、模块/cfg及协议权威 | T0.1/A1, T0.3/A1, T0.12/A1, T0.13/A1 | 按原规格完整保留 |
 | R09 / §5.1 | 目标系统/工具链与Rust来源实际资源测量 | T0.1/A1（历史）, T0.21/A1, T0.26/A1, T0.26/A2 | ADR-048移除AVD镜像及其预算 |
 | R10 / §5.2 | Rust宿主先就绪，单来源失败与Stremio/其他来源隔离 | T0.3/A1, T0.21/A1, T0.22/A1, T0.24/A1 | ADR-048取代Android按需启动 |
@@ -98,10 +105,10 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R27 / §9.2 | 原生来源请求上下文保真、Range200/206/416、压缩头、64KiB流/8MiB清单 | T0.9/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
 | R28 / §9.3 | HLS URI行/属性/key/map/音字幕/相对签名/序列与全部子资源 | T0.10/A1, T0.25/A1 | 按原规格完整保留 |
 | R29 / §9.4 | 字幕结构化VTT、DASH条件性全基线模板/SIDX、DRM明确拒绝 | T0.11/A1, T0.22/A1, T0.25/A1 | 按原规格完整保留 |
-| R30 / §10.1 | 系统WebView真实H264/AAC/HLS/MSE、平台依赖与安全传输 | T0.2/A1, T0.12/A1, T0.27/A1, T0.28/A1 | 按原规格完整保留 |
+| R30 / §10.1 | 系统WebView真实H264/AAC/HLS/MSE、平台依赖与安全传输 | T0.2/A1, T0.12/A1, T0.27/A1, T0.35/A1 | 按原规格完整保留 |
 | R31 / §10.2 | 17invoke形状/权限/host_epoch/包装DTO/递归图片与事件卸载、旧cloudstream明确未支持 | T0.3/A1, T0.7/A1, T0.9/A1, T0.13/A1, T0.22/A1 | ADR-048保留线格式兼容，移除guest执行 |
-| R32 / §10.3 | 一个video/player生命周期/250ms位置/旧epoch/自动播放提示/CORS/CSP | T0.2/A1, T0.12/A1, T0.16/A1, T0.28/A1 | 按原规格完整保留 |
-| R33 / §10.4 | 锁文件、npm ci/type/build、Rustfmt/check/clippy/test与发行依赖 | T0.1/A1, T0.27/A1, T0.29/A1 | 按原规格完整保留 |
+| R32 / §10.3 | 一个video/player生命周期/250ms位置/旧epoch/自动播放提示/CORS/CSP | T0.2/A1, T0.12/A1, T0.16/A1, T0.35/A1 | 按原规格完整保留 |
+| R33 / §10.4 | 锁文件、npm ci/type/build、Rustfmt/check/clippy/test与发行依赖 | T0.1/A1, T0.27/A1, T0.36/A1 | 按原规格完整保留 |
 | R34 / §10.5 | 资源状态3秒只读/诊断序号、每尝试一次查询与一次过期恢复/失败呈现 | T0.9/A1, T0.12/A1, T0.14/A1, T0.25/A1 | 按原规格完整保留 |
 | R35 / §11.1 | AppState/完整快照vs单栏/分页合并、index唯一、局部错误与世代 | T0.6/A1, T0.13/A1, T0.14/A1 | 按原规格完整保留 |
 | R36 / §11.2 | 切来源/集/离页/宿主重启的请求取消、世代失效与清理 | T0.3/A1, T0.13/A1, T0.18/A1, T0.21/A1, T0.22/A1 | ADR-048移除guest重启分支 |
@@ -116,16 +123,16 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R45 / §12 | 仅打包应用/依赖及核准来源配置，许可清单/个人使用说明 | T0.19/A1, T0.21/A1, T0.27/A1 | ADR-048移除插件执行/AVD隔离义务 |
 | R46 / §12.1 | 全部HTTP入口DNS/peer绑定、5跳重定向/HTTPS降级/跨Origin头/环境代理 | T0.4/A1, T0.5/A1, T0.9/A1, T0.25/A1 | 按原规格完整保留 |
 | R47 / §13 | 1.5秒壳/100ms UI/本地p95<100ms/60秒宿主冷启为记录目标，5次启动 | T0.26/A1, T0.26/A2 | ADR-044/048；无Android启动样本 |
-| R48 / §13 | 1080p30 H264AAC10分钟、20Mbps3分钟、50切集无泄漏与DPI125/150/200 | T0.2/A1（功能）, T0.12/A1, T0.25/A1（功能）, T0.26/A1, T0.26/A2（网关耐久）, T0.28/A1（播放器耐久） | ADR-044放宽 |
-| R49 / §14.1 | 公开行为fixture/自有媒体，测试替身与正式构建隔离 | T0.2/A1, T0.4/A1, T0.5/A1, T0.19/A1, T0.22/A1, T0.25/A1, T0.28/A1 | ADR-048取代原DEX网络替身 |
-| R50 / §14.2,14.3 | G0-Core及Rust来源G2、G1/G3/G4/G5实际桌面闭环 | T0.1/A1（历史）, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.27/A1, T0.28/A1 | ADR-048取消G0-CS、取代原包G2 |
-| R51 / §15 | 先机器契约、真命令/日志/报告、复现/回归/数据及发布材料 | T0.3/A1, T0.28/A1, T0.29/A1 | 按原规格完整保留 |
+| R48 / §13 | 1080p30 H264AAC10分钟、20Mbps3分钟、50切集无泄漏与DPI125/150/200 | T0.2/A1（功能）, T0.12/A1, T0.25/A1（功能）, T0.26/A1, T0.26/A2（网关耐久）, T0.35/A1（播放器耐久） | ADR-044放宽 |
+| R49 / §14.1 | 公开行为fixture/自有媒体，测试替身与正式构建隔离 | T0.2/A1, T0.4/A1, T0.5/A1, T0.19/A1, T0.22/A1, T0.25/A1, T0.35/A1 | ADR-048取代原DEX网络替身 |
+| R50 / §14.2,14.3 | G0-Core及Rust来源G2、G1/G3/G4/G5实际桌面闭环 | T0.1/A1（历史）, T0.2/A1, T0.22/A1, T0.24/A1, T0.25/A1, T0.27/A1, T0.35/A1 | ADR-048取消G0-CS、取代原包G2 |
+| R51 / §15 | 先机器契约、真命令/日志/报告、复现/回归/数据及发布材料 | T0.3/A1, T0.35/A1, T0.36/A1 | 按原规格完整保留 |
 | R52 / §16.1,16.2 | 桌面后移动分期与Rust/DTO/页面/cfg复用 | T0.13/A1, T1.1/A1, T1.6/A1 | 按原规格完整保留 |
 | R53 / §16.3 | Android本地Rust来源、单应用、生命周期/权限隔离 | T1.1/A1, T1.2/A1, T1.3/A1, T1.4/A1 | ADR-048；移动阶段另获授权 |
 | R54 / §16.4 | iOS本地Rust来源/网关，HTTPS校验、会话隔离及断网恢复 | T1.1/A1, T1.5/A1, T1.6/A1 | ADR-048取代远程引擎/配对部署；移动另获授权 |
 | R55 / §16.5 | 44px/safearea/360,390,768/playsinline/返回/音频/后台/网络 | T1.3/A1, T1.6/A1 | 后续移动另获授权 |
 | R56 / §16.6 | MG0..MG3真机、安装签名与生命周期最终交付 | T1.1/A1, T1.4/A1, T1.6/A1 | 后续移动另获授权 |
-| R57 / §17 | 全部固定事实/工程决定/待实测追溯来源与原始证据 | T0.1/A1, T0.28/A1 | 按原规格完整保留 |
+| R57 / §17 | 全部固定事实/工程决定/待实测追溯来源与原始证据 | T0.1/A1, T0.35/A1 | 按原规格完整保留 |
 | R58 / §18.1 | 最多32配置/1..16manifest/匿名UUID/URLuserinfo-fragment与kind归属 | T0.3/A1, T0.4/A1, T0.5/A1, T0.17/A1 | 按原规格完整保留 |
 | R59 / §18.2 | MacCMS完整参数/数字字符串/分组拆分/未知格式/分类与分页 | T0.4/A1, T0.6/A1, T0.7/A1, T0.8/A1 | 按原规格完整保留 |
 | R60 / §18.3 | manifest完整事务/unpublished/编辑撤销/元数据资源失败warning与fallback | T0.5/A1, T0.6/A1, T0.7/A1 | 按原规格完整保留 |
@@ -136,10 +143,10 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R65 / §18.6 | MetadataIdentity全局映射需验证/自定义namespace/addon准确回源 | T0.8/A1, T0.5/A1, T0.18/A1 | 按原规格完整保留 |
 | R66 / §18.6 | 最多2×10候选/外部ID自动确认条件/手动组集/无search/错误vs零匹配 | T0.8/A1, T0.22/A1, T0.24/A1 | 按原规格完整保留 |
 | R67 / §18.6 | match最多256空闲5分与世代绑定、video/播放源乱序、下一集重新匹配 | T0.8/A1, T0.13/A1, T0.16/A1, T0.24/A1 | 按原规格完整保留 |
-| C-PATH / §用户路径确认/ADR-001/C1 | 唯一根、venv/原脚本/driver与全局锁/原证据绑定 | T0.1/A1, T0.29/A1 | 按原规格完整保留 |
+| C-PATH / §用户路径确认/ADR-001/C1 | 唯一根、venv/原脚本/driver与全局锁/原证据绑定 | T0.1/A1, T0.36/A1 | 按原规格完整保留 |
 | C-RESOURCE / §moc-init/C14 | 预算全命令覆盖、真实集群Docker/容器硬限额合计+宿主RSS/实际采样及自产清理 | T0.1/A1, T0.25/A1, T0.26/A1, T0.26/A2, T1.5/A1 | 按原规格完整保留 |
 | REQ-T00 / replica-spec/AI_TASKS.md T00 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.1/A1 | 桌面首版 |
-| REQ-T01 / replica-spec/AI_TASKS.md T01 | 开发功能与产品耐久分期，原时长/规模/指标保持 | T0.2/A1（功能）, T0.28/A1（耐久） | 桌面首版 |
+| REQ-T01 / replica-spec/AI_TASKS.md T01 | 开发功能与产品耐久分期，原时长/规模/指标保持 | T0.2/A1（功能）, T0.35/A1（耐久） | 桌面首版 |
 | REQ-T05 / replica-spec/AI_TASKS.md T05 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.3/A1 | 桌面首版 |
 | REQ-N00 / replica-spec/AI_TASKS.md N00 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.4/A1 | 桌面首版 |
 | REQ-N01 / replica-spec/AI_TASKS.md N01 | 本卡完整工作/通过/验证/停止条件原文见卡内，附可观察反证 | T0.5/A1 | 桌面首版 |
@@ -165,8 +172,31 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | REQ-T21 / replica-spec/AI_TASKS.md T21 | ADR-048修订后的T21工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.25/A1（功能）, T0.26/A1（网关长测采样/协议准备）, T0.26/A2（完整10分钟网关耐久） | 桌面首版 |
 | REQ-T22 / replica-spec/AI_TASKS.md T22 | ADR-048修订后的T22工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.26/A1, T0.26/A2 | 桌面首版 |
 | REQ-T23 / replica-spec/AI_TASKS.md T23 | ADR-048修订后的T23工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.27/A1 | 桌面首版 |
-| REQ-T24 / replica-spec/AI_TASKS.md T24 | ADR-048修订后的T24工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.28/A1 | 桌面首版 |
-| REQ-T25 / replica-spec/AI_TASKS.md T25 | ADR-048修订后的T25工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.29/A1 | 桌面首版 |
+| TV-SHELL / ADR-057 | 沉浸标题栏、悬浮可折叠侧栏、窄屏不变 | T0.28/A1 | 桌面Apple TV化 |
+| TV-THEME / ADR-057 | 桌面固定深色、色系作强调色 | T0.28/A1 | 桌面Apple TV化 |
+| TV-FOCUS / ADR-057 | 键盘空间导航、悬停与焦点一致、减弱动态 | T0.28/A1 | 桌面Apple TV化 |
+| REQ-TV1 / ADR-057 | 桌面外壳、深色主题与焦点系统 | T0.28/A1 | 桌面Apple TV化 |
+| TV-CATALOG-DTO / ADR-057 | 卡片与栏目协议扩展 | T0.29/A1 | 桌面Apple TV化 |
+| TV-FILTER / ADR-057 | TMDB单条件与组合筛选、扫描上限、游标隔离 | T0.29/A1 | 桌面Apple TV化 |
+| TV-SOURCE-UPGRADE / ADR-057 | 升级配置补TMDB一次 | T0.29/A1 | 桌面Apple TV化 |
+| REQ-TV2 / ADR-057 | 目录协议、TMDB筛选与默认来源修复 | T0.29/A1 | 桌面Apple TV化 |
+| TV-HOME / ADR-057 | Hero、继续观看、分类内容排、懒加载 | T0.30/A1 | 桌面Apple TV化 |
+| TV-BROWSE / ADR-057 | 分类页、筛选栏、海报墙、状态恢复 | T0.30/A1 | 桌面Apple TV化 |
+| REQ-TV3 / ADR-057 | 首页与分类页 | T0.30/A1 | 桌面Apple TV化 |
+| TV-MACCMS-CAT / ADR-057 | 分类归一、排除项、客户端过滤 | T0.31/A1 | 桌面Apple TV化 |
+| TV-MACCMS-PLAY / ADR-057 | MacCMS同源播放、历史与续播 | T0.31/A1 | 桌面Apple TV化 |
+| REQ-TV4 / ADR-057 | MacCMS分类与同源直通播放 | T0.31/A1 | 桌面Apple TV化 |
+| TV-DETAILS / ADR-057 | 全幅详情、续播信息、集卡、转场 | T0.32/A1 | 桌面Apple TV化 |
+| TV-WATCHLIST / ADR-057 | SQLite待播清单与迁移 | T0.32/A1 | 桌面Apple TV化 |
+| REQ-TV5 / ADR-057 | 详情页、转场与待播清单 | T0.32/A1 | 桌面Apple TV化 |
+| TV-PLAYER / ADR-057 | 全窗口沉浸播放、自定义皮肤、托盘、下一集、切集回收 | T0.33/A1 | 桌面Apple TV化 |
+| REQ-TV6 / ADR-057 | 沉浸播放器 | T0.33/A1 | 桌面Apple TV化 |
+| TV-SEARCH / ADR-057 | 搜索页与请求取消 | T0.34/A1 | 桌面Apple TV化 |
+| TV-LIBRARY / ADR-057 | 资料库三标签 | T0.34/A1 | 桌面Apple TV化 |
+| TV-MANAGE / ADR-057 | 来源与设置分组列表 | T0.34/A1 | 桌面Apple TV化 |
+| REQ-TV7 / ADR-057 | 搜索、资料库、来源与设置 | T0.34/A1 | 桌面Apple TV化 |
+| REQ-T24 / replica-spec/AI_TASKS.md T24 | ADR-048修订后的T24工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.35/A1 | 桌面首版 |
+| REQ-T25 / replica-spec/AI_TASKS.md T25 | ADR-048修订后的T25工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.36/A1 | 桌面首版 |
 | REQ-M00 / replica-spec/AI_TASKS.md M00 | ADR-048修订后的M00工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.1/A1 | 后续移动 |
 | REQ-M01 / replica-spec/AI_TASKS.md M01 | ADR-048修订后的Android本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.2/A1 | 后续移动 |
 | REQ-M02 / replica-spec/AI_TASKS.md M02 | ADR-048修订后的M02工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.3/A1 | 后续移动 |
@@ -180,7 +210,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 
 开发阶段以功能实现为中心：每卡实际完成相关构建/类型检查、功能行为与正负例回归、必要的短时真实集成验证，验证通过后交接，并沿原完成提交与独立巡检流程收尾。长时间连续播放及本次列出的窗口耐久验收集中到产品测试阶段；原时长、规模、指标、资源与清理要求保持。其他开发卡现有的短时功能循环、错误/边界反例及即时资源清理继续按卡执行。
 
-T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5次；T0.25的网关播放由T0.26/A2在真实产品链路完成，按ADR-044为10分钟。T0.26为产品性能/故障测试，T0.28为产品独立验收与修复，保留原文件顺序及依赖。原始义务原文作为来源保留，执行阶段按本条及ADR-020、ADR-044解释；后续产品测试按当时稳定源码和构建重新实测。短时功能通过与长期验收待测分别记录。
+T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5次；T0.25的网关播放由T0.26/A2在真实产品链路完成，按ADR-044为10分钟。T0.26为产品性能/故障测试，T0.35为产品独立验收与修复，保留原文件顺序及依赖。原始义务原文作为来源保留，执行阶段按本条及ADR-020、ADR-044解释；后续产品测试按当时稳定源码和构建重新实测。短时功能通过与长期验收待测分别记录。
 
 
 已完成卡“原始义务”保留历史原文；ADR-048迁移卡以“修订义务”为当前执行要求，原文可在replica-spec/AI_TASKS.md查阅。原卡号继续用于验收脚本和报告路径，状态统一到docs/PROGRESS.md。
@@ -1545,10 +1575,356 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 
 - 工作与验收：Tauri构建、本地资源、实际依赖和版本锁/许可通知；移除Android运行时/原包发行材料要求及产物。干净机器安装/首播/升级/卸载，使用默认系统安全设置，无开发机绝对路径；缺签名凭据如实列未签名与发行待办，公开发行另获用户授权。
 
-### T0.28 T24 独立验收与问题修复
+### T0.28 TV1 桌面外壳、深色主题与焦点系统
+- [ ] 完成
+- 依赖：T0.27
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-SHELL, TV-THEME, TV-FOCUS, REQ-TV1 → A1（覆盖表含精确对应）
+- 范围：`src/App.vue`, `src/style.css`, `src/ui/`, `src/components/`, `src/i18n.ts`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成沉浸式窗口、悬浮侧栏、桌面固定深色主题、键盘焦点系统和共用内容排组件。提供`tests/acceptance/tv1.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "环境：真实打包窗口，宽度960、1200、1920及窄屏768、390 → 期望：标题栏融入画面且窗口可拖动，悬浮侧栏可折叠，桌面固定深色且色系仍生效，方向键可在卡片和内容排间移动，鼠标悬停与键盘焦点样式一致，减弱动态下无推镜和倾斜，窄屏布局与改造前一致。会被拒绝：窗口无法拖动、焦点丢失到页面外、窄屏样式改变、用截图代替真实焦点断言。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv1.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV1-all.json",
+      "--junit",
+      "evidence/acceptance/TV1-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV1-all.xml",
+    "cases": [
+      "TV-SHELL/overlay-titlebar-drag",
+      "TV-SHELL/floating-sidebar-collapse",
+      "TV-SHELL/narrow-unchanged",
+      "TV-THEME/desktop-dark-palette",
+      "TV-FOCUS/keyboard-navigation",
+      "TV-FOCUS/hover-focus-parity",
+      "TV-FOCUS/reduced-motion",
+      "REQ-TV1"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- 开工前对照本机 TV App 校准侧栏位置、焦点放大比例和动效时长，结果写入 PROGRESS。
+- `lib.rs` 主窗口使用 Overlay 标题栏并隐藏标题文字；`capabilities/main.json` 增加 `core:window:allow-start-dragging`，其余权限保持。
+- 取消顶栏；侧栏悬浮在内容之上，窗口宽度小于1200px时默认折叠；元数据源和播放源收进侧栏底部，语言和色系入口移到设置页。本卡接入现有首页、观看历史、来源、设置入口，后续卡各自增加分类、搜索、资料库入口。
+- 宽度不小于960px时固定深色，五种色系作为强调色；小于960px的布局、明暗跟随和样式保持现状。
+- 新增 `src/ui/focus.ts` 和 `src/components/MediaRow.vue`：原生 DOM 焦点上的方向键导航、Esc 逐级返回；内容排横向吸附、悬停箭头、竖版海报；动画只用 transform 和 opacity。初始参数：放大1.08、200ms、倾斜不超过4度。
+
+### T0.29 TV2 目录协议、TMDB筛选与默认来源修复
+- [ ] 完成
+- 依赖：T0.27
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-CATALOG-DTO, TV-FILTER, TV-SOURCE-UPGRADE, REQ-TV2 → A1（覆盖表含精确对应）
+- 范围：`protocol/`, `src/models.ts`, `src/api.ts`, `src/state.ts`, `src-tauri/src/stremio.rs`, `src-tauri/src/home.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/settings.rs`, `src/data/defaultSources.json`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成卡片与栏目协议扩展、TMDB单条件及组合筛选、分页游标隔离，并修复升级用户缺少TMDB来源。提供`tests/acceptance/tv2.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "输入：受控Stremio目录fixture及内置TMDB实际请求样本，覆盖单条件、年份+类型、语言+类型、语言+年份、占位条目、翻页和语言切换 → 期望：请求携带正确的genre与skip，卡片含backdrop、plot、genres，组合结果全部符合条件，单次最多扫描5页并返回已扫描与命中数，不同筛选的游标互不影响，占位条目按空结果返回；已有MacCMS配置且缺Stremio的设置补上TMDB一次，用户随后删除时保持删除。会被拒绝：筛选值未发送、结果含不符合条件的影片、游标串用、重复补回用户已删除的来源。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv2.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV2-all.json",
+      "--junit",
+      "evidence/acceptance/TV2-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV2-all.xml",
+    "cases": [
+      "TV-CATALOG-DTO/card-fields",
+      "TV-CATALOG-DTO/section-kind-facets",
+      "TV-FILTER/single-condition",
+      "TV-FILTER/priority-routing",
+      "TV-FILTER/scan-limit-progress",
+      "TV-FILTER/cursor-isolation",
+      "TV-FILTER/placeholder-empty",
+      "TV-FILTER/localized-values",
+      "TV-SOURCE-UPGRADE/adds-once",
+      "TV-SOURCE-UPGRADE/respects-removal",
+      "REQ-TV2"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- `Bridge_MediaCard` 增加可选 `backdrop`、`plot`、`genres`；`Bridge_HomeSection` 增加 `kind` 与可用筛选项；`Bridge_HomeRequest` 增加可选 `filter`（类型、年份、语言、地区）；修改 `protocol/` 后重新生成 `src/models.ts`。
+- `stremio.rs:904` 发送 `genre=…&skip=…`；筛选值按来源清单声明校验。
+- 路由优先级为语言、年份、类型：一个条件交给服务端，其余在 Rust 用目录返回的 `genre`、`year` 过滤。仅类型时电影用 `tmdb.top`，剧集用 `tmdb.latest`。
+- 客户端过滤时每次最多连续请求5页，凑够一屏即停，返回已扫描数和命中数供界面显示“继续查找”。2026-11-08实测5页100条的命中范围为8到95条。
+- `genres` 为 `No Results` 的占位条目按空结果处理，TMDB 剧集“热门”目录恢复内容时自动显示。
+- 验证中文筛选值在英文基础数据加中文覆盖的 `localized` 链路上取到正确分类。
+- 修复 PROGRESS 记录的升级场景：已有播放源且缺 Stremio 的配置自动补一次中文 TMDB。
+
+### T0.30 TV3 首页与分类页
+- [ ] 完成
+- 依赖：T0.28, T0.29
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-HOME, TV-BROWSE, REQ-TV3 → A1（覆盖表含精确对应）
+- 范围：`src/App.vue`, `src/views/HomeView.vue`, `src/views/BrowseView.vue`, `src/components/`, `src/style.css`, `src/i18n.ts`, `src/state.ts`, `src/data/history.ts`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成Apple TV式首页、分类页、筛选栏与海报墙。提供`tests/acceptance/tv3.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "环境：真实打包窗口接内置TMDB及受控fixture → 期望：首页显示可轮播Hero、继续观看和按分类的横向内容排；电影、电视剧、动画、纪录片入口显示各自内容；五个筛选胶囊可组合，选中后切换海报墙并滚动加载，条件写入地址，返回详情后恢复筛选和位置；内容排进入视口才请求；空结果给出去掉条件的快捷入口。会被拒绝：各分类显示相同内容、筛选后结果与条件不符、返回后丢失状态、首屏一次请求全部内容排。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv3.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV3-all.json",
+      "--junit",
+      "evidence/acceptance/TV3-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV3-all.xml",
+    "cases": [
+      "TV-HOME/hero-rotation-pause",
+      "TV-HOME/continue-watching",
+      "TV-HOME/category-rows",
+      "TV-HOME/lazy-rows",
+      "TV-BROWSE/distinct-categories",
+      "TV-BROWSE/filter-bar-combination",
+      "TV-BROWSE/poster-wall-pagination",
+      "TV-BROWSE/see-all",
+      "TV-BROWSE/restore-state",
+      "TV-BROWSE/empty-result",
+      "REQ-TV3"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- Hero 取本周趋势前5部，8秒交叉淡入并缓慢推镜，悬停、获得焦点或窗口隐藏时暂停。
+- 继续观看使用 `list_history` 和现有 `historyPoster`，横版卡带进度条。
+- 首页依次为 Hero、继续观看、本周趋势电影与剧集、最新上线与热门电影、华语韩语日语精选；首页和分类页的 `.home-card`、`.home-section` 等现有测试选择器保留。
+- 新增 `BrowseView.vue` 和 `FilterBar.vue`，路由 `#/browse/<分类>?genre=…`，电影、电视剧、动画、纪录片四个分类共用该视图并接入侧栏。
+- 筛选维度为类型、年份、语言、地区、排序，每维单选；毛玻璃面板支持方向键；内容排标题进入该排的海报墙。
+
+### T0.31 TV4 MacCMS分类与同源直通播放
+- [ ] 完成
+- 依赖：T0.30
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-MACCMS-CAT, TV-MACCMS-PLAY, REQ-TV4 → A1（覆盖表含精确对应）
+- 范围：`protocol/`, `src/models.ts`, `src-tauri/src/maccms.rs`, `src-tauri/src/matching.rs`, `src-tauri/src/host.rs`, `src-tauri/src/home.rs`, `src/state.ts`, `src/App.vue`, `src/views/BrowseView.vue`, `src/views/HomeView.vue`, `src/i18n.ts`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成MacCMS分类归一、综艺短剧体育入口及MacCMS影片同源播放。提供`tests/acceptance/tv4.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "输入：8个默认MacCMS来源的分类样本及受控播放fixture → 期望：不同来源的同义分类归一到同一子分类，成人向和非影片分类不显示，当前播放源缺失的分类隐藏，年份、地区、语言在客户端正确过滤；一部MacCMS影片完成详情、播放、切集、写入历史和续播，TMDB影片的跨源匹配行为不变。会被拒绝：出现排除分类、换源后入口指向无效分类、MacCMS影片无法写入历史、同源绑定放宽影响跨源校验。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv4.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV4-all.json",
+      "--junit",
+      "evidence/acceptance/TV4-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV4-all.xml",
+    "cases": [
+      "TV-MACCMS-CAT/normalize-names",
+      "TV-MACCMS-CAT/excluded-classes",
+      "TV-MACCMS-CAT/hide-missing",
+      "TV-MACCMS-CAT/client-filter",
+      "TV-MACCMS-PLAY/same-source-play",
+      "TV-MACCMS-PLAY/history-resume",
+      "TV-MACCMS-PLAY/stremio-binding-kept",
+      "REQ-TV4"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- 内置分类映射表：国产剧、内地剧、大陆剧归为华语剧，`电视剧/国产剧` 这类带前缀的名称先取末段；综艺、动漫、短剧、体育、地区剧同样归一。
+- 默认排除伦理片、福利、擦边短剧，以及预告片、资讯、公告、头条、电影解说。
+- 综艺、短剧、体育入口绑定当前播放源，服务端只用分类 ID、分页和关键词；年份、地区、语言沿用5页扫描上限在客户端过滤（2026-11-08实测接口忽略 `year`、`area`）。
+- `maccms.rs:1008` 生成 `namespace` 为 `maccms` 的 `metadata_ref`；`match_playback` 遇到同一 MacCMS 来源直接返回 `matched`。
+- `state.ts:428`、`state.ts:435` 仅在同一 MacCMS 来源时放宽绑定；`App.vue` 续播逻辑接受 MacCMS 身份；`PlaybackContext` 和历史表结构保持。
+
+### T0.32 TV5 详情页、转场与待播清单
+- [ ] 完成
+- 依赖：T0.30
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-DETAILS, TV-WATCHLIST, REQ-TV5 → A1（覆盖表含精确对应）
+- 范围：`protocol/`, `src/models.ts`, `src/views/DetailsView.vue`, `src/views/HomeView.vue`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/data/`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/history.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成全幅详情页、页面转场和SQLite待播清单。提供`tests/acceptance/tv5.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "环境：真实打包窗口及临时数据目录 → 期望：详情页显示全幅背景、评分信息、剧照集卡、演员排和相关排，主按钮按历史显示继续播放及剩余时间；加入待播后首页出现该影片，重启仍保留，移除后消失，旧数据库升级不丢历史；海报到详情有转场，macOS 14回退交叉淡入。会被拒绝：续播信息与历史不一致、待播重启丢失、数据库升级破坏历史记录。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv5.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV5-all.json",
+      "--junit",
+      "evidence/acceptance/TV5-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV5-all.xml",
+    "cases": [
+      "TV-DETAILS/fullbleed-layout",
+      "TV-DETAILS/resume-label",
+      "TV-DETAILS/episode-cards",
+      "TV-DETAILS/cast-related",
+      "TV-DETAILS/transition-fallback",
+      "TV-WATCHLIST/add-remove",
+      "TV-WATCHLIST/persist-restart",
+      "TV-WATCHLIST/migration-keeps-history",
+      "TV-WATCHLIST/home-row",
+      "REQ-TV5"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- 用现有 `backdrop`、`actors` 和 `Bridge_Episode` 的 `poster`、`plot`、`duration_ms`，详情接口有 `logo` 时显示 Logo，否则显示大字片名。
+- 保留 `.details-play`、`.details-episode`、`.details-group` 等现有测试选择器和匹配确认弹层。
+- `history.rs` 数据库升到版本2，新增 watchlist 表，身份字段沿用 `watch_history`；迁移失败显式报错并保持旧库可用。
+- 新增 `list_watchlist`、`add_watchlist`、`remove_watchlist` 三个 IPC 及对应权限。
+- 海报飞入详情使用 View Transitions，不支持时300ms交叉淡入。
+
+### T0.33 TV6 沉浸播放器
+- [ ] 完成
+- 依赖：T0.28
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-PLAYER, REQ-TV6 → A1（覆盖表含精确对应）
+- 范围：`src/views/PlaybackView.vue`, `src/videojs.ts`, `src/style.css`, `src/i18n.ts`, `src/App.vue`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成全窗口沉浸播放界面，播放内核和业务链路保持。提供`tests/acceptance/tv6.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "环境：真实打包窗口播放自有MP4与HLS → 期望：解析期间显示背景和片名，全窗口播放，控件和光标3秒无操作后隐藏，进度预览、前进后退10秒、字幕、音量、倍速、全屏可用；底部托盘切换选集和线路；片尾20秒显示可取消的下一集卡片；Esc按托盘、全屏、详情逐级返回；错误浮层可重试；50次切集后无残留媒体和内存泄露。会被拒绝：解析期间黑屏、同时存在两套控件、切集残留旧音频、Esc直接退出到首页。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv6.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV6-all.json",
+      "--junit",
+      "evidence/acceptance/TV6-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV6-all.xml",
+    "cases": [
+      "TV-PLAYER/loading-backdrop",
+      "TV-PLAYER/immersive-autohide",
+      "TV-PLAYER/custom-skin-controls",
+      "TV-PLAYER/tray-episodes-streams",
+      "TV-PLAYER/next-episode-card",
+      "TV-PLAYER/escape-levels",
+      "TV-PLAYER/error-overlay",
+      "TV-PLAYER/switch-recycle-50",
+      "REQ-TV6"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- 用 Video.js 10.3.0 官方元素（控制层、时间滑块与预览、快进、字幕、缓冲指示、手势、热键）组合自定义皮肤，取代 `video-compat-skin`，内核、网关 Session、历史和原生全屏适配保持。
+- `data-action` 业务按钮收进底部托盘并保留属性；状态文字改为视觉隐藏的无障碍文本。
+- 同步修改 `tests/fixtures/videojs_controls.ts` 等绑定官方皮肤的夹具，断言强度保持。
+- 键盘：左右10秒、上下音量、空格播放暂停、F全屏、M静音。
+
+### T0.34 TV7 搜索、资料库、来源与设置
+- [ ] 完成
+- 依赖：T0.31, T0.32
+- 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
+- 需求：TV-SEARCH, TV-LIBRARY, TV-MANAGE, REQ-TV7 → A1（覆盖表含精确对应）
+- 范围：`protocol/`, `src/models.ts`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/views/SearchView.vue`, `src/views/HistoryView.vue`, `src/views/NativeSourcesView.vue`, `src/views/SettingsView.vue`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/stremio.rs`, `src-tauri/src/maccms.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `tests/`, `docs/PROGRESS.md`
+- 交付物：完成搜索页、资料库和来源设置页的样式统一。提供`tests/acceptance/tv7.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "环境：真实打包窗口及受控搜索fixture → 期望：⌘F打开搜索，输入停顿300ms后按电影、电视剧、综艺短剧分排显示结果，旧请求结果被丢弃；空状态显示类型卡片；资料库分继续观看、待播清单、观看历史，删除和清空行为保持；来源和设置页改为分组列表且全部原有操作可用。会被拒绝：过期搜索结果覆盖新结果、搜索绕过请求取消、来源或设置功能缺失。",
+    "argv": [
+      "{python}",
+      "-B",
+      "tests/acceptance/tv7.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/TV7-all.json",
+      "--junit",
+      "evidence/acceptance/TV7-all.xml"
+    ],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/TV7-all.xml",
+    "cases": [
+      "TV-SEARCH/debounce-cancel",
+      "TV-SEARCH/grouped-results",
+      "TV-SEARCH/empty-genres",
+      "TV-LIBRARY/three-tabs",
+      "TV-LIBRARY/history-actions-kept",
+      "TV-MANAGE/grouped-lists",
+      "TV-MANAGE/actions-kept",
+      "REQ-TV7"
+    ],
+    "timeout_seconds": 3600
+  }
+]
+```
+#### 工作义务（ADR-057）
+
+- 新增 `search_catalog` IPC 及权限，沿用 request_id、engine_epoch、预算和取消规则；Stremio 用声明 `search` 的目录，MacCMS 用 `wd`。
+- `stremio.rs:469` 的 `search` 能力按清单实际声明填写。
+- 新增 `SearchView.vue`，接入侧栏和 ⌘F。
+- `HistoryView.vue` 升级为资料库三标签，历史分组、删除、清空逻辑复用。
+- 来源和设置页只改样式，字段、校验和操作保持。
+
+### T0.35 T24 独立验收与问题修复
 - [ ] 完成
 - 执行阶段：产品测试；承接T0.2两格式各600秒及5次窗口开关（ADR-044），按当前受验源码/构建重新执行；复用现有原生夹具、长播断言及资源清理，历史短测与失败只作历史证据。
-- 依赖：T0.27
+- 依赖：T0.33, T0.34
 - 需求：U01, U04, R30, R32, R48, R49, REQ-T01, U06, U07, R01, R07, R50, R51, R57, REQ-T24 → A1（覆盖表含精确对应）
 - 范围：`src/`, `src-tauri/`, `packaging/`, `docs/release-evidence/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t24.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
@@ -1603,9 +1979,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 - 验证：按行为复测，避免仅复制实现细节；结论包含实际测试命令和结果。
 - 执行：可由独立审查步骤或明确授权的审查agent执行，避免开发者自行省略关键验收。
 
-### T0.29 T25 开发交付与最终说明
+### T0.36 T25 开发交付与最终说明
 - [ ] 完成
-- 依赖：T0.28
+- 依赖：T0.35
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U06, R33, R51, C-PATH, REQ-T25 → A1（覆盖表含精确对应）
 - 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `tests/`, `docs/PROGRESS.md`
@@ -1651,7 +2027,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.28/A1，按ADR-044为各600秒及5�
 
 ### T1.1 M00 Android / iOS 真机可行性与版本基线
 - [ ] 完成
-- 依赖：T0.29, T0.3, T0.12, T0.13
+- 依赖：T0.36, T0.3, T0.12, T0.13
 - 阶段门：移动阶段（M00..M05）需人类明确授权，并给出真实设备及所需签名
 - 需求：U07, R52, R53, R54, R56, REQ-M00 → A1（覆盖表含精确对应）
 - 范围：`src-tauri/`, `docs/mobile-baseline.json`, `tests/`, `docs/PROGRESS.md`

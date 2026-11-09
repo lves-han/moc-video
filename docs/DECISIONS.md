@@ -458,3 +458,12 @@ T0.1处理：解除当前执行分工待决定的BLOCKED；原失败收据、WIP
 决定：新增task.py resume-hard <当前卡> --protected <摘要>，仅在当前卡已STUCK-HARD、现有max_sessions内、唯一额外恢复尚未消费、最新rebaseline批准条目含精确受控恢复会话迁移标记时可用。持原驱动/重任务锁，核对无存活驱动/开发/重命令，校验冻结及追加记录；原脚本原子写入一次消费事件并仅将会话1增至2，失败与hard_sessions、预算/资源/验收阈值保持。当前用户只批准T0.24本次使用；作者不得手改状态。独立文档CLEAR后消费，再通过run.py验证入口正负例，原A1、完整verify、done/完成提交与review-only CLEAR不变；失败再次硬停止后等待用户决定。独立文档审查可在恢复前只读执行，控制器运行测试在恢复后进行。
 
 ADR-056执行路径补充：本次恢复由当前外层在会话2内直接继续原run.py诊断/准确A1、verify、done及完成提交，再以drive.py --review-only独立巡检；不启动新的drive --once开发CLI。原driver的历史硬停止及max_sessions检查保持，继续拒绝另起开发会话。
+
+
+## ADR-057 2026-11-09T01:29:38+00:00 — 已采纳：桌面端 Apple TV 化改造卡插入 T0.27 之后
+
+来源：用户原话“给我一个改造方案，将映象视频改造成类似于apple tv的样子，只改造桌面端，包括app页面，使用体感”“推荐需要按照视频分类进行区分，如电影，电视剧，年份，类型”“还需要加入更多的分类，丰富筛选功能，所有的都按照apple tv来做”“把这些更改整理成任务卡，放到T0.27之后，原来的任务卡顺延”。方案文档：https://claude.ai/artifact/AVuEx8V1sPasLH1dc6ausK 。
+决定：在 T0.27 后新增 7 张桌面卡：T0.28/TV1 外壳主题焦点、T0.29/TV2 目录协议与 TMDB 筛选、T0.30/TV3 首页与分类页、T0.31/TV4 MacCMS 分类与同源播放、T0.32/TV5 详情转场与待播、T0.33/TV6 沉浸播放器、T0.34/TV7 搜索资料库与来源设置。原 T0.28（T24）顺延为 T0.35，原 T0.29（T25）顺延为 T0.36，内容和验收强度不变；T0.35 依赖 T0.33、T0.34，T1.1 依赖改为 T0.36。
+映射：已完成卡正文、历史 ADR、PROGRESS、审查报告及已完成卡的验收脚本（如 tests/acceptance/t01.py）保留原文，其中的 T0.28/A1 指顺延后的 T0.35/A1，T0.29 指 T0.36，原卡号 T24、T25 及其证据路径不变。
+契约：ARCHITECTURE 新增 C17，在宽度不小于 960px 的桌面布局上修订 C10、C11 和 ADR-055 的对应条款：横向内容排、固定深色、Video.js 官方元素组合的自定义皮肤。新增 IPC list_watchlist、add_watchlist、remove_watchlist、search_catalog，合计 27 项；主窗口新增 core:window:allow-start-dragging；SQLite 升至版本 2。CSP、CORS、TLS、媒体网关策略保持。伦理片、福利、擦边短剧默认不显示。
+状态：本 ADR 只修订文档。TASKS.md 和 ARCHITECTURE.md 属冻结文件，继续开发前须由用户明确授权 rebaseline，并由独立只读审查按 PROMPT-DOC-REVIEW 给出新的 CLEAR；移动阶段门和其他卡的范围不变。
