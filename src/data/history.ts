@@ -41,10 +41,11 @@ export function entryFromRecord(record: WatchHistoryRecord): HistoryEntry {
 // Rebuild the metadata reference from durable identity; image access stays in memory.
 export async function historyPoster(record: WatchHistoryRecord, sources: AppSource[], call: Api["call"]): Promise<string | null> {
   const identity = record.metadata_identity;
-  const source = sources.find(item => item.kind === "stremio" && item.runtime_status === "ready" && item.origin.config_id === identity.config_id);
+  const direct = identity.namespace === 'maccms';
+  const source = sources.find(item => item.kind === (direct ? 'maccms' : 'stremio') && item.runtime_status === "ready" && item.origin.config_id === identity.config_id);
   if (!source) return null;
   const data = await call("get_details", { ref: { source_id: source.id, source_revision: source.source_revision,
-    data: JSON.stringify(["stremio", identity.addon_key, identity.type, identity.meta_id]) } });
+    data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) } });
   if (data.details.id !== record.content_id || !data.details.poster) return null;
   return data.images[data.details.poster.resource_id]?.url ?? null;
 }

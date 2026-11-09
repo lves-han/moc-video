@@ -235,7 +235,7 @@ def live_builtin(run, session):
     return live
 
 
-def windows(run, *, hero_only=False, browse_only=False, builtin_only=False):
+def windows(run, *, hero_only=False, browse_only=False, builtin_only=False, review_only=False):
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
     t01.DATA = run.folder / "packaged"; t01.DATA.mkdir()
     t01.BUILD = t01.DATA / "build.json"; t12.LIVE_TEST = LIVE_TEST
@@ -258,6 +258,30 @@ def windows(run, *, hero_only=False, browse_only=False, builtin_only=False):
                 home = session.command("tv3", action="home"); run.observed["home"] = home
                 for name in ["category-rows", "lazy-rows", "genre-year-rows", "continue-watching"]:
                     case(run, "TV-HOME", name, "real homepage ordered rows, lazy entry, year/genre routing and genuine history", lambda: validate_home(home))
+                if review_only:
+                    pagination = session.command("tv3", action="review-pagination")
+                    run.observed["review_pagination"] = pagination
+                    run.case("review-pagination-posters", ["REQ-TV3"], "existing decoded posters remain visible after images map is extended", lambda: require(
+                        pagination["after"] > pagination["before"] > 0 and pagination["reused"] and pagination["same_url"]
+                        and pagination["decoded"] and pagination["opacity"] == "1" and not pagination["errors"], "pagination hid an existing poster"))
+                    session.command("tv3", action="review-breakpoint-leave")
+                    session.command("layout", value=768)
+                    narrow = session.command("tv3", action="review-breakpoint-return", timeout=90)
+                    run.observed["review_narrow_return"] = narrow
+                    run.case("review-narrow-return", ["REQ-TV3"], "desktop home -> details -> resize below 960 -> back loads actual narrow content", lambda: require(
+                        narrow["width"] == 768 and not narrow["catalog"] and narrow["phase"] == "ready" and narrow["cards"] > 0
+                        and any(not request.get("catalog_only") and not request.get("section_ref") for request in narrow["requests"])
+                        and not narrow["errors"], "narrow return retained desktop descriptions"))
+                    if narrow["cards"]:
+                        session.command("tv3", action="review-breakpoint-leave")
+                        session.command("layout", value=1200)
+                        desktop = session.command("tv3", action="review-breakpoint-return", timeout=90)
+                        run.observed["review_desktop_return"] = desktop
+                        run.case("review-desktop-return", ["REQ-TV3"], "narrow home -> details -> resize above 960 -> back restores lazy catalog", lambda: require(
+                            desktop["width"] == 1200 and desktop["catalog"] and desktop["phase"] == "ready" and desktop["cards"] > 0
+                            and any(request.get("catalog_only") for request in desktop["requests"]) and not desktop["errors"], "desktop return retained narrow snapshot"))
+                    session.command("identity"); session.close(); bridge.finish()
+                    return dict(diagnostic="T0.30 review regressions", host_tests=1)
                 if builtin_only:
                     live_builtin(run, session); session.command("identity"); session.close(); bridge.finish()
                     return dict(diagnostic="isolated live built-in TMDB", host_tests=1)

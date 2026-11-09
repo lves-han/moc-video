@@ -780,14 +780,6 @@ impl Host {
                 drop(committed);
                 let http = maccms::Http::default();
                 let result = if capability == "home" {
-                    if key["filter"]
-                        .as_object()
-                        .is_some_and(|filter| !filter.is_empty())
-                    {
-                        return Err(ApiError::bad(
-                            "MacCMS filter dimensions are unavailable for this catalog",
-                        ));
-                    }
                     catalog.home(&http, key, job).map(|home| {
                         (
                             home.mapped,
@@ -808,15 +800,6 @@ impl Host {
                     .sources
                     .check_snapshot(&captured, &self.host_epoch, None, false)?;
                 let (mut mapped, sections) = result?;
-                if capability == "home" {
-                    for section in mapped.value["page"]["sections"]
-                        .as_array_mut()
-                        .expect("Home sections")
-                    {
-                        section["kind"] = json!("other");
-                        section["filters"] = crate::home::unavailable_filters();
-                    }
-                }
                 let current = committed
                     .maccms
                     .get_mut(&captured.source_id)
@@ -849,6 +832,9 @@ impl Host {
         sequence: u64,
         error_details: &mut Option<Value>,
     ) -> Result<Value, ApiError> {
+        if input["metadata_ref"]["identity"]["namespace"] == "maccms" {
+            return self.match_maccms(input, job, sequence);
+        }
         let (metadata_snapshot, metadata_catalog, provider_snapshot, provider, catalog, previous) = {
             let mut committed = self.committed.lock().expect("Host commit lock");
             committed.matches.check(sequence)?;
@@ -1041,6 +1027,90 @@ impl Host {
         };
         Ok(
             json!({"status":if context.is_some() {"matched"} else if candidates.is_empty() {"not_found"} else {"needs_confirmation"}, "metadata_ref":input["metadata_ref"], "video_id":input["video_id"], "candidates":candidates, "context":context}),
+        )
+    }
+
+    fn match_maccms(&self, input: &Value, job: &Job, sequence: u64) -> Result<Value, ApiError> {
+        let reference = &input["metadata_ref"]["content_ref"];
+        if input["playback_source"]["source_id"] != reference["source_id"]
+            || input["playback_source"]["source_revision"] != reference["source_revision"]
+            || !input["selection"].is_null()
+        {
+            return Err(ApiError::bad(
+                "MacCMS metadata requires the same playback source and revision",
+            ));
+        }
+        let (snapshot, catalog) = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            committed.matches.check(sequence)?;
+            let source = committed
+                .sources
+                .source(
+                    reference["source_id"].as_str().expect("Source"),
+                    reference["source_revision"].as_str(),
+                )?
+                .clone();
+            if source["kind"] != "maccms" || source["capabilities"]["resolve"] != true {
+                return Err(ApiError::bad("Same-source playback requires MacCMS"));
+            }
+            let snapshot = committed.sources.snapshot(
+                source["origin"]["config_id"].as_str().expect("Config"),
+                &self.host_epoch,
+                false,
+            )?;
+            let catalog = committed
+                .maccms
+                .get(&snapshot.source_id)
+                .cloned()
+                .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Synchronize MacCMS first"))?;
+            (snapshot, catalog)
+        };
+        job.bind_source(&snapshot.source_id);
+        matching::budget(job)?;
+        let child = job.aggregate_child(&Uuid::new_v4().to_string(), "default_metadata")?;
+        let mapped = catalog.details(&maccms::Http::default(), reference, &child)?;
+        if mapped.value["metadata_ref"] != input["metadata_ref"] {
+            return Err(ApiError::bad(
+                "MacCMS metadata identity differs from current details",
+            ));
+        }
+        let episode =
+            matching::video(&mapped.value, input["video_id"].as_str().expect("Video ID"))?;
+        let details = &mapped.value["details"];
+        let group = details["groups"]
+            .as_array()
+            .expect("Groups")
+            .iter()
+            .find(|g| {
+                g["episodes"]
+                    .as_array()
+                    .expect("Episodes")
+                    .contains(&episode)
+            })
+            .ok_or_else(|| ApiError::bad("MacCMS episode group is missing"))?;
+        let selection =
+            json!({"content_ref":reference,"group_id":group["id"],"episode_id":episode["id"]});
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        matching::budget(job)?;
+        committed.matches.check(sequence)?;
+        committed
+            .sources
+            .check_snapshot(&snapshot, &self.host_epoch, None, false)?;
+        committed
+            .maccms
+            .get_mut(&snapshot.source_id)
+            .ok_or_else(ApiError::cancelled)?
+            .register_images(mapped.images)?;
+        let context = committed.matches.issue(
+            input,
+            details,
+            &selection,
+            (snapshot.clone(), snapshot),
+            "same_source",
+            self.clock.now_ms(),
+        )?;
+        Ok(
+            json!({"status":"matched","metadata_ref":input["metadata_ref"],"video_id":input["video_id"],"candidates":[matching::candidate(details)],"context":context}),
         )
     }
 

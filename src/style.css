@@ -2642,4 +2642,21 @@ main {
   @keyframes wall-appear { from { opacity: 0; } to { opacity: 1; } }
 }
 @media (min-width: 1440px) { .home-catalog { --catalog-right: 64px; } .continue-track { gap: 20px; } }
+/* TV4: mixed source artwork uses the same poster geometry and glass tokens. */
+.maccms-accessible-source { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (min-width: 960px) {
+  .media-update-label { position: absolute; left: 8px; bottom: 8px; height: 22px; max-width: calc(100% - 16px); padding: 0 8px; border-radius: 6px; background: var(--tv-glass); -webkit-backdrop-filter: var(--tv-glass-filter); backdrop-filter: var(--tv-glass-filter); font-size: 11px; font-weight: 600; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .catalog-hero-slide.hero-poster-background img { filter: blur(40px); transform: scale(1.2); animation: none; }
+  .hero-cover-poster { position: absolute; right: 64px; top: 20%; height: 60%; width: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 12px; }
+  .maccms-catalog .catalog-hero-copy { max-width: min(560px, calc(100vw - var(--catalog-left) - 360px)); }
+  .maccms-subcategories { display: flex; gap: 8px; overflow-x: auto; padding: 20px 0 12px; }
+  .maccms-subcategories .filter-pill { flex-shrink: 0; }
+  .maccms-catalog .poster-wall .media-row-landscape .media-row-track { grid-template-columns: repeat(auto-fill, minmax(clamp(240px,22vw,360px),1fr)); }
+  .maccms-details .details-head { position: relative; display: flex; align-items: center; height: min(56vh,560px); padding-right: calc(min(56vh,560px) * .4 + 96px); overflow: hidden; isolation: isolate; }
+  .maccms-details .details-head::before { content: ''; position: absolute; inset: 0; background-image: var(--maccms-poster); background-size: cover; background-position: center; filter: blur(40px); transform: scale(1.2); z-index: -2; }
+  .maccms-details .details-head::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, var(--tv-bg), transparent 55%), linear-gradient(to right, rgba(11,11,13,.75), transparent 60%); z-index: -1; }
+  .maccms-details .details-poster { position: absolute; top: 20%; right: 64px; height: 60%; width: auto; border-radius: 12px; }
+  .maccms-details .details-copy { min-width: 0; padding: 24px; }
+  .maccms-details .details-meta::after { content: ' · ' var(--maccms-source); color: var(--tv-text-2); font-size: 13px; font-weight: 400; }
+}
 @media (prefers-reduced-motion: reduce) { .catalog-hero-slide img,.filter-panel,.poster-wall { animation: none !important; } .catalog-hero,.catalog-hero-slide { transition: none; } .catalog-hero-visual { transform: none !important; } }

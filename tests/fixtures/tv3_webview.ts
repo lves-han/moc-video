@@ -207,6 +207,34 @@ export async function catalogScenario(action: string, prototype: { player: Playe
     const ids = all<HTMLElement>('.poster-wall .home-card').map(e => e.dataset.cardId!);
     return { before, after: ids.length, unique: new Set(ids).size, requests: calls.filter(c => c.command === 'get_home' && c.input.filter?.genre === 'Action').map(c => c.input.page) };
   }
+  if (action === 'review-pagination') {
+    await route('#/browse/movie?genre=Action'); await wallReady();
+    const image = node<HTMLImageElement>('.poster-wall .media-poster img');
+    image.scrollIntoView({ block: 'center', behavior: 'instant' });
+    await until(() => image.complete && image.naturalWidth && getComputedStyle(image).opacity === '1', 'Original poster did not become visible');
+    const before = all('.poster-wall .home-card').length, src = image.src;
+    node('.wall-more').scrollIntoView({ block: 'center', behavior: 'instant' });
+    await until(() => all('.poster-wall .home-card').length > before, 'Pagination did not append cards');
+    image.scrollIntoView({ block: 'center', behavior: 'instant' }); await delay(300);
+    return { before, after: all('.poster-wall .home-card').length, reused: image.isConnected, same_url: image.src === src,
+      decoded: image.complete && image.naturalWidth > 0, opacity: getComputedStyle(image).opacity, errors: [...errors] };
+  }
+  if (action === 'review-breakpoint-leave') {
+    if (innerWidth >= 960) await route('#/home');
+    await until(() => !!document.querySelector('.home-card .poster-link'), 'Home cards missing before leaving');
+    node<HTMLAnchorElement>('.home-card .poster-link').click();
+    await until(() => state.route.name === 'details' && state.details.phase === 'ready', 'Details did not open before resizing');
+    return { width: innerWidth, requests: calls.filter(c => c.command === 'get_home').length };
+  }
+  if (action === 'review-breakpoint-return') {
+    const before = calls.filter(c => c.command === 'get_home').length;
+    history.back();
+    await until(() => location.hash === '#/home' && state.route.name === 'home', 'Home route did not return');
+    await delay(500);
+    await until(() => state.home.phase !== 'loading', 'Home reload did not settle after resizing');
+    return { width: innerWidth, phase: state.home.phase, cards: all('.home-card').length,
+      catalog: !!document.querySelector('.home-catalog'), requests: calls.filter(c => c.command === 'get_home').slice(before).map(c => c.input), errors: [...errors] };
+  }
   if (action === 'restore') {
     await route('#/browse/movie?genre=Comedy'); await wallReady();
     node('.poster-wall .home-card').scrollIntoView({ block: 'center', behavior: 'instant' }); await delay(200);

@@ -27,6 +27,14 @@ pub fn candidate(details: &Value) -> Value {
 
 pub fn video(metadata: &Value, id: &str) -> Result<Value, ApiError> {
     let mut found = Vec::new();
+    let maccms_id = if metadata["metadata_ref"]["identity"]["namespace"] == "maccms" {
+        Some(
+            serde_json::from_str::<[String; 4]>(id)
+                .map_err(|_| ApiError::bad("Invalid MacCMS video identity"))?,
+        )
+    } else {
+        None
+    };
     for group in metadata["details"]["groups"]
         .as_array()
         .ok_or_else(|| ApiError::bad("Metadata groups are missing"))?
@@ -38,7 +46,13 @@ pub fn video(metadata: &Value, id: &str) -> Result<Value, ApiError> {
             let fields: Vec<String> =
                 serde_json::from_str(episode["ref"]["data"].as_str().unwrap_or(""))
                     .map_err(|_| ApiError::bad("Metadata video reference is invalid"))?;
-            if fields.len() == 5 && fields[0] == "stremio_video" && fields[4] == id {
+            let same_maccms = fields.len() == 5
+                && fields[0] == "maccms_episode"
+                && maccms_id
+                    .as_ref()
+                    .is_some_and(|video| video[0] == "maccms_video" && video[1..] == fields[1..4]);
+            if same_maccms || (fields.len() == 5 && fields[0] == "stremio_video" && fields[4] == id)
+            {
                 found.push(episode.clone());
             }
         }

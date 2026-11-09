@@ -35,6 +35,9 @@ const desktopNavigation = computed(() => [
   { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
   { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
   { page: 'browse', href: '#/browse/documentary', icon: 'library', label: t('Documentary') },
+  ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
+    && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
+    .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
   { page: "history", href: "#/history", icon: "history", label: t("Watch history") },
   { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
@@ -102,6 +105,12 @@ const sources = computed<Source[]>(() => native ? (appState.sources.data?.provid
 })) : previewSources.value);
 const sourceId = computed(() => native ? appState.selected_playback_source?.source_id ?? "" : previewSourceId(appState.selected_playback_source));
 const source = computed(() => sources.value.find(item => item.id === sourceId.value) ?? sources.value[0] ?? initialSources[0]!);
+const maccmsDetailsSource = computed(() => appState.details.data?.metadata_ref?.identity.namespace === 'maccms'
+  ? appState.sources.data?.providers.find(item => item.kind === 'maccms' && item.id === appState.details.data?.details.ref.source_id) : undefined);
+const maccmsDetailsStyle = computed(() => {
+  const data = appState.details.data, id = data?.details.poster?.resource_id, url = id ? data?.images[id]?.url : null;
+  return maccmsDetailsSource.value ? { '--maccms-poster': url ? `url(${JSON.stringify(url)})` : 'none', '--maccms-source': JSON.stringify(maccmsDetailsSource.value.name) } : {};
+});
 const selectedFilm = computed(() => films.value.find(film => film.id === route.value.id) ?? films.value[0]!);
 const activeGenre = ref<Message>("All"), expanded = ref(false), heroIndex = ref(0);
 const homeSnapshots = new Map<string, { genre: Message; expanded: boolean; hero: number; scroll: number }>();
@@ -237,7 +246,8 @@ async function onHashChange() {
       // The first-run setup entry and the source manager are one native page.
       const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
       appController.navigate({ name });
-      if (name === "home" && !appState.home.data && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
+      if (name === "home" && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
+        && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
     }
     if (current !== sequence) return;
     const home = route.value.page === "home" ? homeSnapshots.get(homeKey()) : undefined;
@@ -309,14 +319,16 @@ let wantedResume: { video_id: string; position_ms: number } | null = null;
 async function continueNativeHistory(record: WatchHistoryRecord) {
   const providers = appState.sources.data?.providers ?? [], identity = record.metadata_identity;
   const ready = (source: AppSource) => source.runtime_status === "ready";
-  const metadata = providers.find(source => source.kind === "stremio" && ready(source) && source.origin.config_id === identity.config_id);
+  const direct = identity.namespace === 'maccms';
+  const metadata = providers.find(source => source.kind === (direct ? 'maccms' : 'stremio') && ready(source) && source.origin.config_id === identity.config_id);
   if (!metadata) { messages.error(t("This title is unavailable in the current catalog.")); return; }
   const playback = providers.find(source => source.id === record.source_id && ready(source));
   if (!playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
   try {
-    await appController.selectSource(metadata.id, "metadata");
+    if (!direct) await appController.selectSource(metadata.id, "metadata");
     await appController.selectSource(playback.id, "playback");
-    const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(["stremio", identity.addon_key, identity.type, identity.meta_id]) };
+    if (direct && metadata.id !== playback.id) throw new Error(t('This title is unavailable in the current catalog.'));
+    const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) };
     wantedResume = record.video_id ? { video_id: record.video_id, position_ms: record.completed ? 0 : record.position_ms } : null;
     location.hash = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
   } catch (error) { preferenceError.value = String(error); }
@@ -575,7 +587,10 @@ onBeforeUnmount(() => {
         <p v-if="route.page === 'settings'" class="tv-theme-note">{{ t('Desktop uses a dark appearance.') }}</p>
         <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
-        <DetailsView v-else-if="native && route.page === 'film'" @open="openDetails" @play="playEpisode" />
+        <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
+          <DetailsView @open="openDetails" @play="playEpisode" />
+          <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
+        </div>
         <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
           <div class="page-heading">

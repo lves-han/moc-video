@@ -418,29 +418,43 @@ export function redactDiagnostics(text: string) {
 export function metadataVideoId(reference: Bridge_MediaRef) {
   try {
     const fields = JSON.parse(reference.data);
+    if (Array.isArray(fields) && fields.length === 5 && fields[0] === 'maccms_episode'
+      && fields.every(field => typeof field === 'string')) return JSON.stringify(['maccms_video', ...fields.slice(1, 4)]);
     const value = Array.isArray(fields) ? fields.length === 5 && fields[0] === "stremio_video" && fields[4] : fields?.video_id;
     return typeof value === "string" ? value : "";
   } catch { return ""; }
 }
 
+function sameMacCmsSource(state: AppState, reference: SourceKey & { data?: string }) {
+  try {
+    const fields = JSON.parse(reference.data ?? '');
+    if (!Array.isArray(fields) || fields.length !== 2 || fields[0] !== 'maccms' || typeof fields[1] !== 'string' || !fields[1]) return false;
+  } catch { return false; }
+  return sameSource(reference, state.selected_playback_source) && state.sources.data?.providers.some(source => source.kind === 'maccms'
+    && source.runtime_status === 'ready' && source.id === reference.source_id && source.source_revision === reference.source_revision);
+}
+
 export function assertContext(state: AppState, context: PlaybackContext) {
-  const metadata = state.sources.data?.providers.find(source => source.id === state.selected_metadata_source?.source_id);
+  const direct = context.metadata_ref.identity.namespace === 'maccms' && sameMacCmsSource(state, context.metadata_ref.content_ref)
+    && sameSource(context.metadata_ref.content_ref, context.episode_ref) && sameRef(context.metadata_ref.content_ref, context.content_ref);
+  const metadata = state.sources.data?.providers.find(source => source.id === (direct ? context.metadata_ref.content_ref.source_id : state.selected_metadata_source?.source_id));
   const provider = state.sources.data?.providers.find(source => source.id === state.selected_playback_source?.source_id);
-  requireBinding(metadata?.kind === "stremio" && metadata.runtime_status === "ready" && sameSource(state.selected_metadata_source, context.metadata_ref.content_ref)
+  requireBinding(metadata && metadata.kind !== 'cloudstream' && (direct || metadata.kind === "stremio" && sameSource(state.selected_metadata_source, context.metadata_ref.content_ref)) && metadata.runtime_status === "ready"
     && metadata.source_revision === context.metadata_ref.content_ref.source_revision
     && metadata.origin.config_id === context.metadata_ref.identity.config_id, "Metadata source/configuration binding differs");
   requireBinding(provider && provider.kind !== "stremio" && provider.runtime_status === "ready"
     && provider.capabilities.resolve && provider.source_revision === context.episode_ref.source_revision
     && sameSource(state.selected_playback_source, context.episode_ref)
     && sameSource(context.content_ref, context.episode_ref)
-    && context.metadata_ref.content_ref.source_id !== context.episode_ref.source_id, "Playback source/revision binding differs");
+    && (direct || context.metadata_ref.content_ref.source_id !== context.episode_ref.source_id), "Playback source/revision binding differs");
   requireBinding(context.match_id.length > 0 && context.group_id.length > 0 && context.episode_id.length > 0, "Missing confirmed match/episode identity");
   const details = state.details.data;
   requireBinding(details?.metadata_ref && sameMetadata(details.metadata_ref, context.metadata_ref)
     && sameRef(details.details.ref, context.metadata_ref.content_ref), "Current details and playback metadata differ");
   if (state.route.name === "details") requireBinding(sameRef(state.route.ref, details.details.ref), "Route and details differ");
   requireBinding(details.details.groups.some(group => group.episodes.some(episode => {
-    return sameSource(episode.ref, context.metadata_ref.content_ref) && metadataVideoId(episode.ref) === context.metadata_video_id;
+    return sameSource(episode.ref, context.metadata_ref.content_ref) && metadataVideoId(episode.ref) === context.metadata_video_id
+      && (!direct || group.id === context.group_id && episode.id === context.episode_id && sameRef(episode.ref, context.episode_ref));
   })), "Video is absent from current metadata details");
 }
 
@@ -520,6 +534,8 @@ export class AppController {
   readonly rows = reactive<Record<string, CatalogRow>>({});
   private catalogGeneration = 0;
   private catalogMode = false;
+  get homeCatalogOnly() { return this.catalogMode; }
+  private rowImageAttempts = new WeakMap<CatalogRow, { queried: Set<string>; refreshed: boolean }>();
   private homeFilters = new Map<string, Bridge_HomeRequest["filter"]>();
   readonly state: AppState;
   readonly sections = reactive<Record<string, LocalRequest>>({});
@@ -574,7 +590,8 @@ export class AppController {
     return this.requests.get(scope) === ticket && ticket.host === this.state.runtime.engine_epoch
       && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || ticket.locale === (this.state.settings.ui_locale ?? "en"))
       && (ticket.guest === undefined || ticket.guest === this.state.runtime.cloudstream.engine_epoch)
-      && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || sameSource(ticket.source, this.state.selected_metadata_source))
+      && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || sameSource(ticket.source, this.state.selected_metadata_source)
+        || scope === "details" && ticket.source && sameMacCmsSource(this.state, ticket.source))
       && (!["match", "candidate"].includes(scope) || sameSource(ticket.source, this.state.selected_playback_source))
       && (!["match", "candidate"].includes(scope) || ticket.epoch === this.state.playback.playback_epoch)
       && (!ticket.source || (provider?.source_revision === ticket.source.source_revision && provider.runtime_status === "ready"));
@@ -600,13 +617,15 @@ export class AppController {
   }
   catalogRow(sectionRef: string, filter: HomeFilter = {}) {
     const key = this.rowKey(sectionRef, filter);
-    return this.rows[key] ??= { phase: "pending", data: null, error: null };
+    this.rows[key] ??= { phase: "pending", data: null, error: null };
+    return this.rows[key]!;
   }
   async loadRow(sectionRef: string, filter: HomeFilter = {}, pageNumber = 1) {
     const source = this.state.selected_metadata_source;
     requireBinding(source && this.state.runtime.engine_epoch, "Row requires a metadata source and host epoch");
     const key = this.rowKey(sectionRef, filter), row = this.catalogRow(sectionRef, filter);
     requireBinding(pageNumber === 1 || row.data?.page.sections[0]?.next_page === pageNumber, "Row pagination requires its current continuation");
+    this.rowImageAttempts.set(row, { queried: new Set(), refreshed: false });
     const scope = `section:row:${key}`, ticket = this.ticket(scope, source, this.state.home.request_epoch);
     const input = { ...clone(source), section_ref: sectionRef, page: pageNumber, filter: clone(filter) };
     const valid = () => this.current(scope, ticket) && key === this.rowKey(sectionRef, filter);
@@ -628,11 +647,21 @@ export class AppController {
   }
   async rowImageError(sectionRef: string, filter: HomeFilter, id: string) {
     const key = this.rowKey(sectionRef, filter), row = this.catalogRow(sectionRef, filter), snapshot = row.data;
-    if (!snapshot?.images[id]) return;
-    const status = await this.api.call("get_resource_status", { kind: "image", target_id: id });
-    if (key !== this.rowKey(sectionRef, filter) || row.data !== snapshot) return;
-    if (status.error?.code === "SESSION_EXPIRED") await this.loadRow(sectionRef, filter);
-    else { row.error = status.error ?? { code: "UPSTREAM_FAILED", message: "Image failed to load", retryable: true }; }
+    const attempt = this.rowImageAttempts.get(row), host = this.state.runtime.engine_epoch;
+    if (!snapshot?.images[id] || !host || !attempt || row.phase === "loading" || attempt.queried.has(id)) return;
+    attempt.queried.add(id);
+    const active = () => key === this.rowKey(sectionRef, filter) && row.data === snapshot && this.rowImageAttempts.get(row) === attempt;
+    try {
+      const status = await this.api.call("get_resource_status", { kind: "image", target_id: id }, crypto.randomUUID(), host);
+      if (!active()) return;
+      requireBinding(status.kind === "image" && status.target_id === id, "Image status target differs");
+      if (status.error?.code === "SESSION_EXPIRED" && !attempt.refreshed) {
+        const refresh = this.loadRow(sectionRef, filter);
+        // The recovery DTO shares this attempt's one-refresh allowance.
+        this.rowImageAttempts.get(row)!.refreshed = true;
+        await refresh;
+      } else row.error = status.error ?? { code: "UPSTREAM_FAILED", message: "Image failed to load", retryable: true };
+    } catch (cause) { if (active()) row.error = failure(cause); }
   }
   loadCatalog() { return this.loadHome(null, 1, null, true); }
   async initialize() {
@@ -765,7 +794,7 @@ export class AppController {
     }
   }
   navigate(route: Route) {
-    if (route.name === "details") requireBinding(sameSource(route.ref, this.state.selected_metadata_source), "Route requires the selected metadata source");
+    if (route.name === "details") requireBinding(sameSource(route.ref, this.state.selected_metadata_source) || sameMacCmsSource(this.state, route.ref), "Route requires the selected metadata or MacCMS playback source");
     if (route.name === "playback") { assertContext(this.state, route.context); requireBinding(this.state.playback.context && sameContext(this.state.playback.context, route.context), "Route requires the current confirmed context"); }
     else this.invalidatePlayback();
     this.cancelPages();
@@ -879,7 +908,7 @@ export class AppController {
     return redactDiagnostics(lines.join("\n"));
   }
   async loadDetails(ref: Bridge_MediaRef) {
-    requireBinding(sameSource(ref, this.state.selected_metadata_source), "Details must belong to selected metadata source");
+    requireBinding(sameSource(ref, this.state.selected_metadata_source) || sameMacCmsSource(this.state, ref), "Details must belong to selected metadata or MacCMS playback source");
     const target = this.state.details;
     this.imageAttempts.details.refreshed = false; this.detailsImage.error = "";
     const ticket = this.ticket("details", ref, ++target.request_epoch);
@@ -890,7 +919,8 @@ export class AppController {
       requireBinding(sameRef(response.details.ref, ref) && response.metadata_ref && sameRef(response.metadata_ref.content_ref, ref), "Details response identity differs");
       requireBinding(response.details.groups.every(group => group.episodes.every(episode => sameSource(episode.ref, ref))), "Metadata episode source/revision differs");
       const provider = this.state.sources.data?.providers.find(source => source.id === ref.source_id);
-      requireBinding(provider?.kind === "stremio" && provider.origin.config_id === response.metadata_ref.identity.config_id, "Details metadata configuration differs");
+      requireBinding(provider && (provider.kind === 'stremio' || provider.kind === 'maccms' && sameMacCmsSource(this.state, ref)
+        && response.metadata_ref.identity.namespace === 'maccms') && provider.origin.config_id === response.metadata_ref.identity.config_id, "Details metadata configuration differs");
       target.data = clone(response); target.phase = "ready";
     } catch (error) { if (this.current("details", ticket)) { target.phase = "failed"; target.error = failure(error); } }
     finally { if (this.requests.get("details") === ticket) { this.requests.delete("details"); target.request_id = null; } }
@@ -974,7 +1004,8 @@ export class AppController {
     try {
       const data = await this.api.call("get_details", { ref: clone(ref) }, ticket.id, ticket.host ?? undefined);
       if (!this.current("candidate", ticket)) return;
-      requireBinding(sameRef(data.details.ref, ref) && data.metadata_ref === null
+      requireBinding(sameRef(data.details.ref, ref) && (data.metadata_ref === null || data.metadata_ref.identity.namespace === 'maccms'
+        && sameMacCmsSource(this.state, data.metadata_ref.content_ref) && sameRef(data.metadata_ref.content_ref, ref))
         && data.details.groups.every(group => group.episodes.every(episode => sameSource(episode.ref, ref))), "Candidate details/episode source binding differs");
       this.matching.details = data;
     } catch (cause) { if (this.current("candidate", ticket)) this.matching.error = failure(cause); }

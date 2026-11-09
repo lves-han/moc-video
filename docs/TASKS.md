@@ -1842,7 +1842,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 **空状态。** 居中，图标40px，标题17/600，说明14px，下方列出“去掉某个条件”胶囊。
 
 ### T0.31 TV4 MacCMS分类与同源直通播放
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.30
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-MACCMS-CAT, TV-MACCMS-PLAY, REQ-TV4 → A1（覆盖表含精确对应）

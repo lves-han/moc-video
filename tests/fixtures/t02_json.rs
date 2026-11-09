@@ -34,6 +34,17 @@ pub(super) fn stage(request: &Request) -> &'static str {
     }
 }
 
+// TV4's display policy applies to list/search cards too. Keep every other
+// captured title and opaque identity in its original order.
+fn visible(item: &&Value) -> bool {
+    ![
+        "伦理", "倫理", "福利", "擦边", "预告", "资讯", "公告", "头条", "解说", "三级", "写真",
+        "两性", "有声", "儿歌", "音乐", "影视", "搞笑", "汽车",
+    ]
+    .iter()
+    .any(|word| item["type_name"].as_str().unwrap_or("").contains(word))
+}
+
 fn serve_public(source: Value) -> Fixture {
     Fixture::new(move |request, port| {
         let body = record(&source, stage(request))["response"]
@@ -57,17 +68,19 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
         let catalog = catalog(&host);
         let http = Http::default();
         let list = &record(source, "list")["response"];
-        assert_eq!(
-            catalog.sections.len(),
-            list["class"].as_array().unwrap().len()
-        );
-        for (section, original) in catalog
-            .sections
+        let expected: Vec<_> = list["class"]
+            .as_array()
+            .unwrap()
             .iter()
-            .zip(list["class"].as_array().unwrap())
-        {
+            .filter_map(|class| {
+                normalized_category(class["type_name"].as_str().unwrap())
+                    .map(|(title, _)| (class, title))
+            })
+            .collect();
+        assert_eq!(catalog.sections.len(), expected.len());
+        for (section, (original, title)) in catalog.sections.iter().zip(expected) {
             assert_eq!(section.type_id, identifier(&original["type_id"]).unwrap());
-            assert_eq!(section.title, original["type_name"].as_str().unwrap());
+            assert_eq!(section.title, title);
         }
         for page in [1, 2] {
             let section = &catalog.sections[0];
@@ -80,11 +93,26 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
                 .unwrap();
             let expected = &record(source, &format!("category_page_{page}"))["response"];
             let actual = &mapped.mapped.value["page"]["sections"][0];
+            let visible: Vec<_> = expected["list"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(visible)
+                .collect();
             assert_eq!(actual["page"], page);
-            assert_eq!(
-                actual["items"].as_array().unwrap().len(),
-                expected["list"].as_array().unwrap().len()
-            );
+            assert_eq!(actual["items"].as_array().unwrap().len(), visible.len());
+            for (card, original) in actual["items"].as_array().unwrap().iter().zip(visible) {
+                let reference: Vec<String> =
+                    serde_json::from_str(card["ref"]["data"].as_str().unwrap()).unwrap();
+                assert_eq!(
+                    reference,
+                    vec![
+                        "maccms".to_owned(),
+                        identifier(&original["vod_id"]).unwrap()
+                    ]
+                );
+                assert_eq!(card["title"], original["vod_name"]);
+            }
             assert_eq!(
                 actual["has_next"],
                 !expected["list"].as_array().unwrap().is_empty()
@@ -101,9 +129,16 @@ fn t02_public_json_list_search_pagination_details_and_complete_groups() {
             let expected = record(source, stage)["response"]["list"]
                 .as_array()
                 .unwrap();
+            let expected: Vec<_> = expected.iter().filter(visible).collect();
             assert_eq!(mapped.value.as_array().unwrap().len(), expected.len());
             for (card, item) in mapped.value.as_array().unwrap().iter().zip(expected) {
                 assert_eq!(card["title"], item["vod_name"]);
+                let reference: Vec<String> =
+                    serde_json::from_str(card["ref"]["data"].as_str().unwrap()).unwrap();
+                assert_eq!(
+                    reference,
+                    vec!["maccms".to_owned(), identifier(&item["vod_id"]).unwrap()]
+                );
             }
         }
         let original = &record(source, "detail_id")["response"]["list"][0];

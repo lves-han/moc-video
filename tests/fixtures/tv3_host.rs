@@ -49,7 +49,7 @@ fn media3(kind: &str, index: usize, genre: &str, year: i32, label: &str, port: u
         "videos":[{"id":format!("video:{index}"),"season":1,"episode":3,"title":"Episode 3"}]})
 }
 
-fn upstream3(request: &Request, port: u16, mode: usize) -> Reply {
+pub(super) fn upstream3(request: &Request, port: u16, mode: usize) -> Reply {
     if request.target.contains("manifest.json") {
         let mut manifest = manifest3();
         manifest["version"] = json!(format!("1.0.{mode}"));

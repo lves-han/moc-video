@@ -10,6 +10,7 @@ const track = ref<HTMLElement>();
 const atStart = ref(true), atEnd = ref(false);
 const loaded = ref(new Set<string>()), broken = ref(new Set<string>());
 const poster = (card: Bridge_MediaCard) => card.poster && !broken.value.has(card.poster.resource_id) ? props.images[card.poster.resource_id]?.url : undefined;
+const maccms = (card: Bridge_MediaCard) => card.ref.data.startsWith('["maccms",');
 function edges() {
   if (track.value) {
     atStart.value = track.value.scrollLeft <= 1;
@@ -42,7 +43,11 @@ function failed(card: Bridge_MediaCard) {
   broken.value.add(card.poster.resource_id);
   emit("imageError", card.poster.resource_id);
 }
-watch(() => props.images, () => { loaded.value.clear(); broken.value.clear(); });
+watch(() => props.images, (images, previous) => {
+  // Pagination extends the map without reloading unchanged <img> elements.
+  for (const id of loaded.value) if (images[id]?.url !== previous[id]?.url) loaded.value.delete(id);
+  broken.value.clear();
+});
 watch(() => props.items, async () => { await nextTick(); edges(); });
 let observer: ResizeObserver | undefined;
 onMounted(() => { observer = new ResizeObserver(edges); if (track.value) observer.observe(track.value); edges(); });
@@ -59,9 +64,10 @@ onBeforeUnmount(() => observer?.disconnect());
           <a class="media-poster poster-link" :href="`#/details/${encodeURIComponent(JSON.stringify(card.ref))}`" :aria-label="t('View details for {title}', { title: card.title })" @click.prevent="emit('open', card.ref)" @pointermove="highlight" @pointerleave="reset">
             <img v-if="poster(card)" :src="poster(card)" alt="" loading="lazy" :class="{ loaded: loaded.has(card.poster!.resource_id) }" @load="loaded.add(card.poster!.resource_id)" @error="failed(card)" />
             <span v-else class="media-poster-missing">{{ card.title }}</span>
+            <span v-if="maccms(card) && card.update_label" class="media-update-label">{{ card.update_label }}</span>
           </a>
           <p class="media-card-title card-title" :title="card.title">{{ card.title }}</p>
-          <p class="media-card-detail">{{ [card.year, card.update_label ?? card.subtitle, ...(card.genres ?? []).slice(0, 1)].filter(Boolean).join(' · ') }}</p>
+          <p class="media-card-detail">{{ [card.year, maccms(card) ? card.subtitle : card.update_label ?? card.subtitle, card.rating?.value ? `${card.rating.value} ★` : null, ...(card.genres ?? []).slice(0, 1)].filter(Boolean).join(' · ') }}</p>
         </article>
       </div>
       <button v-if="!atStart" class="media-row-arrow media-row-previous" :aria-label="t('Previous items')" @click="page(-1)"><Icon name="back" /></button>

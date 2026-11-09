@@ -157,6 +157,11 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await foreground();
         return catalogScenario(command.action!, { player, base, cap });
       }
+      case "tv4": {
+        const { maccmsScenario } = await import("../tv4_webview");
+        await foreground();
+        return maccmsScenario(command.action!, { player, base, cap });
+      }
       case "t22-startup": {
         const foregroundState = await foreground();
         const window_ready_epoch_ms = performance.timeOrigin + performance.now();

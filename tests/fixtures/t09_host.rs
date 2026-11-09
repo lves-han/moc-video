@@ -23,6 +23,8 @@ mod t19;
 mod t24_cache;
 #[path = "tv3_host.rs"]
 mod tv3;
+#[path = "tv4_host.rs"]
+mod tv4;
 
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());

@@ -622,7 +622,12 @@ fn t03_page_tail_and_partial_failures_never_become_silent_empty_lists() {
             (failures[0]["index"].clone(), failures[1]["index"].clone()),
             (json!(1), json!(2))
         );
-        assert_eq!(failures[0]["title"], original[1]["type_name"]);
+        let raw_title = original[1]["type_name"].as_str().unwrap();
+        let title = match raw_title {
+            "连续剧" => "电视剧",
+            other => other.rsplit('/').next().unwrap(),
+        };
+        assert_eq!(failures[0]["title"], title);
         for failure in failures {
             assert_eq!(failure["error"]["code"], "UPSTREAM_FAILED");
         }

@@ -570,6 +570,116 @@ pub struct Section {
     pub id: String,
     pub handle: String,
     pub index: usize,
+    pub category: &'static str,
+}
+
+// Names are source-owned; IDs remain opaque and always go back to that source.
+pub(crate) fn normalized_category(name: &str) -> Option<(String, &'static str)> {
+    if [
+        "伦理", "倫理", "福利", "擦边", "擦邊", "情色", "成人", "三级", "里番", "预告", "預告",
+        "资讯", "資訊", "公告", "头条", "頭條", "解说", "解說", "花絮", "搞笑", "汽车", "写真",
+        "两性", "有声", "儿歌", "音乐", "影视",
+    ]
+    .iter()
+    .any(|word| name.contains(word))
+    {
+        return None;
+    }
+    let leaf = name
+        .rsplit(['/', '／', '\\', '>'])
+        .next()
+        .unwrap_or(name)
+        .trim();
+    let (title, category) = match leaf {
+        "电影" | "电影片" => ("电影", "movie"),
+        "电视剧" | "连续剧" | "剧集" => ("电视剧", "series"),
+        "国产剧" | "内地剧" | "大陆剧" | "华语剧" => ("华语剧", "series"),
+        "香港剧" | "港澳剧" | "港剧" => ("港剧", "series"),
+        "台湾剧" | "台剧" => ("台剧", "series"),
+        "日本剧" | "日剧" => ("日剧", "series"),
+        "韩国剧" | "韩剧" => ("韩剧", "series"),
+        "泰国剧" | "泰剧" | "马泰剧" => ("泰剧", "series"),
+        "美国剧" | "美剧" | "欧美剧" => ("欧美剧", "series"),
+        "综艺" | "综艺片" | "综艺节目" => ("综艺", "variety"),
+        "大陆综艺" | "内地综艺" | "国产综艺" | "华语综艺" => {
+            ("华语综艺", "variety")
+        }
+        "动漫" | "动漫片" | "动画" => ("动漫", "anime"),
+        "中国动漫" | "国产动漫" | "国漫" => ("国产动漫", "anime"),
+        "日本动漫" | "日韩动漫" | "日漫" => ("日韩动漫", "anime"),
+        "动画片" | "动漫电影" | "动画电影" => ("动画电影", "anime"),
+        "短剧" | "短剧大全" | "短剧片" | "微短剧" | "精品短剧" => ("短剧", "short"),
+        "体育" | "体育赛事" | "体育节目" | "体育直播" => ("体育", "sports"),
+        "记录片" | "纪录片" | "纪录" => ("纪录片", "documentary"),
+        other => (
+            other,
+            if other.contains("综艺") {
+                "variety"
+            } else if other.contains("动漫") || other.contains("漫剧") {
+                "anime"
+            } else if other.contains("短剧")
+                || [
+                    "古装仙侠",
+                    "现代都市",
+                    "穿越年代",
+                    "年代穿越",
+                    "言情总裁",
+                    "重生民国",
+                    "反转爽剧",
+                    "脑洞悬疑",
+                    "女频恋爱",
+                    "都市脑洞",
+                    "逆袭",
+                ]
+                .contains(&other)
+            {
+                "short"
+            } else if [
+                "足球",
+                "篮球",
+                "网球",
+                "斯诺克",
+                "台球",
+                "其他赛事",
+                "电竞",
+                "综合体育",
+            ]
+            .contains(&other)
+            {
+                "sports"
+            } else if other.ends_with('剧') {
+                "series"
+            } else if other.ends_with('片') {
+                "movie"
+            } else {
+                "other"
+            },
+        ),
+    };
+    Some((title.to_owned(), category))
+}
+
+fn category_kind(category: &str) -> &str {
+    if ["movie", "series", "anime"].contains(&category) {
+        category
+    } else {
+        "other"
+    }
+}
+
+fn normalized_region(value: &str) -> &str {
+    match value.trim() {
+        "大陆" | "内地" | "中国大陆" | "中国" => "中国大陆",
+        "香港" | "中国香港" => "中国香港",
+        "台湾" | "中国台湾" => "中国台湾",
+        other => other,
+    }
+}
+fn normalized_language(value: &str) -> &str {
+    match value.trim() {
+        "普通话" | "汉语普通话" | "国语" | "中文" => "国语",
+        other => other,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -637,6 +747,10 @@ impl Catalog {
         };
         let response = catalog.request(http, &[("ac", "list"), ("pg", "1")], job, true)?;
         catalog.sections = catalog.categories(&response)?;
+        let mut categories: Vec<_> = catalog.sections.iter().map(|s| s.category).collect();
+        categories.sort_unstable();
+        categories.dedup();
+        catalog.source["content_types"] = json!(categories);
         Contracts::get().validate("AppSource", &catalog.source)?;
         Ok(catalog)
     }
@@ -654,21 +768,21 @@ impl Catalog {
             if !seen.insert(id.clone()) {
                 return Err(upstream("MacCMS classifications contain ambiguous IDs"));
             }
-            sections.push((
-                id,
-                class["type_name"]
-                    .as_str()
-                    .ok_or_else(|| upstream("MacCMS classification title is missing"))?
-                    .to_owned(),
-            ));
+            let name = class["type_name"]
+                .as_str()
+                .ok_or_else(|| upstream("MacCMS classification title is missing"))?
+                .to_owned();
+            if let Some((title, category)) = normalized_category(&name) {
+                sections.push((id, title, category));
+            }
         }
-        if sections.is_empty() {
-            sections.push((String::new(), "最近更新".into()));
+        if classes.is_empty() {
+            sections.push((String::new(), "最近更新".into(), "other"));
         }
         Ok(sections
             .into_iter()
             .enumerate()
-            .map(|(index, (type_id, title))| Section {
+            .map(|(index, (type_id, title, category))| Section {
                 id: identity(
                     "maccms_section",
                     &[
@@ -691,6 +805,7 @@ impl Catalog {
                 type_id,
                 title,
                 index,
+                category,
             })
             .collect())
     }
@@ -739,16 +854,16 @@ impl Catalog {
                 continue;
             }
             let results = std::thread::scope(|scope| {
-                let workers: Vec<_> = chunk.iter().map(|section| scope.spawn(move || crate::home::column(job, section_ref.is_none(), |job| {
-                    let page_text = page.to_string();
-                    let response = self.request(http, &[("ac", "detail"), ("t", &section.type_id), ("pg", &page_text)], job, false)?;
-                    let mapped = self.cards(&response, page)?;
-                    let count = number(&response["pagecount"], 0)?;
-                    let has_next = !mapped.value.as_array().expect("Mapped cards").is_empty() && page < count && page < 10000;
-                    Ok::<_, ApiError>((json!({"id": section.id, "title": section.title, "section_ref": section.handle,
-                        "index": section.index, "items": mapped.value, "has_next": has_next,
-                        "next_page": if has_next { Some(page + 1) } else { None }, "page": page}), mapped.images))
-                }))).collect();
+                let workers: Vec<_> = chunk
+                    .iter()
+                    .map(|section| {
+                        scope.spawn(move || {
+                            crate::home::column(job, section_ref.is_none(), |job| {
+                                self.home_section(http, input, section, page, job)
+                            })
+                        })
+                    })
+                    .collect();
                 workers
                     .into_iter()
                     .map(|worker| {
@@ -791,6 +906,148 @@ impl Catalog {
             mapped: Mapped { value, images },
             sections,
         })
+    }
+
+    fn facets(&self, section: &Section) -> Value {
+        let mut filters = crate::home::unavailable_filters();
+        let mut genres = vec![section.title.clone()];
+        genres.extend(
+            [
+                "动作", "喜剧", "爱情", "科幻", "剧情", "悬疑", "冒险", "恐怖", "历史",
+            ]
+            .map(str::to_owned),
+        );
+        genres.sort();
+        genres.dedup();
+        let years: Vec<_> = (1900..=OffsetDateTime::now_utc().year())
+            .rev()
+            .map(|y| y.to_string())
+            .collect();
+        for (key, options) in [
+            ("genre", genres),
+            ("year", years),
+            (
+                "region",
+                [
+                    "中国大陆",
+                    "中国香港",
+                    "中国台湾",
+                    "美国",
+                    "日本",
+                    "韩国",
+                    "英国",
+                    "泰国",
+                    "法国",
+                ]
+                .map(str::to_owned)
+                .to_vec(),
+            ),
+            (
+                "language",
+                [
+                    "国语", "粤语", "英语", "日语", "韩语", "法语", "德语", "泰语",
+                ]
+                .map(str::to_owned)
+                .to_vec(),
+            ),
+        ] {
+            filters[key] = json!({"available":true,"options":options.iter().map(|v| json!({"value":v,"name":v})).collect::<Vec<_>>()});
+        }
+        filters
+    }
+
+    fn home_section(
+        &self,
+        http: &Http,
+        input: &Value,
+        section: &Section,
+        page: u64,
+        job: &Job,
+    ) -> Result<(Value, Vec<Image>), ApiError> {
+        let filter = &input["filter"];
+        if !filter["sort"].is_null() {
+            return Err(ApiError::bad("MacCMS sorting is unavailable"));
+        }
+        let filtered = filter.as_object().is_some_and(|f| !f.is_empty());
+        // APIs commonly ignore year/area/lang. Scan at most five source pages
+        // per logical page, passing only the documented category and page.
+        let batch = if filtered { 5 } else { 1 };
+        let first = (page - 1) * batch + 1;
+        let mut items = Vec::new();
+        let mut images = Vec::new();
+        let mut scanned = 0;
+        let mut has_next = false;
+        for upstream_page in first..first + batch {
+            let response = self.request(
+                http,
+                &[
+                    ("ac", "detail"),
+                    ("t", &section.type_id),
+                    ("pg", &upstream_page.to_string()),
+                ],
+                job,
+                false,
+            )?;
+            if response.get("page").is_some() && number(&response["page"], 1)? != upstream_page {
+                return Err(upstream("MacCMS returned a different page"));
+            }
+            let entries = response["list"].as_array().expect("Validated list");
+            scanned += entries.len();
+            for item in entries {
+                if normalized_category(item["type_name"].as_str().unwrap_or("")).is_none() {
+                    continue;
+                }
+                let card = self.card(item, &mut images)?;
+                let matches = filter.as_object().is_none_or(|f| {
+                    f.iter().all(|(key, selected)| {
+                        let selected = selected.as_str().unwrap_or("");
+                        match key.as_str() {
+                            "year" => card["year"]
+                                .as_u64()
+                                .is_some_and(|y| y.to_string() == selected),
+                            "region" => words(item["vod_area"].as_str())
+                                .iter()
+                                .any(|v| normalized_region(v) == normalized_region(selected)),
+                            "language" => words(item["vod_lang"].as_str())
+                                .iter()
+                                .any(|v| normalized_language(v) == normalized_language(selected)),
+                            "genre" => {
+                                section.title == selected
+                                    || words(item["vod_class"].as_str())
+                                        .iter()
+                                        .any(|v| v == selected)
+                            }
+                            _ => false,
+                        }
+                    })
+                });
+                if matches && !items.iter().any(|old: &Value| old["id"] == card["id"]) {
+                    items.push(card);
+                }
+            }
+            has_next = !entries.is_empty()
+                && upstream_page < number(&response["pagecount"], 0)?
+                && upstream_page < 10000
+                && page < 10000;
+            if !has_next {
+                break;
+            }
+        }
+        let used: HashSet<_> = items
+            .iter()
+            .filter_map(|c| c["poster"]["resource_id"].as_str())
+            .collect();
+        images.retain(|image| {
+            image.reference["resource_id"]
+                .as_str()
+                .is_some_and(|id| used.contains(id))
+        });
+        Ok((
+            json!({"id":section.id,"title":section.title,"section_ref":section.handle,"index":section.index,
+            "kind":category_kind(section.category),"filters":self.facets(section),"scanned_count":scanned,"matched_count":items.len(),
+            "items":items,"has_next":has_next,"next_page":if has_next {Some(page+1)} else {None},"page":page}),
+            images,
+        ))
     }
 
     pub fn search(
@@ -839,6 +1096,7 @@ impl Catalog {
             .as_array()
             .expect("Validated list")
             .iter()
+            .filter(|item| normalized_category(item["type_name"].as_str().unwrap_or("")).is_some())
             .take(maximum)
             .map(|item| self.card(item, &mut images))
             .collect();
@@ -849,6 +1107,39 @@ impl Catalog {
 
     fn media_ref(&self, data: &str) -> Value {
         json!({"source_id": self.captured.source_id, "source_revision": self.captured.source_revision, "data": data})
+    }
+
+    fn item_category(&self, item: &Value) -> &'static str {
+        let type_id = identifier(&item["type_id"]).ok();
+        self.sections
+            .iter()
+            .find(|section| Some(&section.type_id) == type_id.as_ref())
+            .map(|s| s.category)
+            .unwrap_or_else(|| {
+                normalized_category(item["type_name"].as_str().unwrap_or(""))
+                    .map(|(_, kind)| kind)
+                    .unwrap_or("other")
+            })
+    }
+
+    fn metadata_identity(&self, item: &Value, vod_id: &str) -> Value {
+        let config_id = self.captured.config["config_id"]
+            .as_str()
+            .expect("Config UUID");
+        json!({"config_id":config_id,"addon_key":identity("maccms_addon", &[config_id]),"namespace":"maccms",
+            "type":category_kind(self.item_category(item)),"meta_id":vod_id,"canonical_id":identity("maccms_content", &[config_id, vod_id])})
+    }
+
+    fn content_id(&self, item: &Value, vod_id: &str) -> String {
+        let metadata = self.metadata_identity(item, vod_id);
+        identity(
+            "metadata",
+            &[
+                "maccms",
+                metadata["type"].as_str().expect("Type"),
+                metadata["canonical_id"].as_str().expect("ID"),
+            ],
+        )
     }
 
     fn card(&self, item: &Value, images: &mut Vec<Image>) -> Result<Value, ApiError> {
@@ -872,11 +1163,13 @@ impl Catalog {
         };
         let poster = self.image(item["vod_pic"].as_str(), images)?;
         Ok(
-            json!({"id": identity("content", &[&self.captured.source_id, &data]), "ref": self.media_ref(&data),
-            "title": item["vod_name"].as_str().ok_or_else(|| upstream("MacCMS title is missing"))?, "kind": "other",
+            json!({"id": self.content_id(item, &vod_id), "ref": self.media_ref(&data),
+            "title": item["vod_name"].as_str().ok_or_else(|| upstream("MacCMS title is missing"))?, "kind": category_kind(self.item_category(item)),
             "poster": poster, "year": year, "rating": rating, "status": status,
             "update_label": item["vod_remarks"].as_str().filter(|s| !s.is_empty()),
-            "provider_type": item["type_name"].as_str(), "episode_count": null}),
+            "provider_type": item["type_name"].as_str(), "episode_count": null,
+            "backdrop":null,"plot":item["vod_content"].as_str().map(plain_text).filter(|s| !s.trim().is_empty()),
+            "genres":match words(item["vod_class"].as_str()) { words if words.is_empty() => None, words => Some(words) }}),
         )
     }
 
@@ -979,6 +1272,10 @@ impl Catalog {
         let groups = self.groups(item, card["id"].as_str().expect("Content id"))?;
         let mut details = card;
         details.as_object_mut().expect("Card object").remove("ref");
+        details
+            .as_object_mut()
+            .expect("Card object")
+            .remove("genres");
         details["ref"] = reference.clone();
         details["plot"] = item["vod_content"]
             .as_str()
@@ -992,6 +1289,12 @@ impl Catalog {
                 .collect::<Vec<_>>()
         );
         details["tags"] = json!(words(item["vod_class"].as_str()));
+        if details["tags"].as_array().is_some_and(Vec::is_empty)
+            && let Some((name, _)) = normalized_category(item["type_name"].as_str().unwrap_or(""))
+            && !name.is_empty()
+        {
+            details["tags"] = json!([name]);
+        }
         details["related"] = json!([]);
         details["actors"] = json!(people(item["vod_actor"].as_str()));
         details["directors"] = json!(people(item["vod_director"].as_str()));
@@ -1005,7 +1308,8 @@ impl Catalog {
                 Err(upstream("MacCMS detail image is not registered"))
             }
         })?;
-        let value = json!({"details": details, "images": {}, "metadata_ref": null});
+        let metadata = self.metadata_identity(item, &identifier(&item["vod_id"])?);
+        let value = json!({"details": details, "images": {}, "metadata_ref": {"identity":metadata,"content_ref":reference}});
         wire_size(&value, RESPONSE_LIMIT)?;
         Contracts::get().validate("DetailsViewData", &value)?;
         Ok(Mapped { value, images })
@@ -1119,11 +1423,7 @@ impl Catalog {
             .parse()
             .map_err(|_| ApiError::bad("Invalid MacCMS episode index"))?;
         let item = self.detail_item(http, &data[1], job)?;
-        let content = serde_json::to_string(&["maccms", &data[1]]).expect("String array");
-        let groups = self.groups(
-            &item,
-            &identity("content", &[&self.captured.source_id, &content]),
-        )?;
+        let groups = self.groups(&item, &self.content_id(&item, &data[1]))?;
         if groups.is_empty() {
             return Err(crate::resolution::no_links());
         }
