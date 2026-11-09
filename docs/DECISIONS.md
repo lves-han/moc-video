@@ -467,3 +467,7 @@ ADR-056执行路径补充：本次恢复由当前外层在会话2内直接继续
 映射：已完成卡正文、历史 ADR、PROGRESS、审查报告及已完成卡的验收脚本（如 tests/acceptance/t01.py）保留原文，其中的 T0.28/A1 指顺延后的 T0.35/A1，T0.29 指 T0.36，原卡号 T24、T25 及其证据路径不变。
 契约：ARCHITECTURE 新增 C17，在宽度不小于 960px 的桌面布局上修订 C10、C11 和 ADR-055 的对应条款：横向内容排、固定深色、Video.js 官方元素组合的自定义皮肤。新增 IPC list_watchlist、add_watchlist、remove_watchlist、search_catalog，合计 27 项；主窗口新增 core:window:allow-start-dragging；SQLite 升至版本 2。CSP、CORS、TLS、媒体网关策略保持。伦理片、福利、擦边短剧默认不显示。
 状态：本 ADR 只修订文档。TASKS.md 和 ARCHITECTURE.md 属冻结文件，继续开发前须由用户明确授权 rebaseline，并由独立只读审查按 PROMPT-DOC-REVIEW 给出新的 CLEAR；移动阶段门和其他卡的范围不变。
+
+ADR-057补充 2026-11-09T01:43:38+00:00：用户要求“0.28-0.34的任务卡里需要详细规划好页面风格”。T0.28至T0.34各增加“页面风格规格”和对应验收用例，T0.28定义共用变量，开工校准后的最终值写入PROGRESS；T0.31、T0.32、T0.34的范围同步增加样式或组件目录。
+
+ADR-057补充 2026-11-09T01:48:31.000000+00:00：用户选择“加入 4 个文件并重验”。T0.27 范围增加 src/data/defaultSources.json、src/data/sourcePresets.ts、src/main.ts、src/state.ts，以覆盖交付后已提交的默认来源功能（2f6bd94）；T0.27 验收命令和阈值不变，经 rebaseline 后完整重跑 A1、verify、done、完成提交和 review-only，失败历史与会话额度保留。升级配置缺 TMDB 的缺陷由 T0.29 修复。

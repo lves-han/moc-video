@@ -2497,3 +2497,8 @@
 - 需要用户决定：是否授权把上述 4 个文件加入 T0.27 范围，再执行 RESOLVED、rebaseline，并完整重跑 T0.27/A1、verify、done、完成提交和 review-only。
 - 可选方案：1）扩展 T0.27 范围并重验，保留默认来源功能；2）回退 2f6bd94，并另开卡重做默认来源功能。
 - 证据：`task.py status` 当前 protected 01215bf1ce8751b5626c265350f36972e3eaa2aaf5f80ad43596e51aafc1b2cb，T0.27 状态基线 b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af。
+
+## T0.27 用户决定 2026-11-09T01:48:31.000000+00:00
+- 结果：RESOLVED
+- 决定：用户原话“授权执行”及“加入 4 个文件并重验”：批准 ADR-057 的 T0.28 至 T0.34 新卡、原 T0.28/T0.29 顺延、C17 与页面风格规格，批准 T0.27 范围增加 src/data/defaultSources.json、src/data/sourcePresets.ts、src/main.ts、src/state.ts 并执行 rebaseline；T0.27 原验收和阈值不变，须完整重验；升级配置缺 TMDB 的问题转入 T0.29。
+- 批准摘要：d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a

@@ -1538,7 +1538,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 依赖：T0.26
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U04, R30, R33, R45, R50, REQ-T23 → A1（覆盖表含精确对应）
-- 范围：`packaging/`, `src-tauri/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `tests/`, `docs/PROGRESS.md`
+- 范围：`packaging/`, `src-tauri/`, `licenses/`, `docs/runtime.lock.json`, `package.json`, `package-lock.json`, `README.md`, `src/data/defaultSources.json`, `src/data/sourcePresets.ts`, `src/main.ts`, `src/state.ts`, `tests/`, `docs/PROGRESS.md`
 - 交付物：落实下列修订义务；提供`tests/acceptance/t23.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
 ```json
@@ -1587,7 +1587,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口，宽度960、1200、1920及窄屏768、390 → 期望：标题栏融入画面且窗口可拖动，悬浮侧栏可折叠，桌面固定深色且色系仍生效，方向键可在卡片和内容排间移动，鼠标悬停与键盘焦点样式一致，减弱动态下无推镜和倾斜，窄屏布局与改造前一致。会被拒绝：窗口无法拖动、焦点丢失到页面外、窄屏样式改变、用截图代替真实焦点断言。",
+    "description": "环境：真实打包窗口，宽度960、1200、1920及窄屏768、390 → 期望：标题栏融入画面且窗口可拖动，悬浮侧栏可折叠，桌面固定深色且色系仍生效，方向键可在卡片和内容排间移动，鼠标悬停与键盘焦点样式一致，减弱动态下无推镜和倾斜，窄屏布局与改造前一致。会被拒绝：窗口无法拖动、焦点丢失到页面外、窄屏样式改变、用截图代替真实焦点断言。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1609,6 +1609,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-FOCUS/keyboard-navigation",
       "TV-FOCUS/hover-focus-parity",
       "TV-FOCUS/reduced-motion",
+      "TV-THEME/visual-tokens",
       "REQ-TV1"
     ],
     "timeout_seconds": 3600
@@ -1623,6 +1624,55 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 宽度不小于960px时固定深色，五种色系作为强调色；小于960px的布局、明暗跟随和样式保持现状。
 - 新增 `src/ui/focus.ts` 和 `src/components/MediaRow.vue`：原生 DOM 焦点上的方向键导航、Esc 逐级返回；内容排横向吸附、悬停箭头、竖版海报；动画只用 transform 和 opacity。初始参数：放大1.08、200ms、倾斜不超过4度。
 
+#### 页面风格规格（ADR-057）
+
+**规格来源与校准。** 本卡定义 T0.28 至 T0.34 共用的设计规格。开工时对照本机 TV App 校准，调整后的最终值写入 PROGRESS，后续卡沿用最终值。
+
+**实现方式。** 变量集中在 `src/ui/theme.ts` 的 `resolveTheme`，以 `--tv-*` 输出，只在宽度不小于960px时生效；Naive UI 通过 `themeOverrides` 同步。毛玻璃同时写 `backdrop-filter` 和 `-webkit-backdrop-filter`（macOS 14 的 WebView 需要后者）。
+
+**颜色。**
+
+| 变量 | 值 | 用途 |
+| --- | --- | --- |
+| `--tv-bg` | `#0b0b0d` | 页面底色 |
+| `--tv-surface-1` | `rgba(255,255,255,.06)` | 海报占位、分组卡片 |
+| `--tv-surface-2` | `rgba(255,255,255,.10)` | 胶囊、输入框 |
+| `--tv-surface-hover` | `rgba(255,255,255,.16)` | 悬停态 |
+| `--tv-glass` | `rgba(30,30,34,.62)` + 模糊30px、饱和度160% | 侧栏、面板、控制条 |
+| `--tv-hairline` | `rgba(255,255,255,.10)` | 分隔线、玻璃描边 |
+| `--tv-text` | `#f5f5f7` | 主文字 |
+| `--tv-text-2` | `rgba(235,235,245,.62)` | 次要文字 |
+| `--tv-text-3` | `rgba(235,235,245,.38)` | 禁用态 |
+| `--tv-button` / `--tv-button-ink` | `#f5f5f7` / `#0b0b0d` | 主按钮 |
+| `--tv-danger` | `#ff453a` | 删除、错误 |
+| `--accent` | 当前色系 night 值 | 进度条、选中勾、当前集 |
+
+**字体。** 沿用系统字体栈，字间距0，时间和集数使用 `tabular-nums`。
+
+| 层级 | 字号/行高/字重 |
+| --- | --- |
+| Hero 片名 | `clamp(40px,4.4vw,72px)` / 1.05 / 700 |
+| 页面标题 | 34px / 1.15 / 700 |
+| 内容排标题 | 22px / 1.25 / 600 |
+| 正文 | 15px / 1.5 / 400 |
+| 卡片标题 | 14px / 1.3 / 500 |
+| 辅助信息 | 13px / 1.4 / 400 |
+| 角标 | 11px / 1.2 / 600 |
+
+**尺寸。** 间距以4px为基准；内容左边距为侧栏外沿加32px，右边距48px（宽度不小于1600px时64px）；内容排上下间距40px，卡片间距16px（不小于1600px时20px）。圆角：卡片12px，面板和侧栏20px，分组卡片14px，胶囊和按钮999px。
+
+**动效。** 标准曲线 `cubic-bezier(.2,.8,.2,1)`；焦点200ms，浮层和页面300ms，Hero 淡入600ms；减弱动态时关闭位移、缩放和推镜，只保留淡入。
+
+**窗口与侧栏。** 顶部44px为拖动区，其中的按钮和链接不触发拖动。侧栏距窗口上、左、下各12px，展开宽220px，折叠宽72px，宽度过渡240ms；玻璃底、1px `--tv-hairline` 描边、圆角20px；顶部留52px给红绿灯。导航项高36px、圆角10px、图标20px、文字14/500，悬停 `--tv-surface-1`，当前项底色 `rgba(255,255,255,.14)`；折叠时只显示图标并提供悬浮说明。底部来源胶囊高32px、文字13px、超长省略。
+
+**图标。** 继续使用 `Icon.vue` 的线性风格，1.75px描边；补充搜索、资料库、侧栏折叠、综艺、纪录片、短剧、体育、待播图标。
+
+**焦点态。** 悬停和键盘焦点相同：放大1.08、阴影 `0 18px 40px rgba(0,0,0,.55)`、顶部斜向高光（透明度0至.18随光标移动）；键盘焦点额外显示2px `--tv-text` 内描边。按钮和胶囊焦点放大1.04。
+
+**内容排 `MediaRow`。** 标题行高28px、下方12px，标题可点时右侧显示箭头。竖版海报宽 `clamp(132px,12.5vw,220px)`、比例2:3；横版卡宽 `clamp(240px,22vw,360px)`、比例16:9。卡片下方标题单行省略，辅助信息单行。排内上下各留24px，避免放大被裁切；右缘48px渐隐露出下一张。翻页按钮44px圆形玻璃，垂直居中于海报，悬停内容排时淡入，到头隐藏；隐藏横向滚动条。
+
+**加载与缺图。** 占位为 `--tv-surface-1`，透明度在.5至.8之间1.2秒循环；图片加载后淡入200ms；缺图时显示居中片名，15/600。
+
 ### T0.29 TV2 目录协议、TMDB筛选与默认来源修复
 - [ ] 完成
 - 依赖：T0.27
@@ -1635,7 +1685,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "输入：受控Stremio目录fixture及内置TMDB实际请求样本，覆盖单条件、年份+类型、语言+类型、语言+年份、占位条目、翻页和语言切换 → 期望：请求携带正确的genre与skip，卡片含backdrop、plot、genres，组合结果全部符合条件，单次最多扫描5页并返回已扫描与命中数，不同筛选的游标互不影响，占位条目按空结果返回；已有MacCMS配置且缺Stremio的设置补上TMDB一次，用户随后删除时保持删除。会被拒绝：筛选值未发送、结果含不符合条件的影片、游标串用、重复补回用户已删除的来源。",
+    "description": "输入：受控Stremio目录fixture及内置TMDB实际请求样本，覆盖单条件、年份+类型、语言+类型、语言+年份、占位条目、翻页和语言切换 → 期望：请求携带正确的genre与skip，卡片含backdrop、plot、genres，组合结果全部符合条件，单次最多扫描5页并返回已扫描与命中数，不同筛选的游标互不影响，占位条目按空结果返回；已有MacCMS配置且缺Stremio的设置补上TMDB一次，用户随后删除时保持删除。会被拒绝：筛选值未发送、结果含不符合条件的影片、游标串用、重复补回用户已删除的来源。；字段缺失时按“页面风格规格”的对应表返回空值，筛选项带可显示名称，并返回已扫描数和命中数。会被拒绝：缺失字段返回空字符串或占位值、筛选项缺少显示名称。",
     "argv": [
       "{python}",
       "-B",
@@ -1660,6 +1710,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-FILTER/localized-values",
       "TV-SOURCE-UPGRADE/adds-once",
       "TV-SOURCE-UPGRADE/respects-removal",
+      "TV-CATALOG-DTO/style-fields",
       "REQ-TV2"
     ],
     "timeout_seconds": 3600
@@ -1676,6 +1727,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 验证中文筛选值在英文基础数据加中文覆盖的 `localized` 链路上取到正确分类。
 - 修复 PROGRESS 记录的升级场景：已有播放源且缺 Stremio 的配置自动补一次中文 TMDB。
 
+#### 页面风格规格（ADR-057）
+
+本卡负责界面所需字段，样式由 T0.30 落地。字段与展示的对应关系：
+
+| 字段 | 展示位置 | 缺失时 |
+| --- | --- | --- |
+| `backdrop` | Hero、横版卡 | 模糊放大的海报（40px模糊、1.2倍）叠加遮罩 |
+| `plot` | Hero 简介（最多3行） | 隐藏简介，版面不留空 |
+| `genres` | Hero 信息行（最多2个）、筛选 | 隐藏 |
+| `rating` | 信息行评分 | 值为空或0时隐藏 |
+| `year` | 信息行 | 隐藏 |
+| 筛选项 | `FilterBar` 面板 | 该维度胶囊禁用，文字用 `--tv-text-3` |
+
+筛选结果返回已扫描数和命中数，供界面显示“已查找 100 部，找到 12 部”；中文环境下筛选项按来源声明的显示名输出。
+
 ### T0.30 TV3 首页与分类页
 - [ ] 完成
 - 依赖：T0.28, T0.29
@@ -1688,7 +1754,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口接内置TMDB及受控fixture → 期望：首页显示可轮播Hero、继续观看和按分类的横向内容排；电影、电视剧、动画、纪录片入口显示各自内容；五个筛选胶囊可组合，选中后切换海报墙并滚动加载，条件写入地址，返回详情后恢复筛选和位置；内容排进入视口才请求；空结果给出去掉条件的快捷入口。会被拒绝：各分类显示相同内容、筛选后结果与条件不符、返回后丢失状态、首屏一次请求全部内容排。",
+    "description": "环境：真实打包窗口接内置TMDB及受控fixture → 期望：首页显示可轮播Hero、继续观看和按分类的横向内容排；电影、电视剧、动画、纪录片入口显示各自内容；五个筛选胶囊可组合，选中后切换海报墙并滚动加载，条件写入地址，返回详情后恢复筛选和位置；内容排进入视口才请求；空结果给出去掉条件的快捷入口。会被拒绝：各分类显示相同内容、筛选后结果与条件不符、返回后丢失状态、首屏一次请求全部内容排。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1713,6 +1779,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-BROWSE/see-all",
       "TV-BROWSE/restore-state",
       "TV-BROWSE/empty-result",
+      "TV-HOME/visual-spec",
       "REQ-TV3"
     ],
     "timeout_seconds": 3600
@@ -1727,19 +1794,41 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 新增 `BrowseView.vue` 和 `FilterBar.vue`，路由 `#/browse/<分类>?genre=…`，电影、电视剧、动画、纪录片四个分类共用该视图并接入侧栏。
 - 筛选维度为类型、年份、语言、地区、排序，每维单选；毛玻璃面板支持方向键；内容排标题进入该排的海报墙。
 
+#### 页面风格规格（ADR-057）
+
+**Hero。** 高 `min(72vh,760px)`，最小460px，铺满窗口顶部并位于侧栏之下。背景 `object-fit:cover`，焦点位置 `center 20%`。遮罩两层：自下而上 `--tv-bg` 到透明（占高度55%），自左向右 `rgba(11,11,13,.75)` 到透明（占宽度60%）。推镜8秒内缩放1至1.06。
+
+**Hero 文案。** 左对齐内容左边距，底部距Hero 56px，最大宽560px，自上而下：角标（13/600，`--tv-text-2`）、片名、信息行（14px，`--tv-text-2`，用“·”分隔）、简介（15px，3行截断）、按钮组（上方20px）。主按钮高44px、最小宽120px、`--tv-button` 底、带播放图标；次按钮高44px、玻璃底。指示点位于右下，距边48px，圆点6px，当前项20×6px胶囊；点击切换。
+
+**滚动。** Hero 随滚动以0.4倍速度位移，滚动到自身高度60%时透明度降至.25。第一条内容排上移32px，压在 Hero 渐隐区。
+
+**继续观看。** 横版卡，底部内嵌3px进度条，轨道 `rgba(255,255,255,.3)`、填充 `--accent`；角标显示“第 3 集”，下方标题加“剩 12 分钟”。悬停时居中显示56px玻璃播放圆钮。
+
+**首页竖版海报。** 无常驻文字叠加，仅悬停时放大；分类标签放在卡片下方的辅助信息。
+
+**分类页头部。** 默认结构同 Hero，高 `min(56vh,560px)`；角标显示分类名。选中筛选后高度以300ms收缩到240px，隐藏简介和按钮，片名改为分类名。
+
+**筛选栏。** 位于 Hero 下方，滚动到顶部后吸附在距窗口顶12px处，吸附时带玻璃底。胶囊高36px、水平内边距14px、14/500：默认 `--tv-surface-2`，悬停 `--tv-surface-hover`，已选 `--tv-button` 底加深色文字和关闭图标。右侧“清除全部”为13px文字按钮。
+
+**筛选面板。** 玻璃底、圆角16px、内边距12px、宽360至480px、最大高360px并可滚动，出现时从胶囊处淡入并缩放.96至1，200ms。选项网格最小列宽96px，单项高36px、圆角10px，当前项右侧带 `--accent` 勾。
+
+**海报墙。** 网格按竖版海报宽度自动填充，行间距28px、列间距16px，排序变化时淡入300ms。查找进度13px `--tv-text-2`，“继续查找”为36px玻璃胶囊。
+
+**空状态。** 居中，图标40px，标题17/600，说明14px，下方列出“去掉某个条件”胶囊。
+
 ### T0.31 TV4 MacCMS分类与同源直通播放
 - [ ] 完成
 - 依赖：T0.30
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-MACCMS-CAT, TV-MACCMS-PLAY, REQ-TV4 → A1（覆盖表含精确对应）
-- 范围：`protocol/`, `src/models.ts`, `src-tauri/src/maccms.rs`, `src-tauri/src/matching.rs`, `src-tauri/src/host.rs`, `src-tauri/src/home.rs`, `src/state.ts`, `src/App.vue`, `src/views/BrowseView.vue`, `src/views/HomeView.vue`, `src/i18n.ts`, `tests/`, `docs/PROGRESS.md`
+- 范围：`protocol/`, `src/models.ts`, `src-tauri/src/maccms.rs`, `src-tauri/src/matching.rs`, `src-tauri/src/host.rs`, `src-tauri/src/home.rs`, `src/state.ts`, `src/App.vue`, `src/views/BrowseView.vue`, `src/views/HomeView.vue`, `src/i18n.ts`, `src/style.css`, `src/components/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：完成MacCMS分类归一、综艺短剧体育入口及MacCMS影片同源播放。提供`tests/acceptance/tv4.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "输入：8个默认MacCMS来源的分类样本及受控播放fixture → 期望：不同来源的同义分类归一到同一子分类，成人向和非影片分类不显示，当前播放源缺失的分类隐藏，年份、地区、语言在客户端正确过滤；一部MacCMS影片完成详情、播放、切集、写入历史和续播，TMDB影片的跨源匹配行为不变。会被拒绝：出现排除分类、换源后入口指向无效分类、MacCMS影片无法写入历史、同源绑定放宽影响跨源校验。",
+    "description": "输入：8个默认MacCMS来源的分类样本及受控播放fixture → 期望：不同来源的同义分类归一到同一子分类，成人向和非影片分类不显示，当前播放源缺失的分类隐藏，年份、地区、语言在客户端正确过滤；一部MacCMS影片完成详情、播放、切集、写入历史和续播，TMDB影片的跨源匹配行为不变。会被拒绝：出现排除分类、换源后入口指向无效分类、MacCMS影片无法写入历史、同源绑定放宽影响跨源校验。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1761,6 +1850,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-MACCMS-PLAY/same-source-play",
       "TV-MACCMS-PLAY/history-resume",
       "TV-MACCMS-PLAY/stremio-binding-kept",
+      "TV-MACCMS-CAT/visual-spec",
       "REQ-TV4"
     ],
     "timeout_seconds": 3600
@@ -1775,19 +1865,33 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - `maccms.rs:1008` 生成 `namespace` 为 `maccms` 的 `metadata_ref`；`match_playback` 遇到同一 MacCMS 来源直接返回 `matched`。
 - `state.ts:428`、`state.ts:435` 仅在同一 MacCMS 来源时放宽绑定；`App.vue` 续播逻辑接受 MacCMS 身份；`PlaybackContext` 和历史表结构保持。
 
+#### 页面风格规格（ADR-057）
+
+**海报。** MacCMS 图片比例不一，统一 2:3 裁切，`object-fit:cover`，缺图样式同 T0.28。
+
+**更新状态角标。** `vod_remarks` 显示在海报左下，距边8px，玻璃底、高22px、水平内边距8px、11/600、最大宽为卡片宽减16px并省略，例如“更新至第08集”。
+
+**评分。** `vod_score` 为空或0时隐藏，其余沿用信息行样式。
+
+**无横幅影片。** Hero 和详情背景使用海报模糊放大（40px、1.2倍），加 T0.30 的两层遮罩，右侧距边64px显示竖版海报，高为头部的60%，圆角12px。
+
+**综艺、短剧、体育页。** 沿用分类页结构；子分类以横向胶囊排在筛选栏前，样式同筛选胶囊。短剧默认竖版海报，体育默认横版卡。
+
+**来源提示。** 详情信息行末尾显示来源名，13px `--tv-text-2`；当前播放源缺失分类时，侧栏入口直接隐藏，不显示禁用态。
+
 ### T0.32 TV5 详情页、转场与待播清单
 - [ ] 完成
 - 依赖：T0.30
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-DETAILS, TV-WATCHLIST, REQ-TV5 → A1（覆盖表含精确对应）
-- 范围：`protocol/`, `src/models.ts`, `src/views/DetailsView.vue`, `src/views/HomeView.vue`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/data/`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/history.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `tests/`, `docs/PROGRESS.md`
+- 范围：`protocol/`, `src/models.ts`, `src/views/DetailsView.vue`, `src/views/HomeView.vue`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/data/`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/history.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `src/components/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：完成全幅详情页、页面转场和SQLite待播清单。提供`tests/acceptance/tv5.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口及临时数据目录 → 期望：详情页显示全幅背景、评分信息、剧照集卡、演员排和相关排，主按钮按历史显示继续播放及剩余时间；加入待播后首页出现该影片，重启仍保留，移除后消失，旧数据库升级不丢历史；海报到详情有转场，macOS 14回退交叉淡入。会被拒绝：续播信息与历史不一致、待播重启丢失、数据库升级破坏历史记录。",
+    "description": "环境：真实打包窗口及临时数据目录 → 期望：详情页显示全幅背景、评分信息、剧照集卡、演员排和相关排，主按钮按历史显示继续播放及剩余时间；加入待播后首页出现该影片，重启仍保留，移除后消失，旧数据库升级不丢历史；海报到详情有转场，macOS 14回退交叉淡入。会被拒绝：续播信息与历史不一致、待播重启丢失、数据库升级破坏历史记录。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1811,6 +1915,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-WATCHLIST/persist-restart",
       "TV-WATCHLIST/migration-keeps-history",
       "TV-WATCHLIST/home-row",
+      "TV-DETAILS/visual-spec",
       "REQ-TV5"
     ],
     "timeout_seconds": 3600
@@ -1825,6 +1930,30 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 新增 `list_watchlist`、`add_watchlist`、`remove_watchlist` 三个 IPC 及对应权限。
 - 海报飞入详情使用 View Transitions，不支持时300ms交叉淡入。
 
+#### 页面风格规格（ADR-057）
+
+**头部。** 高 `min(78vh,820px)`，最小520px，全幅背景，遮罩同 Hero，自下而上渐隐占高度65%。内容左下对齐，距底56px，最大宽620px。
+
+**标题。** 有 Logo 时最大高120px、最大宽420px；否则用 Hero 片名字号。下方信息行依次为评分、年份、类型、时长、地区。
+
+**简介。** 15px、最多3行；超长时末尾显示“更多”，打开玻璃弹层，弹层最大宽640px、圆角20px、内边距28px。
+
+**操作区。** 主按钮高48px、最小宽160px、`--tv-button` 底，文字“播放”或“继续播放 · 第 3 集 · 剩 12 分钟”，进度存在时按钮底部内嵌3px `--accent` 进度。待播按钮为48px圆形玻璃，未加入显示加号，已加入显示勾，切换时图标淡入200ms。
+
+**季标签。** 同筛选胶囊，当前季为已选样式，横向可滚动。
+
+**集卡。** 横版，宽 `clamp(260px,24vw,380px)`，图片圆角12px；标题15/600“3. 标题”，简介13px两行，时长13px `--tv-text-2`。当前集显示 `--accent` 角标“正在观看”，已看过的集底部显示进度。无剧照时用背景图模糊版加集数大字。
+
+**演员排。** 头像88px圆形，姓名13px居中两行，角色12px `--tv-text-2`；无头像时显示姓氏首字。
+
+**信息区。** 三列网格，列间距32px；标签12px `--tv-text-2`，内容14px。窄到960px时两列。
+
+**转场。** 海报飞入详情头部300ms，详情内容延后100ms淡入；返回时海报飞回并恢复滚动位置。
+
+**匹配确认弹层。** 玻璃底、圆角20px、最大宽640px，候选项样式同季标签，操作区沿用现有按钮语义。
+
+**待播清单（首页）。** 排在继续观看之后，竖版海报，空清单时整排隐藏。
+
 ### T0.33 TV6 沉浸播放器
 - [ ] 完成
 - 依赖：T0.28
@@ -1837,7 +1966,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口播放自有MP4与HLS → 期望：解析期间显示背景和片名，全窗口播放，控件和光标3秒无操作后隐藏，进度预览、前进后退10秒、字幕、音量、倍速、全屏可用；底部托盘切换选集和线路；片尾20秒显示可取消的下一集卡片；Esc按托盘、全屏、详情逐级返回；错误浮层可重试；50次切集后无残留媒体和内存泄露。会被拒绝：解析期间黑屏、同时存在两套控件、切集残留旧音频、Esc直接退出到首页。",
+    "description": "环境：真实打包窗口播放自有MP4与HLS → 期望：解析期间显示背景和片名，全窗口播放，控件和光标3秒无操作后隐藏，进度预览、前进后退10秒、字幕、音量、倍速、全屏可用；底部托盘切换选集和线路；片尾20秒显示可取消的下一集卡片；Esc按托盘、全屏、详情逐级返回；错误浮层可重试；50次切集后无残留媒体和内存泄露。会被拒绝：解析期间黑屏、同时存在两套控件、切集残留旧音频、Esc直接退出到首页。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1860,6 +1989,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-PLAYER/escape-levels",
       "TV-PLAYER/error-overlay",
       "TV-PLAYER/switch-recycle-50",
+      "TV-PLAYER/visual-spec",
       "REQ-TV6"
     ],
     "timeout_seconds": 3600
@@ -1873,19 +2003,43 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 同步修改 `tests/fixtures/videojs_controls.ts` 等绑定官方皮肤的夹具，断言强度保持。
 - 键盘：左右10秒、上下音量、空格播放暂停、F全屏、M静音。
 
+#### 页面风格规格（ADR-057）
+
+**画面。** 背景 `#000`，视频 `object-fit:contain`，隐藏窗口其他界面。控件显示时底部覆盖高30%的黑色渐隐遮罩，透明度200ms过渡。
+
+**加载态。** 背景图40px模糊并压暗到35%亮度，居中显示片名（28/700）、集名（15px）和28px转圈指示；解析超过10秒时显示“正在查找可用线路”。
+
+**顶部。** 左上距边24px：44px圆形玻璃返回钮，右侧片名17/600、集名13px `--tv-text-2`，避开红绿灯（全屏外向下留28px）。
+
+**控制条。** 左右和底部各距24px，玻璃底、圆角20px、内边距12px 20px，分两行。
+
+**进度条。** 轨道高4px、悬停8px，圆角满，轨道 `rgba(255,255,255,.3)`，缓冲 `rgba(255,255,255,.5)`，已播 `--tv-text`；拖动点14px，仅悬停和拖动时显示。预览时间为玻璃胶囊，12px。两端时间13px等宽数字，右端显示剩余时间。
+
+**按钮。** 点击区44px、图标24px，悬停圆形 `--tv-surface-hover`。左组为后退10秒、播放暂停（图标28px）、前进10秒；右组为字幕、音量、倍速、选集托盘、全屏。音量滑杆悬停时展开到96px。
+
+**底部托盘。** 从控制条位置上滑，高 `min(46vh,420px)`，玻璃底、顶部圆角20px，过渡300ms；顶部三个标签（选集、线路、字幕与音频）使用筛选胶囊样式。选集为横版集卡；线路为44px行，显示线路名和清晰度，当前项带 `--accent` 勾，不可播放项用 `--tv-text-3` 并显示原因。
+
+**下一集卡片。** 右下距边24px、控制条上方，宽300px，玻璃底、圆角16px，含16:9剧照、“下一集”12/600、集名14/500、5秒倒计时环、“立即播放”和“取消”。
+
+**字幕。** 白色28px（宽度不小于1600px时34px），2px黑色描边阴影，距底8%；控件显示时上移到控制条上方，过渡200ms。
+
+**错误浮层。** 居中玻璃面板、宽420px、圆角20px，错误标题17/600、说明14px，主按钮“重试”，次按钮“换线路”。
+
+**缓冲。** 居中40px转圈，延迟300ms显示，避免短暂闪烁。
+
 ### T0.34 TV7 搜索、资料库、来源与设置
 - [ ] 完成
 - 依赖：T0.31, T0.32
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-SEARCH, TV-LIBRARY, TV-MANAGE, REQ-TV7 → A1（覆盖表含精确对应）
-- 范围：`protocol/`, `src/models.ts`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/views/SearchView.vue`, `src/views/HistoryView.vue`, `src/views/NativeSourcesView.vue`, `src/views/SettingsView.vue`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/stremio.rs`, `src-tauri/src/maccms.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `tests/`, `docs/PROGRESS.md`
+- 范围：`protocol/`, `src/models.ts`, `src/App.vue`, `src/api.ts`, `src/state.ts`, `src/views/SearchView.vue`, `src/views/HistoryView.vue`, `src/views/NativeSourcesView.vue`, `src/views/SettingsView.vue`, `src/style.css`, `src/i18n.ts`, `src-tauri/src/stremio.rs`, `src-tauri/src/maccms.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/host.rs`, `src-tauri/src/contracts.rs`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/`, `src-tauri/build.rs`, `src/components/`, `tests/`, `docs/PROGRESS.md`
 - 交付物：完成搜索页、资料库和来源设置页的样式统一。提供`tests/acceptance/tv7.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C17中与本卡相关契约。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "环境：真实打包窗口及受控搜索fixture → 期望：⌘F打开搜索，输入停顿300ms后按电影、电视剧、综艺短剧分排显示结果，旧请求结果被丢弃；空状态显示类型卡片；资料库分继续观看、待播清单、观看历史，删除和清空行为保持；来源和设置页改为分组列表且全部原有操作可用。会被拒绝：过期搜索结果覆盖新结果、搜索绕过请求取消、来源或设置功能缺失。",
+    "description": "环境：真实打包窗口及受控搜索fixture → 期望：⌘F打开搜索，输入停顿300ms后按电影、电视剧、综艺短剧分排显示结果，旧请求结果被丢弃；空状态显示类型卡片；资料库分继续观看、待播清单、观看历史，删除和清空行为保持；来源和设置页改为分组列表且全部原有操作可用。会被拒绝：过期搜索结果覆盖新结果、搜索绕过请求取消、来源或设置功能缺失。；计算样式核对本卡“页面风格规格”中的颜色、字号、尺寸、圆角、动效和状态，并保存960、1200、1920宽度截图供走查。会被拒绝：规格值被改动而未记录校准结果、状态样式缺失。",
     "argv": [
       "{python}",
       "-B",
@@ -1907,6 +2061,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-LIBRARY/history-actions-kept",
       "TV-MANAGE/grouped-lists",
       "TV-MANAGE/actions-kept",
+      "TV-SEARCH/visual-spec",
       "REQ-TV7"
     ],
     "timeout_seconds": 3600
@@ -1920,6 +2075,26 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 新增 `SearchView.vue`，接入侧栏和 ⌘F。
 - `HistoryView.vue` 升级为资料库三标签，历史分组、删除、清空逻辑复用。
 - 来源和设置页只改样式，字段、校验和操作保持。
+
+#### 页面风格规格（ADR-057）
+
+**搜索页。** 无 Hero，页面顶部距窗口72px；输入框高56px、最大宽720px、圆角16px、`--tv-surface-2`、文字20px，左侧搜索图标，有内容时右侧清除按钮，聚焦时1px `--tv-hairline` 变为 `--tv-text`。
+
+**搜索空状态。** 类型卡片网格，最小列宽200px、高96px、圆角14px、`--tv-surface-1`，类型名17/600左下对齐，悬停放大1.04。
+
+**搜索结果。** 按电影、电视剧、综艺短剧分排，沿用 `MediaRow`；加载中保留上一次结果并降低透明度到.6；无结果时居中提示，样式同 T0.30 空状态。
+
+**资料库。** 页面标题34/700，距窗口顶72px；下方三段式分段控件，高36px、玻璃底、圆角满，当前段 `rgba(255,255,255,.18)`。内容为海报墙，继续观看用横版卡。
+
+**观看历史。** 按今天、昨天、更早分组，组标题17/600，吸附时带玻璃底；悬停卡片右上显示28px圆形玻璃删除钮；“清空”为13px `--tv-danger` 文字按钮，确认弹层用玻璃样式。
+
+**来源与设置页。** 内容最大宽720px并居中，顶部距窗口72px，页面标题34/700。分组标题13/600 `--tv-text-2`，下方8px；分组卡片 `--tv-surface-1`、圆角14px；行最小高52px、内边距12px 16px，行间分隔线左缩进16px，左侧标题15px、说明13px，右侧控件。
+
+**表单控件。** 输入框和下拉高36px、圆角10px、`--tv-surface-2`；开关沿用 Naive 组件，开启色为 `--accent`；添加来源使用玻璃弹层。
+
+**来源状态。** 行首8px圆点：可用绿色 `#30d158`，禁用 `--tv-text-3`，失败 `--tv-danger`；错误说明13px显示在该行内。
+
+**色系设置。** 五个32px圆形色块，当前项带2px `--tv-text` 外环；语言使用分段控件。
 
 ### T0.35 T24 独立验收与问题修复
 - [ ] 完成
