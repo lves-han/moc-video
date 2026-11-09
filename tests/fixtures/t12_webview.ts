@@ -374,23 +374,46 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     }
     case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
       framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
+    case "color-play": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
+      video.loop=true;await playing(current);await delay(300);result=sample(current);break;
+    }
     case "color-diagnostic": {
       const matched=await api.call('match_playback',current.matches[1]!);
       const previous=appState.playback.session?.session_id;
       check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
       await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
-      video.loop=true; await playing(current); await delay(200);
+      video.loop=true; await playing(current);
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>video.querySelector('track')?.readyState===2 && current.frames>2,'Diagnostic caption/frame did not load');
+      await delay(200);
+      const first=sample(current);
+      const frame=new VideoFrame(video);
+      const frameInfo={ format:frame.format, colorSpace:frame.colorSpace.toJSON() };
+      const copied=new Uint8Array(4);
+      let copy:unknown;
+      try { await frame.copyTo(copied,{rect:{x:960,y:540,width:1,height:1},format:'RGBA'});copy={pixel:[...copied]}; }
+      catch(cause) {copy={error:String(cause)};}
+      const frameCanvas=document.createElement('canvas');frameCanvas.width=frameCanvas.height=1;
+      const frameContext=frameCanvas.getContext('2d')!;
+      frameContext.drawImage(frame,960,540,1,1,0,0,1,1);
+      const framePixel=[...frameContext.getImageData(0,0,1,1).data];
+      frame.close();frameCanvas.width=frameCanvas.height=0;
       const rows=[];
       for(const paused of [false,true]) {
         if(paused) {video.pause();video.currentTime=.5;await until(()=>!video.seeking,'Diagnostic seek did not settle');}
         const before=sample(current);
-        for(const settings of [undefined,{colorSpace:'srgb' as const},{colorSpace:'srgb' as const,willReadFrequently:true}]) for(const crop of [false,true]) {
+        for(const settings of [undefined,{colorSpace:'srgb' as const},{colorSpace:'srgb' as const,willReadFrequently:true}]) for(const crop of [false,true]) for(const smooth of [true,false]) {
           const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
           const ctx=canvas.getContext('2d',settings) as CanvasRenderingContext2D;
+          ctx.imageSmoothingEnabled=smooth;
           if(crop)ctx.drawImage(video,960,540,1,1,0,0,1,1);else ctx.drawImage(video,0,0,1,1);
           const pixel=[...ctx.getImageData(0,0,1,1).data];
           ctx.fillStyle='blue';ctx.fillRect(0,0,1,1);
-          rows.push({paused,settings:settings??'default',crop,pixel,reference:[...ctx.getImageData(0,0,1,1).data],before:before.pixel});
+          rows.push({paused,settings:settings??'default',crop,smooth,pixel,reference:[...ctx.getImageData(0,0,1,1).data],before:before.pixel});
           canvas.width=canvas.height=0;
         }
       }
@@ -398,7 +421,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       await until(()=>Boolean(video.textTracks[0]?.activeCues?.length),'Diagnostic native cue missing');
       let colorSpace:unknown=null;
       if('VideoFrame' in window) {const frame=new VideoFrame(video);colorSpace=frame.colorSpace.toJSON();frame.close();}
-      result={rows,colorSpace,phase:appState.playback.phase,error:appState.playback.error,diagnostic:current.controller.ui.diagnostic,videoRect:video.getBoundingClientRect().toJSON(),sample:sample(current)};
+      result={rows,colorSpace,first,frameInfo,copy,framePixel,phase:appState.playback.phase,error:appState.playback.error,diagnostic:current.controller.ui.diagnostic,videoRect:video.getBoundingClientRect().toJSON(),sample:sample(current)};
       break;
     }
     case "switch": {

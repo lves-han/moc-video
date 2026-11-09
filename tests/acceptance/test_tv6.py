@@ -11,6 +11,13 @@ class Oracles(unittest.TestCase):
         with self.assertRaises((ValueError,AssertionError)):
             validate(invalid)
 
+    def test_resume_pause_requires_settled_play_and_no_visible_error(self):
+        row=dict(paused=True,phase='paused',error=None,errors=[],plays=[dict(state='resolved')])
+        for mutate in [lambda value:value.update(paused=False),lambda value:value.update(phase='failed'),
+                       lambda value:value.update(error=dict(code='UPSTREAM_FAILED')),lambda value:value['plays'][0].update(state='pending'),
+                       lambda value:value['plays'][0].update(state='rejected'),lambda value:value.update(plays=[])]:
+            self.reject(tv6.validate_resume_pause,row,mutate)
+
     def test_loading_must_identify_and_decode_blurred_backdrop(self):
         row=dict(phase='resolving',title='TV6 自有测试影片',episode='第1集',backdrop=dict(filter='blur(40px) brightness(0.35)'),titleStyle=dict(fontSize='28px',fontWeight='700'),episodeStyle=dict(fontSize='15px'),spinner=dict(width='28px',height='28px'))
         self.reject(tv6.validate_loading,row,lambda value:value['backdrop'].update(filter='none'))

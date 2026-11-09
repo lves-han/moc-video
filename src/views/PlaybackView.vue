@@ -117,7 +117,9 @@ async function openTray(tab: NonNullable<typeof tray.value>, trigger?: EventTarg
 }
 function closeTray() {
   tray.value = null;
-  (trayTrigger.value ?? panel.value?.querySelector<HTMLElement>('[data-player-tray]'))?.focus({ preventScroll: true });
+  void nextTick(() => {
+    (trayTrigger.value ?? panel.value?.querySelector<HTMLElement>('[data-player-tray]'))?.focus({ preventScroll: true });
+  });
 }
 watch(tray, value => {
   releaseTray?.(); releaseTray = undefined;
@@ -133,7 +135,10 @@ async function back() {
   if (tray.value) { closeTray(); return; }
   const store = officialPlayer.value?.store;
   if (store?.isFullscreen) {
-    try { await store.exitFullscreen(); } catch (cause) { ui.diagnostic = String(cause); }
+    try {
+      await store.exitFullscreen();
+      officialPlayer.value?.querySelector<HTMLElement>('media-container')?.focus({ preventScroll: true });
+    } catch (cause) { ui.diagnostic = String(cause); }
     return;
   }
   location.hash = backHref.value;
@@ -177,6 +182,9 @@ onMounted(async () => {
   unsubscribeOfficial = official.store.subscribe(syncOfficial);
   syncOfficial();
   playback.attach(video.value!);
+  // Native fullscreen transitions can leave focus on body. Handle Escape after
+  // the official popup handlers while this playback view owns the window.
+  window.addEventListener('keydown', onEscape, { signal: interaction.signal });
   video.value!.addEventListener('loadstart', () => { mediaReady.value = false; }, { signal: interaction.signal });
   video.value!.addEventListener('loadeddata', () => { mediaReady.value = true; }, { signal: interaction.signal });
   video.value!.addEventListener('volumechange', () => {
@@ -231,7 +239,7 @@ defineExpose({ playback });
 </script>
 
 <template>
-  <main id="main-content" ref="panel" class="playback-view" :class="{ 'controls-hidden': !controlsVisible, 'native-fullscreen': nativeFullscreen, 'tray-open': tray }" tabindex="-1" @keydown="onEscape">
+  <main id="main-content" ref="panel" class="playback-view" :class="{ 'controls-hidden': !controlsVisible, 'native-fullscreen': nativeFullscreen, 'tray-open': tray }" tabindex="-1">
     <media-i18n :lang="locale">
     <video-player class="official-player" :lang="locale" default-playback-rates="0.5 1 1.25 1.5 2" ref="officialPlayer">
       <!-- Dynamic native tags use Vue's standard runtime path, keeping the frozen compiler configuration. -->

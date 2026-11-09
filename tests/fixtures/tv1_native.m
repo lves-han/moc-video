@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
 #include <unistd.h>
+#include <math.h>
 
 // Test-only native input and window observation, always bound to the owned PID.
 static NSDictionary *windowFor(pid_t pid) {
@@ -25,6 +26,13 @@ int main(int argc, const char **argv) {
         if ([action isEqual:@"permissions"]) {
             // A diagnostic only; input is validated by the receiving WebView.
         } else {
+            if ([action isEqual:@"click"]) {
+                NSRunningApplication *owned = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+                if (!owned || ![owned activateWithOptions:NSApplicationActivateAllWindows]) {
+                    fprintf(stderr, "Owned application activation rejected\n"); return 4;
+                }
+                usleep(200000);
+            }
             NSDictionary *window = windowFor(pid);
             if (!window) { fprintf(stderr, "Owned visible window missing\n"); return 3; }
             result[@"id"] = window[(id)kCGWindowNumber];
@@ -46,12 +54,24 @@ int main(int argc, const char **argv) {
                 }
             } else if ([action isEqual:@"key"]) {
                 if (argc != 4) return 2;
+                if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != pid) {
+                    fprintf(stderr, "Owned application must be frontmost for keyboard input\n"); return 5;
+                }
                 int code = atoi(argv[3]);
                 if (code != 123 && code != 124 && code != 125 && code != 126 && code != 53 && code != 48 && code != 36 && code != 49 && code != 3 && code != 46) return 2;
                 for (int down=1; down>=0; down--) {
                     CGEventRef event = CGEventCreateKeyboardEvent(NULL, code, down);
-                    CGEventPostToPid(pid, event); CFRelease(event); usleep(100000);
+                    CGEventPost(kCGHIDEventTap, event); CFRelease(event); usleep(100000);
                 }
+            } else if ([action isEqual:@"pixel"]) {
+                if (argc != 4) return 2;
+                NSBitmapImageRep *capture = [NSBitmapImageRep imageRepWithContentsOfFile:@(argv[3])];
+                NSColor *pixel = [[capture colorAtX:capture.pixelsWide / 2 y:capture.pixelsHigh / 2]
+                    colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+                if (!capture || !pixel) { fprintf(stderr, "Owned window PNG read failed\n"); return 6; }
+                result[@"pixel"] = @[@(lround(pixel.redComponent * 255)), @(lround(pixel.greenComponent * 255)),
+                    @(lround(pixel.blueComponent * 255)), @(lround(pixel.alphaComponent * 255))];
+                result[@"color_space"] = @"sRGB";
             } else if (![action isEqual:@"window"]) return 2;
         }
         NSData *data = [NSJSONSerialization dataWithJSONObject:result options:0 error:nil];

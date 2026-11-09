@@ -53,7 +53,7 @@ test("T12 unknown duration is null, seeking fails explicitly, later metadata ena
   await f.controller.stop();
 });
 
-test("TV6 initial zero resume can pause without a redundant seek aborting native play", async () => {
+test("TV6 resume-seek-race: zero resume can pause without a redundant seek aborting native play", async () => {
   const f = fixture(); await f.controller.load(context());
   let position = f.video.currentTime, seekInterruptedStart = false;
   const pending = deferred<void>();
@@ -77,6 +77,57 @@ test("TV6 initial zero resume can pause without a redundant seek aborting native
     assert.equal(f.root.playback.error, null);
   } finally { await f.controller.stop(); }
 });
+
+for (const [position_ms, duration, was_playing, currentTime] of [
+  [12000, 30, false, 0], [12000, 30, true, 0], [45000, 30, false, 0],
+  [45000, 30, true, 0], [12000, 30, false, 12],
+] as const) test(`TV6 resume-seek-race: restore ${position_ms}ms / ${duration}s playing=${was_playing} current=${currentTime}`, async () => {
+  const f = fixture(), ctx = context();
+  await f.controller.load(ctx, { resume: { context: ctx, position_ms, was_playing } });
+  f.video.currentTime = currentTime;
+  try {
+    f.ready(duration); await flush();
+    const expected = Math.min(position_ms / 1000, duration);
+    assert.equal(f.video.currentTime, expected);
+    assert.equal(f.root.playback.position_ms, expected * 1000);
+    assert.equal(f.video.paused, !was_playing);
+    assert.equal(f.root.playback.error, null);
+    assert.equal(f.sessions.size, 1);
+  } finally { await f.controller.stop(); }
+});
+
+test("TV6 resume-seek-race: nonzero resume waits for duration and then clamps", async () => {
+  const f = fixture(), ctx = context();
+  await f.controller.load(ctx, { resume: { context: ctx, position_ms: 12000, was_playing: true } });
+  try {
+    f.ready(Infinity); await flush();
+    assert.equal(f.video.currentTime, 0); assert.equal(f.video.paused, true);
+    assert.match(f.controller.ui.diagnostic, /等待媒体时长/);
+    f.video.duration = 8; f.video.dispatchEvent(new Event("durationchange")); await flush();
+    assert.equal(f.video.currentTime, 8); assert.equal(f.root.playback.position_ms, 8000);
+    assert.equal(f.video.paused, false); assert.equal(f.controller.ui.diagnostic, "");
+  } finally { await f.controller.stop(); }
+});
+
+for (const mismatch of ["playback_epoch", "engine_epoch", "session_id"] as const) {
+  test(`TV6 resume-seek-race: stale ${mismatch} cannot consume resume or change current playback`, async () => {
+    const f = fixture(), ctx = context();
+    await f.controller.load(ctx, { resume: { context: ctx, position_ms: 12000, was_playing: true } });
+    const binding = { playback_epoch: f.root.playback.playback_epoch, engine_epoch: HOST, session_id: f.root.playback.session.session_id };
+    const stale = { ...binding, [mismatch]: mismatch === "playback_epoch" ? binding.playback_epoch - 1 : "stale" };
+    try {
+      const before = JSON.stringify(f.root.playback);
+      for (const type of ["ready", "paused", "ended", "failed", "position"])
+        f.controller.receive({ ...stale, type, duration_ms: 1000, position_ms: 999, error: { code: "UPSTREAM_FAILED", message: "stale", retryable: true } });
+      assert.equal(JSON.stringify(f.root.playback), before); assert.equal(f.video.currentTime, 0);
+      f.ready(); await flush();
+      assert.equal(f.video.currentTime, 12); assert.equal(f.video.paused, false);
+      assert.equal(f.root.playback.session.session_id, binding.session_id);
+      assert.equal(f.root.playback.error, null); assert.equal(f.ended.length, 0);
+      assert.equal(f.calls.filter(call => call.command === "get_resource_status").length, 0);
+    } finally { await f.controller.stop(); }
+  });
+}
 
 test("T12 position events coalesce to at most one update every 250ms", async () => {
   const f = fixture(); await f.controller.load(context()); f.ready(); await flush();

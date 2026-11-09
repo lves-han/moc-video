@@ -16,7 +16,7 @@ from t00 import require, file_hash, write_json
 from t10 import resources
 
 ROOT = Path(__file__).resolve().parents[2]
-BEHAVIORS = ['loading-backdrop','immersive-autohide','custom-skin-controls','tray-episodes-streams','next-episode-card','escape-levels','error-overlay','switch-recycle-50','visual-spec']
+BEHAVIORS = ['loading-backdrop','immersive-autohide','custom-skin-controls','tray-episodes-streams','next-episode-card','escape-levels','error-overlay','switch-recycle-50','visual-spec','resume-seek-race']
 IDS = ['TV-PLAYER', *[f'TV-PLAYER/{name}' for name in BEHAVIORS], 'REQ-TV6']
 
 
@@ -32,6 +32,26 @@ def case(run, name, expected, function):
 
 def near(value, expected, message, tolerance=.15):
     tv1.near(value, expected, message, tolerance)
+
+
+def resume_regressions(run):
+    output = run.command(['node','--experimental-strip-types','--test','--test-reporter=tap','--test-concurrency=1','tests/playback.test.ts'])
+    names = re.findall(r'^ok \d+ - (TV6 resume-seek-race: .+)$', output, re.M)
+    count = re.search(r'^# tests (\d+)$', output, re.M)
+    passed = re.search(r'^# pass (\d+)$', output, re.M)
+    require(len(names) == 10 and count and passed and int(count[1]) >= 10 and count[1] == passed[1]
+            and re.search(r'^# fail 0$', output, re.M) and re.search(r'^# skipped 0$', output, re.M),
+            'All ten resume race regressions and existing playback tests must run and pass')
+    result = dict(tests=int(count[1]), passed=int(passed[1]), resume_tests=len(names), resume_passed=len(names), names=names)
+    run.observed['resume_regressions'] = result
+    return result
+
+
+def validate_resume_pause(row):
+    require(row['paused'] and row['phase'] == 'paused' and row['error'] is None and not row['errors']
+            and row['plays'] and all(play['state'] == 'resolved' for play in row['plays']),
+            'Current real playback must pause after zero resume without a pending/rejected play or error')
+    return row
 
 
 def validate_loading(row):
@@ -112,7 +132,7 @@ def color_probe():
         print(json.dumps(dict(metadata=metadata,decoded_rgb=colors)))
 
 
-def diagnose():
+def diagnose(*, full_range=False):
     """One real window for raw readback diagnostics; never an A1 verdict."""
     run=Acceptance(ROOT/'evidence/acceptance/TV6-diagnostic.json',ROOT/'evidence/acceptance/TV6-diagnostic.xml')
     previous=t01.DATA,t01.BUILD
@@ -120,16 +140,28 @@ def diagnose():
     try:
         resources(run,card='T0.33')
         t01.DATA=run.folder/'packaged';t01.DATA.mkdir();t01.BUILD=t01.DATA/'build.json';t01.build(run)
+        run.command(['clang','-fobjc-arc','-framework','Cocoa','-framework','ApplicationServices','tests/fixtures/tv1_native.m','-o',str(run.folder/'tv1-native')])
         os.environ['T12_MIN_OPENS']='1'
         with tempfile.TemporaryDirectory(prefix='tv6-diagnostic-',dir=run.folder) as temporary:
             folder=Path(temporary);media=folder/'media';media.mkdir();t12.owned_media(run,media)
+            if full_range:
+                original=media/'b-limited.mp4';(media/'b.mp4').rename(original)
+                run.command(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-i',str(original),
+                             '-vf','scale=in_color_matrix=bt601:out_color_matrix=bt709:in_range=tv:out_range=pc',
+                             '-c:v','libx264','-preset','ultrafast','-pix_fmt','yuvj420p','-color_range','pc','-colorspace','bt709','-color_primaries','bt709','-color_trc','bt709',
+                             '-c:a','copy',str(media/'b.mp4')])
+                run.observed['range_diagnostic']=dict(original_sha256=file_hash(original),full_range_sha256=file_hash(media/'b.mp4'),
+                    probe=json.loads(run.command(['ffprobe','-v','error','-show_entries','stream=codec_type,pix_fmt,color_range,color_space,color_transfer,color_primaries','-of','json',str(media/'b.mp4')])))
             bridge=t12.Bridge(run,folder,media);bridge.minimum_opens=1;ready=bridge.wait(folder/'ready.json',timeout=180)
             with t01.Fixture(t01.MEDIA,invoke=bridge.invoke) as fixture:
                 executable=ROOT/t01.check_build(run.source)['automation']['path']/'Contents/MacOS/yingxiang-video'
                 session=t01.NativeSession(run,fixture,executable,1)
-                session.wait(0,30);session.command('identity')
+                session.wait(0,30);session.observe();tv1.native(run,'click',session.process.pid,600,200);session.command('identity')
                 session.command('t12',action='start',payload=ready,timeout=60)
                 session.record['commands'][-1]['args']=dict(action='start',payload='real Host DTO; capabilities transient')
+                run.observed['playing_color']=session.command('t12',action='color-play',timeout=45)
+                run.observed['native_capture']=tv1.capture(run,session.process.pid,1200,2)
+                run.observed['native_pixel']=tv1.native(run,'pixel',session.process.pid,ROOT/run.observed['native_capture']['path'])
                 run.observed['colors']=session.command('t12',action='color-diagnostic',timeout=45)
                 print('TV6_COLOR:'+json.dumps(run.observed['colors']))
                 session.command('t12',action='stop');session.command('t12',action='dispose');session.close()
@@ -145,7 +177,7 @@ def diagnose():
     print('Diagnostic evidence: '+str(run.folder/'diagnostic.json'))
 
 
-def interactive(run):
+def interactive(run, *, escape_only=False):
     previous_folder=run.folder
     run.folder=previous_folder/'immersive'; run.folder.mkdir()
     os.environ['T12_MIN_OPENS']='1'
@@ -169,10 +201,21 @@ def interactive(run):
                     run.observed.setdefault('immersive',{})[name]=value
                     return value
                 loaded=action('start',payload=ready)
+                if escape_only:
+                    action('release')
+                    escape=[action('escape-start')]
+                    for _ in range(3):
+                        tv1.native(run,'key',session.process.pid,53);escape.append(action('escape-state'))
+                    run.observed['escape']=escape
+                    require(escape[0]['tray'] and escape[0]['fullscreen'] and not escape[1]['tray'] and escape[1]['fullscreen'] and escape[1]['route']=='playback' and not escape[2]['fullscreen'] and escape[2]['route']=='playback' and escape[3]['route']=='details' and escape[3]['videos']==0,'Targeted native Escape chain failed')
+                    action('dispose');session.close()
+                    bridge.finish()
+                    return dict(escape=escape)
                 long=action('long-loading')
                 missing=action('loading-no-image')
                 case(run,'loading-backdrop','real pending resolver, decoded blurred background, identified title including missing image, >10s message',lambda: (validate_loading(loaded),require(long['elapsed']>=10000 and long['visible'] and long['text']=='正在查找可用线路' and missing['title']==loaded['title'] and missing['images']==0,'Long resolver hint/missing-image title missing')))
-                action('release')
+                resumed=action('release')
+                case(run,'resume-seek-race','current packaged zero-position playback pauses without PLAY_FAILED or an unresolved play promise',lambda:validate_resume_pause(resumed))
                 styles=[]; screenshots=[]; hovers=[]
                 for width in [960,1200,1512]:
                     session.command('layout',value=width)
@@ -225,7 +268,7 @@ def interactive(run):
                 run.folder=previous_folder
 
 
-def diagnose_interactive():
+def diagnose_interactive(*, escape_only=False):
     """Run only the current UI loop while debugging; qualification still uses A1."""
     run=Acceptance(ROOT/'evidence/acceptance/TV6-diagnostic.json',ROOT/'evidence/acceptance/TV6-diagnostic.xml')
     previous=t01.DATA,t01.BUILD
@@ -233,7 +276,7 @@ def diagnose_interactive():
     try:
         resources(run,card='T0.33')
         t01.DATA=run.folder/'packaged';t01.DATA.mkdir();t01.BUILD=t01.DATA/'build.json'
-        t01.build(run);interactive(run)
+        t01.build(run);interactive(run,escape_only=escape_only)
         require(all(case['result']=='PASS' for case in run.cases),'UI diagnostic has failed behavioral checks')
     finally:
         t01.DATA,t01.BUILD=previous
@@ -254,6 +297,7 @@ def main():
                 output=run.command(['{python}','-B','-m','unittest','discover','-s','tests/acceptance','-p','test_tv6.py'])
                 count=re.search(r'Ran (\d+) tests?',output); require(count and int(count[1])>=4,'Nonzero independent negative oracle tests required'); return dict(tests=int(count[1]))
             run.case('negative-oracles',['REQ-TV6'],'corrupted independent style/control/next evidence is rejected',oracles)
+            run.case('resume-controller',['TV-PLAYER','TV-PLAYER/resume-seek-race','REQ-TV6'],'nonzero resume tests: zero pause race, nonzero restore, duration clamp and stale Session/epoch isolation',lambda:resume_regressions(run))
             built=run.case('packaged-build',['REQ-TV6'],'current-source production and automation bundles',lambda:t01.build(run))
             if built:
                 run.case('packaged-immersive',['TV-PLAYER','REQ-TV6'],'real window current-source interaction loop and screenshots',lambda:interactive(run))

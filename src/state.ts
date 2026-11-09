@@ -248,8 +248,9 @@ export function createPlaybackController(root: AppState = appState, client: Pick
         pendingResume = null;
         if (ui.diagnostic === "恢复播放位置正在等待媒体时长") ui.diagnostic = "";
         if (event.duration_ms !== null) {
-          player!.seek(resume.position_ms / 1000);
-          state.position_ms = Math.min(event.duration_ms, resume.position_ms);
+          const position = Math.min(event.duration_ms, resume.position_ms);
+          if (video!.currentTime !== position / 1000) player!.seek(position / 1000);
+          state.position_ms = position;
         }
         if (resume.was_playing) void play();
       }

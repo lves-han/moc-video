@@ -25,6 +25,7 @@ let payload: Bootstrap, releaseLoading: (() => void) | undefined, loadingStarted
 const calls: { command: string; video?: string; completed?: boolean }[] = [], errors: string[] = [];
 const mediaEvents: Record<string,unknown>[] = [];
 const playPromises: Record<string,unknown>[] = [];
+const escapeKeys: Record<string,unknown>[] = [];
 let removeErrors = () => {};
 const matches = () => calls.filter(row => row.command === 'match_playback').length;
 const focus = () => one('media-container').focus();
@@ -76,6 +77,7 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     const root = document.getElementById('app') as HTMLElement & { __vue_app__?: VueApp };
     root.__vue_app__!.unmount(); original = window.__TAURI__!.core;
     calls.length = 0; errors.length = 0; mediaEvents.length=0;playPromises.length=0;
+    escapeKeys.length=0;
     const gate = new Promise<void>(resolve => { releaseLoading = resolve; });
     let firstResolve = true;
     window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
@@ -93,10 +95,17 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     const onError = (event: ErrorEvent) => errors.push(event.message);
     const onReject = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
     window.addEventListener('error', onError); window.addEventListener('unhandledrejection', onReject);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const row = { type:event.type, trusted:event.isTrusted, target:(event.target as Element)?.tagName, prevented:event.defaultPrevented, at:performance.now() };
+      escapeKeys.push(row); if(escapeKeys.length>16)escapeKeys.shift();
+      queueMicrotask(()=>{row.prevented=event.defaultPrevented;});
+    };
+    window.addEventListener('keydown',onKey,true);window.addEventListener('keyup',onKey,true);
     const oldWarn = console.warn, oldError = console.error;
     console.warn = (...args) => { errors.push(`warn: ${args.map(String).join(' ')}`); oldWarn(...args); };
     console.error = (...args) => { errors.push(`error: ${args.map(String).join(' ')}`); oldError(...args); };
-    removeErrors = () => { window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onReject); console.warn = oldWarn; console.error = oldError; };
+    removeErrors = () => { window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onReject);window.removeEventListener('keydown',onKey,true);window.removeEventListener('keyup',onKey,true); console.warn = oldWarn; console.error = oldError; };
     await appController.restoreSettings(); await appController.refreshRuntime();
     locale.value = 'zh-CN';
     await appController.updateSettings(s => ({ ...s, ui_locale: 'zh-CN', auto_next: false, volume: .5, muted: false, media_cache_max_bytes: 0 }));
@@ -135,7 +144,11 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     const result={ title:one('.playback-loading h1').textContent, background:getComputedStyle(one('.playback-loading')).backgroundColor, images:document.querySelectorAll('.playback-backdrop').length };
     details.poster=poster;details.backdrop=backdrop;await nextTick();return result;
   }
-  if (action === 'release') { releaseLoading!(); await playing(); media().loop = true; media().pause(); await until(() => appState.playback.phase === 'paused', 'Pause failed'); return snapshot(); }
+  if (action === 'release') {
+    releaseLoading!(); await playing(); media().loop = true; media().pause();
+    await until(() => appState.playback.phase === 'paused', 'Pause failed'); await delay(250);
+    return { ...snapshot(), error:appState.playback.error, errors:[...errors], plays:playPromises.map(row => ({ ...row })) };
+  }
   if (action === 'snapshot') { await delay(400); return snapshot(); }
   if (action === 'focus') { focus(); return snapshot(); }
   if (action === 'styles') {
@@ -216,11 +229,20 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     one<HTMLButtonElement>('.playback-error button:first-child').click(); await playing();
     return { panel,title,description,buttons,recovered:!document.querySelector('.playback-error') && appState.playback.phase === 'playing',stimulus:'injected retryable resolver envelope; retry uses real Host and media' };
   }
-  if (action === 'escape-start') { focus(); if (!store().isFullscreen) { videoJsControl('fullscreen').click(); await until(() => store().isFullscreen, 'Native fullscreen did not enter'); } one<HTMLButtonElement>('[data-player-tray]').click(); await delay(350); return snapshot(); }
+  if (action === 'escape-start') {
+    escapeKeys.length=0; focus();
+    if (!store().isFullscreen) {
+      videoJsControl('fullscreen').click(); await until(() => store().isFullscreen, 'Native fullscreen did not enter');
+      // As in T01, let AppKit finish the native Space transition before input.
+      await delay(1500);
+    }
+    one<HTMLButtonElement>('[data-player-tray]').click(); await delay(350);
+    return { ...snapshot(), native:await nativeInvoke('t01_control',{ action:'identity' }) };
+  }
   if (action === 'escape-state') {
     await delay(1400);
     if (!document.querySelector('video-player')) return { route:appState.route.name,hash:location.hash,videos:document.querySelectorAll('video').length,errors:[...errors] };
-    return snapshot();
+    return { ...snapshot(), keys:escapeKeys.map(row=>({...row})), active:{ tag:document.activeElement?.tagName, class:document.activeElement?.className }, native:await nativeInvoke('t01_control',{ action:'identity' }), menus:[...document.querySelectorAll('media-menu[data-open],media-tooltip[data-open]')].map(el=>el.tagName) };
   }
   if (action === 'dispose') {
     await appController.updateSettings(s => ({ ...s, ui_locale:'en', auto_next:false })); locale.value = 'en';

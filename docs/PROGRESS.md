@@ -2649,3 +2649,16 @@
 - 决定：用户在本聊天就将 src/state.ts 纳入本卡、跳过相同位置的多余恢复定位以及复审、基线更新和重新验收选择“批准并继续（推荐）”；同一聊天已批准 T0.30 对应修订及基线更新。按 ADR-059 和独立复审 round-53 CLEAR，对当前卡及暂停的 T0.30 一并迁移经审查的冻结基线，保留失败历史、原范围基线及会话额度，重跑受影响验收。
 - 迁移暂停卡：T0.30
 - 批准摘要：656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e
+
+## T0.33 第二会话恢复修复与 Esc／颜色门阻塞 2026-11-09T07:45:39+00:00
+- 结果：BLOCKED
+- 开工：先读AGENTS.md，指定`.venv/bin/python`以argv执行原`task.py check`及`start T0.33`，均exit0；工作树初始干净。沿用外层已批准的ADR-059、round-53 CLEAR和原rebaseline；当前会话2/2、generation1、protected=`656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e`。只处理本卡，冻结文档、资源、额度和验收阈值保持。
+- Changed：应用已授权的最小恢复修复，先夹取时长，再仅对不同目标执行seek。新增10项真实控制器回归，覆盖零位置pause/play竞争、非零播放／暂停恢复、超时长夹取、未知时长等待、playback_epoch／engine_epoch／session_id各自隔离；A1实际调用并报告数量，同时检查真实窗口首次播放可暂停、无错误且play Promise已结算。Esc监听移至window冒泡、托盘DOM更新后回焦点、退出全屏后聚焦官方media-container。测试助手按owned PID激活应用；后续HID键盘先核对frontmost PID。保留有界按键、帧元数据和原生截图诊断。
+- 定向回归：PASS；日志：`evidence/runs/20261109T071419668744-diag-tv6-resume/output.log`；真实exit0，44/44通过、失败0、跳过0，其中新增恢复测试10/10通过。
+- 验收 A1：FAIL；日志：`evidence/runs/20261109T071435019667-A1/output.log`；真实exit1，主体7项中5通过／2失败；JUnit为6通过／13失败／0跳过。原资源门、独立反例5项、恢复44项及当前源码生产／自动化打包通过；真实窗口前台激活失败，50次切集在index1失败。报告：`evidence/acceptance/TV6-all.json`、`evidence/acceptance/TV6-all.xml`。后续源码有变化，此收据保留为历史失败，未作为完成证据。
+- 后续真实UI正证：`evidence/runs/20261109T073734297256-diag-tv6-ui/output.log`最终exit1；已执行9组中8组PASS，包括加载／缺图／10秒提示、首次恢复后的真实暂停与已结算Promise、960／1200／1512计算样式及截图、官方控件和真实键盘、3秒隐藏、托盘、真实EOS后约5209ms下一集／取消／旧epoch防护、错误重试；Esc组FAIL。此前`TV6-2c8cfa633b9c47ba9c1ba5096f02465b/immersive/desktop-960.png`及`desktop-1512.png`已实际查看，另有1200截图。全部属于定向证据，完整A1仍未通过。
+- Esc因果链：首个版本入全屏后仅收到首击keyup；等待AppKit过渡、window监听和nextTick回焦点后，第一击关闭tray，第二击native与official store均退出全屏，第三击仍留在playback且没有DOM按键。由CGEventPostToPid改为核对前台PID的HID输入，结果相同。完整UI同签名达到4次后停止，改为只验证三击Esc；退出全屏后显式focus官方media-container仍失败。最新最小诊断：`evidence/runs/20261109T074258014297-diag-tv6-escape-focus/output.log`，exit1；原始逐击状态在`evidence/acceptance/TV6-a3242e0d8a654074b575eeb9708e1c01/diagnostic.json`，第三击前native focused=true、activeElement=MEDIA-CONTAINER，仍无第三击DOM事件。未确认最终根因，停止同类修法。
+- 颜色因果链：A1蓝片Session绑定、ready4／playing、音频878.906Hz正确，Canvas读回`[4,54,255,255]`被原green<50拒绝；裁剪／平滑／默认或sRGB读回对比无改善。VideoFrame播放中为NV12、fullRange=true且部分颜色描述缺失；暂停后Canvas可变为`[0,13,255,255]`。仅诊断的显式full-range副本播放时仍为`[4,50,254]`，已停止媒体变换。最新原生窗口PNG以NSBitmapImageRep转换sRGB得到`[5,52,247,255]`，Canvas同期为`[4,54,255,255]`；因此原生画面亦有差异，尚无修复结论。日志：`evidence/runs/20261109T073643733838-diag-tv6-native-pixel/output.log`，exit0；原始截图／摘要／样本：`evidence/acceptance/TV6-466d04c5609e4d5781b940a2e051345a/diagnostic.json`。A1媒体生成器与RGB、音频、RSS原阈值全部保持。
+- Verified：各轮真实打包已执行类型／生产构建与自动化构建；本会话最后`git diff --check` exit0。最终源码仅跑过上述失败的Esc最小诊断；完整`verify.py all` NOT RUN，未勾选、未执行done、未产生完成提交。macos-x86_64、windows-x86_64、linux-x11/wayland为NOT RUN，沿ADR-005/006。实际资源后端process-watchdog、RSS采样4096MiB、构建并行2、测试线程1，非硬内存隔离。
+- 停止与Git：外层于`evidence/task-state/T0.33/handoff.md`的2026-11-09T07:43:51及07:45:12明确要求停止同类重试、追加BLOCKED并退出。当前CLI的.git只读；已先handoff请求外层WIP保存，外层要求写入者退出后将本卡源码／测试／本记录以单个`WIP T0.33:`提交保存。此刻WIP尚未提交，不虚报提交成功；保留全部现场供外层Git收尾。最后原status确认current=T0.33、sessions=2、generation1、无unfinished运行。
+- Remaining：本卡及依赖卡阻塞；独立的T0.30按外层原授权选择。后续需决定已用2/2会话下的受控恢复方式，继续精确定位原生全屏后Esc输入与编码颜色描述；涉及必要范围或冻结规则修订时按真实用户决定、独立CLEAR和原控制器流程办理。原范围内恢复修复已获授权，本记录未新增或伪造RESOLVED／AUTHORIZED，未扩大权限或重置预算。恢复后须重新执行准确A1、完整verify、done、受验完成提交及独立巡检。
