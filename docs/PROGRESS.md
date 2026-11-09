@@ -2517,3 +2517,11 @@
 - 需要用户决定：是否批准 round-48 修订（范围、1512 验收宽度与 1440 断点、排序和地区规则、按类型与年份内容排、权限精确断言）并授权第二次 rebaseline。
 - 可选方案：1）批准并 rebaseline，随后重验 T0.27；2）提出修改，修改后须重新独立审查。
 - 备注：round-49 的 N2 已由 2026-11-08 清单实测回答：tmdb.top/year/language/trending/latest 的 genre 均非必填，仅 tmdb.search 必填 search。
+
+## T0.27 ADR-058 修订待用户批准 2026-11-09T02:23:26.000000+00:00
+
+- 结果：BLOCKED
+- 事实：round-50 BLOCKING 已修订，round-51 CLEAR，受审基线 78dee2837ba6e162bd63ec69983447d46d1a2769，protected d26c7b3c0e7bd447cbf049df27b05877ea25b037e5d3c8f33738751934e9dfd5，报告 `docs/reviews/doc-review/round-51.md`。T0.27 状态基线仍为 d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a。
+- 已尝试：未写 RESOLVED，未执行第二次 rebaseline，T0.27 验收未开始。
+- 需要用户决定：是否批准 round-48 修订和 ADR-058（T0.27 简化为安装包检查，干净系统生命周期移至 T0.36/A2）并授权第二次 rebaseline。
+- 可选方案：1）批准并 rebaseline，随后按 `--suite package` 重验 T0.27；2）提出修改，修改后须重新独立审查。
