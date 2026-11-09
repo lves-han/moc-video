@@ -2488,3 +2488,12 @@
 - 通过：从已交付新版 app 使用临时空配置启动，自动生成1个中文TMDB及8个播放配置，来源页全部 ready；首页中文片名、海报及详情真实显示，默认优质来源匹配《蝙蝠侠：黑暗骑士》(2008)，选择1080zyk HD中字版后实际播放，进度5.128562秒至23.39515秒，出现解码画面。声音 NOT VERIFIED。
 - 问题：原有8个MacCMS配置且无Stremio时，新版保留非空配置，未自动补TMDB。恢复原配置再次启动新版，来源页仍要求添加Stremio manifest。当前升级场景未满足免手工添加元数据。
 - 收尾：测试app正常退出；原设置/历史目录恢复，测试数据移至 evidence/tmp/default-sources-smoke/test-profile。观察汇总：`evidence/tmp/default-sources-smoke/result.json`，原始界面观察保留在本聊天工具记录。未追加其他验收。
+
+## T0.27 Apple TV 化基线更新前置检查 2026-11-09T01:40:25.000000+00:00
+
+- 结果：BLOCKED
+- 事实：用户授权提交 ADR-057 文档、执行 rebaseline 并启动独立文档审查，文档已提交 ce0b965。T0.27 当前 completed=True，但 scope_problems 列出非冻结范围外文件 src/data/defaultSources.json、src/data/sourcePresets.ts、src/main.ts、src/state.ts，来自交付后提交 2f6bd94。rebaseline 对此明确拒绝；check_completion_tree 同样因交付后源码快照不同而停止推进。
+- 已尝试：只读核对 workflow.py 的 rebaseline、next_card、completed、scope_problems；未写 RESOLVED，未执行 rebaseline，未修改控制脚本或状态文件，独立文档审查未启动。
+- 需要用户决定：是否授权把上述 4 个文件加入 T0.27 范围，再执行 RESOLVED、rebaseline，并完整重跑 T0.27/A1、verify、done、完成提交和 review-only。
+- 可选方案：1）扩展 T0.27 范围并重验，保留默认来源功能；2）回退 2f6bd94，并另开卡重做默认来源功能。
+- 证据：`task.py status` 当前 protected 01215bf1ce8751b5626c265350f36972e3eaa2aaf5f80ad43596e51aafc1b2cb，T0.27 状态基线 b98bb8d6c0a64a790d36c7f6a4955ea1bc7039388d6670d90c9545a44a5fe5af。
