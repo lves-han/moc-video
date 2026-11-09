@@ -166,6 +166,7 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 播放器：沿用Video.js 10.3.0内核及官方元素，以官方元素组合的自定义皮肤取代`video-compat-skin`，修订ADR-055的“官方皮肤”；网关Session、单媒体所有权、250ms位置、旧epoch丢弃、焦点恢复、原生全屏和50次切集回收继续有效。
 目录：`Bridge_MediaCard`、`Bridge_HomeSection`、`Bridge_HomeRequest`按T0.29扩展可选字段；Stremio组合筛选由Rust完成，服务端条件优先级为语言、年份、类型，单次最多扫描5页。MacCMS的服务端条件限于分类ID、分页和关键词。筛选含类型、年份、语言、地区、排序，每个栏目返回各维度可用性。TMDB的地区禁用；排序只在无语言和年份条件时可用。
 按ADR-059，`HomeRequest.catalog_only`可选，缺省或false保持原首页行为；true仅用于Stremio、page=1、无section_ref和filter，返回宿主登记栏目描述及空items、page=1、has_next=false、next_page=null、计数0，不请求目录内容、不登记图片或推进分页游标。其他来源和非法组合明确报错。引用、取消、来源修订及语言世代规则保持；内容排进入视口才请求该栏内容。
+描述阶段属于待加载，不能因空items判定为真实空结果；首个内容请求完成后才判断该排是否为空。页面排身份由来源及修订、语言世代、栏目引用和规范化筛选条件组成，加载、错误、结果、分页及重试各自隔离，旧响应不能覆盖当前排。catalog_only=true时section_ref和filter缺省或null等价，filter空对象视为非法组合。
 契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节、T0.29列名及ADR-059的可选字段（含`Settings.metadata_preset_applied`）；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
 同源播放：`metadata_ref.identity.namespace`为`maccms`时，元数据与播放可来自同一MacCMS来源；Stremio元数据的跨源匹配和绑定校验保持。
 IPC与权限：在C11的23项基础上增加`list_watchlist`、`add_watchlist`、`remove_watchlist`、`search_catalog`，合计27项，沿用request_id、engine_epoch、预算和取消规则；`list_watchlist`输入为空，返回`{entries}`；`add_watchlist`输入观看身份字段、title、kind、poster_cache_key，`remove_watchlist`输入`{content_id}`；`search_catalog`输入`{source_id,source_revision,query}`，返回`{items}`，按default_metadata预算、每来源串行，界面取消旧请求；四项都拒绝URL、cap和Cookie；主窗口权限只增加这4项及`core:window:allow-start-dragging`。CSP、CORS、TLS和媒体网关策略保持。

@@ -1800,6 +1800,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-HOME/visual-spec",
       "TV-HOME/genre-year-rows",
       "TV-HOME/media-row-spec",
+      "TV-HOME/catalog-pending",
+      "TV-HOME/filtered-row-isolation",
       "REQ-TV3"
     ],
     "timeout_seconds": 3600
@@ -1809,6 +1811,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 #### 工作义务（ADR-057）
 
 - 按 ADR-059 增加 `HomeRequest.catalog_only`；真实 Host 断言仅列栏目时内容请求为零、旧全量请求兼容、非法参数组合及不支持的来源明确报错；首页仅在栏目进入视口后请求其内容，沿用原引用、取消和分页规则。
+- A1 的 `TV-HOME/catalog-pending` 在真实 Host/窗口检查栏目描述为待加载而非空结果：有描述时渲染可进入视口的排，进入视口请求第一页；仅实际首请求完成且为空才显示该排空态，验证失败、重试及来源切换。`section_ref` 和 `filter` 缺省或 null 等价；`filter: {}` 属于有筛选参数，在 catalog_only=true 时拒绝，并验证正反例。非 Stremio 来源明确拒绝该模式，T0.31 继续使用其支持路径。
+- A1 的 `TV-HOME/filtered-row-isolation` 以来源及修订、语言世代、栏目引用和规范化筛选条件区分页面排，独立保存加载、错误、结果与分页，旧响应不得覆盖新状态；真实 Host 与受控 fixture 验证同引用不同筛选并发、乱序、分页、重试以及来源/语言切换，多个排各自显示正确内容。
 - Hero 取本周趋势前5部，8秒交叉淡入并缓慢推镜，悬停、获得焦点或窗口隐藏时暂停。
 - 继续观看使用 `list_history` 和现有 `historyPoster`，横版卡带进度条。
 - 首页依次为 Hero、继续观看、本周趋势电影与剧集、最新上线与热门电影、按类型（动作、喜剧、科幻、剧情，来自 `tmdb.top` 的 `genre`）、按年份（今年、去年，来自 `tmdb.year` 的 `genre`）、华语韩语日语精选；分类页默认依次为趋势、最新、今年、去年和该分类的类型排；首页和分类页的 `.home-card`、`.home-section` 等现有测试选择器保留。
@@ -2021,6 +2025,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "TV-PLAYER/error-overlay",
       "TV-PLAYER/switch-recycle-50",
       "TV-PLAYER/visual-spec",
+      "TV-PLAYER/resume-seek-race",
       "REQ-TV6"
     ],
     "timeout_seconds": 3600
@@ -2031,6 +2036,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 
 - 用 Video.js 10.3.0 官方元素（控制层、时间滑块与预览、快进、字幕、缓冲指示、手势、热键）组合自定义皮肤，取代 `video-compat-skin`，内核、网关 Session、历史和原生全屏适配保持。
 - 按 ADR-059 仅在恢复目标与当前媒体时间不同时执行定位；验证零位置暂停不会将取消中的播放请求误报为故障，非零恢复、时长限制及会话身份保持原契约。
+- A1 的 `TV-PLAYER/resume-seek-race` 必须实际运行非零数量的回归测试，覆盖零位置暂停竞争、非零与超时长夹取、旧会话事件隔离，并在真实窗口验证当前播放可暂停且不产生错误；报告测试数及结果。
 - `data-action` 业务按钮收进底部托盘并保留属性；状态文字改为视觉隐藏的无障碍文本。
 - 同步修改 `tests/fixtures/videojs_controls.ts` 等绑定官方皮肤的夹具，断言强度保持。
 - 键盘：左右10秒、上下音量、空格播放暂停、F全屏、M静音。
