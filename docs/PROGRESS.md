@@ -2502,3 +2502,9 @@
 - 结果：RESOLVED
 - 决定：用户原话“授权执行”及“加入 4 个文件并重验”：批准 ADR-057 的 T0.28 至 T0.34 新卡、原 T0.28/T0.29 顺延、C17 与页面风格规格，批准 T0.27 范围增加 src/data/defaultSources.json、src/data/sourcePresets.ts、src/main.ts、src/state.ts 并执行 rebaseline；T0.27 原验收和阈值不变，须完整重验；升级配置缺 TMDB 的问题转入 T0.29。
 - 批准摘要：d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a
+
+## T0.27 文档审查 round-48 记录 2026-11-09T02:03:01+00:00
+
+- 受审基线：93897b046d1d72acb6bd76b679940521a74a0600；protected d441fca11eb084cd9b4e82156ff1e3e1c867de608b66187879689ff03d07572a。报告：`docs/reviews/doc-review/round-48.md`，结论 BLOCKING，6 项阻断已逐项核对并修订，待独立复审。
+- 2026-11-08 来源实测（支撑 ADR-057 卡片数据）：内置 TMDB 电影 19 种类型均满页 20 条；剧集 tmdb.latest 按类型剧情 25、悬疑 10、科幻 7、喜剧 6、动作冒险 5、动画 3、犯罪 3 条；组合过滤 5 页 100 条命中 8 至 95 条；MacCMS ac=detail 对 year、area 参数无过滤效果。
+- 显示器：系统报告内屏 3024×1964 Retina，Finder 桌面逻辑宽度 1512。
