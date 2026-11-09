@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref, onMounted, onBeforeUnmount } from "vue";
+import HomeCatalog from '../components/HomeCatalog.vue';
+import type { HistoryEntry } from '../data/history-model';
 import { NAlert, NButton, NEmpty } from "naive-ui";
 import { appState as state, appController as app } from "../state";
 import { locale, t } from "../i18n";
 import { describeError } from "../api";
 import type { Bridge_MediaCard, Bridge_MediaRef } from "../models";
 
-const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; select: [id: string, role: "metadata" | "playback"] }>();
+const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; select: [id: string, role: "metadata" | "playback"]; resume: [entry: HistoryEntry] }>();
+const query = matchMedia('(min-width: 960px)'), desktop = ref(query.matches);
+function resize() { desktop.value = query.matches; if (state.selected_metadata_source) void (query.matches ? app.loadCatalog() : app.loadHome()); }
+onMounted(() => query.addEventListener('change', resize)); onBeforeUnmount(() => query.removeEventListener('change', resize));
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
 const providers = computed(() => (state.sources.data?.providers ?? []).filter(source => source.runtime_status === "ready"));
 const metadataSources = computed(() => providers.value.filter(source => source.kind === "stremio" && source.capabilities.home && source.capabilities.details));
@@ -32,6 +37,8 @@ async function refresh() {
 </script>
 
 <template>
+  <HomeCatalog v-if="desktop" @open="emit('open', $event)" @resume="emit('resume', $event)" />
+  <template v-else>
   <div class="catalog-sources">
     <label>{{ t('Metadata provider') }}<select class="home-metadata-source" :value="state.selected_metadata_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="source in metadataSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
     <label>{{ word('播放源', 'Playback source') }}<select class="home-playback-source" :value="state.selected_playback_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'playback')"><option value="" disabled>{{ t('Choose a video source') }}</option><option v-for="source in playbackSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
@@ -59,6 +66,7 @@ async function refresh() {
     </div>
     <NButton v-if="row.section?.has_next && row.section.next_page" class="home-load-more" :loading="app.sections[row.ref ?? '']?.phase === 'loading'" @click="app.loadHome(row.ref, row.section!.next_page!)">{{ t('Load more') }}</NButton>
   </section>
+  </template>
 </template>
 
 <style scoped>

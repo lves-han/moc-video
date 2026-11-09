@@ -3283,6 +3283,9 @@
                 "type": "null"
               }
             ]
+          },
+          "catalog_only": {
+            "type": "boolean"
           }
         },
         "required": [

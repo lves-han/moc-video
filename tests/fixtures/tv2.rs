@@ -577,3 +577,80 @@ fn tv2_card_fields_and_missing_values() {
     assert_eq!(details["details"]["tags"], json!(["Drama"]));
     assert_eq!(details["details"]["plot"], "English plot");
 }
+
+#[test]
+fn tv3_catalog_descriptions_zero_content_and_old_compatibility() {
+    let fixture = Fixture::new(|r| tv_reply(r, false));
+    let (_temp, host) = setup(vec![fixture.url("/tmdb/en-US/manifest.json")]);
+    let source = sync(&host);
+    let mut input = home_input(&source);
+    input["catalog_only"] = json!(true);
+    let descriptions = ok(&host, "get_home", input.clone());
+    assert_eq!(descriptions["images"], json!({}));
+    assert_eq!(descriptions["page"]["sections"].as_array().unwrap().len(), 10);
+    for section in descriptions["page"]["sections"].as_array().unwrap() {
+        assert_eq!(section["items"], json!([]));
+        assert_eq!(section["page"], 1);
+        assert_eq!(section["has_next"], false);
+        assert_eq!(section["next_page"], Value::Null);
+        assert_eq!(section["scanned_count"], 0);
+        assert_eq!(section["matched_count"], 0);
+        assert!(section["section_ref"].as_str().is_some());
+    }
+    assert_eq!(fixture.requests.lock().unwrap().iter().filter(|r| r.target.contains("/catalog/")).count(), 0);
+    let mut next = home_input(&source);
+    next["section_ref"] = descriptions["page"]["sections"][0]["section_ref"].clone();
+    next["page"] = json!(2);
+    error(&call(&host, "get_home", next), "BAD_REQUEST");
+    input["catalog_only"] = json!(false);
+    let full = ok(&host, "get_home", input);
+    assert!(full["page"]["sections"].as_array().unwrap().iter().all(|s| !s["items"].as_array().unwrap().is_empty()));
+    let omitted = ok(&host, "get_home", home_input(&source));
+    assert_eq!(omitted["page"], full["page"]);
+    assert!(fixture.requests.lock().unwrap().iter().any(|r| r.target.contains("/catalog/")));
+    trace(&fixture, "tv3-descriptions");
+}
+
+#[test]
+fn tv3_catalog_null_equivalence_and_invalid_combinations() {
+    let fixture = Fixture::new(|r| tv_reply(r, false));
+    let (_temp, host) = setup(vec![fixture.url("/tmdb/en-US/manifest.json")]);
+    let source = sync(&host);
+    let mut input = home_input(&source);
+    input["catalog_only"] = json!(true);
+    input.as_object_mut().unwrap().remove("section_ref");
+    let omitted = ok(&host, "get_home", input.clone());
+    input["section_ref"] = Value::Null;
+    input["filter"] = Value::Null;
+    assert_eq!(ok(&host, "get_home", input.clone()), omitted);
+    for (field, value) in [("filter", json!({})), ("filter", json!({"genre":"Drama"})), ("section_ref", omitted["page"]["sections"][0]["section_ref"].clone()), ("page", json!(2))] {
+        let mut invalid = input.clone(); invalid[field] = value;
+        error(&call(&host, "get_home", invalid), "BAD_REQUEST");
+    }
+    assert_eq!(fixture.requests.lock().unwrap().iter().filter(|r| r.target.contains("/catalog/")).count(), 0);
+}
+
+#[test]
+fn tv3_same_reference_filters_concurrent_and_pagination() {
+    let fixture = Fixture::new(|r| { let mut reply = tv_reply(r, false); if r.target.contains("genre=Drama") { reply.delay = Duration::from_millis(120); } reply });
+    let (_temp, host) = setup(vec![fixture.url("/tmdb/en-US/manifest.json")]);
+    let source = sync(&host);
+    let mut input = home_input(&source); input["catalog_only"] = json!(true);
+    let descriptions = ok(&host, "get_home", input);
+    let section = &descriptions["page"]["sections"][0];
+    let (drama, comedy) = thread::scope(|scope| {
+        let slow = scope.spawn(|| filtered(&host, &source, section, json!({"genre":"Drama"}), 1));
+        let fast = scope.spawn(|| filtered(&host, &source, section, json!({"genre":"Comedy"}), 1));
+        (slow.join().unwrap(), fast.join().unwrap())
+    });
+    for (value, genre) in [(&drama, "Drama"), (&comedy, "Comedy")] {
+        assert!(value["items"].as_array().unwrap().iter().all(|c| c["genres"] == json!([genre])));
+        let next = filtered(&host, &source, section, json!({"genre":genre}), 2);
+        assert_eq!(next["scanned_count"], 40);
+        assert!(next["items"].as_array().unwrap().iter().all(|c| c["genres"] == json!([genre])));
+    }
+    set_locale(&host, "zh-CN");
+    let translated = filtered(&host, &source, section, json!({"genre":"Drama"}), 1);
+    assert!(translated["items"].as_array().unwrap().iter().all(|c| c["genres"] == json!(["剧情"])));
+    trace(&fixture, "tv3-filter-isolation");
+}

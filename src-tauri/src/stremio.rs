@@ -894,6 +894,10 @@ impl Catalog {
             .filter(|p| (1..=10000).contains(p))
             .ok_or_else(|| ApiError::bad("Invalid Stremio page"))?;
         let handle = input["section_ref"].as_str();
+        let catalog_only = input["catalog_only"] == true;
+        if catalog_only && (page != 1 || !input["section_ref"].is_null() || !input["filter"].is_null()) {
+            return Err(ApiError::bad("catalog_only requires page 1 without section_ref or filter"));
+        }
         if page > 1 && handle.is_none() {
             return Err(ApiError::bad(
                 "Stremio pagination requires a registered section",
@@ -912,6 +916,23 @@ impl Catalog {
         let mut output = Output::default();
         let display_manifests = self.display_manifests(http, language, job, &mut output)?;
         let display_manifests = &display_manifests;
+        if catalog_only {
+            let descriptions = sections.iter().map(|section| {
+                let display = &display_manifests[section.addon];
+                let title = display["catalogs"].as_array().and_then(|catalogs| catalogs.iter()
+                    .find(|c| c["id"] == section.catalog_id && c["type"] == section.kind))
+                    .and_then(|c| text(&c["name"])).unwrap_or(&section.title);
+                json!({"id":section.id,"title":title,"section_ref":section.handle,"index":section.index,
+                    "kind":match section.kind.as_str() {"movie"=>"movie","series"=>"series","anime"=>"anime",_=>"other"},
+                    "filters":self.facets(section,input,display,language),"items":[],"page":1,
+                    "has_next":false,"next_page":null,"scanned_count":0,"matched_count":0})
+            }).collect();
+            output.value = json!({"page":crate::home::page(input,descriptions,vec![],None)?,"images":{}});
+            job.check()?;
+            wire_size(&output.value, LIMIT)?;
+            Contracts::get().validate("HomeViewData", &output.value)?;
+            return Ok(output);
+        }
         let mut success = Value::Array(Vec::new());
         let mut failed = Vec::new();
         let mut first_error = None;

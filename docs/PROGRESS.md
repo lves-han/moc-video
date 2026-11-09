@@ -2662,3 +2662,20 @@
 - Verified：各轮真实打包已执行类型／生产构建与自动化构建；本会话最后`git diff --check` exit0。最终源码仅跑过上述失败的Esc最小诊断；完整`verify.py all` NOT RUN，未勾选、未执行done、未产生完成提交。macos-x86_64、windows-x86_64、linux-x11/wayland为NOT RUN，沿ADR-005/006。实际资源后端process-watchdog、RSS采样4096MiB、构建并行2、测试线程1，非硬内存隔离。
 - 停止与Git：外层于`evidence/task-state/T0.33/handoff.md`的2026-11-09T07:43:51及07:45:12明确要求停止同类重试、追加BLOCKED并退出。当前CLI的.git只读；已先handoff请求外层WIP保存，外层要求写入者退出后将本卡源码／测试／本记录以单个`WIP T0.33:`提交保存。此刻WIP尚未提交，不虚报提交成功；保留全部现场供外层Git收尾。最后原status确认current=T0.33、sessions=2、generation1、无unfinished运行。
 - Remaining：本卡及依赖卡阻塞；独立的T0.30按外层原授权选择。后续需决定已用2/2会话下的受控恢复方式，继续精确定位原生全屏后Esc输入与编码颜色描述；涉及必要范围或冻结规则修订时按真实用户决定、独立CLEAR和原控制器流程办理。原范围内恢复修复已获授权，本记录未新增或伪造RESOLVED／AUTHORIZED，未扩大权限或重置预算。恢复后须重新执行准确A1、完整verify、done、受验完成提交及独立巡检。
+
+## T0.30 第二会话实现初稿与资源边界阻塞 2026-11-09T07:58:48+00:00
+- 结果：BLOCKED
+- 开工：先读AGENTS.md，指定`/Users/eason/jp/application/.venv/bin/python`执行原`task.py check`（exit0，42卡）与`start T0.30`（exit0）；初始工作树干净。核对ADR-059、round-53 CLEAR和外层RESOLVED，当前session=2/2、generation=1、protected=`656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e`；未修改冻结任务、原控制脚本、资源或会话配置。
+- 最小实施方案：复用现有Host引用、mergeHome与请求票据/取消、MediaRow、历史仓库及historyPoster；仅新增本卡所需描述模式、独立页面排和首页/分类UI。旧loadHome路径保留；桌面切换描述模式，窄屏保留原首页。预定先做类型检查和Host/前端定向回归，再补真实打包窗口fixture及tv3.py准确A1，最后完整verify。
+- Changed（均为待验证初稿）：HomeRequest追加可选catalog_only、重新生成models并扩展精确契约字段检查；Stremio仅列宿主登记栏目描述、空items/计数/分页，无column调用，显式拒绝带section_ref/filter（含空对象）或page非1；Host分发拒绝非Stremio来源的此模式。状态控制器新增按来源/修订、Host、语言及catalog世代、引用和规范化筛选条件隔离的行快照/错误/请求/分页，描述保持pending语义。新增CatalogHero/CatalogRow/HomeCatalog、BrowseView、FilterBar，接线分类侧栏、趋势Hero、list_history/historyPoster继续观看、IntersectionObserver内容排、组合筛选地址/返回位置、海报墙和空态；MediaRow保留并增加旧测试选择器。初稿样式按本卡原规格值编写，尚无实机校准证据。
+- 回归初稿：`tests/tv3.test.ts`增加5项Node行为测试，覆盖描述待加载、同引用不同筛选并发乱序/分页、错误重试与实际空结果隔离、语言/来源/修订/Host/刷新后旧响应拒绝及导航缓存；`tests/fixtures/tv2.rs`增加3项真实Host测试，覆盖零内容请求/旧全量兼容、null缺省等价/非法组合和同引用筛选并发/分页/语言。全部NOT RUN，未宣称通过。
+- Verified：`git diff --check`实际exit0。首次原受管命令`{python} scripts/run.py tv3-frontend-check -- npm run check`实际exit125；日志：`evidence/runs/20261109T075450722697-tv3-frontend-check/output.log`；收据：同目录`receipt.json`，status=cleanup_failed、tests=null、raw_exit=null。没有类型检查有效结果；启动/清理阶段报`[Errno 1] Operation not permitted (originated from sysctl() malloc 1/3)`。真实资源后端process-watchdog、rss-sampled、build-jobs，memory_mib=4096、jobs=2、test_threads=1；未作硬内存隔离验证。
+- 根因与停止依据：当前受限执行环境拒绝Darwin进程树sysctl读取，原执行器无法确认payload session清理。收据登记launcher PID18047/created:1794210890.730482，payload PID18052/created:1794210890.993521。读原恢复代码后执行原`task.py recover`实际exit2：`无法确认 payload session 清理；保留未完成状态`。失败后均执行原task.py note，未重复启动重命令，未改写/删除失败收据或锁，也未绕过run.py执行构建/测试。
+- WIP与交接：写本条前已原task.py handoff；随后显式git add和`git commit -m 'WIP T0.30: 首页分类页与按筛选隔离初稿待受管验证'`均实际exit128，原因是创建`.git/index.lock`被Operation not permitted拒绝。未产生提交；所有初稿保留在工作树，需外层具备原Git写权限后收尾。未勾完成、未执行done、未accept-review。
+- 验收 A1：NOT RUN；`tests/acceptance/tv3.py`、完整窗口fixture/受控来源与内置TMDB联验、960/1200/1512截图及样式/交互实际断言仍待补齐；非Stremio拒绝、真实窗口空态/失败重试/来源切换/过滤乱序等完整覆盖仍待执行。完整`verify.py all`：NOT RUN。macos-arm64必需行为未通过；macos-x86_64/windows-x86_64/linux-x11/wayland均NOT RUN（ADR-005/006）。
+- 下一步/外层所需条件：先以真实PID+创建时间核对旧payload及原共享重锁，在具备原进程树读取能力的环境通过原recover确认清理，恢复原Git写入并保存WIP；本卡已达2/2会话，后续继续方式及会话预算由外层按用户授权处理。保留原范围基线、generation、全部历史与证据，沿T0.30先类型检查/定向回归修复，再补齐准确A1及完整verify/受验完成提交/独立巡检。本会话停止实施，不扩大权限、预算或验收阈值。本卡BLOCKED只暂停本卡及其依赖卡。
+
+## T0.30 外层执行器恢复与类型检查 2026-11-09
+- 事实：外层确认 runner PID18047、payload PID18052 及其记录身份已退出，原 task.py recover 将 tv3-frontend-check 中断登记 exit125 并保留原证据。此前会话的 BLOCKED 记录中“尚待外层 recover”已经处理，原限制与失败历史保留。
+- 定向检查：外层原 run.py tv3-frontend-check 实际 exit2，vue-tsc 报 CatalogRow.vue:20、HomeCatalog.vue:93/100 的 AppController.value 类型错误；日志 `evidence/runs/20261109T080004096650-tv3-frontend-check/output.log`。产品代码尚未通过类型检查，准确A1和完整verify仍 NOT RUN。
+- 后续：两次原会话均已使用，已向用户询问是否增加一次本卡会话以修复并完成既有验收；未扩大预算或验收标准。

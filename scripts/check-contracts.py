@@ -42,7 +42,7 @@ def check(directory):
                         'required': dimensions, 'additionalProperties': False},
             'scanned_count': count, 'matched_count': count,
         },
-        'HomeRequest': {'filter': {'anyOf': [
+        'HomeRequest': {'catalog_only': {'type': 'boolean'}, 'filter': {'anyOf': [
             {'type': 'object', 'properties': {**{key: nonempty for key in dimensions if key != 'sort'},
                 'sort': {'type': 'string', 'enum': ['trending_day', 'trending_week', 'popular', 'latest']}},
                 'additionalProperties': False}, {'type': 'null'}]}},

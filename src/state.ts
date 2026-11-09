@@ -512,7 +512,14 @@ export function mergeHome(current: HomeViewData | null, incoming: HomeViewData, 
 
 type Ticket = { id: string; source: SourceKey | null; host: string | null; guest: string | null | undefined; locale: string; epoch: number };
 type LocalRequest = { request_id: string | null; phase: "loading" | "ready" | "failed"; error: Bridge_ApiError | null };
+export type HomeFilter = NonNullable<Bridge_HomeRequest["filter"]>;
+export type CatalogRow = { phase: "pending" | "loading" | "ready" | "failed"; data: HomeViewData | null; error: Bridge_ApiError | null };
+export const normalizedFilter = (filter: Bridge_HomeRequest["filter"]) =>
+  JSON.stringify(Object.entries(filter ?? {}).filter(([, value]) => value != null).sort(([a], [b]) => a.localeCompare(b)));
 export class AppController {
+  readonly rows = reactive<Record<string, CatalogRow>>({});
+  private catalogGeneration = 0;
+  private catalogMode = false;
   private homeFilters = new Map<string, Bridge_HomeRequest["filter"]>();
   readonly state: AppState;
   readonly sections = reactive<Record<string, LocalRequest>>({});
@@ -585,7 +592,49 @@ export class AppController {
     if (this.state.home.phase === "loading") this.state.home.phase = this.state.home.data ? "ready" : "idle";
     if (this.state.details.phase === "loading") this.state.details.phase = this.state.details.data ? "ready" : "idle";
     for (const key of Object.keys(this.sections)) delete this.sections[key];
+    for (const row of Object.values(this.rows)) if (row.phase === "loading") row.phase = row.data ? "ready" : "pending";
   }
+  rowKey(sectionRef: string, filter: HomeFilter = {}) {
+    return JSON.stringify([this.state.selected_metadata_source, this.state.runtime.engine_epoch,
+      this.state.settings.ui_locale ?? "en", this.catalogGeneration, sectionRef, normalizedFilter(filter)]);
+  }
+  catalogRow(sectionRef: string, filter: HomeFilter = {}) {
+    const key = this.rowKey(sectionRef, filter);
+    return this.rows[key] ??= { phase: "pending", data: null, error: null };
+  }
+  async loadRow(sectionRef: string, filter: HomeFilter = {}, pageNumber = 1) {
+    const source = this.state.selected_metadata_source;
+    requireBinding(source && this.state.runtime.engine_epoch, "Row requires a metadata source and host epoch");
+    const key = this.rowKey(sectionRef, filter), row = this.catalogRow(sectionRef, filter);
+    requireBinding(pageNumber === 1 || row.data?.page.sections[0]?.next_page === pageNumber, "Row pagination requires its current continuation");
+    const scope = `section:row:${key}`, ticket = this.ticket(scope, source, this.state.home.request_epoch);
+    const input = { ...clone(source), section_ref: sectionRef, page: pageNumber, filter: clone(filter) };
+    const valid = () => this.current(scope, ticket) && key === this.rowKey(sectionRef, filter);
+    row.phase = "loading"; row.error = null;
+    try {
+      const response = await this.api.call("get_home", input, ticket.id, ticket.host ?? undefined);
+      if (!valid()) return;
+      const initial = pageNumber === 1 ? this.state.home.data : row.data;
+      const merged = mergeHome(initial, response, input);
+      const error = response.page.failed_sections[0]?.error;
+      if (error) throw new ApiFailure(error);
+      // A row owns only its own images and continuation, even when another row
+      // uses the same opaque section reference with a different filter.
+      const section = merged.page.sections.find(section => section.section_ref === sectionRef)!;
+      row.data = { page: { ...merged.page, sections: [section], failed_sections: [] }, images: merged.images };
+      row.phase = "ready";
+    } catch (cause) { if (valid()) { row.phase = "failed"; row.error = failure(cause); } }
+    finally { if (this.requests.get(scope) === ticket) this.requests.delete(scope); }
+  }
+  async rowImageError(sectionRef: string, filter: HomeFilter, id: string) {
+    const key = this.rowKey(sectionRef, filter), row = this.catalogRow(sectionRef, filter), snapshot = row.data;
+    if (!snapshot?.images[id]) return;
+    const status = await this.api.call("get_resource_status", { kind: "image", target_id: id });
+    if (key !== this.rowKey(sectionRef, filter) || row.data !== snapshot) return;
+    if (status.error?.code === "SESSION_EXPIRED") await this.loadRow(sectionRef, filter);
+    else { row.error = status.error ?? { code: "UPSTREAM_FAILED", message: "Image failed to load", retryable: true }; }
+  }
+  loadCatalog() { return this.loadHome(null, 1, null, true); }
   async initialize() {
     await this.restoreSettings();
     await this.refreshRuntime();
@@ -681,7 +730,7 @@ export class AppController {
     if ((previous.ui_locale ?? "en") !== (confirmed.ui_locale ?? "en")) {
       this.cancelPages();
       // Active playback retains the same confirmed identity and session; only display DTOs reload.
-      if (this.state.route.name === "home" && this.state.selected_metadata_source) void this.loadHome();
+      if (this.state.route.name === "home" && this.state.selected_metadata_source) void (this.catalogMode ? this.loadCatalog() : this.loadHome());
       else if (this.state.details.data && this.state.route.name === "details") void this.loadDetails(this.state.details.data.details.ref);
     }
     return confirmed;
@@ -722,7 +771,7 @@ export class AppController {
     this.cancelPages();
     this.state.route = clone(route);
   }
-  async loadHome(sectionRef: string | null = null, pageNumber = 1, filter?: Bridge_HomeRequest["filter"]) {
+  async loadHome(sectionRef: string | null = null, pageNumber = 1, filter?: Bridge_HomeRequest["filter"], catalogOnly = false) {
     const source = this.state.selected_metadata_source;
     requireBinding(source && this.state.runtime.engine_epoch, "Home requires a metadata source and host epoch");
     const full = sectionRef === null && pageNumber === 1;
@@ -731,6 +780,9 @@ export class AppController {
     const filterKey = (value: Bridge_HomeRequest["filter"]) => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
     if (pageNumber >= 2) requireBinding(filterKey(selectedFilter) === filterKey(this.homeFilters.get(sectionRef!)), "Pagination requires the current section filter");
     if (full) {
+      this.catalogMode = catalogOnly;
+      this.catalogGeneration++;
+      for (const key of Object.keys(this.rows)) delete this.rows[key];
       this.imageAttempts.home.refreshed = false; this.homeImage.error = "";
       for (const scope of [...this.requests.keys()]) if (scope.startsWith("section:")) this.cancel(scope);
       for (const key of Object.keys(this.sections)) delete this.sections[key];
@@ -738,7 +790,7 @@ export class AppController {
     }
     const scope = full ? "home" : `section:${sectionRef}`;
     const ticket = this.ticket(scope, source, this.state.home.request_epoch);
-    const input = { ...clone(source), section_ref: sectionRef, page: pageNumber, ...(selectedFilter ? { filter: clone(selectedFilter) } : {}) };
+    const input = { ...clone(source), section_ref: sectionRef, page: pageNumber, ...(selectedFilter ? { filter: clone(selectedFilter) } : {}), ...(catalogOnly ? { catalog_only: true } : {}) };
     if (full) { this.state.home.phase = "loading"; this.state.home.request_id = ticket.id; this.state.home.error = null; }
     else this.sections[sectionRef!] = { request_id: ticket.id, phase: "loading", error: null };
     const valid = () => this.current(scope, ticket) && ticket.epoch === this.state.home.request_epoch;
@@ -750,7 +802,7 @@ export class AppController {
       if (full) this.homeFilters.clear();
       for (const section of response.page.sections) this.homeFilters.set(section.section_ref, clone(selectedFilter));
       if (full) {
-        this.state.home.phase = next.page.sections.some(section => section.items.length) ? "ready" : next.page.failed_sections.length ? "failed" : "empty";
+        this.state.home.phase = next.page.sections.some(section => catalogOnly || section.items.length) ? "ready" : next.page.failed_sections.length ? "failed" : "empty";
         this.state.home.error = this.state.home.phase === "failed" ? next.page.failed_sections[0]!.error : null;
       }
       else {

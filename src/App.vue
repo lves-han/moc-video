@@ -7,6 +7,7 @@ import SourcesView from "./views/SourcesView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
 import NativeSourcesView from "./views/NativeSourcesView.vue";
 import HomeView from "./views/HomeView.vue";
+import BrowseView from "./views/BrowseView.vue";
 import DetailsView from "./views/DetailsView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
@@ -30,6 +31,10 @@ const shell = ref<HTMLElement>();
 const sidebarSources = ref<HTMLElement>();
 const desktopNavigation = computed(() => [
   { page: "home", href: "#/home", icon: "compass", label: t("Discover") },
+  { page: 'browse', href: '#/browse/movie', icon: 'film', label: t('Movies') },
+  { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
+  { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
+  { page: 'browse', href: '#/browse/documentary', icon: 'library', label: t('Documentary') },
   { page: "history", href: "#/history", icon: "history", label: t("Watch history") },
   { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
@@ -78,10 +83,10 @@ function readHash() {
   const [name = "home", id = "", episode = "1"] = path.split("/");
   return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
-type Page = "home" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
+type Page = "home" | "browse" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
 const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   const stored = appState.route, view = readHash();
-  const page: Page = stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
+  const page: Page = stored.name === 'home' && view.name === 'browse' ? 'browse' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
   return { page,
     id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
 });
@@ -100,12 +105,18 @@ const source = computed(() => sources.value.find(item => item.id === sourceId.va
 const selectedFilm = computed(() => films.value.find(film => film.id === route.value.id) ?? films.value[0]!);
 const activeGenre = ref<Message>("All"), expanded = ref(false), heroIndex = ref(0);
 const homeSnapshots = new Map<string, { genre: Message; expanded: boolean; hero: number; scroll: number }>();
+const browseScroll = new Map<string, number>();
+let lastHash = location.hash;
+function loadPageHome() { return native && desktopQuery.matches ? appController.loadCatalog() : appController.loadHome(); }
+watch(() => appState.selected_metadata_source, source => {
+  if (source && appState.home.phase === 'idle' && ['home', 'browse', 'kind'].includes(readHash().name)) void loadPageHome();
+});
 const homeKey = () => `${appState.selected_metadata_source?.source_id}:${appState.selected_metadata_source?.source_revision}:${route.value.kind}`;
 function rememberHome() { if (route.value.page === "home") homeSnapshots.set(homeKey(), { genre: activeGenre.value, expanded: expanded.value, hero: heroIndex.value, scroll: scrollY }); }
 const heroFilms = computed(() => route.value.kind ? films.value.filter(film => film.kind === route.value.kind) : [films.value[0]!, films.value[2]!, films.value[3]!]);
 const hero = computed(() => heroFilms.value[heroIndex.value % heroFilms.value.length]!);
 const title = computed(() => route.value.kind ? t(kindLabels[route.value.kind as FilmKind]) : t(({
-  home: "Discover", film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
+  home: "Discover", browse: 'Browse by genre', film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
 } as const)[route.value.page]));
 const filteredFilms = computed(() => films.value.filter(film => (!route.value.kind || film.kind === route.value.kind) && (activeGenre.value === "All" || film.genres.includes(activeGenre.value))));
 const visibleFilms = computed(() => expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6));
@@ -157,7 +168,7 @@ async function selectNativeSource(id: string, role: "metadata" | "playback") {
     pendingResume.value = null;
     await appController.selectSource(id, role);
     if (role === "metadata") {
-      if (location.hash === "#/home") await appController.loadHome();
+      if (location.hash === "#/home" && appState.home.phase !== 'loading') await loadPageHome();
       else location.hash = "#/home";
     }
   } catch (error) { preferenceError.value = String(error); }
@@ -191,6 +202,8 @@ async function onHashChange() {
   const current = ++sequence;
   await flushHistory();
   if (current !== sequence) return;
+  if (lastHash.startsWith('#/browse/')) browseScroll.set(lastHash, scrollY);
+  lastHash = location.hash;
   rememberHome(); hash.value = location.hash;
   const next = readHash();
   if (next.name === "playback") return;
@@ -224,14 +237,14 @@ async function onHashChange() {
       // The first-run setup entry and the source manager are one native page.
       const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
       appController.navigate({ name });
-      if (name === "home" && !appState.home.data && appState.selected_metadata_source) await appController.loadHome();
+      if (name === "home" && !appState.home.data && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
     }
     if (current !== sequence) return;
     const home = route.value.page === "home" ? homeSnapshots.get(homeKey()) : undefined;
     if (route.value.page === "home") { activeGenre.value = home?.genre ?? "All"; expanded.value = home?.expanded ?? false; heroIndex.value = home?.hero ?? 0; }
     await nextTick();
     if (current !== sequence) return;
-    scrollTo({ top: home?.scroll ?? 0, behavior: "instant" }); focusMain();
+    scrollTo({ top: route.value.page === 'browse' ? browseScroll.get(location.hash) ?? 0 : home?.scroll ?? 0, behavior: "instant" }); focusMain();
   } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
 }
 let lastWrite = 0;
@@ -412,7 +425,7 @@ onBeforeUnmount(() => {
     <aside class="tv-sidebar" :aria-label="t('Main navigation')">
       <button ref="sidebarToggle" class="tv-sidebar-toggle" :aria-expanded="!sidebarCollapsed" :aria-label="t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')" :title="t(sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')" @click="sidebarCollapsed = !sidebarCollapsed"><Icon name="sidebar" /></button>
       <nav class="tv-navigation" data-focus-row>
-        <a v-for="item in desktopNavigation" :key="item.page" :href="item.href" :aria-label="item.label" :title="item.label" :aria-current="route.page === item.page ? 'page' : undefined"><Icon :name="item.icon" /><span>{{ item.label }}</span></a>
+        <a v-for="item in desktopNavigation" :key="item.href" :href="item.href" :aria-label="item.label" :title="item.label" :aria-current="item.page === 'browse' ? hash.split('?')[0] === item.href ? 'page' : undefined : route.page === item.page ? 'page' : undefined"><Icon :name="item.icon" /><span>{{ item.label }}</span></a>
       </nav>
       <div ref="sidebarSources" class="tv-sidebar-sources" data-focus-row>
         <template v-if="sidebarCollapsed">
@@ -559,9 +572,9 @@ onBeforeUnmount(() => {
       </header>
 
       <main id="main-content" tabindex="-1">
-        <h1 v-if="native && route.page === 'home'" class="tv-page-title">{{ title }}</h1>
         <p v-if="route.page === 'settings'" class="tv-theme-note">{{ t('Desktop uses a dark appearance.') }}</p>
-        <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" />
+        <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
+        <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <DetailsView v-else-if="native && route.page === 'film'" @open="openDetails" @play="playEpisode" />
         <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
