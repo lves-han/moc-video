@@ -4,7 +4,7 @@ import { capabilities, nativeInvoke, type PlaybackSource, type Player, type Subt
 declare global {
   interface Window { __T01_BOOTSTRAP__?: { base: string; cap: string } }
 }
-type Command = { id: number; op: string; kind?: "mp4" | "hls"; seconds?: number; value?: number;
+type Command = { id: number; op: string; kind?: "mp4" | "hls"; seconds?: number; value?: number; skip_audio_sampling?: boolean;
   view?: { media_url: string; subtitles: SubtitleSource[] }; episode?: "first" | "second"; action?: string; payload?: unknown };
 type NativeVisibility = { visible: boolean; focused: boolean; minimized: boolean };
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -51,6 +51,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   analyser.connect(audio.destination);
   const bins = new Float32Array(analyser.fftSize);
   const spectrum = new Float32Array(analyser.frequencyBinCount);
+  let sampleAudio = true;
   const errors: string[] = [];
   window.addEventListener("error", event => errors.push(event.message));
   window.addEventListener("unhandledrejection", event => errors.push(String(event.reason)));
@@ -73,11 +74,14 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
   for (const type of ["focus", "blur", "pagehide", "pageshow"])
     window.addEventListener(type, trace, { signal: tracing.signal });
   const sample = () => {
-    analyser.getFloatTimeDomainData(bins);
-    const rms = Math.sqrt(bins.reduce((sum, x) => sum + x * x, 0) / bins.length);
-    analyser.getFloatFrequencyData(spectrum);
+    let rms: number | null = null;
     let peak = 0;
-    for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+    if (sampleAudio) {
+      analyser.getFloatTimeDomainData(bins);
+      rms = Math.sqrt(bins.reduce((sum, x) => sum + x * x, 0) / bins.length);
+      analyser.getFloatFrequencyData(spectrum);
+      for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+    }
     const quality = video.getVideoPlaybackQuality();
     return { time: performance.now(), position: video.currentTime, duration: video.duration,
       paused: video.paused, ended: video.ended, ready_state: video.readyState,
@@ -92,7 +96,8 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       last_frame: lastFrame, last_raf_ms: lastRaf, last_timeupdate_ms: lastTimeUpdate,
       width: video.videoWidth, height: video.videoHeight, frames, raf, max_raf_gap_ms: maxRafGap,
       total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames,
-      audio_rms: rms, audio_peak_hz: peak * audio.sampleRate / analyser.fftSize, audio_state: audio.state, audio_sample_rate: audio.sampleRate,
+      audio_rms: rms, audio_peak_hz: sampleAudio ? peak * audio.sampleRate / analyser.fftSize : null,
+      audio_state: audio.state, audio_sample_rate: sampleAudio ? audio.sampleRate : null,
       output_channels: audio.destination.maxChannelCount, media_error: video.error?.code ?? null,
       diagnostics: player.diagnostics() };
   };
@@ -200,7 +205,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       case "t12": {
         const { formalPlayback } = await import("../t12_webview");
         await foreground();
-        return formalPlayback(command, { video, player, base, cap });
+        return formalPlayback(command, { video, player, base, cap, sampleAudio });
       }
       case "t14": {
         const { homeScenario } = await import("../t14_webview");
@@ -453,8 +458,8 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
               Math.abs(current.duration - Math.abs(current.ui_position - current.position))) <= 1,
             "Playback progress UI stalled or differs from media clock");
           assertCondition(current.width === 1920 && current.height === 1080, "Unexpected decoded resolution");
-          assertCondition(current.audio_state === "running" && current.audio_rms > 0.001, "Decoded audio output is silent or suspended");
-          assertCondition(Math.abs(current.audio_peak_hz - 440) < 30, "Decoded audio tone frequency differs");
+          assertCondition(current.audio_state === "running" && current.audio_rms !== null && current.audio_rms > 0.001, "Decoded audio output is silent or suspended");
+          assertCondition(current.audio_peak_hz !== null && Math.abs(current.audio_peak_hz - 440) < 30, "Decoded audio tone frequency differs");
           assertCondition(current.position !== previous.position, "Media clock stalled");
           elapsedMedia += current.position >= previous.position ? current.position - previous.position : current.duration - previous.position + current.position;
           context.drawImage(video, 0, 0, 64, 36);
@@ -503,6 +508,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
     if (response.status === 204) continue;
     assertCondition(response.ok, "Fixture command transport failed");
     const command = await response.json() as Command;
+    sampleAudio = command.skip_audio_sampling !== true;
     longObservation = null;
     try { await post("control/result", { id: command.id, ok: true, value: await execute(command) }); }
     catch (cause) {

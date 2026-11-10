@@ -29,6 +29,7 @@ CURRENT = ROOT / 'evidence/acceptance/T24-endurance-current.json'
 IDS = ['U01','U04','R30','R32','R48','R49','REQ-T01','U06','U07','R01','R07','R50','R51','R57','REQ-T24']
 OBLIGATIONS = ['U%02d' % i for i in range(1,10)] + ['G0-Core','G1','G2','G3','G4','G5']
 AUDIO = dict(status='SKIPPED_USER_AUTHORIZED', decision='电脑静音 默认音频采样正常，跳过音频采样',
+    actual_performance='NOT VERIFIED', g1_scope='non-audio obligations',
     source='Outer handoff 2026-11-10T06:47:33.147078+00:00; current user decision')
 
 
@@ -91,6 +92,7 @@ def check_playback(rows,kind,minimum=600):
     sid=first['value']['session_id']
     for row in rows:
         value=row['value'];s=value['sample'];audit=value['input_audit']
+        check_audio_skipped(s)
         require(audit['active'] and audit['count']==0 and audit['events']==[], 'Continuous playback received control/seek/rate/pause/EOS events')
         require(sid and value['session_id']==sid and value['actual_gateway'] and value['playback_rate']==1
             and s['session_bound'] and s['video_count']==1 and s['width']==1920 and s['height']==1080
@@ -109,6 +111,12 @@ def check_playback(rows,kind,minimum=600):
     return dict(format=kind,seconds=seconds,samples=len(rows),media_seconds=last['value']['sample']['position']-first['value']['sample']['position'])
 
 
+def check_audio_skipped(sample):
+    require(sample['audio_rms'] is None and sample['audio_peak_hz'] is None
+        and sample.get('audio_time') is None and sample.get('audio_sample_rate') is None,
+        'ADR-060 requires empty audio measurements; actual audio performance is unverified')
+
+
 def check_lifecycles(rows):
     require(len(rows)==5 and len({(row['session']['pid'],row['session']['identity']) for row in rows})==5,'Five distinct complete native windows required')
     for index,row in enumerate(rows,1):
@@ -117,15 +125,18 @@ def check_lifecycles(rows):
         session=row['session'];t22.check_cleanup(session)
         require(row['identity']['native']['pid']==session['pid'] and row['identity']['origin']=='tauri://localhost'
             and row['identity']['native']['webkit_pids']['renderer']>0,'Real native window/renderer identity missing')
-        t12.validate_stop(row['stop'])
+        t12.validate_stop(row['stop'],check_audio=False)
+        check_audio_skipped(row['stop']['sample'])
         require(row['disposed']['audio_closed'] and row['disposed']['videos']==0 and row['disposed']['errors']==[], 'Formal player/audio unmount failed')
         require(row['host']['closed'] and row['host']['active_requests']==0 and row['host']['opens']>=1
             and row['transport']['active_requests']==0,'Host/fixture requests or sessions leaked')
         sample=row['played']['sample']
+        check_audio_skipped(sample)
         require(sample['session_bound'] and sample['video_count']==1 and sample['frames']>0
             and sample['width']==1920 and sample['height']==1080 and not sample['paused'] and sample['media_error'] is None,'Window did not actually decode current media')
         require(sample['pixel'][0]>180 and sample['pixel'][1]<50 and sample['pixel'][2]<50 and sample['pixel'][3]==255,'Window decoded the wrong frame')
         if row['kind']=='hls':
+            check_audio_skipped(row['switch']['sample'])
             t12.validate_cycle(row['switch'],51,check_audio=False)
             require(sample['diagnostics']['engine']=='native','Window native HLS engine inactive')
     return dict(windows=5,formats=['mp4','hls'],normal_cleanup=True)
@@ -161,7 +172,7 @@ def collect_window(run,build,media,index,kind,long):
                     time.sleep(max(0,start+len(rows)*5-time.monotonic()))
                 row['playback']=samples.relative_to(ROOT).as_posix()
                 row['long_result']=check_playback(rows,kind)
-            row['stop']=session.command('t12',action='stop');t12.validate_stop(row['stop'])
+            row['stop']=session.command('t12',action='stop');t12.validate_stop(row['stop'],check_audio=False)
             row['disposed']=session.command('t12',action='dispose')
             session.close();row['session']=session.record;row['transport']=fixture.summary()
         bridge.finish();row['host']=dict(run.observed['host'])
@@ -214,6 +225,7 @@ def check_public(value):
     declared=read_json(ROOT/'docs/compatibility-report.json')
     require({row['name'] for row in value['sources']}=={row['name'] for row in declared['sources'] if row.get('probe')}, 'All approved source candidates must be observed')
     t02.validate_short_play(value['short_play'],check_audio=False);t22.check_cleanup(value['session'])
+    for key in ['first','final']:check_audio_skipped(value['short_play'][key])
     require(value['host']['ready'] and value['host']['closed'],'Public native Host failed cleanup')
     protocol=value['protocol']
     require(all(protocol[key] is True for key in ['list','details','resolve']) and type(protocol['complete_groups']) is int
@@ -399,6 +411,7 @@ def check_review(text,manifest,path,current,root=ROOT):
     require(set(review['obligations'])==set(OBLIGATIONS),'Every revised U01..U09 and G0-Core/G1..G5 must be independently reviewed')
     for key,row in review['obligations'].items():
         require(row['result']=='PASS' and row['evidence'] and row['reason'],'Independent obligation lacks concrete reviewed evidence: '+key)
+    require(review['obligations']['G1']['scope']==AUDIO['g1_scope'],'G1 review must explicitly cover non-audio obligations only')
     required={item['path']:item['sha256'] for item in manifest['files']}
     required[path.relative_to(ROOT).as_posix()]=file_hash(path)
     required[manifest['receipt']]=file_hash(ROOT/manifest['receipt'])

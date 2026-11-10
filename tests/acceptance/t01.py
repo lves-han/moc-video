@@ -470,7 +470,9 @@ class NativeSession:
 
     def command(self, op, timeout=30, **args):
         self.sequence += 1
-        self.fixture.commands.put(dict(id=self.sequence, op=op, **args))
+        # ADR-060 applies to every T24 path, including failure diagnostics.
+        self.fixture.commands.put(dict(id=self.sequence, op=op, **args,
+            skip_audio_sampling=self.run.CARD == 'T0.35'))
         start = time.monotonic()
         value = self.wait(self.sequence, timeout)
         if isinstance(value, dict) and "native" in value:

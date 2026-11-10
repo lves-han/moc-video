@@ -16,7 +16,7 @@ def samples():
     for row in rows:
         row['value']['focused']=True
         row['value']['native']['audio_playing']=True
-        row['value']['sample'].update(pixel=[255,0,0,255],diagnostics=dict(engine='native'))
+        row['value']['sample'].update(pixel=[255,0,0,255],diagnostics=dict(engine='native'),audio_rms=None,audio_peak_hz=None)
     return rows
 
 
@@ -27,10 +27,11 @@ def lifecycles():
         played=dict(sample=samples()[0]['value']['sample'],native=native)
         played['sample']['frames']=3
         switch=cycle();switch.update(index=51,native=native)
-        switch['sample'].update(pixel=[255,0,0,255],audio_peak_hz=440)
+        switch['sample'].update(pixel=[255,0,0,255],audio_rms=None,audio_peak_hz=None)
+        stop=stopped();stop['sample'].update(audio_rms=None,audio_peak_hz=None)
         session=dict(pid=i,identity='owned-'+str(i),exit=0,lingering=[],forced_cleanup=[],wake_guard=dict(exit=0),peak_combined_rss_bytes=4096)
         rows.append(dict(index=i,kind='hls' if i%2==0 else 'mp4',audio_sampling=t24.AUDIO,session=session,identity=dict(origin='tauri://localhost',native=native),
-            stop=stopped(),disposed=dict(audio_closed=True,videos=0,errors=[]),host=dict(closed=True,active_requests=0,opens=1),
+            stop=stop,disposed=dict(audio_closed=True,videos=0,errors=[]),host=dict(closed=True,active_requests=0,opens=1),
             transport=dict(active_requests=0),played=played,switch=switch))
     return rows
 
@@ -119,10 +120,22 @@ class T24Tests(unittest.TestCase):
         for kind in ['mp4','hls']:
             rows=samples()
             for row in rows:
-                row['value']['sample'].update(audio_rms=0,audio_peak_hz=0)
+                row['value']['sample'].update(audio_rms=None,audio_peak_hz=None)
                 row['value']['native']['audio_playing']=False
             self.assertEqual(t24.check_playback(rows,kind)['samples'],121)
         self.assertEqual(t24.AUDIO['status'],'SKIPPED_USER_AUTHORIZED')
+        self.assertEqual(t24.AUDIO['actual_performance'],'NOT VERIFIED')
+        for key in ['audio_rms','audio_peak_hz','audio_time','audio_sample_rate']:
+            row=samples();row[0]['value']['sample'][key]=0
+            with self.subTest(key=key),self.assertRaises(ValueError):t24.check_playback(row,'mp4')
+
+    def test_audio_skip_preserves_stop_resource_gates_and_default_audio_check(self):
+        value=stopped();value['sample']['audio_rms']=.1
+        with self.assertRaises(ValueError):t24.t12.validate_stop(value)
+        t24.t12.validate_stop(value,check_audio=False)
+        for key,changed in [('tracks',1),('source_present',True),('network_state',2),('paused',False)]:
+            row=copy.deepcopy(value);row['sample'][key]=changed
+            with self.subTest(key=key),self.assertRaises(ValueError):t24.t12.validate_stop(row,check_audio=False)
 
     def test_latest_review_requires_final_clear_and_one_binding(self):
         for text in ['', 'ACCEPTANCE-VERDICT: BLOCKING','ACCEPTANCE-VERDICT: CLEAR\nextra','ACCEPTANCE-VERDICT: CLEAR']:
@@ -155,9 +168,10 @@ class T24Tests(unittest.TestCase):
             files={item.relative_to(t24.ROOT).as_posix():t24.file_hash(item) for item in folder.iterdir()}
             good=dict(current,commit='commit',manifest=t24.artifact(path),files=files,audio_sampling=t24.AUDIO,unresolved_blockers=[],personal_use_only=True,
                 public_distribution_authorized=False,obligations={key:dict(result='PASS',evidence=['synthetic raw'],reason='synthetic test') for key in t24.OBLIGATIONS})
+            good['obligations']['G1']['scope']=t24.AUDIO['g1_scope']
             def text(value):return 'independent synthetic test\n```json\n'+json.dumps(value)+'\n```\nACCEPTANCE-VERDICT: CLEAR\n'
             self.assertEqual(t24.check_review(text(good),manifest,path,current)['commit'],'commit')
-            for change in ['commit','manifest','files','obligation','blocker','public','audio-overclaim']:
+            for change in ['commit','manifest','files','obligation','blocker','public','audio-overclaim','G1-scope']:
                 bad=copy.deepcopy(good)
                 if change=='commit':bad['commit']='old'
                 elif change=='manifest':bad['manifest']['sha256']='changed'
@@ -165,8 +179,9 @@ class T24Tests(unittest.TestCase):
                 elif change=='obligation':bad['obligations'].pop('U09')
                 elif change=='blocker':bad['unresolved_blockers']=['high impact issue']
                 elif change=='public':bad['public_distribution_authorized']=True
+                elif change=='G1-scope':bad['obligations']['G1'].pop('scope')
                 else:bad['audio_sampling']['status']='PASS'
-                with self.subTest(change=change),self.assertRaises(ValueError):t24.check_review(text(bad),manifest,path,current)
+                with self.subTest(change=change),self.assertRaises((ValueError,KeyError)):t24.check_review(text(bad),manifest,path,current)
 
     def test_latest_numeric_review_never_falls_back_to_old_clear(self):
         with tempfile.TemporaryDirectory() as temporary:

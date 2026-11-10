@@ -10,7 +10,7 @@ const source = ts.transpileModule(readFileSync(new URL("./fixtures/t01/automatio
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 
-async function scenario(fault: string, operation = "long") {
+async function scenario(fault: string, operation = "long", skipAudioSampling = false) {
   let now = 1;
   let stopped = false;
   let focused = fault !== "needs-activation";
@@ -59,9 +59,10 @@ async function scenario(fault: string, operation = "long") {
   const native = { visible: true, focused, minimized: false };
   const actions: string[] = [];
   let next = 0;
+  let audioReads = 0;
   const exports: Record<string, any> = {};
   runInNewContext(source, {
-    exports, Event, AbortController, Float32Array, Uint8Array,
+    exports, Event, AbortController, Float32Array, Uint8Array, URL,
     require: () => ({ nativeInvoke: async (_command: string, args: { action: string }) => {
       actions.push(args.action);
       if (args.action === "foreground") {
@@ -113,23 +114,37 @@ async function scenario(fault: string, operation = "long") {
       state = "running"; sampleRate = 48000; destination = { maxChannelCount: 2 };
       createMediaElementSource() { return { connect() {}, disconnect() {} }; }
       createAnalyser() { return { fftSize: 2048, frequencyBinCount: 1024, connect() {}, disconnect() {},
-        getFloatTimeDomainData: (bins: Float32Array) => bins.fill(fault === "audio" ? 0 : 0.1),
-        getFloatFrequencyData: (bins: Float32Array) => { bins.fill(-100); bins[19] = -1; },
+        getFloatTimeDomainData: (bins: Float32Array) => { audioReads++; bins.fill(fault === "audio" ? 0 : 0.1); },
+        getFloatFrequencyData: (bins: Float32Array) => { audioReads++; bins.fill(-100); bins[19] = -1; },
       }; }
       async close() { this.state = "closed"; }
     },
     fetch: async (url: string, options?: { body: string }) => {
       const path = new URL(url).pathname;
       if (path === "/control/next") return { status: 200, ok: true, json: async () => ++next === 1
-        ? { id: 1, op: operation, seconds: 1800 } : { id: 2, op: "shutdown" } };
+        ? { id: 1, op: operation, seconds: 1800, skip_audio_sampling: skipAudioSampling }
+        : { id: 2, op: "shutdown", skip_audio_sampling: skipAudioSampling } };
       const value = JSON.parse(options!.body);
       (path === "/control/sample" ? samples : results).push(value);
       return { ok: true };
     },
   });
   await exports.automate(video, player, () => {});
-  return { result: results.find(result => result.id === 1), samples, native, actions };
+  return { result: results.find(result => result.id === 1), samples, native, actions, audioReads,
+    shutdown: results.find(result => result.id === 2) };
 }
+
+test("T24 automation skips PCM/FFT on stop and failure diagnostics, closes AudioContext", async () => {
+  for (const [fault, op] of [['healthy', 'stop'], ['paused', 'long']]) {
+    const { result, audioReads, shutdown } = await scenario(fault, op, true);
+    assert.equal(audioReads, 0);
+    const value = result.ok ? result.value.sample : result.diagnostics.current;
+    assert.equal(value.audio_rms, null); assert.equal(value.audio_peak_hz, null);
+    assert.equal(value.audio_sample_rate, null);
+    assert.equal(shutdown.value.audio_state, 'closed');
+  }
+  assert.ok((await scenario('healthy', 'stop')).audioReads > 0);
+});
 
 test("T01 stop confirms released media while currentSrc retains the selected URL", async () => {
   const { result } = await scenario("healthy", "stop");

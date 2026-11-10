@@ -192,15 +192,17 @@ def validate_cycle(value, index, *, check_audio=True):
     require(not value["errors"], "Formal App console/unhandled errors")
 
 
-def validate_stop(value):
+def validate_stop(value, *, check_audio=True):
     sample = value["sample"]
     require(value["source_removed"] is True and value["frames_after_stop"] <= 1 and sample["video_count"] == 1
             and sample["paused"] is True and sample["ready_state"] == 0 and sample["network_state"] == 0
-            and sample["source_present"] is False and sample["tracks"] == 0 and sample["audio_rms"] < .001
+            and sample["source_present"] is False and sample["tracks"] == 0
             and sample["diagnostics"]["listening"] is False and sample["diagnostics"]["hls_instances"] == 0
             and sample["diagnostics"]["retiring"] == 0 and value["host"]["live_sessions"] == 0
             and value["host"]["requests"] == 0 and value["host"]["source_active"] == 0,
             "Stop retained old audio/frames/HTTP/session/listener/media resources")
+    if check_audio:
+        require(sample["audio_rms"] < .001, "Stop retained old audio output")
 
 
 def validate_eos(value):

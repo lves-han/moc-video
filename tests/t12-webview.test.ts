@@ -182,6 +182,23 @@ test("T12 observer explicitly fails when frame observation has no 2D context", (
   assert.throws(() => f.sampler({}, { fftSize: 4096, frequencyBinCount: 2048 }, 48000), /requires a canvas 2D context/);
 });
 
+test("T24 shared observer reads frames with empty audio measurements and zero analyser reads", () => {
+  const canvas = { width: 0, height: 0, getContext: () => ({ clearRect() {}, drawImage() {},
+    getImageData: () => ({ data: [254, 0, 0, 255] }) }) };
+  const f = fixture({ document: { createElement: () => canvas } });
+  const sampler = f.sampler({ readyState: 2, videoWidth: 1920, videoHeight: 1080 }, {
+    fftSize: 4096, frequencyBinCount: 2048,
+    getFloatTimeDomainData() { assert.fail('T24 read PCM'); },
+    getFloatFrequencyData() { assert.fail('T24 read FFT'); },
+  }, 48000, false);
+  for (let i = 0; i < 500; i++) {
+    const value = sampler.read();
+    assert.equal(value.audio_rms, null); assert.equal(value.audio_peak_hz, null);
+    assert.deepEqual([...value.pixel], [254, 0, 0, 255]);
+  }
+  sampler.dispose(); assert.equal(canvas.width, 0);
+});
+
 test("T12 sampling waits for nonzero current PCM and current frame, retaining every transient sample", async () => {
   const f = fixture();
   const values = [

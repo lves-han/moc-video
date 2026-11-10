@@ -253,6 +253,15 @@ class NativeResultTests(unittest.TestCase):
         self.session.observe = mock.Mock()
         self.session.drain_samples = mock.Mock()
 
+    def test_t24_commands_disable_all_audio_sampling_and_other_cards_keep_default(self):
+        self.session.sequence=0;self.session.wait=mock.Mock(return_value={})
+        for card in ['T0.35','T0.2','T0.24','T0.33']:
+            self.session.run.CARD=card
+            for op in ['identity','t12','t02-public','t20','t18','stop','shutdown']:
+                self.session.command(op)
+                sent=self.session.fixture.commands.put.call_args.args[0]
+                self.assertEqual(sent['skip_audio_sampling'],card=='T0.35')
+
     def test_wake_guard_is_bound_to_and_accounted_with_native_session(self):
         self.session.process = mock.Mock(pid=1234)
         self.session.owned = {}

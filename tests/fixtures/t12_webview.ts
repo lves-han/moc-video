@@ -15,6 +15,7 @@ type Harness = {
   app: VueApp; container: HTMLElement; video: HTMLVideoElement; controller: PlaybackController; matches: PlaybackMatchInput[];
   rpc: (value: unknown) => Promise<any>; audio: AudioContext; source: MediaElementAudioSourceNode; analyser: AnalyserNode;
   sampling: ReturnType<typeof createMediaSampler>; retiredTracks: WeakRef<HTMLTrackElement>[];
+  sampleAudio: boolean;
   frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
   errors: string[]; stopErrors: () => void;
   initialLocale: typeof locale.value; details: DetailsViewData;
@@ -71,7 +72,7 @@ async function until(predicate: () => boolean, message: string, timeout = 20000)
 // Keep observer scratch storage bounded independently of readiness polling.
 // The previous 50-switch report contains 437 reads, each allocating 24 KiB
 // plus a canvas. Raw numeric observations still leave the WebView in full.
-export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNode, sampleRate: number) {
+export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNode, sampleRate: number, sampleAudio = true) {
   const bins = new Float32Array(analyser.fftSize);
   const spectrum = new Float32Array(analyser.frequencyBinCount);
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
@@ -81,10 +82,12 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
   return {
     read() {
       reads++;
-      analyser.getFloatTimeDomainData(bins);
-      analyser.getFloatFrequencyData(spectrum);
       let peak = 0;
-      for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+      if (sampleAudio) {
+        analyser.getFloatTimeDomainData(bins);
+        analyser.getFloatFrequencyData(spectrum);
+        for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+      }
       drawing.clearRect(0, 0, 1, 1);
       // The owned frames are uniform colors. Copy their center pixel 1:1 so
       // WebKit need not materialize a full-frame conversion for a 1px sample.
@@ -92,8 +95,8 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
       const pixel = [...drawing.getImageData(0, 0, 1, 1).data];
       // Retain only scalar pixels, not the video readback drawing surface.
       canvas.width = 1;
-      return { audio_rms: Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length),
-        audio_peak_hz: peak * sampleRate / analyser.fftSize, pixel };
+      return { audio_rms: sampleAudio ? Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length) : null,
+        audio_peak_hz: sampleAudio ? peak * sampleRate / analyser.fftSize : null, pixel };
     },
     diagnostics: () => ({ reads, scratch_buffers: 2, scratch_bytes: bins.byteLength + spectrum.byteLength, scratch_canvases: 1 }),
     dispose() { canvas.width = canvas.height = 0; },
@@ -104,7 +107,7 @@ function sample(current: Harness) {
   const media = current.sampling.read();
   const retained = current.retiredTracks.flatMap(reference => { const track = reference.deref(); return track ? [track] : []; });
   return { position: video.currentTime, paused: video.paused, ready_state: video.readyState, network_state: video.networkState,
-    sampled_at: performance.now(), audio_state: current.audio.state, audio_time: current.audio.currentTime,
+    sampled_at: performance.now(), audio_state: current.audio.state, audio_time: current.sampleAudio ? current.audio.currentTime : null,
     session_bound: Boolean(appState.playback.session && video.currentSrc === appState.playback.session.media_url),
     source_present: video.hasAttribute("src"), tracks: video.querySelectorAll("track").length,
     video_count: document.querySelectorAll("video").length, frames: current.frames, width: video.videoWidth, height: video.videoHeight,
@@ -128,7 +131,8 @@ export async function waitForEpisodeSample(read: () => ReturnType<typeof sample>
     const [red, green, blue, alpha] = value.pixel;
     const isRed = index % 2 === 0 || index === 51;
     const frame = alpha === 255 && (isRed ? green < 50 && red > 180 && blue < 50 : green < 64 && blue > 180 && red < 50);
-    const audio = value.audio_state === "running" && value.audio_rms > .001 && Math.abs(value.audio_peak_hz - (isRed ? 440 : 880)) < 40;
+    const audio = value.audio_state === "running" && value.audio_rms !== null && value.audio_rms > .001
+      && value.audio_peak_hz !== null && Math.abs(value.audio_peak_hz - (isRed ? 440 : 880)) < 40;
     if (performance.now() >= deadline) throw new Error(`Current episode media did not become ready: ${JSON.stringify({ index, observations })}`);
     if (value.session_bound && frame && (index === 51 || audio)) return { sample: value, observations };
     await delay(20);
@@ -187,7 +191,7 @@ export async function observeNativeEos(current: Pick<Harness, "video" | "control
   } finally { video.removeEventListener("ended", onEnded); }
 }
 
-export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string }) {
+export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string; sampleAudio?: boolean }) {
   const started = performance.now();
   if (command.action === "start") {
     check(!harness, "Formal App already mounted");
@@ -234,7 +238,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     const audio = new AudioContext(); const source = audio.createMediaElementSource(video); const analyser = audio.createAnalyser();
     analyser.fftSize = 4096; source.connect(analyser); analyser.connect(audio.destination);
     const current: Harness = { app, container, video, controller, matches: payload.match_inputs, rpc, audio, source, analyser,
-      sampling: createMediaSampler(video, analyser, audio.sampleRate), retiredTracks: [],
+      sampling: createMediaSampler(video, analyser, audio.sampleRate, prototype.sampleAudio), sampleAudio: prototype.sampleAudio !== false, retiredTracks: [],
       frames: 0, callback: 0, originalCore, initialLocale, details: payload.details, errors, stopErrors: () => {
         window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
         console.error = oldError; console.warn = oldWarn;
@@ -928,7 +932,7 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       await current.controller.stop(); await delay(300); const before = current.frames; await delay(500);
       const value = sample(current);
       check(video.paused && !video.hasAttribute("src") && video.readyState === 0 && video.networkState === 0 && video.buffered.length === 0 && video.videoWidth === 0 && video.querySelectorAll("track").length === 0, "Formal media not released");
-      check(current.frames <= before + 1 && value.audio_rms < .001, "Old frames/audio remain after stop");
+      check(current.frames <= before + 1 && (!current.sampleAudio || (value.audio_rms !== null && value.audio_rms < .001)), "Old frames/audio remain after stop");
       check(!value.diagnostics.listening && value.diagnostics.hls_instances === 0 && value.diagnostics.retiring === 0, "Formal controller retains transport/listeners/handles");
       result = { source_removed: true, frames_after_stop: current.frames - before, host: await current.rpc({ operation: "observe" }) };
       break;
