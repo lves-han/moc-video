@@ -137,7 +137,6 @@ async function back() {
   if (store?.isFullscreen) {
     try {
       await store.exitFullscreen();
-      officialPlayer.value?.querySelector<HTMLElement>('media-container')?.focus({ preventScroll: true });
     } catch (cause) { ui.diagnostic = String(cause); }
     return;
   }
@@ -185,6 +184,16 @@ onMounted(async () => {
   // Native fullscreen transitions can leave focus on body. Handle Escape after
   // the official popup handlers while this playback view owns the window.
   window.addEventListener('keydown', onEscape, { signal: interaction.signal });
+  document.addEventListener('visibilitychange', () => {
+    if (!native || document.visibilityState !== 'visible') return;
+    // AppKit's Space transition can leave a visible key window with an
+    // unfocused WebView. Restore it after the WebView becomes visible again.
+    window.focus();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const target = tray.value ? panel.value?.querySelector<HTMLElement>(`[data-tray-tab="${tray.value}"]`)
+      : official.querySelector<HTMLElement>('media-container');
+    target?.focus({ preventScroll: true });
+  }, { signal: interaction.signal });
   video.value!.addEventListener('loadstart', () => { mediaReady.value = false; }, { signal: interaction.signal });
   video.value!.addEventListener('loadeddata', () => { mediaReady.value = true; }, { signal: interaction.signal });
   video.value!.addEventListener('volumechange', () => {

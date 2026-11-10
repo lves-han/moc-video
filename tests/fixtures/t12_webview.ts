@@ -86,7 +86,9 @@ export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNo
       let peak = 0;
       for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
       drawing.clearRect(0, 0, 1, 1);
-      if (video.readyState >= 2) drawing.drawImage(video, 0, 0, 1, 1);
+      // The owned frames are uniform colors. Copy their center pixel 1:1 so
+      // WebKit need not materialize a full-frame conversion for a 1px sample.
+      if (video.readyState >= 2) drawing.drawImage(video, Math.floor(video.videoWidth / 2), Math.floor(video.videoHeight / 2), 1, 1, 0, 0, 1, 1);
       const pixel = [...drawing.getImageData(0, 0, 1, 1).data];
       // Retain only scalar pixels, not the video readback drawing surface.
       canvas.width = 1;
@@ -125,7 +127,7 @@ export async function waitForEpisodeSample(read: () => ReturnType<typeof sample>
     observations.push(value);
     const [red, green, blue, alpha] = value.pixel;
     const isRed = index % 2 === 0 || index === 51;
-    const frame = alpha === 255 && green < 50 && (isRed ? red > 180 && blue < 50 : blue > 180 && red < 50);
+    const frame = alpha === 255 && (isRed ? green < 50 && red > 180 && blue < 50 : green < 64 && blue > 180 && red < 50);
     const audio = value.audio_state === "running" && value.audio_rms > .001 && Math.abs(value.audio_peak_hz - (isRed ? 440 : 880)) < 40;
     if (performance.now() >= deadline) throw new Error(`Current episode media did not become ready: ${JSON.stringify({ index, observations })}`);
     if (value.session_bound && frame && (index === 51 || audio)) return { sample: value, observations };
@@ -372,6 +374,19 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       result = { diagnostic_only: true, official_ui_removed: !current.container.querySelector('video-player'), native_media_kept: true };
       break;
     }
+    case "memory-variant": {
+      const variant=String(command.payload);
+      check(['no-glass','local-fade'].includes(variant),'Unknown memory diagnostic variant');
+      const stylesheet=document.createElement('style');
+      stylesheet.textContent=variant==='no-glass'
+        ? '.playback-view .playback-glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}'
+        : '.playback-chrome{opacity:1!important;transition:none!important}.playback-chrome>:is(.playback-header,.playback-bar,.playback-shade){opacity:1;transition:opacity 200ms}.playback-chrome:not([data-visible])>:is(.playback-header,.playback-bar,.playback-shade){opacity:0}';
+      current.container.append(stylesheet);
+      await delay(250);
+      result={diagnostic_only:true,variant,glass:getComputedStyle(current.container.querySelector('.playback-bar')!).getPropertyValue('-webkit-backdrop-filter'),
+        chrome_opacity:getComputedStyle(current.container.querySelector('.playback-chrome')!).opacity};
+      break;
+    }
     case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
       framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
     case "color-play": {
@@ -380,6 +395,70 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
       await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
       video.loop=true;await playing(current);await delay(300);result=sample(current);break;
+    }
+    case "color-readback-paths":
+    case "paired-colors": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Paired diagnostic blue match missing');navigatePlayback(matched.context!);await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Paired diagnostic blue did not load');
+      video.loop=true;
+      await playing(current);
+      if(command.action==='color-readback-paths') {
+        const modes:CanvasRenderingContext2DSettings[]=[
+          {colorSpace:'srgb',willReadFrequently:true},
+          {colorSpace:'srgb',alpha:false,willReadFrequently:true},
+          {colorSpace:'display-p3',willReadFrequently:true},
+          {colorSpace:'srgb',desynchronized:true,willReadFrequently:true},
+        ];
+        const rows=[];
+        for(let i=0;i<4;i++) {
+          const before=current.frames;await until(()=>current.frames>before,'Readback diagnostic requires advancing frames',2000);
+          const frame=new VideoFrame(video);
+          try {
+            const samples=[];
+            for(const settings of modes) {
+              const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+              const ctx=canvas.getContext('2d',settings)!;
+              ctx.drawImage(video,0,0,1,1);
+              samples.push({path:'canvas',settings,actual:ctx.getContextAttributes(),pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});
+              canvas.width=canvas.height=0;
+            }
+            const offscreen=new OffscreenCanvas(1,1),ctx=offscreen.getContext('2d',{colorSpace:'srgb',willReadFrequently:true})!;
+            ctx.drawImage(video,0,0,1,1);
+            samples.push({path:'offscreen',pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});
+            for(const colorSpaceConversion of ['none','default'] as const) {
+              const bitmap=await createImageBitmap(video,{colorSpaceConversion});
+              try {ctx.drawImage(bitmap,0,0,1,1);samples.push({path:'bitmap',colorSpaceConversion,pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});}
+              finally {bitmap.close();}
+            }
+            offscreen.width=offscreen.height=0;
+            const rect={x:960,y:540,width:2,height:2};
+            const raw=new Uint8Array(frame.allocationSize({rect}));
+            const layout=await frame.copyTo(raw,{rect});
+            rows.push({frames:current.frames,position:video.currentTime,paused:video.paused,format:frame.format,colorSpace:frame.colorSpace.toJSON(),raw:[...raw],layout,samples});
+          } finally {frame.close();}
+        }
+        result={diagnostic_only:true,rows};break;
+      }
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+      const drawing=canvas.getContext('2d',{colorSpace:'srgb',willReadFrequently:true})!;
+      const pairs=[];
+      try {
+        for(let i=0;i<24;i++) {
+          const before=current.frames;
+          await until(()=>current.frames>before,'Paired diagnostic requires advancing presented frames',2000);
+          const frame=new VideoFrame(video);
+          try {
+            drawing.drawImage(video,0,0,1,1);
+            const direct=[...drawing.getImageData(0,0,1,1).data];
+            drawing.drawImage(frame,0,0,1,1);
+            pairs.push({at:performance.now(),position:video.currentTime,frames:current.frames,paused:video.paused,
+              format:frame.format,colorSpace:frame.colorSpace.toJSON(),direct,frame:[...drawing.getImageData(0,0,1,1).data]});
+          } finally {frame.close();}
+        }
+      } finally {canvas.width=canvas.height=0;}
+      result={diagnostic_only:true,pairs};break;
     }
     case "color-diagnostic": {
       const matched=await api.call('match_playback',current.matches[1]!);
@@ -422,6 +501,23 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
       let colorSpace:unknown=null;
       if('VideoFrame' in window) {const frame=new VideoFrame(video);colorSpace=frame.colorSpace.toJSON();frame.close();}
       result={rows,colorSpace,first,frameInfo,copy,framePixel,phase:appState.playback.phase,error:appState.playback.error,diagnostic:current.controller.ui.diagnostic,videoRect:video.getBoundingClientRect().toJSON(),sample:sample(current)};
+      break;
+    }
+    case "memory-no-readback": {
+      result={diagnostic_only:true,sample:{diagnostic_only:true,canvas_readback:false}};break;
+    }
+    case "memory-switch": {
+      const index=Number(command.payload),previous=appState.playback.session!.session_id,before=current.frames;
+      check(index>=1&&index<=10,'Memory isolation index outside ten switches');
+      const matched=await api.call('match_playback',current.matches[index]!);
+      check(matched.status==='matched'&&matched.context,'Memory isolation match missing');
+      navigatePlayback(matched.context!);await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous),'Memory isolation session did not change');
+      await playing(current);current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>video.querySelector('track')?.readyState===2&&current.frames>before+1,'Memory isolation frames/track did not advance');
+      result={diagnostic_only:true,index,session_changed:appState.playback.session!.session_id!==previous,new_frames:current.frames-before,
+        sample:{diagnostic_only:true,canvas_readback:false,session_bound:video.currentSrc===appState.playback.session!.media_url,
+          paused:video.paused,width:video.videoWidth,height:video.videoHeight,video_count:document.querySelectorAll('video').length}};
       break;
     }
     case "switch": {

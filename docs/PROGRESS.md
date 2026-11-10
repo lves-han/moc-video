@@ -2769,3 +2769,26 @@
 - 结果：RESOLVED
 - 决定：用户在本聊天对“0.33 的 Esc 逐级返回和视频帧采样仍未通过，原定两次开发会话已用完。是否批准为 0.33 增加一次会话，继续定位并按现有标准验收？”选择“批准增加一次（推荐）”。仅本卡会话上限由2增至3；原验收标准、时长、资源及失败历史保持。
 - 新定位方向：不重复原失败流程；按此前Claude只读分析先区分退出全屏后其他按键及原生点击是否恢复输入，核对窗口实际first responder；颜色对同一媒体成对记录帧色彩信息与像素，并与旧构建比较，先判定产品或采样差异。均为诊断方案而非新增验收标准；如需修改范围外宿主文件或改变验收标准，按用户要求先取得明确决定。外层沿原run代验并回传，开发会话保持运行。
+
+## T0.33 蓝帧颜色容差明确决定 2026-11-10T05:19:28+00:00
+- 结果：RESOLVED
+- 决定：外层于本卡handoff的2026-11-10T05:18:54.808613+00:00转达当前聊天真实用户答复：针对“是否批准仅将该蓝帧绿色分量门槛调整为小于64，保留切集次数、音频和资源检查”，用户明确回答“批准小于 64”。仅将蓝帧G<50校准为G<64；红帧G<50、其余RGB与alpha、原媒体、切集次数、音频、Session、资源及内存门均保持。
+- 依据：同一媒体在最早TV6存档和当前构建分别实测蓝帧[4,53,255]与[4,54,255]；24组成对Canvas/VideoFrame以及4帧×7种标准读回路径均保留原始观测，原始NV12为[41,41,41,41,240,110]，WebKit报告fullRange=true。原媒体生成器保持；仅诊断的补标记副本解码YUV摘要相同，仍未满足原门，未用于A1。证据见`evidence/acceptance/TV6-a0183120178f4ce2b54057baea1205e4/diagnostic.json`、`evidence/acceptance/TV6-7069ce87645e47a08a5693f82ad97184/diagnostic.json`、`evidence/acceptance/TV6-7e6bc6e5005b47fabe69363a9eced8d0/diagnostic.json`及`evidence/acceptance/TV6-78097535701646dd8c47a2e46490f764/diagnostic.json`。
+- 实施与剩余：授权前提案始终未应用；收到明确答复后才同步修改两处蓝帧判定并加入蓝54/63通过、64拒绝及红帧/原生HLS红帧49通过50拒绝的边界回归。将先运行边界与原反例，再重跑准确A1及完整verify；本条决定与既有定向通过均不证明本卡完成。冻结任务正文、命令、case集合、资源和会话额度保持，未rebaseline。
+
+## T0.33 TV6 沉浸播放器 2026-11-10T05:47:12+00:00
+- 结果：DONE
+- 开工：本会话3/3；先读AGENTS.md，按指定venv解释器以argv执行原task.py check与start T0.33，均exit0，初始工作树干净。沿原generation1、protected=`656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e`及ADR-059，只处理本卡。构建、测试与准确A1由外层原run.py串行代验，完整verify由外层直接执行；开发会话全程读回结果，重任务期间保持源码稳定。
+- Changed：沿用Video.js 10.3.0内核、官方元素与原生全屏适配，完成全窗口自定义皮肤、解析背景和长等待提示、官方进度预览/前后10秒/字幕/音量/五倍速/全屏、3秒隐藏、底部选集线路及音轨托盘、片尾20秒下一集卡和真实EOS后5秒可取消倒计时、错误重试及Esc三级返回。业务按钮保留data-action并收进托盘，状态使用视觉隐藏文本；网关Session、历史、旧epoch隔离与单媒体所有权保持。ADR-059零位置无效seek修复及非零恢复/clamp契约继续有效。
+- Why：AppKit被动观察及真实M键/原生点击实验确认退出全屏后WKWebView失焦；最终在原生WebView重新可见时恢复窗口及播放器/托盘焦点，监听由既有interaction.signal清理。Esc状态读取改为只读核对前台，避免测试重新聚焦影响结果。单帧rAF方案在完整路径仍失焦后已替换，正式宿主与权限保持。
+- 颜色决定：按上条真实用户“批准小于 64”，仅蓝帧G<64、红帧G<50；其余RGB与alpha、媒体、频率、切集次数与资源门保持。批准后实际运行204项前端及34项Python反例，包含蓝54/63通过、64拒绝、其他颜色/alpha边界拒绝和红帧/原生HLS红帧49通过50拒绝，均exit0。日志`evidence/runs/20261110T052020286553-diag-tv6-approved-frontend-tests/output.log`、`evidence/runs/20261110T052036168352-diag-tv6-approved-oracles/output.log`。源码后续仅有观察器资源修复及诊断；最终全量前端与准确A1重新验证。
+- 资源根因与最小修复：首轮本会话准确A1已完成50次切集，但原512MiB门拒绝，日志`evidence/runs/20261110T052144262828-A1/output.log`；GPU前4轮由约64升至316MiB。禁用玻璃滤镜、局部淡出及移除官方UI均未解决，正式CSS保持；完整UI关闭Canvas观察时GPU约69MiB，定位整帧缩放读回。最终只将测试观察器改为源视频中心1×1像素1:1复制，自有均匀红蓝帧的颜色与频率观察保持；同尺寸Canvas重置方案实测无效后已撤回。修复后10轮完整RGB/PCM/Session诊断约404MiB，随后重跑原50次及全部原门。原失败收据、日志、JUnit、原生事件与vmmap均保留，未删除失败历史或调整资源门。
+- 验收 A1：PASS；日志：`evidence/runs/20261110T054029128628-A1/output.log`；断言：准确argv实际exit0，主体16/16、JUnit28/28、失败0、跳过0；全部12项需求汇总通过。报告`evidence/acceptance/TV6-all.json`及`evidence/acceptance/TV6-all.xml`。恢复控制器44/44，其中本卡10/10恢复竞争回归实际执行，覆盖零恢复暂停、非零与超时长夹取、旧playback_epoch/engine_epoch/Session隔离；真实窗口首次暂停无错误且play Promise已结算。真实Host测试1/1通过。
+- 真实窗口与回收：加载背景/缺图片名/超过10秒提示、官方控件及真实左右/上下/Space/F/M、3秒隐藏和恢复、托盘同Resolution换线/切集与不可播放原因、真实EOS及约5191ms自动下一集/取消/旧epoch隔离、错误重试及Esc关托盘→退全屏→回详情全过。50轮均验证新Session、旧HTTP410、旧轨道禁用、单video/track、当前解码帧与440/880Hz音频；独立第51轮原生HLS及后续控件、过期恢复、图片过期、实际错误、自动播放恢复、未知时长、可信EOS、来源重新匹配与退出清理全部通过。
+- 页面风格：页面规格颜色、字号、尺寸、圆角与动效原值保持。960/1200/1512全窗口contain、30%遮罩、44px点击区、24px边距、20px玻璃控制条、4/8px轨道及14px拖动点、96px音量展开、300ms托盘、300px下一集卡、28/34px字幕、420px错误层及300ms缓冲延迟均按计算样式/实际状态核对。最终三宽原生截图已保存并逐张走查：`evidence/acceptance/TV6-6147522886474e7db91f516aae694116/immersive/desktop-960.png`、`desktop-1200.png`、`desktop-1512.png`。
+- RSS判定：最终保留51个原始CPU/RSS样本及10个五切集中位窗口；窗口403.98→428.23MiB，最大428.23MiB<512MiB，增长24.25MiB<64MiB。真实UI与回收两个App/WebKit会话exit0、lingering=[]、forced_cleanup=[]；峰值owned RSS分别469041152与477921280字节，合并客户端/报告/Host采样峰值分别823918592与853491712字节。
+- Verified：A1后外层直接执行原verify.py all，实际exit0、六门全过；收据`evidence/verify/20261110T054307635162.json`。工作流124通过/7既有跳过；工作契约27命令、232结构、89语义及6生命周期向量通过；原归档契约通过；前端204通过/0失败/0跳过；原生库200通过/0失败/3既有忽略，另16项集成测试通过；原生fmt/check/clippy及前端类型/生产构建通过。六门日志依次为`evidence/runs/20261110T054307756141-verify-workflow/output.log`、`evidence/runs/20261110T054445859481-verify-contracts/output.log`、`evidence/runs/20261110T054447036097-verify-working-contracts/output.log`、`evidence/runs/20261110T054448099402-verify-frontend-tests/output.log`、`evidence/runs/20261110T054454223678-verify-frontend-build/output.log`、`evidence/runs/20261110T054458659444-verify-project/output.log`。git diff --check与原task.py scope均exit0。
+- 证据绑定：准确A1前后及完整verify六门source均为`804cad06ab470955465861d1a0b1307c81d26f2c98bfa9509cf50d42a2cdedab`，protected及generation相同；verify后仅勾当前卡与追加本记录，源码保持。所有原会话、失败与额度保持；没有改控制脚本、冻结定义、权限或资源上限。
+- 资源：实际process-watchdog、4096MiB RSS采样、构建jobs2、测试线程1；最终A1 peak_rss_bytes=1289666560。RSS采样允许瞬时超限，无cgroup硬内存隔离或CPU quota；普通受控HTTP夹具与本流程唯一身份的App/WebKit/Host资源已清理。
+- Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland、真实macOS14及1920宽度NOT RUN（ADR-005/006/057）。本会话随后执行原task.py done核对并明确退出，由外层保存受验完成提交及执行固定提交独立review-only；当前Git完成提交和独立CLEAR尚未执行。
+- 收尾：原task.py done T0.33已实际exit0，核对当前授权基线下准确A1及完整verify的完成资格。受验源码保持；本写入者完成最终交接后退出，外层保存`T0.33: 完成沉浸播放器与回收验收`受验完成提交并开展独立review-only。

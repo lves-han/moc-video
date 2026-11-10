@@ -425,6 +425,20 @@ class NativeOracleTests(unittest.TestCase):
         value["sample"].update(pixel=[254, 0, 0, 255], audio_peak_hz=440)
         t12.validate_cycle(value, 2)
 
+    def test_cycle_blue_green_calibration_preserves_red_and_hls_boundaries(self):
+        for index, frequency, accepted, limit in [(1, 880, [54, 63], 64), (2, 440, [49], 50), (51, 440, [49], 50)]:
+            value = cycle()
+            value["index"] = index
+            value["sample"]["audio_peak_hz"] = frequency
+            if index == 51:
+                value["native"] = dict(audio_playing=True)
+            for green in accepted:
+                value["sample"]["pixel"] = [4, green, 255, 255] if index == 1 else [254, green, 0, 255]
+                t12.validate_cycle(value, index)
+            value["sample"]["pixel"][1] = limit
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                t12.validate_cycle(value, index)
+
     def test_cycle_rejects_every_resource_audio_frame_and_identity_corruption(self):
         edits = [("index", 2), ("old_tracks_disabled", False), ("session_changed", False),
                  ("new_frames", 0), ("actual_gateway", False), ("errors", ["runtime failed"])]

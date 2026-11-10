@@ -96,8 +96,8 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     const onReject = (event: PromiseRejectionEvent) => errors.push(String(event.reason));
     window.addEventListener('error', onError); window.addEventListener('unhandledrejection', onReject);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      const row = { type:event.type, trusted:event.isTrusted, target:(event.target as Element)?.tagName, prevented:event.defaultPrevented, at:performance.now() };
+      if (!['Escape', 'm', 'M'].includes(event.key)) return;
+      const row = { key:event.key, type:event.type, trusted:event.isTrusted, target:(event.target as Element)?.tagName, prevented:event.defaultPrevented, at:performance.now() };
       escapeKeys.push(row); if(escapeKeys.length>16)escapeKeys.shift();
       queueMicrotask(()=>{row.prevented=event.defaultPrevented;});
     };
@@ -239,10 +239,19 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     one<HTMLButtonElement>('[data-player-tray]').click(); await delay(350);
     return { ...snapshot(), native:await nativeInvoke('t01_control',{ action:'identity' }) };
   }
-  if (action === 'escape-state') {
+  if (action === 'escape-state' || action === 'input-state' || action === 'dom-focus') {
+    if (action === 'dom-focus') {
+      window.focus();
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      focus();
+    }
     await delay(1400);
+    const native=await nativeInvoke<{visible:boolean;focused:boolean;minimized:boolean}>('t01_control',{action:'identity'});
+    const foreground={native,visibility:document.visibilityState,focused:document.hasFocus()};
+    if(action==='escape-state') check(native.visible && native.focused && !native.minimized && document.visibilityState === 'visible' && document.hasFocus(),
+      `Escape observation requires the same visible focused native window: ${JSON.stringify(foreground)}`);
     if (!document.querySelector('video-player')) return { route:appState.route.name,hash:location.hash,videos:document.querySelectorAll('video').length,errors:[...errors] };
-    return { ...snapshot(), keys:escapeKeys.map(row=>({...row})), active:{ tag:document.activeElement?.tagName, class:document.activeElement?.className }, native:await nativeInvoke('t01_control',{ action:'identity' }), menus:[...document.querySelectorAll('media-menu[data-open],media-tooltip[data-open]')].map(el=>el.tagName) };
+    return { ...snapshot(), keys:escapeKeys.map(row=>({...row})), active:{ tag:document.activeElement?.tagName, class:document.activeElement?.className }, native, foreground, menus:[...document.querySelectorAll('media-menu[data-open],media-tooltip[data-open]')].map(el=>el.tagName) };
   }
   if (action === 'dispose') {
     await appController.updateSettings(s => ({ ...s, ui_locale:'en', auto_next:false })); locale.value = 'en';

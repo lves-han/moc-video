@@ -179,7 +179,7 @@ def validate_cycle(value, index):
             "Duplicate player, retained transport, failed media or wrong decode")
     red, green, blue, alpha = sample["pixel"]
     is_red = index % 2 == 0 or index == 51
-    require(alpha == 255 and green < 50 and (red > 180 and blue < 50 if is_red else blue > 180 and red < 50), "Old/incorrect episode frame is still visible")
+    require(alpha == 255 and (green < 50 and red > 180 and blue < 50 if is_red else green < 64 and blue > 180 and red < 50), "Old/incorrect episode frame is still visible")
     frequency = 440 if is_red else 880
     if index == 51:
         require(value["native"]["audio_playing"] is True, "Native HLS audio is not playing")

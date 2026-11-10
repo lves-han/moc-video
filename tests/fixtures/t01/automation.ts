@@ -219,7 +219,9 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       }
       case "tv6": {
         const { immersiveScenario } = await import("../tv6_webview");
-        await foreground();
+        // Read native input results without scheduling another AppKit focus
+        // change while its fullscreen responder transition is completing.
+        if (!['escape-state','input-state','dom-focus'].includes(command.action ?? '')) await foreground();
         return immersiveScenario(command, { player, base, cap });
       }
       case "t20": {

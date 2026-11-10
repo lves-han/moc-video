@@ -143,7 +143,7 @@ test("T12 codec stimulus accepts only the current progressive media, rejecting t
 test("T12 observer reuses its PCM/FFT buffers and canvas while returning independent raw values", () => {
   let canvases = 0, allocations = 0, clears = 0, draws = 0;
   const pcm = new Set<Float32Array>(), fft = new Set<Float32Array>();
-  const video = { readyState: 2 };
+  const video = { readyState: 2, videoWidth: 1920, videoHeight: 1080 };
   const pixels = new Uint8ClampedArray([254, 0, 0, 255]);
   const canvas = { width: 0, height: 0, getContext: () => ({
     clearRect() { clears++; pixels.fill(0); },
@@ -203,6 +203,28 @@ test("T12 odd episodes require blue frames and the actual 880Hz PCM", async () =
   const result = await f.wait(() => value, 1, 30000);
   assert.equal(result.sample, value);
   assert.equal(f.now(), 0);
+});
+
+test("T12 blue green calibration accepts 54 and 63 while 64 and other channel boundaries reject", async () => {
+  for (const green of [54, 63]) {
+    const f = fixture();
+    const value = { ...red(), audio_peak_hz: 880, pixel: [4, green, 255, 255] };
+    assert.equal((await f.wait(() => value, 1, 60)).sample, value);
+  }
+  for (const pixel of [[4, 64, 255, 255], [50, 54, 255, 255], [4, 54, 180, 255], [4, 54, 255, 254]]) {
+    const f = fixture();
+    await assert.rejects(f.wait(() => ({ ...red(), audio_peak_hz: 880, pixel }), 1, 60), /Current episode media did not become ready/);
+  }
+});
+
+test("T12 progressive and native HLS red frames retain the original green boundary", async () => {
+  for (const index of [2, 51]) {
+    const f = fixture();
+    const value = { ...red(), pixel: [254, 49, 0, 255] };
+    assert.equal((await f.wait(() => value, index, 60)).sample, value);
+    const rejected = fixture();
+    await assert.rejects(rejected.wait(() => ({ ...value, pixel: [254, 50, 0, 255] }), index, 60), /Current episode media did not become ready/);
+  }
 });
 
 for (const change of [
