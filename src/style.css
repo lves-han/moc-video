@@ -2710,8 +2710,8 @@ main {
 .details-plot-modal.n-card,.details-confirm.n-card { max-width: 640px; border-radius: 20px; background: var(--tv-glass,var(--surface)); -webkit-backdrop-filter: var(--tv-glass-filter); backdrop-filter: var(--tv-glass-filter); border: 1px solid var(--tv-hairline,var(--border)); --n-padding-left: 28px !important; --n-padding-top: 28px !important; --n-padding-bottom: 28px !important; }
 .details-plot-modal p { white-space: pre-line; font-size: 15px; line-height: 1.65; }
 .details-candidates { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.details-candidate.n-button { height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; background: rgba(255,255,255,.1); }
-.details-candidate.selected.n-button { background: var(--tv-button); color: var(--tv-button-ink); }
+.details-confirm .details-candidates .details-candidate.n-button { height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; background: rgba(255,255,255,.1); }
+.details-confirm .details-candidates .details-candidate.selected.n-button { background: var(--tv-button); color: var(--tv-button-ink); }
 .details-confirm-cancel { margin-top: 20px; }
 .details-candidate-group h3 { margin-top: 20px; }
 .details-retry { margin-inline-start: 12px; }

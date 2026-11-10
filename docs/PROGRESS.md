@@ -2731,3 +2731,18 @@
 - 结果：RESOLVED
 - 决定：用户在本聊天对“0.32 新增的那一次会话已在格式修正后结束，真实窗口验收又发现两处待修复的测试或界面问题。是否批准再增加一次会话？”选择“批准再增加一次”。仅本卡上限由3增至4；原资源、时长、验收标准和失败历史保持。开发会话保持活跃并读回外层原执行器的结果，直至完成或遇到明确阻塞。
 - 当前证据：准确A1 `evidence/runs/20261110T011312155630-A1/output.log` exit1：宿主和权限通过，详情布局检查及简介弹层检查失败。只读核对显示本次窗口origin为 `tauri://localhost`，检查却要求HTTP来源；弹层选择器须结合真实窗口核实。以上仅为待验证定位，不得借此弱化原验收。
+
+## T0.32 TV5 详情页、转场与待播清单 2026-11-10T01:38:02+00:00
+- 结果：DONE
+- 开工：本会话为4/4；先读AGENTS.md并用指定venv解释器以argv执行原task.py check、start T0.32，均exit0，初始工作树干净。沿ADR-010由外层原run.py串行代验，本开发会话保持活跃并逐轮读取真实结果。原冻结文档、控制脚本、资源、额度及失败历史保持。
+- Changed：本卡复用现有详情DTO、匹配确认、官方播放器、历史身份及网关，交付全幅详情背景、信息/简介玻璃弹层、历史续播主按钮、季/剧照集卡、演员/相关排、300ms原生共享转场及禁用API时的交叉淡入/返回滚动恢复；SQLite版本2新增待播表及list_watchlist/add_watchlist/remove_watchlist三项IPC，首页待播排随增删与重启更新，空排隐藏。watch_history结构保持，迁移事务失败明确报错并保留旧库可用。
+- 本会话最小修复：候选胶囊在匹配弹层内提高样式优先级，保留焦点时的选中颜色。真实窗口来源检查与既有t01/tv4统一为tauri://localhost；简介读取当前Naive UI实际n-card-content。夹具等待候选颜色过渡完成；同一过期图片切换到anonymous请求模式，绕过WKWebView已解码no-CORS缓存并保留真实原生error；转场观测改用shared字段，避免与NativeSession保留的native身份字段冲突，并限定到本次专门往返；续播等待playing、seek完成及媒体时钟推进0.1秒后暂停。产品播放器和图片恢复逻辑在本会话保持。所有原验收断言、样式值和阈值保持。
+- Why：真实窗口证据逐项定位测试观测错误、组件库焦点样式覆盖及异步媒体启动时序，按当前源码和现有验收约定作局部修复。每次失败先note，保留全部失败日志；旧失败和旧成功均未替代本轮验收。
+- 验收 A1：PASS；日志：`evidence/runs/20261110T013227773267-A1/output.log`；断言：准确argv实际exit0，主体19/19、JUnit34/34，失败0、跳过0，15项需求汇总全PASS；报告`evidence/acceptance/TV5-all.json`及`evidence/acceptance/TV5-all.xml`。宿主实际运行3项待播/迁移行为：幂等增删、9个非法输入拒绝、新Host重启保留；v1→v2逐项保留19个历史字段；迁移失败回滚保持版本1和旧数据可读，显式重试升到2。权限精确为T0.28结果加3项待播权限，共34项，CSP与原基线一致。
+- 真实窗口行为：960/1200/1512计算样式全部通过，2名演员及5张相关海报存在；两季切换、简介/匹配玻璃弹层及候选选中状态通过。主按钮匹配第3集/7000ms历史，实际官方播放器解码并恢复至约7118.01ms，暂停和离页后历史视频身份保持。待播真实App与Host关闭重开后仍保留，移除后整排隐藏。图片两次实际HTTP410、两次可信error；首次1次诊断/1次DTO刷新，二次累计2次诊断且DTO仍1次并显示错误/占位，手动重试DTO累计2次成功，无未捕获错误。
+- 页面风格与动效：规格颜色、字号、尺寸、圆角和时长原值保持，未作校准变更。全幅头部、65%遮罩、内容底距56px/最大620px、48px主控及圆形玻璃待播、3px历史进度、季胶囊、clamp集卡/12px图片圆角、88px圆形头像、960两列/其他三列信息及延后100ms淡入均按计算样式核对。专门原生往返2次各唯一共享元素、300ms；禁用API时旧页1→0与新页0→1均300ms，返回滚动320→313且临时DOM清理。截图已保存并走查：`evidence/acceptance/TV5-3f5d87dd12904174996e4663b65ffeab/desktop-960.png`、`evidence/acceptance/TV5-3f5d87dd12904174996e4663b65ffeab/desktop-1200.png`、`evidence/acceptance/TV5-3f5d87dd12904174996e4663b65ffeab/details-header-1512.png`、`evidence/acceptance/TV5-3f5d87dd12904174996e4663b65ffeab/details-lower-1512.png`。
+- Verified：A1后外层直接执行原verify.py all，实际exit0、六门PASS，收据`evidence/verify/20261110T013336397172.json`。工作流124通过/7既有跳过，前端197通过/0失败/0跳过，原生库197通过/0失败/3既有忽略，另16项集成测试通过；原生fmt/check/clippy、两项契约、前端类型及生产构建全部通过。六门日志依次为`evidence/runs/20261110T013336517984-verify-workflow/output.log`、`evidence/runs/20261110T013518754423-verify-contracts/output.log`、`evidence/runs/20261110T013519921355-verify-working-contracts/output.log`、`evidence/runs/20261110T013521121363-verify-frontend-tests/output.log`、`evidence/runs/20261110T013527287464-verify-frontend-build/output.log`、`evidence/runs/20261110T013531767797-verify-project/output.log`。git diff --check及task.py scope均exit0。
+- 证据绑定：最新准确A1前后、完整verify的source均为`f3ba7036d308f7220bce2f7e1a0201b4a20b3b452954d5a2ff24c817eab70bfc`，protected=`656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e`、generation=0；verify后仅勾当前卡和追加本记录，源码保持。原全部失败、收据及4次会话记录保持。
+- 资源：真实后端process-watchdog，4096MiB RSS采样、构建jobs2、测试线程1；A1 peak_rss_bytes=2216083456。两个真实App/WebKit会话exit0、lingering=[]、forced_cleanup=[]，合并RSS采样峰值分别802914304和857178112字节。该后端为RSS采样保护，允许瞬时超限，无cgroup硬内存隔离和CPU quota。
+- Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland、真实macOS14及1920宽度均NOT RUN（ADR-005/006/057）。Git及固定提交独立review-only沿ADR-010由外层收尾；本会话随后仅执行原task.py done核对并交接，不进入其他卡，不自行accept-review。
+- 收尾：原task.py done T0.32实际exit0，已确认当前受验源码及准确A1/完整verify完成资格；提交前继续保持源码稳定。当前.git只读，按ADR-010在本写入者退出后由外层保存`T0.32: 完成详情转场与持久待播清单`受验完成提交并执行固定提交独立review-only。

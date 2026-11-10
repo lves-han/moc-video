@@ -70,14 +70,14 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
   }
   if (action === 'states') {
     one<HTMLButtonElement>('.details-plot-toggle').click(); await until(() => !!all('.details-plot-modal').length,'Plot dialog missing'); await delay(300);
-    const plot = { style: measure('.details-plot-modal'), content: measure('.details-plot-modal .n-card__content'), text: one('.details-plot-modal').textContent };
+    const plot = { style: measure('.details-plot-modal'), content: measure('.details-plot-modal .n-card-content'), text: one('.details-plot-modal').textContent };
     one<HTMLElement>('.details-plot-modal .n-card-header__close').click(); await until(() => !all('.details-plot-modal').length,'Plot dialog did not close');
     all<HTMLButtonElement>('.details-group')[1]!.click(); await nextTick(); const season = { episodes: all('.details-episode').length, selected: one('.details-group[aria-pressed="true"]').textContent };
     all<HTMLButtonElement>('.details-group')[0]!.click(); await nextTick();
     one<HTMLButtonElement>('.details-episode').click();
     await until(() => app.matching.result?.status === 'needs_confirmation' || state.route.name === 'playback','Match did not settle');
     check(app.matching.result?.status === 'needs_confirmation','Controlled cross-source match must ask for confirmation'); await delay(300);
-    one<HTMLButtonElement>('.details-candidate').click(); await until(() => all('.details-candidate-episode').length > 0,'Candidate did not load');
+    one<HTMLButtonElement>('.details-candidate').click(); await until(() => all('.details-candidate-episode').length > 0,'Candidate did not load'); await delay(350);
     const confirm = { style: measure('.details-confirm'), candidate: measure('.details-candidate'), text: one('.details-confirm').textContent };
     one<HTMLButtonElement>('.details-confirm-cancel').click(); await until(() => !all('.details-confirm').length,'Match cancel did not close');
     return { plot, season, confirm, errors: await maccmsScenario('errors',prototype) };
@@ -101,6 +101,7 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
   }
   if (action === 'watchlist-images') {
     await settled();
+    one('.watchlist-poster').scrollIntoView({ block:'center', behavior:'instant' }); await delay(300);
     const core = window.__TAURI__!.core, calls: { command: string; input: any; response: any }[] = [], imageErrors: boolean[] = [], expiredStatuses: number[] = [];
     window.__TAURI__!.core = { ...core, invoke: async <T>(command: string, args?: Record<string, any>): Promise<T> => {
       const response = await core.invoke<T>(command, args);
@@ -118,7 +119,9 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
       await expired.arrayBuffer(); check(expired.status === 410, 'Evicted watchlist image must return real HTTP 410');
       image.src = '/mark.svg'; await image.decode();
       image.addEventListener('error', event => imageErrors.push(event.isTrusted), {once:true});
-      // Change the current request before retrying the exact no-store gateway URL.
+      // A different request mode bypasses WKWebView's already-decoded no-CORS image.
+      // The resource URL/capability stays exact and the failure remains a native event.
+      image.crossOrigin = 'anonymous';
       image.src = source;
     };
     try {
@@ -137,6 +140,11 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
       one<HTMLButtonElement>('.watchlist-row [role="alert"] button').click();
       await until(() => details() === 2 && all<HTMLImageElement>('.watchlist-poster img').some(img => img.complete && img.naturalWidth > 0) && !all('.watchlist-row [role="alert"]').length, 'Explicit watchlist retry did not start a new attempt');
       return { recovered, refused, retried:{details:details(),queries:statuses().length}, native_image_errors:imageErrors, expired_http_status:expiredStatuses, errors:await maccmsScenario('errors',prototype) };
+    } catch (cause) {
+      const image = all<HTMLImageElement>('.watchlist-poster img')[0];
+      throw new Error(`${String(cause)}; image recovery evidence=${JSON.stringify({ details:details(), queries:statuses().length, native_image_errors:imageErrors, expired_http_status:expiredStatuses,
+        statuses:statuses().map(call => ({ kind:call.response.data?.kind, target_matches:call.response.data?.target_id === call.input.target_id, code:call.response.data?.error?.code })),
+        image:image ? { complete:image.complete, decoded:image.naturalWidth > 0, connected:image.isConnected, loading:image.loading, top:image.getBoundingClientRect().top } : null })}`);
     } finally { window.__TAURI__!.core = core; }
   }
   if (action === 'resume') {
@@ -148,16 +156,18 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
     }
     await until(() => state.playback.session && document.querySelector<HTMLVideoElement>('video')?.readyState! >= 2,'Resume video did not load');
     const video = one<HTMLVideoElement>('video'); if (video.paused) videoJsControl('play').click();
-    await until(() => !video.paused && video.currentTime >= 6.8 && state.playback.context?.metadata_video_id === ready.record.video_id,'Actual player did not restore the history video and position');
+    await until(() => !video.paused && !video.seeking && state.playback.phase === 'playing' && video.currentTime >= 6.8 && state.playback.context?.metadata_video_id === ready.record.video_id,'Actual player did not restore the history video and position');
+    const resumedAt = video.currentTime;
+    await until(() => state.playback.phase === 'playing' && !video.seeking && video.currentTime > resumedAt + .1,'Resumed media clock did not advance');
     const played = { video: state.playback.context!.metadata_video_id, position: video.currentTime * 1000, decoded: video.videoWidth > 0, session: state.playback.session!.session_id, label };
     videoJsControl('play').click(); await until(() => state.playback.phase === 'paused','Pause did not flush history');
     location.hash = '#/home'; await until(() => state.route.name === 'home' && !!all('.continue-card').length,'Resume exit did not finish'); await settled();
     return { played, history: (await api.call('list_history',{})).entries[0], errors: await maccmsScenario('errors',prototype) };
   }
   if (action === 'transitions') {
-    await home(); scrollTo({top:320,behavior:'instant'}); await delay(100); const original = scrollY;
+    await home(); transitions.length = 0; scrollTo({top:320,behavior:'instant'}); await delay(100); const original = scrollY;
     await open(ready); one<HTMLAnchorElement>('.details-back').click(); await until(() => state.route.name === 'home','Native transition return failed'); await settled();
-    const native = { supported: !!document.startViewTransition, observations: [...transitions], original, restored: scrollY };
+    const shared = { supported: !!document.startViewTransition, observations: [...transitions], original, restored: scrollY };
     const descriptor = Object.getOwnPropertyDescriptor(document,'startViewTransition');
     Object.defineProperty(document,'startViewTransition',{configurable:true,value:undefined});
     let fallback;
@@ -169,7 +179,7 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
       fallback = { old: old.getAnimations().map(a => ({ duration:a.effect?.getComputedTiming().duration, frames:(a.effect as KeyframeEffect).getKeyframes().map(f => f.opacity) })),
         next: one('#main-content').getAnimations().map(a => ({ duration:a.effect?.getComputedTiming().duration, frames:(a.effect as KeyframeEffect).getKeyframes().map(f => f.opacity) })) };
       await settled(); one<HTMLAnchorElement>('.details-back').click(); await until(() => state.route.name === 'home','Fallback return failed'); await settled();
-      return { native, fallback, restored: scrollY, clean: !document.querySelector('.page-transition-old'), errors: await maccmsScenario('errors',prototype) };
+      return { shared, fallback, restored: scrollY, clean: !document.querySelector('.page-transition-old'), errors: await maccmsScenario('errors',prototype) };
     } finally { if (descriptor) Object.defineProperty(document,'startViewTransition',descriptor); else delete (document as any).startViewTransition; }
   }
   if (action === 'errors') return maccmsScenario('errors',prototype);

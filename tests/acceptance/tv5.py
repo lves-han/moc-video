@@ -65,7 +65,7 @@ def native(run):
 
 def styles(row):
     s, width, height = row['styles'], row['width'], row['height']
-    require(width in [960, 1200, 1512] and not row['overflow'] and row['title'] and row['origin'].startswith('http://127.0.0.1:'), 'actual nonblank packaged page/geometry differs')
+    require(width in [960, 1200, 1512] and not row['overflow'] and row['title'] and row['origin'] == 'tauri://localhost', 'actual nonblank packaged page/geometry differs')
     require(not row['errors'] and row['more'], 'page errors or missing long-plot action')
     head, copy = s['.details-head'], s['.details-copy']
     tv1.near(head['rect']['width'], width, 'fullbleed width'); tv1.near(head['rect']['left'], 0, 'fullbleed left')
@@ -111,9 +111,9 @@ def modal_states(row):
 
 
 def transitions(row):
-    require(not row['errors'] and row['clean'] and abs(row['restored'] - row['native']['original']) < 8 and abs(row['native']['restored'] - row['native']['original']) < 8 and row['native']['original'] > 0, 'return transition must restore scroll and clean temporary DOM')
-    if row['native']['supported']:
-        observations = [r for r in row['native']['observations'] if r['ready']]
+    require(not row['errors'] and row['clean'] and abs(row['restored'] - row['shared']['original']) < 8 and abs(row['shared']['restored'] - row['shared']['original']) < 8 and row['shared']['original'] > 0, 'return transition must restore scroll and clean temporary DOM')
+    if row['shared']['supported']:
+        observations = [r for r in row['shared']['observations'] if r['ready']]
         require(len(observations) >= 2 and all(r['before'] == r['after'] == 1 and r['duration'] == '0.3s' for r in observations), 'real native poster/detail shared-element transition must run at 300ms')
     fallback = row['fallback']; require(any(a['duration'] == 300 and a['frames'] == ['1', '0'] for a in fallback['old']) and any(a['duration'] == 300 and a['frames'] == ['0', '1'] for a in fallback['next']), 'disabled API must crossfade both old and new pages for 300ms')
 

@@ -1909,7 +1909,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 **来源提示。** 详情信息行末尾显示来源名，13px `--tv-text-2`；当前播放源缺失分类时，侧栏入口直接隐藏，不显示禁用态。
 
 ### T0.32 TV5 详情页、转场与待播清单
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.30
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-DETAILS, TV-WATCHLIST, REQ-TV5 → A1（覆盖表含精确对应）
