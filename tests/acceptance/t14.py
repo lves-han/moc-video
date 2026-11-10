@@ -68,17 +68,19 @@ def webview(run):
     return packaged(run, LIVE_TEST, "t14", validate_home, "home", lambda e: dict(cards=e["pagination"]["cards"], layouts=e["layouts"]))
 
 
-def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None, command_timeout=240, after_close=None):
+def packaged(run, live_test, op, validate, key, summary, bridge_class=None, prepare_media=None, command_timeout=240, after_close=None, build_folder=None):
     require(t01.native_gui_session()["screen_locked"] is not True, "macOS desktop locked; unlock before packaged WKWebView acceptance")
     previous = t01.DATA, t01.BUILD, t12.LIVE_TEST
-    t01.DATA = run.folder / "packaged"
-    t01.DATA.mkdir()
+    t01.DATA = build_folder if build_folder is not None else run.folder / "packaged"
+    if build_folder is None:
+        t01.DATA.mkdir()
     t01.BUILD = t01.DATA / "build.json"
     t12.LIVE_TEST = live_test
     session, bridge = None, None
     try:
         t01.check_media()
-        t01.build(run)
+        if build_folder is None:
+            t01.build(run)
         receipt = t01.check_build(run.source)
         executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
         with tempfile.TemporaryDirectory(prefix="t14-live-", dir=run.folder) as temporary:

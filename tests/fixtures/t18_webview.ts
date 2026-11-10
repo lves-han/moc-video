@@ -63,11 +63,15 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
   };
   const playFromHome = async () => {
     location.hash = "#/home";
-    await until(() => one(".home-card-title"), "Recommendation did not render");
-    one<HTMLElement>(".home-card-title")!.click();
+    await until(() => one(".home-card .poster-link"), "Recommendation did not render");
+    one<HTMLElement>(".home-card .poster-link")!.click();
     await until(() => appState.details.phase === "ready" && one(".details-episode"), "Details did not open");
     all<HTMLElement>(".details-episode")[0]!.click();
     await confirmFirst();
+  };
+  const historyTab = async () => {
+    await until(() => one('#library-tab-history'), 'History tab missing');
+    one<HTMLButtonElement>('#library-tab-history')!.click(); await nextTick();
   };
   const pauseAndSave = async () => {
     await video()!.play().catch(() => {});
@@ -93,6 +97,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     video()!.pause();
     await until(() => count("save_history") > beforeFail, "The failing save was not attempted");
     location.hash = "#/history";
+    await historyTab();
     await until(() => all(".history-card").length === 1, "History view did not list the row");
     await until(() => one(".history-alert"), "Unsaved history notice missing");
     const notice = one(".history-alert")!.textContent!, rowText = one(".history-card")!.textContent!;
@@ -182,8 +187,11 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     await appController.loadSources();
     await until(() => appState.selected_playback_source, "Sources did not return after restart");
     location.hash = "#/history";
+    await historyTab();
     await until(() => all(".history-card").length === 1, "Row did not survive the restart");
-    evidence.restart = { new_epoch: appState.runtime.engine_epoch !== epoch, rows: all(".history-card").length, write_sequence: (await list()).write_sequence };
+    const restartedHistory = await list();
+    evidence.restart = { new_epoch: appState.runtime.engine_epoch !== epoch, rows: all(".history-card").length,
+      write_sequence: restartedHistory.write_sequence, before_record: saved, after_records: restartedHistory.entries };
     check(appState.settings.media_cache_max_bytes === 1048576, 'Cache limit did not survive restart');
     evidence.cache_limit.restored = true;
     await until(() => one(".history-actions") && !one(".history-loading"), "History did not finish loading");
@@ -234,6 +242,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
     appController.invalidatePlayback();
     await nextTick();
     location.hash = "#/history";
+    await historyTab();
     await until(() => one(".history-card"), "History did not reopen");
     await until(() => one<HTMLButtonElement>(".page-heading button") && !one<HTMLButtonElement>(".page-heading button")!.disabled && !one(".history-loading"), "Clear button missing");
     one<HTMLButtonElement>(".page-heading button")!.click();

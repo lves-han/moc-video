@@ -55,9 +55,19 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
   }
   const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App) }) }); app.mount(root);
   try {
-    await until(() => all('.home-card-title').length > 0, 'Public recommendations missing', 90000);
+    await until(() => all('.home-card .poster-link').length > 0, 'Public recommendations missing', 90000);
     await until(() => appState.home.phase !== 'loading', 'Public home did not settle', 90000);
-    const homeItems = appState.home.data!.page.sections.flatMap(section => section.items);
+    if (matchMedia('(min-width:960px)').matches) {
+      const series = appState.home.data!.page.sections.find(section => section.kind === 'series');
+      check(series, 'Public series catalog descriptor missing');
+      const row = all<HTMLElement>('.catalog-lazy-row').find(element =>
+        element.querySelector<HTMLAnchorElement>('.media-row-heading a')?.getAttribute('href')?.startsWith('#/browse/series?'));
+      check(row, 'Public series catalog row missing');
+      row!.scrollIntoView({ block: 'center', behavior: 'instant' });
+      await until(() => row!.dataset.phase === 'ready' && row!.querySelector('.poster-link'), 'Visible public series row did not load', 90000);
+    }
+    const homeItems = [appState.home.data, ...Object.values(appController.rows).map(row => row.data)]
+      .flatMap(data => data?.page.sections.flatMap(section => section.items) ?? []);
     const recommendations = [...new Map(homeItems.filter(card => card.kind === 'series' && /[一-鿿]/.test(card.title)).map(card => [card.id, { title: card.title, href: '#/details/' + encodeURIComponent(JSON.stringify(card.ref)) }])).values()];
     const playback = appState.sources.data!.providers.find(source => source.name === '红牛' && source.runtime_status === 'ready');
     check(playback, 'Public playback source is not ready');

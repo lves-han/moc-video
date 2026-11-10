@@ -71,12 +71,13 @@ def closed_window_kept_everything(bridge, e):
             f"Closing must finish slow queued changes and the latest audio: {settings['volume']}, {settings['auto_next']}")
     require(settings["window_bounds"] == e["bounds"]["saved"], "Closing must keep the window bounds")
     e["closing"].update(saved=dict(position_ms=entries[0]["position_ms"]), volume=settings["volume"], auto_next=settings["auto_next"])
+    e["closing"].update(history_records=entries,settings_snapshot=settings)
 
 
 def contracts(run):
     output = run.command(["{python}", "-B", "scripts/check-contracts.py"])
     match = re.search(r'"commands":\s*(\d+)', output)
-    require(match and int(match[1]) == 23, "The working protocol must retain 21 existing commands plus two cache commands")
+    require(match and int(match[1]) == 27, "The working protocol must retain all existing commands and C17 watchlist/search commands")
     return output.strip()[:300]
 
 

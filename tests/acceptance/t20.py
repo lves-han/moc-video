@@ -48,10 +48,10 @@ def validate_public(e):
     require(len(p['icon_buttons']) == 5 and all(button['icon'] and button['tooltip'] and button['accessible'] and button['width'] >= 44 for button in p['icon_buttons']), 'Playback icon controls need hover text, accessible labels and usable hit targets')
     require(e['errors'] == [], 'Unhandled public page errors')
     require(len(e['layouts']) == 8 and any(row['width'] <= 390 for row in e['layouts']) and all(not row['overflow'] for row in e['layouts']), 'Bilingual light/dark 390px layouts must fit')
-def public(run):
+def public(run, *, build_folder=None):
     os.environ['T12_MIN_OPENS'] = '1'
     try:
-        return t14.packaged(run, n02.LIVE_TEST, 't20', validate_public, 'public_product', lambda e: e['public'], bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=1500)
+        return t14.packaged(run, n02.LIVE_TEST, 't20', validate_public, 'public_product', lambda e: e['public'], bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=1500, build_folder=build_folder)
     finally:
         os.environ.pop('T12_MIN_OPENS', None)
 def isolated(run, name, action):
@@ -62,19 +62,20 @@ def isolated(run, name, action):
         return action(run)
     finally:
         run.folder = previous
-def controlled_history(run):
-    def validate(e):
-        t18.validate(e)
-        require(e['cache_limit']['invalid_refused'] and e['cache_limit']['failed_save_kept_limit'] and e['cache_limit']['saved'] == 1048576 and e['cache_limit']['restored'] and e['cache_limit']['used'] <= 1048576, 'Cache limit must save, apply and restore')
-        require(all(e['cache_clear'][key] for key in ['failed_clear_kept_files','cleared','disabled','playback_after_clear']), 'Cache clear/off must change real occupancy and preserve playback')
-        require(e['cross_season'] == dict(season=2, episode=1, distinct_video=True), 'Cross-season video identity must survive SQLite restart and resume')
-        require(e['eos'] == dict(current_video=True, completed=True), 'Current video EOS must persist completion')
-        require(all(e['source_switch'][key] for key in ['rematched','confirmed_before_open','history_kept']), 'Source switch must rematch and keep history')
+def controlled_history(run, *, build_folder=None):
     os.environ['T12_MIN_OPENS'] = '1'
     try:
-        return t14.packaged(run, n02.LIVE_TEST, 't18', validate, 'history', lambda e: dict(cross_season=e['cross_season'], source_switch=e['source_switch'], eos=e['eos']), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=600, after_close=t18.closed_window_kept_everything)
+        return t14.packaged(run, n02.LIVE_TEST, 't18', validate_history, 'history', lambda e: dict(cross_season=e['cross_season'], source_switch=e['source_switch'], eos=e['eos']), bridge_class=n02.Bridge, prepare_media=t12.owned_media, command_timeout=600, after_close=t18.closed_window_kept_everything, build_folder=build_folder)
     finally:
         os.environ.pop('T12_MIN_OPENS', None)
+
+def validate_history(e):
+    t18.validate(e)
+    require(e['cache_limit']['invalid_refused'] and e['cache_limit']['failed_save_kept_limit'] and e['cache_limit']['saved'] == 1048576 and e['cache_limit']['restored'] and e['cache_limit']['used'] <= 1048576, 'Cache limit must save, apply and restore')
+    require(all(e['cache_clear'][key] for key in ['failed_clear_kept_files','cleared','disabled','playback_after_clear']), 'Cache clear/off must change real occupancy and preserve playback')
+    require(e['cross_season'] == dict(season=2, episode=1, distinct_video=True), 'Cross-season video identity must survive SQLite restart and resume')
+    require(e['eos'] == dict(current_video=True, completed=True), 'Current video EOS must persist completion')
+    require(all(e['source_switch'][key] for key in ['rematched','confirmed_before_open','history_kept']), 'Source switch must rematch and keep history')
 def videojs_lifecycle(run):
     previous = t01.DATA, t01.BUILD
     t01.DATA = run.folder / 'packaged'
