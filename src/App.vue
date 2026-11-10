@@ -9,6 +9,7 @@ import NativeSourcesView from "./views/NativeSourcesView.vue";
 import HomeView from "./views/HomeView.vue";
 import BrowseView from "./views/BrowseView.vue";
 import DetailsView from "./views/DetailsView.vue";
+import SearchView from "./views/SearchView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId } from "./state.ts";
@@ -31,6 +32,7 @@ const shell = ref<HTMLElement>();
 const sidebarSources = ref<HTMLElement>();
 const desktopNavigation = computed(() => [
   { page: "home", href: "#/home", icon: "compass", label: t("Discover") },
+  { page: "search", href: "#/search", icon: "search", label: locale.value === 'zh-CN' ? '搜索' : 'Search' },
   { page: 'browse', href: '#/browse/movie', icon: 'film', label: t('Movies') },
   { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
   { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
@@ -38,7 +40,7 @@ const desktopNavigation = computed(() => [
   ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
-  { page: "history", href: "#/history", icon: "history", label: t("Watch history") },
+  { page: "history", href: "#/history", icon: "library", label: locale.value === 'zh-CN' ? '资料库' : 'Library' },
   { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
 ]);
@@ -86,10 +88,10 @@ function readHash() {
   const [name = "home", id = "", episode = "1"] = path.split("/");
   return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
-type Page = "home" | "browse" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
+type Page = "home" | "browse" | "search" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
 const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   const stored = appState.route, view = readHash();
-  const page: Page = stored.name === 'home' && view.name === 'browse' ? 'browse' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
+  const page: Page = stored.name === 'home' && ['browse','search'].includes(view.name) ? view.name as 'browse' | 'search' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
   return { page,
     id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
 });
@@ -125,7 +127,7 @@ function rememberHome() { if (route.value.page === "home") homeSnapshots.set(hom
 const heroFilms = computed(() => route.value.kind ? films.value.filter(film => film.kind === route.value.kind) : [films.value[0]!, films.value[2]!, films.value[3]!]);
 const hero = computed(() => heroFilms.value[heroIndex.value % heroFilms.value.length]!);
 const title = computed(() => route.value.kind ? t(kindLabels[route.value.kind as FilmKind]) : t(({
-  home: "Discover", browse: 'Browse by genre', film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
+  home: "Discover", browse: 'Browse by genre', search:'Search', film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
 } as const)[route.value.page]));
 const filteredFilms = computed(() => films.value.filter(film => (!route.value.kind || film.kind === route.value.kind) && (activeGenre.value === "All" || film.genres.includes(activeGenre.value))));
 const visibleFilms = computed(() => expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6));
@@ -188,13 +190,18 @@ async function changeSource(id: string) {
 }
 function addSource(value: Source) { previewSources.value.push(value); notify(t("Source added to this preview. Live connections will follow.")); }
 function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
-const detailsOrigins = new Map<string, string>();
 function openDetails(ref: Bridge_MediaRef) {
   const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
-  detailsOrigins.set(target, location.hash);
-  location.hash = target;
+  if (target === location.hash) return;
+  // Each visit owns its predecessor, including a repeated title. History state
+  // survives reload and lets the browser keep Back/Forward in the same order.
+  history.pushState({ detailsOrigin: location.hash }, '', target);
+  void onHashChange();
 }
-function backFromDetails() { location.hash = detailsOrigins.get(location.hash) ?? '#/home'; }
+function backFromDetails() {
+  if (typeof history.state?.detailsOrigin === 'string') history.back();
+  else location.hash = '#/home';
+}
 function markTransitionPoster(target: string) {
   const candidates = [...document.querySelectorAll<HTMLElement>('.poster-link[href]')].filter(element => element.getAttribute('href') === target);
   const element = candidates.find(element => { const r = element.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; }) ?? candidates[0];
@@ -243,6 +250,7 @@ async function playEpisode(videoId: string) {
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;
 function focusMain() {
+  if (route.value.page === 'search') { searchView.value?.focus(); return; }
   const main = document.getElementById("main-content");
   if (desktopQuery.matches) {
     const href = routeFocus.get(location.hash);
@@ -290,7 +298,7 @@ async function updateRoute() {
       // The first-run setup entry and the source manager are one native page.
       const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
       appController.navigate({ name });
-      if (name === "home" && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
+      if (name === "home" && next.name !== 'search' && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
         && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
     }
     if (current !== sequence) return;
@@ -448,7 +456,16 @@ const closeFailed = ref(false);
 function quitWithoutSaving() { void window.__TAURI__?.core.invoke("app_close_ready", {});
 }
 function onVisibilityChange() { if (document.visibilityState === "hidden") void flushHistory(); }
+const searchView = ref<InstanceType<typeof SearchView>>();
+async function searchShortcut(event: KeyboardEvent) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f' && desktopQuery.matches) {
+    event.preventDefault(); location.hash = '#/search';
+    await nextTick(); searchView.value?.focus();
+  }
+}
+watch(searchView, view => { if (view) view.focus(); });
 onMounted(() => {
+  window.addEventListener('keydown', searchShortcut, true);
   expandedQuery.addEventListener("change", resetSidebar);
   document.addEventListener("focusin", rememberFocus);
   // T12's formal harness supplies a Host-confirmed context before mounting App.
@@ -460,6 +477,7 @@ onMounted(() => {
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', searchShortcut, true);
   expandedQuery.removeEventListener("change", resetSidebar);
   removeFocus?.();
   document.removeEventListener("focusin", rememberFocus);
@@ -637,9 +655,9 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <main id="main-content" tabindex="-1">
-        <p v-if="route.page === 'settings'" class="tv-theme-note">{{ t('Desktop uses a dark appearance.') }}</p>
-        <HomeView v-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
+      <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': ['sources','settings'].includes(route.page), 'tv-library-main':route.page === 'history', 'tv-search-main':route.page === 'search' }">
+        <SearchView v-if="route.page === 'search'" ref="searchView" @open="openDetails" />
+        <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
           <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
@@ -952,7 +970,7 @@ onBeforeUnmount(() => {
           </section>
         </template>
 
-        <HistoryView v-else-if="route.page === 'history'" :save-error="historySaveError" @resume="continueHistory" @retry-save="retryHistorySave" @removed="discardPendingHistory" />
+        <HistoryView v-else-if="route.page === 'history'" :save-error="historySaveError" @open="openDetails" @resume="continueHistory" @retry-save="retryHistorySave" @removed="discardPendingHistory" />
         <SourcesView
           v-else-if="route.page === 'sources'"
           :sources="sources"

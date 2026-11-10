@@ -2746,3 +2746,21 @@
 - 资源：真实后端process-watchdog，4096MiB RSS采样、构建jobs2、测试线程1；A1 peak_rss_bytes=2216083456。两个真实App/WebKit会话exit0、lingering=[]、forced_cleanup=[]，合并RSS采样峰值分别802914304和857178112字节。该后端为RSS采样保护，允许瞬时超限，无cgroup硬内存隔离和CPU quota。
 - Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland、真实macOS14及1920宽度均NOT RUN（ADR-005/006/057）。Git及固定提交独立review-only沿ADR-010由外层收尾；本会话随后仅执行原task.py done核对并交接，不进入其他卡，不自行accept-review。
 - 收尾：原task.py done T0.32实际exit0，已确认当前受验源码及准确A1/完整verify完成资格；提交前继续保持源码稳定。当前.git只读，按ADR-010在本写入者退出后由外层保存`T0.32: 完成详情转场与持久待播清单`受验完成提交并执行固定提交独立review-only。
+
+## T0.34 TV7 搜索、资料库、来源与设置 2026-11-10T03:28:42.169507+00:00
+- 结果：DONE
+- 开工：本会话1/2；先读AGENTS.md，以指定项目venv解释器和argv执行原task.py check、start T0.34，均exit0，初始工作树干净。本会话只处理T0.34；沿交接由外层原run.py串行代验、直接执行完整verify，开发会话保持活跃并核对结果。原冻结文档、资源、额度和验收阈值保持。
+- 先行修复：按用户要求先复现T0.32的首页→A→B→A返回循环。修复前真实窗口连续返回B/A/B，原首页滚动320、循环后0，evidence/runs/20261110T022532710901-A1-nav-before/output.log exit0表示准确复现旧缺陷；报告TV7-navigation-before.json。最小修改为每次访问独立的history.pushState及history.back，来源保存在history.state。修复后返回B/A/首页，浏览器前进/后退A/B/A/首页，滚动320→313、转场临时DOM清理、错误0，evidence/runs/20261110T022932606566-A1-nav-after/output.log exit0。再诊断原tv5.py全部已有场景，主体19/19、JUnit34/34，evidence/runs/20261110T023039500868-A1-tv5-regression/output.log exit0；仅在诊断进程重绑定资源归属当前T0.34，原TV5脚本、断言和历史保持。上述通过后才实施TV7。
+- Changed：新增严格{source_id,source_revision,query}→{items}的search_catalog契约、权限及固定命令，总数27。Stremio仅查询清单声明search且其他必需参数可满足的目录，MacCMS复用wd；保持request_id、engine_epoch、来源修订、30秒总预算、同来源串行和取消。搜索页接入侧栏/原生⌘F、300ms防抖、旧响应隔离、电影/电视剧/综艺短剧三排、类型卡片及清除/空态/错误。海报沿现有get_details签发通道对可见项串行补图并保持C9恢复限制。资料库复用历史队列、日期分组、删除/清空和WatchlistRow，提供继续观看横卡、待播海报墙及历史三标签。来源/设置改为720px分组列表、状态点/行内错误、玻璃弹层、五色圆点和语言分段；原字段、校验、配置/缓存/语言/播放偏好操作保持，窄屏保留原色系/语言控件。
+- Why：复用现有Host分发、来源实现、请求控制器、MediaRow、Naive组件及SQLite；保持C17返回{items}和既有Bridge定义。依据真实计算值局部修复标题旧10px边距、WebKit原生下拉外观覆盖10px圆角、Naive后注入卡片背景及现有来源诊断未内联显示。测试按真实操作收尾等待按钮恢复；受控MacCMS按ids准确返回单条详情。悬停先记录可信pointerenter，等待真实transition.finished采样，期间沿用已聚焦窗口；独立3次原生进入均1.04，evidence/runs/20261110T031613303737-A1-tv7-hover-diagnostic/output.log exit0。三次A1和三次窗口诊断失败均先note并保留原日志/收据及单独归档报告，第三次同签名后切换独立诊断方法，原断言和阈值保持。
+- 验收 A1：PASS；日志：`evidence/runs/20261110T031837178252-A1/output.log`；断言：准确argv实际exit0，主体22/22、JUnit35/35，失败0、跳过0，13项需求汇总全部PASS；报告evidence/acceptance/TV7-all.json及TV7-all.xml。真实Host2项搜索/编码/拒绝输入/在途和排队取消/同来源串行测试及前端5项迟到响应/取消/绑定/海报身份/预算测试通过。权限集合精确为T0.32加搜索，共35项，CSP保持原基线。
+- 真实窗口：原生⌘F打开并聚焦，停顿实测304ms；旧UUID收到取消，真实旧成功在新结果后释放仍被丢弃；加载保留旧项且透明度.6。三排各3项，空提示、6张类型卡及MacCMS wd结果通过。资料库2条继续、1条待播、3条历史按今天/昨天/更早分组；删除取消后3条、删一条后2条、清空0条、待播仍1条，玻璃确认通过。来源验证空表单拒绝、添加、失败行、编辑恢复、禁用/启用、删除取消/确认、8个预设入口和脱敏诊断反馈；设置验证自动下一集、1.5倍速、五色、中英、缓存负数拒绝/64MiB保存/清理。
+- 页面风格：ADR-057颜色、字号、尺寸、圆角和动效原值保持，未作校准变更；960/1200/1512全部计算样式通过，15张原生截图位于evidence/acceptance/TV7-f59f1ca5bebf4bd2a15263a16dcffafa/，已实际走查搜索空态/结果、资料库、来源和设置截图。悬停1.04、历史28px删除钮、36px分段、34/700标题及72px顶距、13/600分组标题、14px面板、52px行及12px/16px内边距、36px/10px控件、32px色块和2px外环均通过。
+- Verified：A1后外层直接执行原verify.py all，实际exit0、六门PASS；收据`evidence/verify/20261110T031950694940.json`。工作流124通过/7既有跳过；工作契约27命令、232结构用例、89语义用例和6生命周期向量通过；前端202通过/0失败/0跳过；原生库200通过/0失败/3既有忽略，另16项集成测试通过；原生fmt/check/clippy、原始契约、前端类型和生产构建通过。git diff --check及原task.py scope均exit0，全部变更在本卡范围内。
+- 证据绑定：最终A1前后与完整verify的source均为c4a54ab09c01e6abf665379e4f41da03bdc801f14f7387fa92c73217fdef81b4；protected=656ef0e94d4e126541a141ffd59171bc3dd9427950babdc010eee48b3e15024e，generation=0。verify后仅勾本卡和追加本记录，源码保持。
+- 资源：真实后端process-watchdog，4096MiB RSS采样、构建jobs2、测试线程1；最终A1 peak_rss_bytes=1276526592，App/WebKit合并RSS峰值791216128字节，窗口exit0、lingering=[]、forced_cleanup=[]，Host active_requests=0。RSS采样允许瞬时超限，无cgroup硬内存隔离和CPU quota。
+- Remaining：macos-arm64本卡通过；macos-x86_64、windows-x86_64、linux-x11/wayland、真实macOS14和1920宽度NOT RUN。完整页面刷新未单独运行；浏览器前进后退及原TV5原生/回退转场已诊断复验。程序化复制被WKWebView手势策略拒绝，实际验证了可手动选择文本的明确回退，真实用户手势复制成功未单独运行。当前.git只读，Git完成提交和固定提交独立review-only由外层收尾；随后仅执行原task.py done核对，不accept-review、不进入其他卡。
+- 收尾：原task.py done T0.34实际exit0，已核对当前授权基线下准确A1及完整verify完成资格；提交前保持受验源码不变。最后git diff --check及scope通过，写入者进入只读交接，由外层保存T0.34受验完成提交并执行固定提交独立巡检。
+
+## T0.34 外层收尾进程停止 2026-11-10
+- 事实：准确A1、完整verify和task.py done已通过；开发会话完成交接后未自行退出，外层为保存受验提交和开展只读巡检使用原 drive.py stop 停止该会话。状态中的 user_stop 为控制器的通用标记，本次并非用户要求暂停；原会话和验收记录保留。

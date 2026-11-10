@@ -273,6 +273,20 @@ impl Addon {
     }
 }
 
+fn searchable(addon: &Addon, catalog: &Value) -> bool {
+    let kind = catalog["type"].as_str().unwrap_or("");
+    let id = catalog["id"].as_str().unwrap_or("");
+    !kind.is_empty()
+        && !id.is_empty()
+        && addon.supports("catalog", kind, id)
+        && catalog["extra"].as_array().is_some_and(|extras| {
+            extras.iter().any(|e| e["name"] == "search")
+                && extras
+                    .iter()
+                    .all(|e| e["isRequired"] != true || e["name"] == "search")
+        })
+}
+
 #[derive(Clone)]
 struct Section {
     addon: usize,
@@ -317,6 +331,7 @@ pub struct Catalog {
     addons: Vec<Addon>,
     sections: Vec<Section>,
     state: Arc<Mutex<State>>,
+    pub search_gate: Arc<Mutex<()>>,
 }
 
 pub struct SyncFailure {
@@ -535,10 +550,17 @@ impl Catalog {
                 });
             }
         }
-        let usable = !sections.is_empty() || details;
+        let search = addons.iter().any(|addon| {
+            addon.manifest["catalogs"]
+                .as_array()
+                .expect("Catalogs")
+                .iter()
+                .any(|catalog| searchable(addon, catalog))
+        });
+        let usable = !sections.is_empty() || details || search;
         let source = json!({"id": captured.source_id, "source_revision": captured.source_revision, "kind": "stremio",
             "name": captured.config["name"], "language": "", "content_types": types,
-            "capabilities": {"home": !sections.is_empty(), "details": details, "search": false, "resolve": false, "sequential_home": false},
+            "capabilities": {"home": !sections.is_empty(), "details": details, "search": search, "resolve": false, "sequential_home": false},
             "runtime_status": if usable {"ready"} else {"failed"}, "error": if usable {Value::Null} else {json!(ApiError::new("CAPABILITY_UNAVAILABLE", "Stremio configuration has no catalog/meta metadata capability"))},
             "origin": {"config_id": captured.config["config_id"], "manifest_urls": captured.config["manifest_urls"]}});
         Contracts::get()
@@ -553,6 +575,7 @@ impl Catalog {
             addons,
             sections,
             state: Arc::default(),
+            search_gate: Arc::default(),
         })
     }
 
@@ -873,6 +896,61 @@ impl Catalog {
             }
         }
         Ok(result)
+    }
+
+    pub fn search(
+        &self,
+        http: &Http,
+        query: &str,
+        language: &str,
+        job: &Job,
+    ) -> Result<Output, ApiError> {
+        if self.source["capabilities"]["search"] != true {
+            return Err(ApiError::new(
+                "CAPABILITY_UNAVAILABLE",
+                "Stremio has no declared search catalog",
+            ));
+        }
+        let mut output = Output::default();
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+        let extra = encode_extra(&[("search".into(), query.into())]);
+        for (index, addon) in self.addons.iter().enumerate() {
+            for catalog in addon.manifest["catalogs"]
+                .as_array()
+                .expect("Catalogs")
+                .iter()
+                .filter(|catalog| searchable(addon, catalog))
+            {
+                job.check()?;
+                let response = self.localized(
+                    http,
+                    Resource {
+                        addon: index,
+                        operation: "catalog",
+                        kind: catalog["type"].as_str().expect("Type"),
+                        id: catalog["id"].as_str().expect("Catalog id"),
+                        extra: Some(&extra),
+                    },
+                    locale(language),
+                    job,
+                    &mut output,
+                )?;
+                for meta in response["metas"].as_array().expect("Validated metas") {
+                    let card = self.card(index, index, meta, &mut output)?;
+                    if seen.insert(card["id"].as_str().expect("Card id").to_owned()) {
+                        items.push(card);
+                    }
+                    if items.len() > 4096 {
+                        return Err(limited("Stremio search item limit reached"));
+                    }
+                }
+            }
+        }
+        job.check()?;
+        output.value = json!({"items":items});
+        wire_size(&output.value, LIMIT)?;
+        Ok(output)
     }
 
     pub fn home(

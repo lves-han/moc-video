@@ -7,6 +7,7 @@ import { locale, t } from '../i18n';
 import type { Bridge_MediaRef, WatchlistEntry } from '../models';
 
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef] }>();
+defineProps<{ wall?:boolean }>();
 const entries = ref<WatchlistEntry[]>([]), posters = ref<Record<string, { id: string; url: string }>>({}), error = ref('');
 const refreshed = new Set<string>();
 let generation = 0;
@@ -65,9 +66,10 @@ watch([() => state.runtime.engine_epoch, () => state.sources.data, () => locale.
 onBeforeUnmount(() => generation++);
 </script>
 <template>
-  <section v-if="entries.length || error" class="watchlist-row home-section">
+  <section v-if="wall || entries.length || error" class="watchlist-row home-section" :class="{ 'watchlist-wall':wall }">
     <h2>{{ locale === 'zh-CN' ? '待播清单' : 'Watchlist' }}</h2>
     <p v-if="error" role="alert">{{ error }} <button class="glass-pill" @click="load">{{ t('Retry') }}</button></p>
+    <p v-if="wall && !entries.length && !error" class="library-empty" role="status">{{ locale === 'zh-CN' ? '添加影片到待播清单，稍后观看。' : 'Add titles to your watchlist to watch later.' }}</p>
     <div class="watchlist-track" data-focus-row>
       <article v-for="entry in entries" :key="entry.content_id" class="watchlist-card home-card" :data-content-id="entry.content_id">
         <a class="poster-link watchlist-poster" :href="detailsHref(entry)" :aria-label="entry.title" @click.prevent="open(entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]!.url" alt="" loading="lazy" @error="imageFailed(entry, $event)" /><span v-else>{{ entry.title }}</span></a>

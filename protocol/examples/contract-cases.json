@@ -9900,6 +9900,62 @@
           "session_id": "transient"
         }
       }
+    },
+    {
+      "name": "args_search_catalog",
+      "document": "app",
+      "schema": "Args_search_catalog",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+          "query": "query"
+        }
+      }
+    },
+    {
+      "name": "args_search_catalog_extra",
+      "document": "app",
+      "schema": "Args_search_catalog",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+          "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+          "query": "query",
+          "url": "https://example.invalid"
+        }
+      }
+    },
+    {
+      "name": "result_search_catalog",
+      "document": "app",
+      "schema": "Result_search_catalog",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "items": []
+        }
+      }
+    },
+    {
+      "name": "result_search_catalog_extra",
+      "document": "app",
+      "schema": "Result_search_catalog",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "items": [],
+          "url": "https://example.invalid"
+        }
+      }
     }
   ],
   "semantic_cases": [

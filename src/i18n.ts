@@ -29,6 +29,8 @@ export function setLocale(value: AppLocale): boolean {
 }
 
 export const chinese = {
+  'Search': '搜索',
+  'Loading…': '加载中…',
   "Browse by genre": "分类浏览",
   "Collapse sidebar": "折叠侧栏",
   "Expand sidebar": "展开侧栏",

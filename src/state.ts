@@ -4,7 +4,7 @@ import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./pl
 import { t } from "./i18n.ts";
 import type { HttpSourceConfig, AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
   Command, CommandInput, PlaybackContext, PlaybackViewSession, PlayerEvent, ResumeSnapshot,
-  AppSource, Bridge_HomeRequest, HomeViewData, MetadataRef, PlaybackMatchResult,
+  AppSource, Bridge_HomeRequest, Bridge_MediaCard, ImageAccessMap, HomeViewData, MetadataRef, PlaybackMatchResult,
   PlaybackMatchSelection, Route, RuntimeStatus, Settings, SourceKey } from "./models.ts";
 
 export const defaultSettings = (): Settings => ({ schema_version: 2, last_source_key: null,
@@ -531,6 +531,9 @@ export type CatalogRow = { phase: "pending" | "loading" | "ready" | "failed"; da
 export const normalizedFilter = (filter: Bridge_HomeRequest["filter"]) =>
   JSON.stringify(Object.entries(filter ?? {}).filter(([, value]) => value != null).sort(([a], [b]) => a.localeCompare(b)));
 export class AppController {
+  readonly search = reactive({ phase: 'idle' as 'idle' | 'loading' | 'ready' | 'empty' | 'failed', query:'',
+    source:null as SourceKey | null, items:[] as Bridge_MediaCard[], images:{} as ImageAccessMap, error:null as Bridge_ApiError | null });
+  private searchImages = new Map<string, { queried:boolean; refreshed:boolean }>();
   readonly rows = reactive<Record<string, CatalogRow>>({});
   private catalogGeneration = 0;
   private catalogMode = false;
@@ -602,6 +605,7 @@ export class AppController {
     if (ticket) void this.api.cancel(ticket.id).catch(error => this.diagnostics.push(failure(error)));
   }
   private cancelPages() {
+    this.cancelSearch(true);
     for (const scope of [...this.requests.keys()]) if (scope === "home" || scope === "details" || scope.startsWith("section:")) this.cancel(scope);
     this.state.home.request_epoch++;
     this.state.details.request_epoch++;
@@ -610,6 +614,58 @@ export class AppController {
     if (this.state.details.phase === "loading") this.state.details.phase = this.state.details.data ? "ready" : "idle";
     for (const key of Object.keys(this.sections)) delete this.sections[key];
     for (const row of Object.values(this.rows)) if (row.phase === "loading") row.phase = row.data ? "ready" : "pending";
+  }
+  cancelSearch(clear = false) {
+    for (const scope of [...this.requests.keys()]) if (scope === 'search' || scope.startsWith('search-image:')) this.cancel(scope);
+    if (this.search.phase === 'loading') this.search.phase = this.search.items.length ? 'ready' : 'idle';
+    if (clear) { this.search.items = []; this.search.images = {}; this.search.phase = 'idle'; this.search.error = null; this.searchImages.clear(); }
+  }
+  async searchCatalog(query: string, source: SourceKey) {
+    this.cancelSearch();
+    requireBinding(this.state.runtime.engine_epoch, 'Search requires a host epoch');
+    this.search.source = clone(source); this.search.query = query; this.search.phase = 'loading'; this.search.error = null;
+    const ticket = this.ticket('search', source, 0);
+    try {
+      const response = await this.api.call('search_catalog', { ...source, query }, ticket.id, ticket.host ?? undefined);
+      if (!this.current('search', ticket) || ticket.locale !== (this.state.settings.ui_locale ?? 'en')) return;
+      requireBinding(response.items.every(card => sameSource(card.ref, source)), 'Search result source differs');
+      this.search.items = response.items; this.search.images = {}; this.searchImages.clear();
+      this.search.phase = response.items.length ? 'ready' : 'empty';
+    } catch (cause) { if (this.current('search', ticket)) { this.search.phase = 'failed'; this.search.error = failure(cause); } }
+    finally { if (this.requests.get('search') === ticket) this.requests.delete('search'); }
+  }
+  async searchPoster(card: Bridge_MediaCard) {
+    const source = this.search.source, items = this.search.items;
+    if (!card.poster || !source || !items.includes(card) || this.search.phase === 'loading') return;
+    const scope = `search-image:${card.id}`, ticket = this.ticket(scope, source, 0);
+    const valid = () => this.current(scope, ticket) && this.search.items === items && ticket.locale === (this.state.settings.ui_locale ?? 'en');
+    try {
+      // SearchResult keeps its existing {items} wire shape. Details is the
+      // existing owner of signed image access; only visible posters hydrate it.
+      const data = await this.api.call('get_details', { ref:card.ref }, ticket.id, ticket.host ?? undefined);
+      if (!valid()) return;
+      requireBinding(data.details.id === card.id && sameSource(data.details.ref, card.ref) && data.details.ref.data === card.ref.data, 'Search poster details identity differs');
+      this.search.images = { ...this.search.images, ...data.images };
+    } catch (cause) { if (valid()) this.search.error = failure(cause); }
+    finally { if (this.requests.get(scope) === ticket) this.requests.delete(scope); }
+  }
+  async searchImageError(id: string) {
+    const card = this.search.items.find(card => card.poster?.resource_id === id), items = this.search.items, host = this.state.runtime.engine_epoch;
+    if (!card || !host || this.search.phase === 'loading') return;
+    const attempt = this.searchImages.get(id) ?? { queried:false, refreshed:false };
+    this.searchImages.set(id, attempt);
+    if (attempt.queried) {
+      if (attempt.refreshed) this.search.error = { code:'SESSION_EXPIRED', message:'Search image expired again. Retry the search.', retryable:true };
+      return;
+    }
+    attempt.queried = true;
+    try {
+      const status = await this.api.call('get_resource_status', { kind:'image', target_id:id }, crypto.randomUUID(), host);
+      if (this.search.items !== items || host !== this.state.runtime.engine_epoch) return;
+      requireBinding(status.kind === 'image' && status.target_id === id, 'Search image status target differs');
+      if (status.error?.code === 'SESSION_EXPIRED' && !attempt.refreshed) { attempt.refreshed = true; await this.searchPoster(card); }
+      else this.search.error = status.error ?? { code:'UPSTREAM_FAILED', message:'Image failed to load', retryable:true };
+    } catch (cause) { if (this.search.items === items) this.search.error = failure(cause); }
   }
   rowKey(sectionRef: string, filter: HomeFilter = {}) {
     return JSON.stringify([this.state.selected_metadata_source, this.state.runtime.engine_epoch,

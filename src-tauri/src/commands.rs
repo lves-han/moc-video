@@ -51,7 +51,8 @@ business_commands!(
     clear_media_cache,
     list_watchlist,
     add_watchlist,
-    remove_watchlist
+    remove_watchlist,
+    search_catalog
 );
 
 // Cancellation stays on the immediate IPC control path even when ordinary
@@ -99,6 +100,7 @@ pub fn handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + 
         clear_media_cache,
         list_watchlist,
         add_watchlist,
-        remove_watchlist
+        remove_watchlist,
+        search_catalog,
     ]
 }

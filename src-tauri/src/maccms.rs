@@ -12,6 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -695,6 +696,7 @@ pub struct Catalog {
     pub source: Value,
     pub sections: Vec<Section>,
     pub images: HashMap<String, Image>,
+    pub search_gate: Arc<Mutex<()>>,
 }
 
 pub struct Mapped {
@@ -744,6 +746,7 @@ impl Catalog {
             source,
             sections: vec![],
             images: HashMap::new(),
+            search_gate: Arc::default(),
         };
         let response = catalog.request(http, &[("ac", "list"), ("pg", "1")], job, true)?;
         catalog.sections = catalog.categories(&response)?;

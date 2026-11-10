@@ -63,7 +63,7 @@ int main(int argc, const char **argv) {
                     mouse(kCGEventLeftMouseUp, start);
                 }
             } else if ([action isEqual:@"key"]) {
-                if (argc != 4) return 2;
+                if (argc != 4 && argc != 5) return 2;
                 if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != pid) {
                     fprintf(stderr, "Owned application must be frontmost for keyboard input\n"); return 5;
                 }
@@ -71,6 +71,7 @@ int main(int argc, const char **argv) {
                 if (code != 123 && code != 124 && code != 125 && code != 126 && code != 53 && code != 48 && code != 36 && code != 49 && code != 3 && code != 46) return 2;
                 for (int down=1; down>=0; down--) {
                     CGEventRef event = CGEventCreateKeyboardEvent(NULL, code, down);
+                    if (argc == 5 && [@(argv[4]) isEqual:@"cmd"]) CGEventSetFlags(event, kCGEventFlagMaskCommand);
                     CGEventPost(kCGHIDEventTap, event); CFRelease(event); usleep(100000);
                 }
             } else if ([action isEqual:@"pixel"]) {

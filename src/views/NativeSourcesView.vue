@@ -21,6 +21,10 @@ const legacyPreference = computed(() => {
 });
 
 const providerOf = (config: HttpSourceConfig) => providers.value.find(source => source.kind === config.kind && source.origin.config_id === config.config_id);
+function sourceError(config: HttpSourceConfig) {
+  const provider = providerOf(config), result = provider && controller.lastSourceResult(provider.id);
+  return provider?.error ? describeError(provider.error) : result && !result.ok ? result.message : '';
+}
 const hostOf = (config: HttpSourceConfig) => (config.kind === "maccms" ? [config.api_url] : config.manifest_urls).map(url => { try { return new URL(url).host; } catch { return ""; } }).join(", ");
 function lastRequest(config: HttpSourceConfig) {
   const source = providerOf(config), result = source && controller.lastSourceResult(source.id);
@@ -78,8 +82,9 @@ async function copyDiagnostics() {
     <NAlert v-if="state.sources.error" class="sources-list-error" type="error">{{ state.sources.error.message }}<NButton size="small" class="sources-action" @click="controller.loadSources()">{{ t('Retry') }}</NButton></NAlert>
     <NAlert v-if="failure" class="sources-failure" type="error" role="alert">{{ failure }}</NAlert>
 
-    <section class="settings-panel">
+    <section class="settings-group">
       <h2>{{ word('当前选择', 'Current selection') }}</h2>
+      <div class="settings-panel">
       <div class="sources-pickers">
         <label>{{ t('Metadata provider') }}<select class="sources-metadata" :value="state.selected_metadata_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="source in metadataSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
         <label>{{ word('播放源', 'Playback source') }}<select class="sources-playback" :value="state.selected_playback_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'playback')"><option value="" disabled>{{ t('Choose a video source') }}</option><option v-for="source in playbackSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
@@ -87,27 +92,31 @@ async function copyDiagnostics() {
       <p v-if="legacyPreference" class="sources-legacy" role="status">{{ word('之前选择的播放源已不可用，可能是已停止支持的 Cloudstream 来源。原偏好和历史都已保留，选择新的播放源后才会更新。', 'The previously selected playback source is unavailable; it may be a Cloudstream source, which is no longer supported. The preference and history are kept until you choose a new playback source.') }}<NButton v-if="state.selected_playback_source" size="small" class="sources-legacy-adopt sources-action" @click="emit('select', state.selected_playback_source.source_id, 'playback')">{{ word('改用当前播放源', 'Use the current playback source') }}</NButton></p>
       <p v-if="!metadataSources.length" class="sources-guidance" role="status">{{ word('请添加 Stremio 扩展的 manifest 地址，首页才能显示内容。', 'Add a Stremio add-on manifest URL so the home page has content.') }}</p>
       <p v-if="!playbackSources.length" class="sources-guidance" role="status">{{ word('请添加一个播放源。', 'Add a playback source.') }}</p>
+          </div>
     </section>
 
-    <section class="settings-panel sources-presets">
+    <section class="settings-group sources-presets">
       <h2>{{ word('可添加的播放源', 'Available playback sources') }}</h2>
+      <div class="settings-panel">
       <p class="sources-presets-note">{{ word('仅供个人使用。这些来源由第三方提供，内容和可用性以来源为准。', 'For personal use only. These third-party sources decide their own content and availability.') }}</p>
       <article v-for="preset in presets" :key="preset.api_url" class="sources-preset" :data-preset="preset.name">
         <h3>{{ preset.name }}</h3>
         <NButton class="sources-preset-add" :disabled="busy || preset.added" @click="addPreset(preset)">{{ preset.added ? word('已添加', 'Added') : word('添加', 'Add') }}</NButton>
       </article>
+          </div>
     </section>
 
-    <section class="settings-panel">
+    <section class="settings-group">
       <div class="sources-heading"><h2>{{ word('HTTP 来源', 'HTTP sources') }}</h2><NButton class="sources-add" type="primary" :loading="busy" @click="openDraft()">{{ word('添加来源', 'Add source') }}</NButton></div>
+      <div class="settings-panel">
       <NEmpty v-if="!configs.length" class="sources-empty" :description="word('尚未配置来源', 'No sources configured')" />
       <article v-for="config in configs" :key="config.config_id" class="sources-row" :data-config-id="config.config_id">
-        <div class="sources-row-text">
+        <span class="source-status" :class="!config.enabled ? 'disabled' : providerOf(config)?.runtime_status === 'ready' ? 'ready' : 'failed'" :aria-label="config.enabled ? providerOf(config)?.runtime_status : 'disabled'" /><div class="sources-row-text">
           <h3>{{ config.name }}</h3>
           <p>{{ kindLabel(config.kind) }} · {{ hostOf(config) }}</p>
           <p class="sources-state">{{ word('登记状态', 'Registration') }}: {{ config.enabled ? providerOf(config)?.runtime_status ?? word('未同步', 'not synced') : word('已禁用', 'disabled') }}</p>
           <p class="sources-last">{{ word('最近请求', 'Last request') }}: {{ lastRequest(config) }}</p>
-          <NAlert v-if="providerOf(config)?.error" class="sources-row-error" type="error">{{ describeError(providerOf(config)!.error!) }}</NAlert>
+          <p v-if="sourceError(config)" class="sources-row-error" role="alert">{{ sourceError(config) }}</p>
         </div>
         <div class="sources-row-actions">
           <NButton class="sources-edit" :disabled="busy" @click="openDraft(config)">{{ word('编辑', 'Edit') }}</NButton>
@@ -115,12 +124,15 @@ async function copyDiagnostics() {
           <NButton class="sources-delete" :disabled="busy" @click="pendingDelete = config">{{ word('删除', 'Delete') }}</NButton>
         </div>
       </article>
+          </div>
     </section>
 
-    <section class="settings-panel sources-diagnostics">
+    <section class="settings-group sources-diagnostics">
       <div class="sources-heading"><h2>{{ word('诊断', 'Diagnostics') }}</h2><NButton class="sources-copy" @click="copyDiagnostics">{{ word('复制脱敏诊断', 'Copy redacted diagnostics') }}</NButton></div>
+      <div class="settings-panel">
       <p v-if="copyState" class="sources-copy-state" role="status">{{ copyState }}</p>
       <pre class="sources-report">{{ report }}</pre>
+          </div>
     </section>
   </div>
 

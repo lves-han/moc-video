@@ -5643,6 +5643,78 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Args_search_catalog": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/SearchRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_search_catalog": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/SearchResult"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "x-command-contracts": {
@@ -5852,6 +5924,14 @@
       },
       "result": {
         "$ref": "#/$defs/Result_remove_watchlist"
+      }
+    },
+    "search_catalog": {
+      "args": {
+        "$ref": "#/$defs/Args_search_catalog"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_search_catalog"
       }
     }
   },

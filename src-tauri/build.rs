@@ -35,6 +35,7 @@ fn main() {
         "list_watchlist",
         "add_watchlist",
         "remove_watchlist",
+        "search_catalog",
         "app_close_started",
         "app_close_aborted",
         "app_close_ready",

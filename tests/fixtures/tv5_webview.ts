@@ -64,6 +64,30 @@ export async function detailsScenario(action: string, ready: any, prototype: { p
       title: document.title, origin: location.origin, overflow: document.documentElement.scrollWidth > innerWidth + 1,
       native: await nativeInvoke('t01_control',{action:'identity'}), errors: await maccmsScenario('errors',prototype) };
   }
+  if (action === 'navigation') {
+    await home(); scrollTo({ top:320, behavior:'instant' }); await delay(100);
+    const original = scrollY;
+    await open(ready); const a = location.hash;
+    const related = all<HTMLAnchorElement>('.details-related .poster-link').find(e => e.getAttribute('href') !== a);
+    check(related, 'Related B missing'); const b = related.getAttribute('href')!; related.click();
+    await until(() => location.hash === b && state.details.phase === 'ready', 'B did not load'); await settled();
+    const backToA = all<HTMLAnchorElement>('.details-related .poster-link').find(e => e.getAttribute('href') === a);
+    check(backToA, 'Related A missing'); backToA.click();
+    await until(() => location.hash === a && state.details.phase === 'ready', 'A revisit did not load'); await settled();
+    const chain: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      one<HTMLAnchorElement>('.details-back').click(); await delay(700); await settled();
+      chain.push(location.hash === a ? 'A' : location.hash === b ? 'B' : location.hash === '#/home' ? 'home' : 'other');
+    }
+    const restored = scrollY, browser: string[] = [];
+    if (chain.at(-1) === 'home') {
+      history.forward(); await until(() => location.hash === a && state.details.phase === 'ready', 'Browser Forward lost A'); await settled(); browser.push('A');
+      history.forward(); await until(() => location.hash === b && state.details.phase === 'ready', 'Browser Forward lost B'); await settled(); browser.push('B');
+      history.back(); await until(() => location.hash === a && state.details.phase === 'ready', 'Browser Back lost A'); await settled(); browser.push('A');
+      one<HTMLAnchorElement>('.details-back').click(); await until(() => state.route.name === 'home', 'Page Back after browser navigation lost home'); await settled(); browser.push('home');
+    }
+    return { chain, browser, original, restored, clean:!document.querySelector('.page-transition-old'), errors:await maccmsScenario('errors',prototype) };
+  }
   if (action === 'lower') {
     one('.details-episodes').scrollIntoView({ block:'start',behavior:'instant' }); await delay(300);
     return { scroll: scrollY, casts: all('.details-actor').length, related: all('.details-related .home-card').length };

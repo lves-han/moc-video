@@ -167,6 +167,8 @@ export type Args_add_watchlist = { "request_id": string; "input": WatchlistEntry
 export type Result_add_watchlist = ({ "request_id": string; "engine_epoch": string; "data": WatchlistEntry } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type Args_remove_watchlist = { "request_id": string; "input": { "content_id": string } };
 export type Result_remove_watchlist = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_search_catalog = { "request_id": string; "input": Bridge_SearchRequest };
+export type Result_search_catalog = ({ "request_id": string; "engine_epoch": string; "data": Bridge_SearchResult } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type CommandArgs = {
   "runtime_status": Args_runtime_status;
   "runtime_prepare": Args_runtime_prepare;
@@ -194,6 +196,7 @@ export type CommandArgs = {
   "list_watchlist": Args_list_watchlist;
   "add_watchlist": Args_add_watchlist;
   "remove_watchlist": Args_remove_watchlist;
+  "search_catalog": Args_search_catalog;
 };
 export type CommandResults = {
   "runtime_status": Result_runtime_status;
@@ -222,6 +225,7 @@ export type CommandResults = {
   "list_watchlist": Result_list_watchlist;
   "add_watchlist": Result_add_watchlist;
   "remove_watchlist": Result_remove_watchlist;
+  "search_catalog": Result_search_catalog;
 };
 export type Command = keyof CommandArgs;
 export type CommandInput<C extends Command> = CommandArgs[C]['input'];

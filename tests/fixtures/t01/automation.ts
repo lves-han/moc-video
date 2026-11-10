@@ -162,6 +162,13 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         await foreground();
         return detailsScenario(command.action!, command.payload, { player, base, cap });
       }
+      case "tv7": {
+        const { searchLibraryScenario } = await import("../tv7_webview");
+        // Refocusing WebKit after native pointer input can invalidate :hover.
+        // The armed pointer observation already belongs to the focused window.
+        if (command.action !== 'search-hover') await foreground();
+        return searchLibraryScenario(command.action!, command.payload, { player, base, cap });
+      }
       case "tv4": {
         const { maccmsScenario } = await import("../tv4_webview");
         await foreground();

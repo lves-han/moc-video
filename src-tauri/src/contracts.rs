@@ -33,6 +33,7 @@ pub const COMMANDS: &[&str] = &[
     "list_watchlist",
     "add_watchlist",
     "remove_watchlist",
+    "search_catalog",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

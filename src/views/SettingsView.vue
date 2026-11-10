@@ -81,17 +81,19 @@ onMounted(() => { void refreshCache(); });
 </script>
 
 <template>
+  <div class="tv-settings">
   <div class="page-heading">
     <div>
       <p class="eyebrow">MAKE YOURSELF COMFORTABLE</p>
-      <h1>{{ t("Make yourself comfortable.") }}</h1>
+      <h1>{{ t("Settings") }}</h1>
       <p class="page-description">
         {{ t("A few small adjustments for a better viewing experience.") }}
       </p>
     </div>
   </div>
-  <section class="settings-panel appearance-panel">
+  <section class="settings-group appearance-panel">
     <h2>{{ t("Appearance") }}</h2>
+    <div class="settings-panel">
     <div class="setting-row system-mode-row">
       <div>
         <h3>{{ t("Display mode") }}</h3>
@@ -112,39 +114,18 @@ onMounted(() => { void refreshCache(); });
           t("Choose your colors. Each palette adapts to light and dark mode.")
         }}
       </p>
-      <NRadioGroup
-        :value="palette"
-        name="color-palette"
-        class="palette-grid"
-        aria-labelledby="palette-label"
-        aria-describedby="palette-help"
-        @update:value="changePalette"
-      >
-        <div v-for="item in paletteOptions" :key="item.value">
-          <NRadioButton
-            :value="item.value"
-            :style="{
-              width: '100%',
-              padding: '6px',
-              '--preview-day': item.day,
-              '--preview-night': item.night,
-            }"
-          >
-            <span class="palette-preview" aria-hidden="true"
-              ><i class="palette-day"><b /><em /></i
-              ><i class="palette-night"><b /><em /></i
-            ></span>
-            <span class="palette-name"
-              ><strong>{{ t(item.label) }}</strong
-              ><Icon v-if="palette === item.value" name="check" :size="16"
-            /></span>
-          </NRadioButton>
-        </div>
+      <div class="palette-swatches" role="radiogroup" aria-labelledby="palette-label" aria-describedby="palette-help">
+        <button v-for="item in paletteOptions" :key="item.value" class="palette-swatch" role="radio" :aria-checked="palette === item.value" :aria-label="t(item.label)" :title="t(item.label)" :style="{ background:item.night }" @click="changePalette(item.value)"><Icon v-if="palette === item.value" name="check" :size="16" /></button>
+      </div>
+      <NRadioGroup class="palette-grid narrow-palette" :value="palette" name="color-palette" aria-labelledby="palette-label" aria-describedby="palette-help" @update:value="changePalette">
+        <div v-for="item in paletteOptions" :key="item.value"><NRadioButton :value="item.value" :style="{ width:'100%', padding:'6px', '--preview-day':item.day, '--preview-night':item.night }"><span class="palette-preview" aria-hidden="true"><i class="palette-day"><b /><em /></i><i class="palette-night"><b /><em /></i></span><span class="palette-name"><strong>{{ t(item.label) }}</strong><Icon v-if="palette === item.value" name="check" :size="16" /></span></NRadioButton></div>
       </NRadioGroup>
     </div>
+      </div>
   </section>
-  <section class="settings-panel">
+  <section class="settings-group">
     <h2>{{ t("Language & metadata") }}</h2>
+    <div class="settings-panel">
     <div class="setting-row">
       <div>
         <h3>{{ t("App language") }}</h3>
@@ -152,20 +133,8 @@ onMounted(() => { void refreshCache(); });
           {{ t("Change the interface language and save it on this device.") }}
         </p>
       </div>
-      <select
-        class="setting-select compact-select"
-        :value="locale"
-        :aria-label="t('App language')"
-        @change="changeLanguage(($event.target as HTMLSelectElement).value)"
-      >
-        <option
-          v-for="item in languageOptions"
-          :key="item.value"
-          :value="item.value"
-        >
-          {{ item.label }}
-        </option>
-      </select>
+      <div class="settings-language library-tabs" role="radiogroup" :aria-label="t('App language')" data-focus-row><button v-for="item in languageOptions" :key="item.value" role="radio" :aria-checked="locale === item.value" @click="changeLanguage(item.value)">{{ item.label }}</button></div>
+      <select class="setting-select compact-select narrow-language" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
     </div>
     <div class="setting-row">
       <div>
@@ -191,9 +160,11 @@ onMounted(() => { void refreshCache(); });
         t(metadataLanguage === "zh-CN" ? "Simplified Chinese" : "English")
       }}</output>
     </div>
+      </div>
   </section>
-  <section class="settings-panel">
+  <section class="settings-group">
     <h2>{{ t("Playback preferences") }}</h2>
+    <div class="settings-panel">
     <div class="setting-row">
       <div>
         <h3>{{ t("Automatically play next episode") }}</h3>
@@ -223,9 +194,11 @@ onMounted(() => { void refreshCache(); });
         </option>
       </select>
     </div>
+      </div>
   </section>
-  <section class="settings-panel media-cache-settings" :aria-busy="cacheBusy">
+  <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
     <h2>{{ t('Media cache') }}</h2>
+    <div class="settings-panel">
     <p>{{ t('Played media is cached on this device. Older cache is removed automatically when the limit is reached.') }}</p>
     <p v-if="preview">{{ t('Manage media cache in the desktop app.') }}</p>
     <div class="setting-row">
@@ -235,9 +208,11 @@ onMounted(() => { void refreshCache(); });
     <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }} / {{ cacheSize(cache.max_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ t('Clear media cache') }}</NButton></div></div>
     <NAlert v-if="cacheError" type="error" class="media-cache-error">{{ cacheError }}</NAlert>
     <p v-if="cacheNotice" role="status" class="media-cache-notice">{{ cacheNotice }}</p>
+      </div>
   </section>
-  <section class="settings-panel">
+  <section class="settings-group">
     <h2>{{ t("About Yingxiang Video") }}</h2>
+    <div class="settings-panel">
     <div class="about-brand">
       <img src="/mark.svg" width="48" height="48" alt="" />
       <div>
@@ -253,7 +228,9 @@ onMounted(() => { void refreshCache(); });
         )
       }}
     </p>
+      </div>
   </section>
+  </div>
 </template>
 
 <style scoped>

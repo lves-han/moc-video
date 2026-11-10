@@ -2066,7 +2066,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 **缓冲。** 居中40px转圈，延迟300ms显示，避免短暂闪烁。
 
 ### T0.34 TV7 搜索、资料库、来源与设置
-- [ ] 完成
+- [x] 完成
 - 依赖：T0.31, T0.32
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：TV-SEARCH, TV-LIBRARY, TV-MANAGE, REQ-TV7 → A1（覆盖表含精确对应）

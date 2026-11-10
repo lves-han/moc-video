@@ -164,7 +164,7 @@ impl Host {
             Ok(job) => {
                 let mut committed = self.committed.lock().expect("Host commit lock");
                 let key = match command {
-                    "get_home" => Some(&args["input"]),
+                    "get_home" | "search_catalog" => Some(&args["input"]),
                     "get_details" => Some(&args["input"]["ref"]),
                     _ => None,
                 };
@@ -348,6 +348,12 @@ impl Host {
         match call.command.as_str() {
             "sync_catalog" => return self.sync_catalog(input, job, error_details),
             "get_home" => return self.route_content(input, job, "home", call.metadata_epoch),
+            "search_catalog" => {
+                if input["query"].as_str().is_none_or(|q| q.trim().is_empty()) {
+                    return Err(ApiError::bad("Search requires a nonblank query"));
+                }
+                return self.route_content(input, job, "search", call.metadata_epoch);
+            }
             "get_details" => {
                 return self.route_content(&input["ref"], job, "details", call.metadata_epoch);
             }
@@ -693,6 +699,21 @@ impl Host {
         capability: &str,
         page_epoch: Option<u64>,
     ) -> Result<Value, ApiError> {
+        fn search_lock<'a>(
+            gate: &'a Mutex<()>,
+            job: &Job,
+        ) -> Result<std::sync::MutexGuard<'a, ()>, ApiError> {
+            loop {
+                job.check()?;
+                match gate.try_lock() {
+                    Ok(guard) => return Ok(guard),
+                    Err(std::sync::TryLockError::WouldBlock) => {
+                        std::thread::sleep(std::time::Duration::from_millis(5))
+                    }
+                    Err(_) => return Err(ApiError::internal("Search gate poisoned")),
+                }
+            }
+        }
         let mut committed = self
             .committed
             .lock()
@@ -742,8 +763,15 @@ impl Host {
                     })?;
                 drop(committed);
                 let http = maccms::Http::default();
+                let _search = if capability == "search" {
+                    Some(search_lock(&catalog.search_gate, job)?)
+                } else {
+                    None
+                };
                 let result = if capability == "home" {
                     catalog.home(&http, key, language, job)
+                } else if capability == "search" {
+                    catalog.search(&http, key["query"].as_str().expect("Query"), language, job)
                 } else {
                     catalog.details(&http, key, language, job)
                 };
@@ -766,6 +794,13 @@ impl Host {
                     &mut output.value,
                     |id| catalog.image_record(id),
                 )?;
+                if capability == "search" {
+                    output
+                        .value
+                        .as_object_mut()
+                        .expect("Search object")
+                        .remove("images");
+                }
                 Ok(output.value)
             }
             SourceKind::Maccms => {
@@ -786,6 +821,11 @@ impl Host {
                 }
                 drop(committed);
                 let http = maccms::Http::default();
+                let _search = if capability == "search" {
+                    Some(search_lock(&catalog.search_gate, job)?)
+                } else {
+                    None
+                };
                 let result = if capability == "home" {
                     catalog.home(&http, key, job).map(|home| {
                         (
@@ -793,6 +833,13 @@ impl Host {
                             key["section_ref"].is_null().then_some(home.sections),
                         )
                     })
+                } else if capability == "search" {
+                    catalog
+                        .search(&http, key["query"].as_str().expect("Query"), 1, job)
+                        .map(|mut mapped| {
+                            mapped.value = json!({"items":mapped.value});
+                            (mapped, None)
+                        })
                 } else {
                     catalog
                         .details(&http, key, job)
@@ -827,6 +874,13 @@ impl Host {
                     &mut mapped.value,
                     |id| images.get(id).cloned(),
                 )?;
+                if capability == "search" {
+                    mapped
+                        .value
+                        .as_object_mut()
+                        .expect("Search object")
+                        .remove("images");
+                }
                 Ok(mapped.value)
             }
         }

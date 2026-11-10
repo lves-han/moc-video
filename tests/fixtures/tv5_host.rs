@@ -1,6 +1,8 @@
 //! TV5 durable watchlist, transactional v1 upgrade, and a production Host for WKWebView.
 use super::*;
 use rusqlite::{Connection, params};
+#[path = "tv7_host.rs"]
+mod tv7;
 
 fn entry5() -> Value {
     let id = crate::source_dispatch::identity("metadata", &["tmdb", "series", "1"]);

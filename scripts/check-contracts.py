@@ -67,7 +67,7 @@ def check(directory):
             assert app[key][name] == definition, f'Existing {key} changed: {name}'
     commands = app['x-command-contracts']
     additions = set(commands) - set(baseline_app['x-command-contracts'])
-    assert additions == HISTORY | CACHE | WATCHLIST, 'History, media cache and watchlist commands must have their complete contracts'
+    assert additions == HISTORY | CACHE | WATCHLIST | {'search_catalog'}, 'History, media cache and watchlist commands must have their complete contracts'
     if (ROOT / 'src-tauri/src/history.rs').exists():
         assert HISTORY <= additions, 'Native history requires all four IPC contracts'
     for command in CACHE:
