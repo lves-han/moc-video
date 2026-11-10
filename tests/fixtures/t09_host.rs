@@ -21,6 +21,8 @@ mod t18;
 mod t19;
 #[path = "t24_cache_host.rs"]
 mod t24_cache;
+#[path = "t37_host.rs"]
+mod t37;
 #[path = "tv3_host.rs"]
 mod tv3;
 #[path = "tv4_host.rs"]

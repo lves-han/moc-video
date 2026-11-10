@@ -1095,7 +1095,6 @@ impl Host {
         let reference = &input["metadata_ref"]["content_ref"];
         if input["playback_source"]["source_id"] != reference["source_id"]
             || input["playback_source"]["source_revision"] != reference["source_revision"]
-            || !input["selection"].is_null()
         {
             return Err(ApiError::bad(
                 "MacCMS metadata requires the same playback source and revision",
@@ -1149,11 +1148,51 @@ impl Host {
                     .contains(&episode)
             })
             .ok_or_else(|| ApiError::bad("MacCMS episode group is missing"))?;
-        let selection =
+        let mut selection =
             json!({"content_ref":reference,"group_id":group["id"],"episode_id":episode["id"]});
         let mut committed = self.committed.lock().expect("Host commit lock");
         matching::budget(job)?;
         committed.matches.check(sequence)?;
+        if !input["selection"].is_null() {
+            let chosen = &input["selection"];
+            let previous = committed.matches.registered(chosen, self.clock.now_ms())?;
+            let old = matching::selection(&previous, chosen)?;
+            let current = matching::selection(details, chosen)?;
+            if old != current {
+                return Err(ApiError::new(
+                    "REVISION_MISMATCH",
+                    "Selected episode changed; inspect details again",
+                ));
+            }
+            // Keep the requested metadata video identity when switching a
+            // route. Both current groups must uniquely name the same episode.
+            let selected_group = details["groups"]
+                .as_array()
+                .expect("Groups")
+                .iter()
+                .find(|g| g["id"] == chosen["group_id"])
+                .ok_or_else(|| ApiError::bad("Selected route is missing"))?;
+            let unique = |g: &Value| {
+                g["episodes"]
+                    .as_array()
+                    .expect("Episodes")
+                    .iter()
+                    .filter(|e| e["label"] == episode["label"])
+                    .count()
+                    == 1
+            };
+            if current["label"] != episode["label"]
+                || !unique(group)
+                || !unique(selected_group)
+                || current["season"] != episode["season"]
+                || current["number"] != episode["number"]
+            {
+                return Err(ApiError::bad(
+                    "Selected route does not uniquely identify the requested video",
+                ));
+            }
+            selection = chosen.clone();
+        }
         committed
             .sources
             .check_snapshot(&snapshot, &self.host_epoch, None, false)?;

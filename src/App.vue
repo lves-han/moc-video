@@ -240,10 +240,10 @@ async function onHashChange() {
   } catch (error) { preferenceError.value = String(error); }
   finally { poster?.style.removeProperty('view-transition-name'); document.querySelectorAll<HTMLElement>('.poster-link').forEach(element => element.style.removeProperty('view-transition-name')); }
 }
-async function playEpisode(videoId: string) {
+async function playEpisode(videoId: string, explicitLine = false) {
   try {
     await flushHistory();
-    const result = await appController.match(videoId);
+    const result = await appController.match(videoId, null, !explicitLine);
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
 }

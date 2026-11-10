@@ -2,6 +2,7 @@ import { reactive } from "vue";
 import { api, Api, ApiFailure, settingsQueue, SettingsQueue } from "./api.ts";
 import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
 import { t } from "./i18n.ts";
+import { captureLine, correspondingEpisode, createLinePreferences, preferredContent, preferredSelection, type LinePreference } from './line-preference.ts';
 import type { HttpSourceConfig, AppState, Bridge_ApiError, Bridge_MediaRef, Bridge_Resolution, DetailsViewData,
   Command, CommandInput, PlaybackContext, PlaybackViewSession, PlayerEvent, ResumeSnapshot,
   AppSource, Bridge_HomeRequest, Bridge_MediaCard, ImageAccessMap, HomeViewData, MetadataRef, PlaybackMatchResult,
@@ -40,7 +41,8 @@ const failure = (cause: unknown): Bridge_ApiError => cause instanceof ApiFailure
 
 export function createPlaybackController(root: AppState = appState, client: Pick<Api, "call"> = api,
   ended: (context: PlaybackContext, epoch: number) => void = () => {},
-  runtimeChanged: (runtime: RuntimeStatus) => void = runtime => { root.runtime = runtime; }) {
+  runtimeChanged: (runtime: RuntimeStatus) => void = runtime => { root.runtime = runtime; },
+  advanced: (context: PlaybackContext, epoch: number, session: string) => void = () => {}) {
   const state = root.playback;
   const ui = reactive({ autoplayBlocked: false, diagnostic: "", action: "" as "" | "retry" | "reconnect", imageError: "" });
   let player: Player | undefined;
@@ -355,7 +357,11 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     attach(element: HTMLVideoElement) {
       if (player) throw new Error("Playback controller already owns a video");
       video = element;
-      player = createPlayer(element, () => {}, receive);
+      player = createPlayer(element, () => {}, receive, binding => {
+        const session = state.session;
+        if (session && state.context && current(binding.playback_epoch, session) && binding.session_id === session.session_id
+          && binding.engine_epoch === state.engine_epoch && state.phase === 'playing') advanced(structuredCloneContext(state.context), binding.playback_epoch, session.session_id);
+      });
     },
     retry() { const resume = snapshot(); return resume ? load(resume.context, { resume }) : retiring.length ? stop() : Promise.resolve(); },
     selectStream(id: string) { const resume = snapshot(); return resume ? load(resume.context, { stream: id, resume }) : Promise.resolve(); },
@@ -454,7 +460,8 @@ export function assertContext(state: AppState, context: PlaybackContext) {
   if (state.route.name === "details") requireBinding(sameRef(state.route.ref, details.details.ref), "Route and details differ");
   requireBinding(details.details.groups.some(group => group.episodes.some(episode => {
     return sameSource(episode.ref, context.metadata_ref.content_ref) && metadataVideoId(episode.ref) === context.metadata_video_id
-      && (!direct || group.id === context.group_id && episode.id === context.episode_id && sameRef(episode.ref, context.episode_ref));
+      && (!direct || details.details.groups.some(selected => selected.id === context.group_id && selected.episodes.some(actual => actual.id === context.episode_id
+        && sameRef(actual.ref, context.episode_ref) && (sameRef(episode.ref, actual.ref) || correspondingEpisode(details.details, episode, selected)?.id === actual.id))));
   })), "Video is absent from current metadata details");
 }
 
@@ -558,8 +565,15 @@ export class AppController {
   private retryRetirement: (() => Promise<void>) | null = null;
   private cleanup: Promise<void> = Promise.resolve();
   private api: Api;
-  constructor(client: Api = api, settings: SettingsQueue = settingsQueue, initial: AppState = appState) {
+  private lineGeneration = 0;
+  private manualSource: MetadataRef | null = null;
+  private playedLine: { match: string; preference: LinePreference; generation: number } | null = null;
+  private linePreferences: ReturnType<typeof createLinePreferences> | null;
+  readonly lineMemory = reactive({ error: '', saved: false });
+  constructor(client: Api = api, settings: SettingsQueue = settingsQueue, initial: AppState = appState,
+    linePreferences: ReturnType<typeof createLinePreferences> | null = typeof window !== 'undefined' && window.__TAURI__ ? createLinePreferences() : null) {
     this.api = client; this.state = initial; this.settings = settings;
+    this.linePreferences = linePreferences;
   }
   bindPlayback(controller: PlaybackController) {
     const stop = async () => {
@@ -823,6 +837,11 @@ export class AppController {
   async selectSource(sourceId: string, role: "metadata" | "playback") {
     const source = this.state.sources.data?.providers.find(source => source.id === sourceId);
     requireBinding(source?.runtime_status === "ready" && (role === "metadata" ? source.kind === "stremio" && source.capabilities.home && source.capabilities.details : source.kind !== "stremio" && source.capabilities.resolve), "Source is unavailable for this role");
+    if (role === 'playback') {
+      this.manualSource = this.state.details.data?.metadata_ref ? clone(this.state.details.data.metadata_ref) : null;
+      ++this.lineGeneration;
+      if (this.matching.pending) this.invalidatePlayback();
+    }
     const configId = source.kind === "stremio" ? source.origin.config_id : null;
     const unchanged = sameSource(role === "metadata" ? this.state.selected_metadata_source : this.state.selected_playback_source,
       { source_id: source.id, source_revision: source.source_revision });
@@ -927,7 +946,10 @@ export class AppController {
   }
   // The metadata video after this one in the current details order; null at the last episode.
   nextVideo(videoId: string) {
-    const videos = (this.state.details.data?.details.groups ?? []).flatMap(group => group.episodes).map(episode => metadataVideoId(episode.ref));
+    const groups = this.state.details.data?.details.groups ?? [];
+    const direct = this.state.details.data?.metadata_ref?.identity.namespace === 'maccms';
+    const videos = (direct ? groups.find(group => group.episodes.some(episode => metadataVideoId(episode.ref) === videoId))?.episodes ?? []
+      : groups.flatMap(group => group.episodes)).map(episode => metadataVideoId(episode.ref));
     const index = videos.indexOf(videoId);
     return index >= 0 ? videos[index + 1] ?? null : null;
   }
@@ -999,6 +1021,9 @@ export class AppController {
     finally { if (this.requests.get("details") === ticket) { this.requests.delete("details"); target.request_id = null; } }
   }
   invalidatePlayback() {
+    ++this.lineGeneration;
+    this.playedLine = null;
+    this.lineMemory.saved = false;
     this.confirmation = null;
     this.matching.result = null; this.matching.details = null; this.matching.error = null; this.matching.loading = false; this.matching.pending = null;
     this.cancel("match"); this.cancel("candidate");
@@ -1023,8 +1048,19 @@ export class AppController {
     if (this.state.route.name === "playback") this.state.route = this.state.details.data
       ? { name: "details", ref: clone(this.state.details.data.details.ref) } : { name: "home" };
   }
-  async match(videoId: string, selection: PlaybackMatchSelection | null = null): Promise<PlaybackMatchResult | null> {
-    const metadata = this.state.details.data?.metadata_ref, source = this.state.selected_playback_source;
+  rememberLine(context: PlaybackContext, epoch: number, session: string) {
+    const choice = this.playedLine, state = this.state.playback;
+    const current = () => Boolean(choice && choice === this.playedLine && choice.generation === this.lineGeneration
+      && state.playback_epoch === epoch && state.context?.match_id === context.match_id && choice.match === context.match_id
+      && state.session?.session_id === session && state.engine_epoch === this.state.runtime.engine_epoch
+      && sameSource(state.context.episode_ref, this.state.selected_playback_source));
+    if (!choice || !this.linePreferences || this.lineMemory.saved || !current()) return;
+    try { if (this.linePreferences.save(choice.preference, current)) { this.lineMemory.saved = true; this.lineMemory.error = ''; } }
+    catch (cause) { if (current()) this.lineMemory.error = String(cause); }
+  }
+  async match(videoId: string, selection: PlaybackMatchSelection | null = null, preferLine = true): Promise<PlaybackMatchResult | null> {
+    const metadata = this.state.details.data?.metadata_ref;
+    let source = this.state.selected_playback_source;
     requireBinding(metadata && source && this.state.details.phase === "ready", "Match requires ready metadata details and playback source");
     requireBinding(this.state.details.data!.details.groups.some(group => group.episodes.some(episode => {
       return sameSource(episode.ref, metadata.content_ref) && metadataVideoId(episode.ref) === videoId;
@@ -1035,6 +1071,7 @@ export class AppController {
       && this.confirmation.candidates.some(candidate => sameRef(candidate.content_ref, selection.content_ref))
       && selection.group_id && selection.episode_id, "Candidate is absent from the current confirmation result");
     const selectedEpisode = selection && this.matching.details?.details.groups.find(group => group.id === selection.group_id)?.episodes.find(episode => episode.id === selection.episode_id);
+    let selectedDetails = selection ? this.matching.details?.details : metadata?.identity.namespace === 'maccms' ? this.state.details.data?.details : undefined;
     if (selection) requireBinding(this.matching.details && sameRef(this.matching.details.details.ref, selection.content_ref)
       && selectedEpisode && sameSource(selectedEpisode.ref, source), "Candidate episode is absent from the current details");
     this.invalidatePlayback();
@@ -1044,7 +1081,42 @@ export class AppController {
     try {
       await this.cleanup;
       if (!this.current("match", ticket)) return null;
-      const response = await this.api.call("match_playback", { metadata_ref: clone(metadata), video_id: videoId, playback_source: clone(source), selection }, ticket.id, ticket.host ?? undefined);
+      let preference: LinePreference | null = null;
+      if (this.linePreferences && !selection && preferLine) {
+        try { preference = await this.linePreferences.get(metadata); if (this.current('match', ticket)) this.lineMemory.error = ''; }
+        catch (cause) { if (this.current('match', ticket)) this.lineMemory.error = String(cause); }
+        if (!this.current('match', ticket)) return null;
+        const remembered = preference;
+        const preferred = remembered && this.state.sources.data?.providers.find(provider => provider.id === remembered.source.source_id
+          && provider.source_revision === remembered.source.source_revision && provider.runtime_status === 'ready' && provider.kind === 'maccms' && provider.capabilities.resolve);
+        if (preferred && (!this.manualSource || !sameMetadata(this.manualSource, metadata))
+          && (metadata.identity.namespace !== 'maccms' || sameSource(preference!.source, metadata.content_ref))) {
+          source = clone(preference!.source);
+          this.state.selected_playback_source = source;
+          ticket.source = clone(source);
+        }
+        if (!sameSource(preference?.source ?? null, source)) preference = null;
+      }
+      let response = await this.api.call("match_playback", { metadata_ref: clone(metadata), video_id: videoId, playback_source: clone(source), selection }, ticket.id, ticket.host ?? undefined);
+      if (!this.current('match', ticket)) return null;
+      if (preference && response.candidates.length === 1 && await preferredContent(preference, response.candidates[0]!.content_ref)) {
+        if (!this.current('match', ticket)) return null;
+        try {
+          const data = await this.api.call('get_details', { ref: clone(response.candidates[0]!.content_ref) }, crypto.randomUUID(), ticket.host ?? undefined);
+          if (!this.current('match', ticket)) return null;
+          const targetEpisode = this.state.details.data!.details.groups.flatMap(group => group.episodes).find(episode => metadataVideoId(episode.ref) === videoId)!;
+          const automatic = await preferredSelection(preference, this.state.details.data!, targetEpisode, data.details);
+          if (!this.current('match', ticket)) return null;
+          if (automatic) {
+            const matched = await this.api.call('match_playback', { metadata_ref: clone(metadata), video_id: videoId, playback_source: clone(source), selection: automatic }, crypto.randomUUID(), ticket.host ?? undefined);
+            if (matched.context && this.current('match', ticket)) {
+              const resolution = await this.api.call('resolve_episode', { match_id: matched.context.match_id, episode_ref: matched.context.episode_ref }, crypto.randomUUID(), ticket.host ?? undefined);
+              await this.api.call('release_resolution', { resolution_id: resolution.id });
+              if (resolution.streams.some(stream => stream.playable)) { response = matched; selectedDetails = data.details; }
+            }
+          }
+        } catch (cause) { if (this.current('match', ticket)) this.lineMemory.error = `Preferred line check failed: ${failure(cause).message}`; }
+      }
       if (!this.current("match", ticket) || target.playback_epoch !== this.state.playback.playback_epoch) return null;
       const result = response;
       requireBinding(["matched", "needs_confirmation", "not_found"].includes(result.status) && result.candidates.length <= 20
@@ -1061,6 +1133,11 @@ export class AppController {
         if (selection) requireBinding(sameRef(context.content_ref, selection.content_ref) && context.group_id === selection.group_id
           && context.episode_id === selection.episode_id, "Confirmed context differs from the selected candidate episode");
         if (selectedEpisode) requireBinding(sameRef(context.episode_ref, selectedEpisode.ref), "Confirmed episode reference differs");
+        if (this.linePreferences && selectedDetails) {
+          const preference = await captureLine(this.state.details.data!, selectedDetails, context);
+          if (!this.current('match', ticket)) return null;
+          if (preference) this.playedLine = { match: context.match_id, preference, generation: this.lineGeneration };
+        }
         target.context = clone(context); target.engine_epoch = ticket.host;
         target.phase = "resolving";
         this.state.route = { name: "playback", context: target.context };

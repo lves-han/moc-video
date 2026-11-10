@@ -8,11 +8,11 @@ import { locale } from "../i18n";
 import Icon from "../components/Icon.vue";
 
 const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean }>();
-const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string]; "update:autoNext": [value: boolean]; seek: [] }>();
+const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; "update:autoNext": [value: boolean]; seek: [] }>();
 const playback = createPlaybackController(appState, undefined, onEnded, runtime => {
   if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
   else appController.applyRuntime(runtime);
-});
+}, (context, epoch, session) => appController.rememberLine(context, epoch, session));
 const unbind = appController.bindPlayback(playback);
 const state = playback.state;
 const ui = playback.ui;
@@ -310,7 +310,7 @@ defineExpose({ playback });
           </div>
           <div class="playback-tray-body">
             <div v-show="tray === 'episodes'" class="playback-episodes" role="tabpanel">
-              <template v-for="group in groups" :key="group.id"><h3>{{ group.title }}</h3><div class="playback-episode-grid"><button v-for="episode in group.episodes" :key="episode.id" class="playback-episode" :data-video-id="metadataVideoId(episode.ref)" :aria-current="metadataVideoId(episode.ref) === currentVideo ? 'true' : undefined" :disabled="busy || !metadataVideoId(episode.ref)" @click="tray = null; emit('play', metadataVideoId(episode.ref))"><img v-if="episodeImage(episode)" :src="episodeImage(episode)" alt="" loading="lazy" /><span>{{ episode.label }}</span></button></div></template>
+              <template v-for="group in groups" :key="group.id"><h3>{{ group.title }}</h3><div class="playback-episode-grid"><button v-for="episode in group.episodes" :key="episode.id" class="playback-episode" :data-video-id="metadataVideoId(episode.ref)" :aria-current="metadataVideoId(episode.ref) === currentVideo ? 'true' : undefined" :disabled="busy || !metadataVideoId(episode.ref)" @click="tray = null; emit('play', metadataVideoId(episode.ref), appState.details.data?.metadata_ref?.identity.namespace === 'maccms')"><img v-if="episodeImage(episode)" :src="episodeImage(episode)" alt="" loading="lazy" /><span>{{ episode.label }}</span></button></div></template>
               <p v-if="!groups.length">{{ word('暂无选集', 'No episodes available') }}</p>
               <div class="playback-business-controls">
                 <button v-if="ui.autoplayBlocked" data-action="continue" :title="word('继续播放', 'Continue playback')" @click="playback.play()"><Icon name="play" />{{ word('继续播放', 'Continue playback') }}</button>
@@ -320,6 +320,7 @@ defineExpose({ playback });
               </div>
             </div>
             <div v-show="tray === 'streams'" role="tabpanel" class="playback-streams">
+              <button v-if="props.context && props.context.metadata_ref.identity.namespace !== 'maccms'" data-action="change-line" class="playback-stream" :disabled="busy" @click="appController.match(props.context.metadata_video_id, null, false)">{{ word('选择其他线路', 'Choose another line') }}</button>
               <button v-for="stream in state.resolution?.streams ?? []" :key="stream.id" class="playback-stream" :data-stream-id="stream.id" :aria-current="stream.id === state.session?.stream_id ? 'true' : undefined" :disabled="!stream.playable || busy" @click="playback.selectStream(stream.id)"><span>{{ stream.label }}</span><span>{{ stream.quality_label ?? (stream.quality ? `${stream.quality}p` : word('清晰度未知', 'Unknown quality')) }}<small v-if="!stream.playable"> · {{ stream.reason ?? word('暂不可用', 'Unavailable') }}</small></span><Icon v-if="stream.id === state.session?.stream_id" name="check" /></button>
               <p v-if="!state.resolution?.streams.length">{{ word('暂无可用线路', 'No streams available') }}</p>
               <slot name="preferences" />
@@ -343,6 +344,7 @@ defineExpose({ playback });
         <div v-if="state.error && !ui.autoplayBlocked || ui.diagnostic" class="playback-error-backdrop">
           <section class="playback-error playback-glass" role="alert"><h2>{{ word('播放遇到问题', 'Playback failed') }}</h2><p>{{ state.error ? `${state.error.code} · ${state.error.message}` : ui.diagnostic }}</p><div><button class="playback-primary" @click="ui.action === 'reconnect' ? playback.reconnect() : playback.retry()">{{ word('重试', 'Retry') }}</button><button @click="openTray('streams', $event.currentTarget)">{{ word('换线路', 'Change stream') }}</button></div></section>
         </div>
+        <p v-if="appController.lineMemory.error" class="playback-line-error" role="status">{{ appController.lineMemory.error }}</p>
         <button v-if="ui.autoplayBlocked" class="playback-start playback-glass" :aria-label="word('继续播放', 'Continue playback')" @click="playback.play()"><Icon name="play" :size="28" />{{ word('继续播放', 'Continue playback') }}</button>
         <component :is="'media-hotkey'" keys="Space" action="togglePaused" />
         <component :is="'media-hotkey'" keys="ArrowLeft" action="seekStep" :value.prop="-10" />

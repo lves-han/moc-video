@@ -8,7 +8,7 @@ import MediaRow from '../components/MediaRow.vue';
 import { locale, t } from "../i18n";
 import type { Bridge_Episode, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
 
-const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string]; resume: [record: WatchHistoryRecord]; back: [] }>();
+const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string, explicitLine?: boolean]; resume: [record: WatchHistoryRecord]; back: [] }>();
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
 const data = computed(() => state.details.data);
 const details = computed(() => data.value?.details ?? null);
@@ -57,7 +57,7 @@ const primaryLabel = computed(() => {
 });
 const progress = (episode: Bridge_Episode | undefined) => episode && history.value?.video_id === videoId(episode.ref) && history.value.duration_ms
   ? Math.min(100, history.value.position_ms / history.value.duration_ms * 100) : 0;
-function playPrimary() { if (resumeEpisode.value && history.value) emit('resume', history.value); else if (primary.value) emit('play', videoId(primary.value.ref)); }
+function playPrimary() { if (resumeEpisode.value && history.value) emit('resume', history.value); else if (primary.value) emit('play', videoId(primary.value.ref), chosenGroup.value !== null); }
 async function toggleWatchlist() {
   const snapshot = data.value, current = savedGeneration;
   if (!snapshot?.metadata_ref || watchlistPending.value) return;
@@ -114,13 +114,14 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
       </div>
     </section>
     <p v-if="savedError" class="details-saved-error" role="alert">{{ savedError }} <button class="glass-pill" @click="loadSaved">{{ t('Retry') }}</button></p>
+    <p v-if="app.lineMemory.error" class="details-saved-error" role="status">{{ app.lineMemory.error }}</p>
     <NAlert v-if="state.playback.error" class="details-play-error" type="error">{{ state.playback.error.message }}</NAlert>
     <p v-if="app.matching.result?.status === 'not_found'" class="details-not-found" role="status">{{ t('No matching playback found') }}</p>
     <NEmpty v-if="!episodes.length" class="details-no-episodes" :description="word('暂无可选剧集', 'No episodes available')" />
     <section v-else-if="!single" class="details-episodes details-content">
       <h2>{{ t('Episodes') }}</h2>
       <div v-if="groups.length > 1" class="details-groups" role="group" :aria-label="t('Episodes')" data-focus-row><button v-for="item in groups" :key="item.id" class="details-group filter-pill" :class="{ selected: item.id === group?.id }" :data-group-id="item.id" :aria-pressed="item.id === group?.id" @click="chosenGroup = item.id">{{ item.title }}</button></div>
-      <div class="details-episode-grid" data-focus-row><button v-for="episode in group?.episodes ?? []" :key="episode.id" class="details-episode" :data-episode-id="episode.id" :data-video-id="videoId(episode.ref)" :disabled="!canPlay(episode)" :aria-busy="app.matching.pending === videoId(episode.ref)" @click="emit('play', videoId(episode.ref))">
+      <div class="details-episode-grid" data-focus-row><button v-for="episode in group?.episodes ?? []" :key="episode.id" class="details-episode" :data-episode-id="episode.id" :data-video-id="videoId(episode.ref)" :disabled="!canPlay(episode)" :aria-busy="app.matching.pending === videoId(episode.ref)" @click="emit('play', videoId(episode.ref), chosenGroup !== null)">
         <span class="details-episode-art"><img v-if="image(episode.poster)" :key="image(episode.poster)!.key" :src="image(episode.poster)!.url" alt="" loading="lazy" @error="imageFailed(image(episode.poster)!.id)" /><template v-else><img v-if="backdrop" class="details-episode-fallback" :src="backdrop.url" alt="" /><span class="details-episode-number">{{ episode.number ?? episode.index + 1 }}</span></template><span v-if="resumeEpisode?.id === episode.id" class="details-watching">{{ word('正在观看', 'Watching') }}</span><span v-if="progress(episode)" class="details-episode-progress"><span :style="{ width: `${progress(episode)}%` }" /></span></span>
         <strong>{{ label(episode) }}</strong><span v-if="episode.plot" class="details-episode-plot">{{ episode.plot }}</span><span v-if="episode.duration_ms" class="details-episode-duration">{{ minutes(episode.duration_ms) }} {{ word('分钟', 'min') }}</span>
       </button></div>

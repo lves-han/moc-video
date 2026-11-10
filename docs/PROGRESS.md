@@ -2856,3 +2856,17 @@
 - 结果：RESOLVED
 - 决定：用户在当前聊天明确指示“批准匹配规则修订并更新 T0.37 的验收基线，完成复审后继续实现线路记忆”。按已审受限 C5 补充更新本卡基线，其他既有任务验收、失败历史和会话额度保持；独立复审后实施。
 - 批准摘要：c1e31d7d047878150f91dec199745932ea972a810193313d933a8ad0f501e26a
+
+## T0.37 已播放线路记忆 2026-11-10T09:40:30+00:00
+- 结果：DONE
+- 开工：本会话1/2，先读AGENTS.md并以指定venv解释器通过argv执行原task.py check、start T0.37，均exit0，初始工作树干净。沿最终文档round-56 CLEAR、generation=1及已批准C5修订，只处理本卡；原脚本的sysctl进程采样权限限制按ADR-010交外层原run.py代验，完整verify由外层直接执行，本会话逐项读回收据。
+- Changed：复用既有localStorage机制和公开匹配/详情/解析命令，按元数据影片及修订保存来源修订、内容稳定证据和线路布局的SHA-256摘要。当前Session的实际呈现帧时间连续推进后才保存；resolve、playable或仅打开Session均不写。每集重新查询并交叉核验内容、当前季集及唯一线路；原格式MacCMS的null season/number通过严格锚定标签与元数据核对。保留首次及歧义确认流程，来源/线路缺失、修订或内容变化、不可播放时走原流程；手动来源及“选择其他线路”优先，旧请求和旧Session由当前选择世代及绑定核对隔离。
+- Why：线路记忆只需要非敏感稳定证据，现有存储与匹配入口足以完成；公开协议及27项命令保持。同源MacCMS局部扩展既有selection处理，重新核对登记与当前详情，换线路仍保留请求集的metadata_video_id和历史身份；下一集在当前组内结束。损坏、权限/配额及写错时保留已确认字节、显示可定位错误并继续当前播放或确认，恢复可写后由当前真实推进再次保存。持久化记录经断言只含摘要及稳定来源身份，URL、令牌、Session、Resolution和Stream均不入记录。
+- 验收 A1：PASS；日志：`evidence/runs/20261110T093335766075-A1/output.log`；断言：准确argv实际exit0，主体6/6、JUnit15/15、失败0、跳过0，9项需求汇总全部PASS。报告`evidence/acceptance/LINE-PREFERENCE.json`、`evidence/acceptance/LINE-PREFERENCE.xml`；原始窗口及命令证据在`evidence/acceptance/LINE-PREFERENCE-97042dd8ec5641f7950496f1d4055632/`（实际目录以报告commands/native_sessions的日志路径为准）。相关前端回归103项、完整当前Host库202项通过及3项既有忽略，验收证据反例6项通过。
+- 真实入口：生产MacCMS适配器、真实Host/网关及三个独立打包窗口，两次真实Host重启。首集前两线路分别实际解码失败及不支持，第三线路真实解码推进后保存；第2/3集及重启优先第三线路，前两条未优先重试，Session/Resolution/Stream全部新建。真实同源换线、第2/3集、历史video身份、旧Session HTTP410、来源修订、另一影片隔离、手动覆盖/抢占、不可用线路及禁用来源、11种重排/同名/缺集/乱序/跨季/无号/重复号/伪造标签/同名候选/同ID内容替换均通过；歧义回确认或同源原流程。真实存储读错、损坏、配额写错及恢复均保持原字节和播放；迟到读/详情结果及帧/seek/旧绑定隔离有回归。验收使用专用存储键，三窗口production_preserved均true，最终清理专用键；产品已有偏好字节保持。
+- Verified：A1后外层直接执行原verify.py all，实际exit0、六门通过，收据`evidence/verify/20261110T093624859888.json`。工作流124通过/7项既有跳过；原归档契约通过；工作契约27命令、232结构用例、89语义用例和6生命周期向量通过；完整前端217通过/0失败/0跳过；原生库202通过/0失败/3项既有忽略，另16项集成测试通过。原生fmt/check/clippy -D warnings、前端类型及生产构建通过；零项doc-tests仅记为未运行用例。git diff --check及原task.py scope已实际exit0。
+- 证据绑定：最终A1前后及完整verify六门source均为`56eb1b06226c871681e270cc9763910fc4a289e83a81f14dcbb7c367f3f565bd`，protected=`c1e31d7d047878150f91dec199745932ea972a810193313d933a8ad0f501e26a`、generation=1。verify后仅勾当前卡及追加本记录，源码保持。T0.35固定构建提交`e6c9b946636adb29afe1bc849f536d2244b1dc38`已在新报告明确标记PRE_CHANGE_T0.35_ONLY，未用于证明本卡新源码；本卡重新构建并验证生产及自动化包。原失败、收据和会话额度全部保留。
+- 资源：真实后端process-watchdog，4096MiB RSS采样、构建jobs2、测试线程1；最终A1 peak_rss_bytes=1970634752。三个窗口exit0、lingering=[]、forced_cleanup=[]，App/WebKit所属RSS峰值分别361971712/452427776/429555712字节，合并客户端/Host采样峰值747208704字节，Host active_requests=0。RSS采样允许瞬时超限，无cgroup硬内存隔离及CPU quota；仅清理本流程自有资源。
+- Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland及真实macOS14 NOT RUN，沿既有矩阵记录。本会话随后仅执行原task.py done核对并退出；Git受验完成提交和固定提交独立review-only由外层收尾，当前均待执行；不accept-review、不进入其他卡。
+- 证据目录更正：上文A1原始目录中的`LINE-PREFERENCE-97042dd8ec5641f7950496f1d4055632`为记录误写；已读回最终JSON的commands与native_sessions，准确目录为`evidence/acceptance/LINE-PREFERENCE-1b02932e282648d785f424c71c76c3b9/`，首窗口日志`native-1.log`。准确A1运行日志、报告路径、收据及摘要均保持上文已核对值；按只追加规则保留并明确更正误写。
+- 收尾：原task.py scope及task.py done T0.37均实际exit0，当前授权基线下最近准确A1与完整verify完成资格已核对；完成后git diff --check再次exit0。本会话只追加本收尾记录及最终handoff，受验源码保持，随后明确退出；外层保存受验完成提交并执行固定提交独立巡检。

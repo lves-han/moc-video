@@ -2845,3 +2845,4 @@ main {
   .details-content,.watchlist-symbol { animation: none; }
   ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*) { animation-duration: .01ms; }
 }
+.playback-line-error { position: absolute; left: 24px; right: 24px; bottom: 100px; z-index: 6; padding: 12px; color: #fff; background: #34271feb; border-radius: 8px; }

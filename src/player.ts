@@ -35,13 +35,14 @@ export function capabilities(video: HTMLVideoElement) {
 
 /** One controller owns one video element. stop() releases its whole loading attempt. */
 export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent) => void,
-  protocol?: (event: ProtocolEvent) => void) {
+  protocol?: (event: ProtocolEvent) => void, advanced?: (binding: PlayerBinding) => void) {
   let fallback: HlsJsAdapter | undefined;
   let provider: HlsJsAdapter | undefined;
   let listeners: AbortController | undefined;
   let listenerRegistrations = 0;
   let epoch = 0;
   let lastPosition = 0;
+  let frameCallback: number | undefined;
   let engine: "native" | "hls.js" = "native";
   let binding: PlayerBinding = { playback_epoch: 0, engine_epoch: null, session_id: null };
   const duration = () => Number.isFinite(video.duration) && video.duration >= 0 ? Math.round(video.duration * 1000) : null;
@@ -72,6 +73,8 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
 
   function stop() {
     epoch++;
+    if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
+    frameCallback = undefined;
     listeners?.abort();
     listeners = undefined;
     listenerRegistrations = 0;
@@ -101,6 +104,29 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     lastPosition = -Infinity;
     notify("preparing");
     const fresh = (event: Event) => epoch === current && event.timeStamp >= openedAt;
+    if (advanced && typeof video.requestVideoFrameCallback === 'function') {
+      let previous: { time: number; wall: number } | null = null;
+      let lastAdvance = -Infinity;
+      const reset = () => { previous = null; };
+      listen(video, 'seeking', reset);
+      listen(video, 'seeked', reset);
+      const frame: VideoFrameRequestCallback = (now, metadata) => {
+        if (current !== epoch) return;
+        frameCallback = video.requestVideoFrameCallback(frame);
+        if (video.paused || video.seeking || video.readyState < 2 || video.currentSrc !== source.url && provider?.engineName !== 'hlsjs') { reset(); return; }
+        const next = { time: metadata.mediaTime, wall: now };
+        const elapsed = previous ? (now - previous.wall) / 1000 : 0;
+        const delta = previous ? metadata.mediaTime - previous.time : 0;
+        // Two presented frames must advance naturally. A seek or ready/playable
+        // declaration alone never establishes successful playback.
+        if (previous && delta > 0 && elapsed > 0 && delta <= elapsed * video.playbackRate + .15 && now - lastAdvance >= 5000) {
+          lastAdvance = now;
+          advanced({ ...binding });
+        }
+        previous = next;
+      };
+      frameCallback = video.requestVideoFrameCallback(frame);
+    }
     const on = (name: string, state: PlayerState, valid: () => boolean = () => true) => listen(video, name, event => {
       if (fresh(event) && valid()) notify(state);
     });
