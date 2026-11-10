@@ -113,14 +113,22 @@ export async function publicScenario(_ready: unknown, prototype: { player: Playe
       check(VIDEOJS_VERSION === '10.3.0' && document.querySelectorAll('video-player').length === 1 && document.querySelectorAll('video').length === 1, 'Official Video.js version/single media owner differs');
       check(!one('.playback-controls'), 'Application still renders the old control bar');
       const shadow = videoJsControls();
-      const iconButtons = ['play', 'mute', 'fullscreen'].map(action => {
+      const iconButtons = [];
+      for (const action of ['play', 'mute', 'fullscreen']) {
         const button = videoJsControl(action as 'play' | 'mute' | 'fullscreen');
         check(button instanceof customElements.get(button.localName)!, 'Control is not a registered official component');
         const label = button.getAttribute('aria-label') ?? '';
         check(label && button.querySelector('media-icon'), 'Official control needs an icon and accessible name');
-        check(shadow.querySelector(`media-tooltip[trigger="${button.id}"]`), 'Official hover tooltip missing');
-        return { action, icon: true, tooltip: label, accessible: true, width: button.getBoundingClientRect().width };
-      });
+        // Vue assigns registered custom-element properties directly. Inspect the
+        // official trigger property, then prove the popup actually opens.
+        const tooltip = all<HTMLElement & { trigger: string }>('media-tooltip').find(element => element.trigger === button.id);
+        check(button.id && tooltip, 'Official hover tooltip missing: '+JSON.stringify({action,id:button.id,triggers:all<HTMLElement & {trigger:string}>('media-tooltip').map(element=>element.trigger)}));
+        button.focus();
+        await until(() => tooltip!.hasAttribute('data-open') && tooltip!.getBoundingClientRect().width > 0
+          && Boolean(tooltip!.textContent?.trim()), 'Official tooltip did not visibly open on focus');
+        iconButtons.push({ action, icon: true, tooltip: label, tooltip_text:tooltip!.textContent!.trim(), tooltip_open:true,
+          accessible: true, width: button.getBoundingClientRect().width });
+      }
       one<HTMLButtonElement>('[data-player-tray]')!.click(); await nextTick();
       for (const action of ['next', 'episodes']) {
         const button = one<HTMLButtonElement>(`[data-action="${action}"]`)!;
