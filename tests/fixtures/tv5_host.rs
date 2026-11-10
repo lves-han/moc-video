@@ -343,7 +343,9 @@ fn tv5_packaged_host_bridge() {
                     let id = Uuid::new_v4().to_string();
                     image.reference["resource_id"] = json!(id);
                     image.reference["path"] = json!(format!("/images/{id}"));
-                    gateway.image(provider["id"].as_str().unwrap(), image).unwrap();
+                    gateway
+                        .image(provider["id"].as_str().unwrap(), image)
+                        .unwrap();
                 }
                 json!({"ok":true})
             }
