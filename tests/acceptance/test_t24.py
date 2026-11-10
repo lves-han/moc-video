@@ -1,8 +1,6 @@
 """Independent corruption examples for the final raw-evidence acceptance."""
-import array
 import copy
 import json
-import math
 from pathlib import Path
 import tempfile
 import unittest
@@ -31,7 +29,7 @@ def lifecycles():
         switch=cycle();switch.update(index=51,native=native)
         switch['sample'].update(pixel=[255,0,0,255],audio_peak_hz=440)
         session=dict(pid=i,identity='owned-'+str(i),exit=0,lingering=[],forced_cleanup=[],wake_guard=dict(exit=0),peak_combined_rss_bytes=4096)
-        rows.append(dict(index=i,kind='hls' if i%2==0 else 'mp4',session=session,identity=dict(origin='tauri://localhost',native=native),
+        rows.append(dict(index=i,kind='hls' if i%2==0 else 'mp4',audio_sampling=t24.AUDIO,session=session,identity=dict(origin='tauri://localhost',native=native),
             stop=stopped(),disposed=dict(audio_closed=True,videos=0,errors=[]),host=dict(closed=True,active_requests=0,opens=1),
             transport=dict(active_requests=0),played=played,switch=switch))
     return rows
@@ -63,17 +61,16 @@ class T24Tests(unittest.TestCase):
             rows=samples();rows[20]['value'][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):t24.check_playback(rows,'mp4')
 
-    def test_foreground_ui_and_native_audio_fail(self):
-        for change in ['focus','native-focus','progress','audio']:
+    def test_foreground_and_ui_fail(self):
+        for change in ['focus','native-focus','progress']:
             rows=samples();row=rows[20]['value']
             if change=='focus':row['focused']=False
             elif change=='native-focus':row['native']['focused']=False
-            elif change=='progress':row['ui_position']+=2
-            else:row['native']['audio_playing']=False
+            else:row['ui_position']+=2
             with self.subTest(change=change),self.assertRaises(ValueError):t24.check_playback(rows,'hls')
 
-    def test_changed_pixels_media_and_mp4_pcm_fail(self):
-        for key,value in [('pixel',[0,0,0,255]),('audio_rms',0),('audio_peak_hz',880),('paused',True),('video_count',2),('media_error',3)]:
+    def test_changed_pixels_and_media_fail(self):
+        for key,value in [('pixel',[0,0,0,255]),('paused',True),('video_count',2),('media_error',3)]:
             rows=samples();rows[20]['value']['sample'][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):t24.check_playback(rows,'mp4')
 
@@ -105,39 +102,27 @@ class T24Tests(unittest.TestCase):
             path.unlink()
             with self.assertRaises(ValueError):t24.checked_file(row,folder)
 
-    def test_pcm_recomputed_and_silence_wrong_tone_truncation_fail(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            path=Path(temporary)/'audio.f32'
-            def write(hz):
-                pcm=array.array('f',(math.sin(2*math.pi*hz*i/48000)*.1 for i in range(48000*3)))
-                path.write_bytes(pcm.tobytes())
-            write(440);self.assertEqual(len(t24.audio_windows(path,3)['windows']),3)
-            for hz in [0,880]:
-                write(hz)
-                with self.subTest(hz=hz),self.assertRaises(ValueError):t24.audio_windows(path,3)
-            write(440);path.write_bytes(path.read_bytes()[:-1])
-            with self.assertRaises(ValueError):t24.audio_windows(path,3)
-
     def test_empty_partial_duplicate_or_forced_lifecycles_fail(self):
         self.assertEqual(t24.check_lifecycles(lifecycles())['windows'],5)
-        for change in ['missing','duplicate','forced','lingering','audio','frame','switch']:
+        for change in ['missing','duplicate','forced','lingering','omitted-skip','frame','switch']:
             rows=lifecycles()
             if change=='missing':rows.pop()
             elif change=='duplicate':rows[4]['session']=rows[0]['session']
             elif change=='forced':rows[0]['session']['forced_cleanup']=[1]
             elif change=='lingering':rows[0]['session']['lingering']=[1]
-            elif change=='audio':rows[3]['played']['native']['audio_playing']=False
+            elif change=='omitted-skip':rows[3].pop('audio_sampling')
             elif change=='frame':rows[4]['played']['sample']['pixel']=[0,0,255,255]
             else:rows[1]['switch']['host']['old_http_status']=200
-            with self.subTest(change=change),self.assertRaises(ValueError):t24.check_lifecycles(rows)
+            with self.subTest(change=change),self.assertRaises((ValueError,KeyError)):t24.check_lifecycles(rows)
 
-    def test_raw_audio_offsets_gaps_overlap_and_missing_frames_fail(self):
-        good=[dict(index=i,offset_frames=i*480,frames=480,pts=100+i*.01) for i in range(10)]
-        self.assertEqual(t24.check_audio_timing(good,4800)['buffers'],10)
-        for key,value in [('pts',101),('offset_frames',0),('frames',0),('index',0)]:
-            bad=copy.deepcopy(good);bad[5][key]=value
-            with self.subTest(key=key),self.assertRaises(ValueError):t24.check_audio_timing(bad,4800)
-        with self.assertRaises(ValueError):t24.check_audio_timing(good[:-1],4800)
+    def test_authorized_audio_skip_keeps_frame_ui_and_ownership_gates(self):
+        for kind in ['mp4','hls']:
+            rows=samples()
+            for row in rows:
+                row['value']['sample'].update(audio_rms=0,audio_peak_hz=0)
+                row['value']['native']['audio_playing']=False
+            self.assertEqual(t24.check_playback(rows,kind)['samples'],121)
+        self.assertEqual(t24.AUDIO['status'],'SKIPPED_USER_AUTHORIZED')
 
     def test_latest_review_requires_final_clear_and_one_binding(self):
         for text in ['', 'ACCEPTANCE-VERDICT: BLOCKING','ACCEPTANCE-VERDICT: CLEAR\nextra','ACCEPTANCE-VERDICT: CLEAR']:
@@ -168,18 +153,19 @@ class T24Tests(unittest.TestCase):
             path=folder/'manifest';current=dict(source='s',protected='p',generation=0)
             manifest=dict(current,commit='commit',files=[t24.artifact(folder/'raw')],receipt=receipt.relative_to(t24.ROOT).as_posix(),release=t24.artifact(folder/'release'))
             files={item.relative_to(t24.ROOT).as_posix():t24.file_hash(item) for item in folder.iterdir()}
-            good=dict(current,commit='commit',manifest=t24.artifact(path),files=files,unresolved_blockers=[],personal_use_only=True,
+            good=dict(current,commit='commit',manifest=t24.artifact(path),files=files,audio_sampling=t24.AUDIO,unresolved_blockers=[],personal_use_only=True,
                 public_distribution_authorized=False,obligations={key:dict(result='PASS',evidence=['synthetic raw'],reason='synthetic test') for key in t24.OBLIGATIONS})
             def text(value):return 'independent synthetic test\n```json\n'+json.dumps(value)+'\n```\nACCEPTANCE-VERDICT: CLEAR\n'
             self.assertEqual(t24.check_review(text(good),manifest,path,current)['commit'],'commit')
-            for change in ['commit','manifest','files','obligation','blocker','public']:
+            for change in ['commit','manifest','files','obligation','blocker','public','audio-overclaim']:
                 bad=copy.deepcopy(good)
                 if change=='commit':bad['commit']='old'
                 elif change=='manifest':bad['manifest']['sha256']='changed'
                 elif change=='files':bad['files'].pop(next(iter(bad['files'])))
                 elif change=='obligation':bad['obligations'].pop('U09')
                 elif change=='blocker':bad['unresolved_blockers']=['high impact issue']
-                else:bad['public_distribution_authorized']=True
+                elif change=='public':bad['public_distribution_authorized']=True
+                else:bad['audio_sampling']['status']='PASS'
                 with self.subTest(change=change),self.assertRaises(ValueError):t24.check_review(text(bad),manifest,path,current)
 
     def test_latest_numeric_review_never_falls_back_to_old_clear(self):

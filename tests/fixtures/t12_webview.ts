@@ -267,10 +267,10 @@ export async function formalPlayback(command: Command, prototype: { video: HTMLV
     }
     case "t22-ready":
     case "t24-ready": {
-      if (command.action === "t24-ready" && command.payload === "hls") {
+      if (command.action === "t24-ready") {
         const before = current.frames;
         await until(() => current.frames > before + 1 && !video.paused && video.readyState >= 2,
-          'T24 native HLS did not present frames');
+          'T24 current media did not present frames');
         result = { sample: sample(current) };
       } else result = await waitForEpisodeSample(() => sample(current), 0, performance.now() + 30000);
       await until(() => !video.seeking, 'Initial media seek did not settle');

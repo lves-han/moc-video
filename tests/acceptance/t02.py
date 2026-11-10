@@ -133,14 +133,15 @@ def validate_sources(sources, selected):
     return names
 
 
-def validate_short_play(value):
+def validate_short_play(value, *, check_audio=True):
     require(value["actual_gateway"] is True and value["error_count"] == 0, "Public media escaped its gateway or raised a WebView error")
     first, final = value["first"], value["final"]
     require(final["media_error"] is None and final["width"] > 0 and final["height"] > 0
             and final["frames"] > first["frames"] and final["position"] > first["position"] + 2
             and final["time"] >= first["time"] + 4900 and final["paused"] is False,
             "Real public media must decode frames and advance across five seconds of packaged WebView playback")
-    require(value["native"]["audio_playing"] is True, "Real public media audio is not playing")
+    if check_audio:
+        require(value["native"]["audio_playing"] is True, "Real public media audio is not playing")
 
 
 class Bridge(t12.Bridge):

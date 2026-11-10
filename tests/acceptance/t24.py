@@ -4,13 +4,10 @@ Both modes require the original run.py. `endurance` creates a new immutable
 batch; `all` rechecks that batch and its original receipt, never saved PASS flags.
 """
 import argparse
-import array
 import json
-import math
 import os
 from pathlib import Path
 import re
-import subprocess
 import sys
 import tempfile
 import time
@@ -31,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CURRENT = ROOT / 'evidence/acceptance/T24-endurance-current.json'
 IDS = ['U01','U04','R30','R32','R48','R49','REQ-T01','U06','U07','R01','R07','R50','R51','R57','REQ-T24']
 OBLIGATIONS = ['U%02d' % i for i in range(1,10)] + ['G0-Core','G1','G2','G3','G4','G5']
+AUDIO = dict(status='SKIPPED_USER_AUTHORIZED', decision='电脑静音 默认音频采样正常，跳过音频采样',
+    source='Outer handoff 2026-11-10T06:47:33.147078+00:00; current user decision')
 
 
 class Acceptance(t14.Acceptance):
@@ -43,8 +42,10 @@ class Acceptance(t14.Acceptance):
 
     def save(self):
         result=super().save()
-        report=read_json(self.report_path);report['suite']=self.suite
+        report=read_json(self.report_path);report['suite']=self.suite;report['audio_sampling']=AUDIO
         write_json(self.report_path,report);write_json(self.folder/'report.json',report)
+        failed=next((row for row in self.cases if row['result']=='FAIL'),None)
+        if failed:print(failed['actual'],flush=True)
         return result
 
 
@@ -81,96 +82,6 @@ def check_original(receipt, manifest_hash, current):
         ==('process-watchdog','rss-sampled',4096,2,1), 'Actual sampled resource backend differs')
 
 
-def audio_windows(path, minimum_seconds):
-    """Recompute every full PCM second with bounded memory; no saved RMS is trusted."""
-    require(path.stat().st_size % 4==0, 'Truncated float32 PCM')
-    seconds=path.stat().st_size / 4 / 48000
-    require(seconds>=minimum_seconds, 'Actual captured PCM duration is too short')
-    rows=[]
-    with path.open('rb') as stream:
-        while data:=stream.read(48000*4):
-            if len(data)<48000*4: break
-            pcm=array.array('f');pcm.frombytes(data)
-            if sys.byteorder!='little': pcm.byteswap()
-            require(all(math.isfinite(value) for value in pcm),'Nonfinite native PCM')
-            rms=math.sqrt(sum(value*value for value in pcm)/len(pcm))
-            # The owned stimulus is one sine; positive-going crossings count its
-            # fundamental without adding a numerical/FFT dependency.
-            hz=sum(a<=0<b for a,b in zip(pcm,pcm[1:]))
-            rows.append(dict(second=len(rows),rms=rms,hz=hz))
-    # Capture startup can precede the first render quantum. All subsequent full
-    # seconds must contain the owned 440Hz tone, including the final long interval.
-    relevant=rows[1:]
-    require(len(relevant)>=int(minimum_seconds)-1 and all(row['rms']>.001 and abs(row['hz']-440)<40 for row in relevant),
-        'Captured native application audio is silent or has the wrong frequency')
-    return dict(seconds=seconds,windows=rows)
-
-
-class AudioCapture:
-    def __init__(self,run,session):
-        self.path=run.folder/'application-audio.f32'
-        self.log=run.folder/'application-audio.log'
-        self.stream=self.log.open('w')
-        timing=run.folder/'application-audio-timing.jsonl'
-        self.process=subprocess.Popen([str(run.folder.parent/'t24-audio'),str(session.process.pid),str(self.path),str(timing)],
-            stdin=subprocess.PIPE,stdout=self.stream,stderr=subprocess.STDOUT,text=True)
-        self.token=workflow.runtime.identity(self.process.pid)
-        session.owned[self.process.pid]=self.token
-        self.record=dict(pid=self.process.pid,identity=self.token,application_pid=session.process.pid,
-            pcm=self.path.relative_to(ROOT).as_posix(),timing=timing.relative_to(ROOT).as_posix(),log=self.log.relative_to(ROOT).as_posix(),exit=None)
-        deadline=time.monotonic()+20
-        while True:
-            require(self.process.poll() is None,'Owned application audio capture failed: '+str(self.log.relative_to(ROOT)))
-            text=self.log.read_text()
-            if '"started":true' in text.replace(' ',''): break
-            require(time.monotonic()<deadline,'Owned application audio capture did not start')
-            time.sleep(.05)
-        self.record['host_started_monotonic']=time.monotonic()
-
-    def close(self):
-        self.record['host_stop_requested_monotonic']=time.monotonic()
-        if self.process.poll() is None:
-            self.process.stdin.write('\n');self.process.stdin.flush()
-        self.process.wait(timeout=20)
-        self.process.stdin.close();self.stream.close()
-        self.record['exit']=self.process.returncode
-        self.record['host_stopped_monotonic']=time.monotonic()
-        require(self.process.returncode==0,'Owned audio capture did not stop cleanly')
-        return self.record
-
-
-def check_audio(record,minimum):
-    rows=[json.loads(line) for line in (ROOT/record['log']).read_text().splitlines() if line.startswith('{')]
-    require(len(rows)==2 and rows[0]['started'] and rows[0]['pid']==record['application_pid']
-        and rows[0]['scope']=='owned application only' and rows[0]['format']=='f32le'
-        and rows[0]['sample_rate']==48000 and rows[0]['channels']==1
-        and rows[1]['stopped'] and not rows[1]['failed'] and record['exit']==0,'Raw application audio lifecycle failed')
-    path=ROOT/record['pcm']
-    require(rows[1]['frames']*4==path.stat().st_size and rows[1]['last_pts']-rows[1]['first_pts']>=minimum-1,
-        'Audio sample count/timestamp coverage differs')
-    timing=[json.loads(line) for line in (ROOT/record['timing']).read_text().splitlines()]
-    check_audio_timing(timing,rows[1]['frames'])
-    require(abs(rows[1]['first_pts']-timing[0]['pts'])<.000001
-        and abs(rows[1]['last_pts']-(timing[-1]['pts']+timing[-1]['frames']/48000))<.000001
-        and abs(rows[1]['last_pts']-rows[1]['first_pts']-rows[1]['frames']/48000)<.001,
-        'PCM first/last timestamps and complete byte duration disagree')
-    return audio_windows(path,minimum)
-
-
-def check_audio_timing(timing,frames):
-    require(timing,'Raw PCM buffer timestamps required')
-    offset=0;previous=None
-    for index,row in enumerate(timing):
-        require(row['index']==index and row['offset_frames']==offset and type(row['frames']) is int
-            and 0<row['frames']<=48000 and t22.numeric(row['pts']),'PCM buffer offset/count/PTS is incomplete')
-        require(abs(row['pts']-(timing[0]['pts']+offset/48000))<.001,'Native PCM timestamp drift/gap differs from byte duration')
-        if previous is not None:
-            require(abs(row['pts']-(previous['pts']+previous['frames']/48000))<.001,'Native PCM has a timestamp gap/overlap')
-        offset+=row['frames'];previous=row
-    require(offset==frames,'PCM timeline does not cover every captured byte')
-    return dict(buffers=len(timing),frames=frames)
-
-
 def check_playback(rows,kind,minimum=600):
     require(kind in ['mp4','hls'] and len(rows)>=121,'Both complete 600s first/last plus 5s sample sequences required')
     first,last=rows[0],rows[-1]
@@ -188,10 +99,7 @@ def check_playback(rows,kind,minimum=600):
             and value['visibility']=='visible' and value['focused'] and value['native']['focused']
             and value['native']['visible'] and not value['native']['minimized'] and value['errors']==[], 'Visible foreground UI/media progress failed')
         require(s['pixel'][0]>180 and s['pixel'][1]<50 and s['pixel'][2]<50 and s['pixel'][3]==255,'Owned decoded red frame differs')
-        if kind=='mp4':
-            require(s['audio_state']=='running' and s['audio_rms']>.001 and abs(s['audio_peak_hz']-440)<40,'Decoded MP4 PCM failed')
-        else:
-            require(value['native']['audio_playing'] and s['diagnostics']['engine']=='native','Native HLS audio/engine inactive')
+        if kind=='hls':require(s['diagnostics']['engine']=='native','Required native HLS engine inactive')
         t22.check_process(row['process'],value['native'])
         require(row['gpu']['counters'] and row['process']['owned_rss_bytes']>0,'Raw CPU/RSS/GPU sample missing')
     for a,b in zip(rows,rows[1:]):
@@ -205,6 +113,7 @@ def check_lifecycles(rows):
     require(len(rows)==5 and len({(row['session']['pid'],row['session']['identity']) for row in rows})==5,'Five distinct complete native windows required')
     for index,row in enumerate(rows,1):
         require(row['index']==index and row['kind']==('hls' if index%2==0 else 'mp4'),'Window format/order differs')
+        require(row['audio_sampling']==AUDIO,'Window audio sampling exception must be reported honestly')
         session=row['session'];t22.check_cleanup(session)
         require(row['identity']['native']['pid']==session['pid'] and row['identity']['origin']=='tauri://localhost'
             and row['identity']['native']['webkit_pids']['renderer']>0,'Real native window/renderer identity missing')
@@ -216,18 +125,16 @@ def check_lifecycles(rows):
         require(sample['session_bound'] and sample['video_count']==1 and sample['frames']>0
             and sample['width']==1920 and sample['height']==1080 and not sample['paused'] and sample['media_error'] is None,'Window did not actually decode current media')
         require(sample['pixel'][0]>180 and sample['pixel'][1]<50 and sample['pixel'][2]<50 and sample['pixel'][3]==255,'Window decoded the wrong frame')
-        if row['kind']=='mp4':
-            require(sample['audio_state']=='running' and sample['audio_rms']>.001 and abs(sample['audio_peak_hz']-440)<40,'Window did not decode MP4 audio')
-        else:
-            t12.validate_cycle(row['switch'],51)
-            require(row['played']['native']['audio_playing'] and sample['diagnostics']['engine']=='native','Window native HLS audio inactive')
+        if row['kind']=='hls':
+            t12.validate_cycle(row['switch'],51,check_audio=False)
+            require(sample['diagnostics']['engine']=='native','Window native HLS engine inactive')
     return dict(windows=5,formats=['mp4','hls'],normal_cleanup=True)
 
 
 def collect_window(run,build,media,index,kind,long):
     base=run.folder;run.folder=base/('window-%d'%index);run.folder.mkdir()
-    session=bridge=capture=transport=None
-    row=dict(index=index,kind=kind)
+    session=bridge=transport=None
+    row=dict(index=index,kind=kind,audio_sampling=AUDIO)
     try:
         # Host DTO/capabilities are transient transport, as in the original T12.
         transport=tempfile.TemporaryDirectory(prefix='bridge-',dir=run.folder)
@@ -242,13 +149,9 @@ def collect_window(run,build,media,index,kind,long):
             session.command('t12',action='start',payload=ready,timeout=60)
             session.record['commands'][-1]['args']=dict(action='start',payload='Host DTO; capabilities redacted')
             if kind=='hls':
-                row['switch']=session.command('t12',action='switch',payload=51,timeout=40);t12.validate_cycle(row['switch'],51)
+                row['switch']=session.command('t12',action='switch',payload=51,timeout=40);t12.validate_cycle(row['switch'],51,check_audio=False)
             row['played']=session.command('t12',action='t24-ready',payload=kind)
             if long:
-                # Keep native HLS PCM outside WebKit's unsupported WebAudio tap.
-                capture=AudioCapture(run,session)
-                time.sleep(2.5)
-                audio_windows(capture.path,2)
                 samples=run.folder/'playback.jsonl';start=time.monotonic();rows=[]
                 while True:
                     value=session.command('t12',action='t22-observe')
@@ -256,12 +159,8 @@ def collect_window(run,build,media,index,kind,long):
                     rows.append(raw);t22.append_sample(samples,raw)
                     if raw['host_monotonic']-rows[0]['host_monotonic']>=600: break
                     time.sleep(max(0,start+len(rows)*5-time.monotonic()))
-                row['audio']=capture.close();capture=None
-                require(row['audio']['host_started_monotonic']<rows[0]['host_monotonic']
-                    and row['audio']['host_stop_requested_monotonic']>rows[-1]['host_monotonic'],'PCM capture did not cover the complete playback interval')
                 row['playback']=samples.relative_to(ROOT).as_posix()
                 row['long_result']=check_playback(rows,kind)
-                row['audio_result']=check_audio(row['audio'],600)
             row['stop']=session.command('t12',action='stop');t12.validate_stop(row['stop'])
             row['disposed']=session.command('t12',action='dispose')
             session.close();row['session']=session.record;row['transport']=fixture.summary()
@@ -270,14 +169,11 @@ def collect_window(run,build,media,index,kind,long):
         return row
     finally:
         try:
-            if capture is not None: capture.close()
+            if session is not None and not session.closed: session.close(graceful=False)
         finally:
-            try:
-                if session is not None and not session.closed: session.close(graceful=False)
-            finally:
-                if bridge is not None: bridge.close()
-                if transport is not None: transport.cleanup()
-                run.folder=base
+            if bridge is not None: bridge.close()
+            if transport is not None: transport.cleanup()
+            run.folder=base
 
 
 def fresh_public(run,build):
@@ -295,7 +191,7 @@ def fresh_public(run,build):
             session.wait(0,30);session.command('identity')
             value=session.command('t02-public',timeout=120,view=ready['view'],kind=ready['kind'])
             session.record['commands'][-1]['args']=dict(view='Rust gateway view; capability redacted',kind=ready['kind'])
-            t02.validate_short_play(value);session.command('stop');session.close()
+            t02.validate_short_play(value,check_audio=False);session.command('stop');session.close()
         bridge.finish()
         result=dict(sources=ready['sources'],selected=ready['source'],protocol=ready['protocol'],short_play=value,host=run.observed['host'],session=session.record)
         result['supported']=t02.validate_sources(result['sources'],result['selected'])
@@ -317,7 +213,7 @@ def check_public(value):
     require(value['supported']==supported,'Public support list differs from recomputation')
     declared=read_json(ROOT/'docs/compatibility-report.json')
     require({row['name'] for row in value['sources']}=={row['name'] for row in declared['sources'] if row.get('probe')}, 'All approved source candidates must be observed')
-    t02.validate_short_play(value['short_play']);t22.check_cleanup(value['session'])
+    t02.validate_short_play(value['short_play'],check_audio=False);t22.check_cleanup(value['session'])
     require(value['host']['ready'] and value['host']['closed'],'Public native Host failed cleanup')
     protocol=value['protocol']
     require(all(protocol[key] is True for key in ['list','details','resolve']) and type(protocol['complete_groups']) is int
@@ -416,8 +312,6 @@ def produce(run):
     original=owner(run)
     commit=workflow.git('rev-parse','HEAD')
     require(workflow.snapshot(commit)==run.source,'Fixed WIP commit must contain all tested source before endurance')
-    run.command(['clang','-fobjc-arc','-fblocks','tests/fixtures/t24_audio.m','-framework','Cocoa','-framework','ScreenCaptureKit',
-        '-framework','CoreMedia','-framework','AudioToolbox','-o',run.folder/'t24-audio'])
     run.command(['clang','-fobjc-arc','tests/fixtures/tv1_native.m','-framework','Cocoa','-framework','ApplicationServices','-o',run.folder/'tv1-native'])
     release=package(run)
     build_dir=run.folder/'packaged';build_dir.mkdir()
@@ -443,7 +337,7 @@ def produce(run):
     manifest=dict(schema_version=1,card='T0.35',commit=commit,source=run.source,protected=original['protected'],generation=original['generation'],
         receipt=run.observed['resources']['receipt'],build=artifact(build_dir/'build.json'),release=release,
         windows=[artifact(ROOT/row['session']['log']).get('path').rsplit('/',1)[0]+'/lifecycle.json' for row in windows],
-        public=(run.folder/'public/public.json').relative_to(ROOT).as_posix(),product=product,files=raw,commands=run.commands,
+        public=(run.folder/'public/public.json').relative_to(ROOT).as_posix(),product=product,audio_sampling=AUDIO,files=raw,commands=run.commands,
         environment=run.observed.get('reference_machine'),utc=t22.utc())
     path=run.folder/'manifest.json';write_json(path,manifest)
     pointer=artifact(path);write_json(CURRENT,pointer)
@@ -467,6 +361,7 @@ def check_media(run,folder):
 def load_batch(run):
     pointer=read_json(CURRENT);path=checked_file(pointer,ROOT/'evidence/acceptance');manifest=read_json(path)
     check_binding(manifest,owner(run))
+    require(manifest['audio_sampling']==AUDIO,'Latest user-authorized audio sampling exception must be explicit')
     require(manifest['card']=='T0.35' and workflow.snapshot(manifest['commit'])==run.source,'Fixed tested commit source differs')
     receipt=read_json(ROOT/manifest['receipt']);check_original(receipt,pointer['sha256'],owner(run))
     names=[row['path'] for row in manifest['files']]
@@ -481,11 +376,9 @@ def load_batch(run):
         checked_file(manifest['build']);t01.check_build(run.source)
     windows=[read_json(ROOT/name) for name in manifest['windows']]
     for row in windows[:2]:
-        require(row['playback'] in names and row['audio']['pcm'] in names and row['audio']['log'] in names and row['audio']['timing'] in names,'Raw long-play/PCM files missing')
+        require(row['playback'] in names and row['audio_sampling']==AUDIO,'Raw long-play data or authorized audio exception missing')
         samples=[json.loads(line) for line in (ROOT/row['playback']).read_text().splitlines()]
-        require(row['audio']['host_started_monotonic']<samples[0]['host_monotonic']
-            and row['audio']['host_stop_requested_monotonic']>samples[-1]['host_monotonic'],'Audio capture does not span the raw playback interval')
-        check_playback(samples,row['kind']);check_audio(row['audio'],600)
+        check_playback(samples,row['kind'])
     check_lifecycles(windows);check_public(read_json(ROOT/manifest['public']));check_package(manifest['release'],run.source)
     require(set(manifest['product'])=={'public_product','history'},'Both current product/history UI scenarios required')
     for key,name in manifest['product'].items():
@@ -502,7 +395,7 @@ def check_review(text,manifest,path,current,root=ROOT):
     review=json.loads(matches[0]);check_binding(review,current)
     require(review['commit']==manifest['commit'] and review['manifest']==artifact(path)
         and review['unresolved_blockers']==[] and review['personal_use_only'] is True
-        and review['public_distribution_authorized'] is False,'Independent review build/evidence/scope binding differs')
+        and review['public_distribution_authorized'] is False and review['audio_sampling']==AUDIO,'Independent review build/evidence/scope binding differs')
     require(set(review['obligations'])==set(OBLIGATIONS),'Every revised U01..U09 and G0-Core/G1..G5 must be independently reviewed')
     for key,row in review['obligations'].items():
         require(row['result']=='PASS' and row['evidence'] and row['reason'],'Independent obligation lacks concrete reviewed evidence: '+key)
@@ -547,11 +440,11 @@ def main():
     if run.case('resource-ownership',IDS,'current source/card original process-watchdog sampled 4096MiB jobs2/thread1',lambda:resources(run,card='T0.35')):
         if args.suite=='endurance':
             run.case('reference-machine',IDS,'actual macOS14+ arm64/WebKit/toolchain/locks',lambda:t22.environment(run))
-            run.case('current-native-endurance',IDS,'two 600s formats, five full windows, PCM/frame/UI/process/raw evidence and current personal package',lambda:produce(run))
+            run.case('current-native-endurance',IDS,'two 600s formats, five full windows, frame/UI/process/raw evidence and current personal package; audio sampling skipped by user',lambda:produce(run))
         else:
             regressions_ok=run.case('independent-negative-oracles',IDS,'missing/stale/corrupt/partial evidence fails',lambda:regressions(run))
             batch=[]
-            if regressions_ok and run.case('raw-endurance-recomputed',IDS,'full recomputation of current batch samples/audio/lifecycles/package/public evidence',lambda:batch.append(load_batch(run)) or dict(files=len(batch[0][0]['files']))):
+            if regressions_ok and run.case('raw-endurance-recomputed',IDS,'full recomputation of current batch frame/UI/lifecycles/package/public evidence; authorized audio sampling skip',lambda:batch.append(load_batch(run)) or dict(files=len(batch[0][0]['files']))):
                 run.case('independent-fixed-build-review',IDS,'latest numeric committed read-only review; every U/G and original raw hash checked',lambda:independent(run,*batch[0]))
                 run.case('current-source-protocol-and-source-regressions',IDS,'real public response projections, DNS/peer/cap isolation and all sources recomputed',lambda:t02.native(run))
                 run.case('current-source-data-and-history',IDS,'real SQLite restart/migration/write barriers/settings and exit regression',lambda:t18.native(run))

@@ -169,7 +169,7 @@ class Bridge:
         require(not self.reader.is_alive() and not any(workflow.runtime.alive(r) for r in self.known.values()), "Owned Host processes remain")
 
 
-def validate_cycle(value, index):
+def validate_cycle(value, index, *, check_audio=True):
     sample = value["sample"]
     require(value["index"] == index and value["old_tracks_disabled"] is True and value["session_changed"] is True
             and value["new_frames"] > 1 and value["actual_gateway"] is True, "Episode/old frame/track/session binding differs")
@@ -181,9 +181,9 @@ def validate_cycle(value, index):
     is_red = index % 2 == 0 or index == 51
     require(alpha == 255 and (green < 50 and red > 180 and blue < 50 if is_red else green < 64 and blue > 180 and red < 50), "Old/incorrect episode frame is still visible")
     frequency = 440 if is_red else 880
-    if index == 51:
+    if check_audio and index == 51:
         require(value["native"]["audio_playing"] is True, "Native HLS audio is not playing")
-    else:
+    elif check_audio:
         require(sample["audio_state"] == "running" and sample["session_bound"] is True
                 and sample["audio_rms"] > .001 and abs(sample["audio_peak_hz"] - frequency) < 40, "Old or missing episode audio")
     host = value["host"]
