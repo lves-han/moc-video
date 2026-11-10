@@ -2721,3 +2721,8 @@
 - 实现：待播 SQLite v2、三项命令、详情及首页接线和转场已形成初稿。前端构建 exit0；原生待播 CRUD/重启/迁移失败回滚及权限/CSP 检查 exit0，日志 `evidence/runs/20261109T152635402504-diag-tv5-native-2/output.log`。
 - 验证：外层前端测试 197/197 exit0，日志 `evidence/runs/20261109T153614301665-diag-tv5-frontend-tests/output.log`；工作契约检查 exit0，日志 `evidence/runs/20261109T153641521245-diag-tv5-contracts/output.log`。A1 因桌面锁定 exit1，真实窗口尚未验收，日志 `evidence/runs/20261109T152708610061-A1/output.log`；完整 verify、done、独立巡检均 NOT RUN。
 - 待办：用户解锁后恢复原会话额度内的开发；核对待播图片错误的既有 C9 保护以及详情样式，完成原 A1、完整 verify 和独立巡检。保留原阈值及全部失败历史；本次交接非用户暂停。
+
+## T0.32 额外会话授权 2026-11-10
+- 结果：RESOLVED
+- 决定：用户在本聊天对“0.32 的两次开发会话已用完；最后一次因进程检查权限限制提前交接，随后验收发现一处 Rust 格式错误。是否批准增加一次会话，以修复并完成现有验收？”选择“批准增加一次（推荐）”。仅本卡会话上限由2调整为3，原时长、资源限制、验收标准与失败历史保持；外层按原执行器代验并负责 Git 收尾。
+- 事实：前端197项及契约检查通过；最新准确A1在窗口构建前因 tests/fixtures/tv5_host.rs:343 的格式检查失败，日志 `evidence/acceptance/TV5-d7a2de30d8024e36931a274d659f9c56/command-2.log`。修复后须重跑当前源码准确A1、完整verify、done及独立巡检。
