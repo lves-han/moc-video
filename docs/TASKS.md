@@ -1,12 +1,12 @@
 # 映象视频任务路线
 
-状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。36张桌面、6张后续移动：T0.28至T0.34为ADR-057新增的Apple TV化改造卡，原T0.28、T0.29按ADR-057顺延为T0.35、T0.36，已完成卡正文及其验收脚本中的“T0.28/A1”指顺延后的T0.35/A1；其余沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
+状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。37张桌面、6张后续移动：T0.28至T0.34为ADR-057新增的Apple TV化改造卡，原T0.28、T0.29按ADR-057顺延为T0.35、T0.36，已完成卡正文及其验收脚本中的“T0.28/A1”指顺延后的T0.35/A1；其余沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
 
 平台范围（ADR-005/ADR-006，macOS first）：桌面必需验收目标只有macOS arm64（本机）。各卡“原始义务”及覆盖表中的macOS x86_64、Windows、Ubuntu X11/Wayland运行、安装、性能与签名要求降为非阻断记录项：代码保持cfg可移植，验收报告列为NOT RUN并给出复现命令，后续另行授权；本机macOS arm64缺测、失败或伪称其他平台通过时验收失败。
 
 ## 路线与执行前提
 
-当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.27桌面验收→T0.28至T0.34桌面Apple TV化改造→T0.35至T0.36独立验收与交付。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
+当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.27桌面验收→T0.28至T0.34桌面Apple TV化改造→T0.35独立验收→T0.37线路记忆→T0.36交付。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
 
 M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌面T25完成后外层监管停止并交付移动待办；M00执行前须明确移动授权。验收入口只做当卡行为断言，任务状态、冻结与完成资格沿原脚本。未完成卡脚本由当卡交付，当前业务验收NOT RUN；已有验收入口及完成证据保持，运行缺入口必然失败。
 
@@ -53,6 +53,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | TV6 | T0.33 | 沉浸播放器 | 桌面 |
 | TV7 | T0.34 | 搜索、资料库、来源与设置 | 桌面 |
 | T24 | T0.35 | 独立验收与问题修复 | 桌面 |
+| LINE-PREFERENCE | T0.37 | 影片成功线路记忆 | 桌面 |
 | T25 | T0.36 | 开发交付与最终说明 | 桌面 |
 | M00 | T1.1 | Android / iOS 真机可行性与版本基线 | 后续移动 |
 | M01 | T1.2 | Android本地Rust来源接入 | 后续移动 |
@@ -198,6 +199,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | REQ-T24 / replica-spec/AI_TASKS.md T24 | ADR-048修订后的T24工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.35/A1 | 桌面首版 |
 | REQ-T25 / replica-spec/AI_TASKS.md T25 | ADR-048修订后的T25工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T0.36/A1 | 桌面首版 |
 | REQ-T25-LIFECYCLE / ADR-058 | 干净真机或专用虚拟机上的安装、初始化、首播、升级、卸载 | T0.36/A2 | 桌面首版 |
+| REQ-LINE-PREFERENCE / 用户当前聊天、ADR-061 | 首集成功线路用于后续集；用户明确要求重启持久化，无可靠匹配保留确认流程 | T0.37/A1 | 桌面首版 |
 | REQ-M00 / replica-spec/AI_TASKS.md M00 | ADR-048修订后的M00工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.1/A1 | 后续移动 |
 | REQ-M01 / replica-spec/AI_TASKS.md M01 | ADR-048修订后的Android本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.2/A1 | 后续移动 |
 | REQ-M02 / replica-spec/AI_TASKS.md M02 | ADR-048修订后的M02工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.3/A1 | 后续移动 |
@@ -2199,12 +2201,36 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 验证：按行为复测，避免仅复制实现细节；结论包含实际测试命令和结果。
 - 执行：可由独立审查步骤或明确授权的审查agent执行，避免开发者自行省略关键验收。
 
-### T0.36 T25 开发交付与最终说明
+### T0.37 已播放线路记忆
 - [ ] 完成
 - 依赖：T0.35
+- 环境：macos-arm64 必需；其他桌面平台按既有矩阵记录。
+- 启动次序：C5 修订生效并经最终独立文档 CLEAR 前，仅允许原 task.py start 建立本卡状态；实现与验收须等待契约修订和基线完成。
+- 需求：REQ-LINE-PREFERENCE → A1
+- 范围：`src/`, `src-tauri/`, `tests/`, `docs/PROGRESS.md`
+- 交付物：为每部影片记住实际播放成功的来源及可跨剧集识别的线路；下一集及其他集优先使用该影片上次成功线路，应用重启后保留。用户主动选择优先；线路缺失、来源失效或不可用时沿现有匹配/选择流程继续。记录不得包含播放 URL、令牌、临时 Session、Resolution 或 Stream 标识，影片及来源修订之间严格隔离。仅在来源修订一致、内容匹配唯一可信、当前目标集及线路有唯一可靠对应且可播放时自动选择；线路重排、同名、缺集、乱序、跨季或同名候选导致无法确认时保留原确认流程，不以旧 group_id 或数组下标单独证明对应；来源 revision 和内容 ID 未变仍须用首次确认时的非敏感稳定内容证据交叉核验当前快照，字段冲突或无法证明时回确认。沿用现有公开协议和命令，复用现有持久化机制；读取损坏、权限/配额或写入失败时继续当前播放及原匹配流程，保留既有已确认记录，不伪报保存成功，并提供可定位错误；恢复可写后允许再次保存，迟到结果不得覆盖新选择。若实现需要协议扩展，先按冻结流程明确最小变更并复审。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "真实入口至少提供三条线路，首集前两条失败或不可用、第三条实际解码并推进后才记忆；第二、三集和应用重启后根据当前数据匹配并优先第三条，证明前两条未被优先重试且未复用旧 Session/Resolution/Stream。写入只由当前身份及会话的实际播放推进触发，resolve 成功或 playable 声明不足以写入。验证手动选择覆盖和抢占、不同影片隔离、缺失/失效时回退、失败或过期请求不得覆盖已成功选择、来源修订变化、存储损坏/不可用/恢复及迟到读写结果、敏感临时数据不落盘；真实入口覆盖线路重排、同名、缺集、乱序、跨季、同名候选及同 revision/同 vod_id 内容替换，无法可靠对应时保留确认。至少通过生产 MacCMS 适配器、真实 Host 和窗口，使用原格式 vod_play_from/vod_play_url 的同影片三线路多集数据，验证首次用户确认后的第2/3集唯一可靠映射，包括生产形态中 season/number 为 null、可唯一解析并与元数据交叉核对的标签；无号、重复号、跨季歧义或相似伪造标签无法证明时保留确认。同时以真实同源 MacCMS 场景验证换线后后续集、重启、历史 video 身份和旧会话安全，重排/歧义回确认或原流程。以当前源码覆盖匹配→播放→切集→历史及手动选择的相关回归，保留现有播放与匹配安全约束。记录 T0.35 的固定构建证据属于变更前提交，禁止声称其验证本卡新源码。",
+    "argv": ["{python}", "-B", "tests/acceptance/line_preference.py", "--report", "evidence/acceptance/LINE-PREFERENCE.json", "--junit", "evidence/acceptance/LINE-PREFERENCE.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/LINE-PREFERENCE.xml",
+    "cases": ["REQ-LINE-PREFERENCE", "REQ-LINE-PREFERENCE/three-lines", "REQ-LINE-PREFERENCE/later-episodes", "REQ-LINE-PREFERENCE/restart", "REQ-LINE-PREFERENCE/races", "REQ-LINE-PREFERENCE/identity-and-fallback", "REQ-LINE-PREFERENCE/storage-and-secrets", "REQ-LINE-PREFERENCE/playback-history", "REQ-LINE-PREFERENCE/same-source"],
+    "timeout_seconds": 1800
+  }
+]
+```
+
+### T0.36 T25 开发交付与最终说明
+- [ ] 完成
+- 依赖：T0.37
 - 环境：macos-arm64 必需；macos-x86_64、windows-x86_64、linux-x11/wayland 记录为 NOT RUN（ADR-005/006）
 - 需求：U06, R33, R51, C-PATH, REQ-T25 → A1；U04, R30, R50, REQ-T25-LIFECYCLE → A2（覆盖表含精确对应）
 - 范围：`README.md`, `docs/release-evidence/`, `docs/runtime.lock.json`, `packaging/`, `src-tauri/`, `src/`, `tests/`, `docs/PROGRESS.md`
+- 证据衔接：交付说明区分 T0.35 变更前固定构建验收与 T0.37 当前源码线路/相关播放回归，不把旧证据表述为新源码全量验收。
 - 移动阶段：本卡完成并独立巡检CLEAR后停止桌面监管，报告移动清单；T1.1的阶段门由控制器拦截，等待人类授权（ADR-007）。
 - 交付物：落实下列修订义务；提供`tests/acceptance/t25.py`的真实行为断言与对应报告。复用已存在代码，保持C1..C16中与本卡相关契约。
 - 验收：
