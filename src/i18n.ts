@@ -71,6 +71,8 @@ export const chinese = {
   "Remove": "删除",
   "Remove {title} and its saved progress from this device?": "删除此设备中《{title}》的观看记录和播放进度？",
   "Watch history": "观看历史",
+  "Local video": "本地视频",
+  "Live": "直播",
   "History": "历史",
   "Today": "今天",
   "Yesterday": "昨天",

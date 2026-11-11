@@ -1,14 +1,5 @@
 [
   {
-    "kind": "stremio",
-    "config_id": "e2065760-819f-4d7d-8f66-907198355001",
-    "name": "TMDB 中文",
-    "enabled": true,
-    "manifest_urls": [
-      "https://tmdb.elfhosted.com/zh-CN/manifest.json"
-    ]
-  },
-  {
     "kind": "maccms",
     "config_id": "e2065760-819f-4d7d-8f66-907198355002",
     "name": "优质",

@@ -3,16 +3,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { NAlert, NButton, NModal, NRadioGroup, NRadioButton, useMessage } from "naive-ui";
 import SettingsView from "./views/SettingsView.vue";
 import HistoryView from "./views/HistoryView.vue";
-import SourcesView from "./views/SourcesView.vue";
+import LocalView from "./views/LocalView.vue";
+import LiveView from "./views/LiveView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
-import NativeSourcesView from "./views/NativeSourcesView.vue";
 import HomeView from "./views/HomeView.vue";
 import BrowseView from "./views/BrowseView.vue";
 import DetailsView from "./views/DetailsView.vue";
 import SearchView from "./views/SearchView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
-import { appState, appController, metadataVideoId } from "./state.ts";
+import { appState, appController, metadataVideoId, liveAvailable } from "./state.ts";
 import { finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
 import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
@@ -40,8 +40,9 @@ const desktopNavigation = computed(() => [
   ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
+  { page: "local", href: "#/local", icon: "folder", label: t("Local video") },
+  ...(liveAvailable(appState.settings) ? [{ page: "live", href: "#/live", icon: "broadcast", label: t("Live") }] : []),
   { page: "history", href: "#/history", icon: "library", label: locale.value === 'zh-CN' ? '资料库' : 'Library' },
-  { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
 ]);
 const metadataProviders = computed(() => (appState.sources.data?.providers ?? []).filter(item => item.kind === "stremio" && item.runtime_status === "ready" && item.capabilities.home && item.capabilities.details));
@@ -88,10 +89,12 @@ function readHash() {
   const [name = "home", id = "", episode = "1"] = path.split("/");
   return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
-type Page = "home" | "browse" | "search" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
+type Page = "home" | "browse" | "search" | "local" | "live" | "film" | "watch" | "settings" | "history";
 const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   const stored = appState.route, view = readHash();
-  const page: Page = stored.name === 'home' && ['browse','search'].includes(view.name) ? view.name as 'browse' | 'search' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
+  // The source manager now lives in Settings; the contract still lists its old route names.
+  const page: Page = stored.name === 'home' && ['browse','search','local','live'].includes(view.name) ? view.name as 'browse' | 'search' | 'local' | 'live' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch"
+    : stored.name === "sources" || stored.name === "setup" ? "settings" : stored.name;
   return { page,
     id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
 });
@@ -127,7 +130,7 @@ function rememberHome() { if (route.value.page === "home") homeSnapshots.set(hom
 const heroFilms = computed(() => route.value.kind ? films.value.filter(film => film.kind === route.value.kind) : [films.value[0]!, films.value[2]!, films.value[3]!]);
 const hero = computed(() => heroFilms.value[heroIndex.value % heroFilms.value.length]!);
 const title = computed(() => route.value.kind ? t(kindLabels[route.value.kind as FilmKind]) : t(({
-  home: "Discover", browse: 'Browse by genre', search:'Search', film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
+  home: "Discover", browse: 'Browse by genre', search:'Search', local: "Local video", live: "Live", film: "Film details", watch: "Now playing", settings: "Settings", history: "Watch history",
 } as const)[route.value.page]));
 const filteredFilms = computed(() => films.value.filter(film => (!route.value.kind || film.kind === route.value.kind) && (activeGenre.value === "All" || film.genres.includes(activeGenre.value))));
 const visibleFilms = computed(() => expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6));
@@ -188,8 +191,6 @@ async function changeSource(id: string) {
   try { await selectNativeSource(native ? id : previewSourceKey(id).source_id, "playback"); }
   catch (cause) { preferenceError.value = String(cause); }
 }
-function addSource(value: Source) { previewSources.value.push(value); notify(t("Source added to this preview. Live connections will follow.")); }
-function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
 function openDetails(ref: Bridge_MediaRef) {
   const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
   if (target === location.hash) return;
@@ -295,10 +296,9 @@ async function updateRoute() {
         if (result?.context) pendingResume.value = { context: result.context, position_ms: saved && !saved.completed ? saved.position_ms : 0, was_playing: true };
       }
     } else {
-      // The first-run setup entry and the source manager are one native page.
-      const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
+      const name = ["settings", "history"].includes(next.name) ? next.name as "settings" | "history" : "home";
       appController.navigate({ name });
-      if (name === "home" && next.name !== 'search' && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
+      if (name === "home" && !['search', 'local', 'live'].includes(next.name) && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
         && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
     }
     if (current !== sequence) return;
@@ -402,6 +402,8 @@ watch(() => appState.route, route => {
   }
 }, { flush: "sync" });
 function continueHistory(entry: HistoryEntry) {
+  // Local files resume on the Local video page, which owns their playback session.
+  if (native && entry.record?.metadata_identity.namespace === "local") { location.hash = `#/local?play=${entry.record.video_id}`; return; }
   if (native && entry.record) { void continueNativeHistory(entry.record); return; }
   const film = baseFilms.find(film => historyContentId(film.kind, film.id) === entry.content_id);
   if (film) location.hash = `#/watch/${film.id}/${entry.episode}?resume=1`;
@@ -553,13 +555,6 @@ onBeforeUnmount(() => {
       <nav class="utility-nav">
         <a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined" :title="t('Watch history')"><Icon name="history" /><span>{{ t('Watch history') }}</span></a>
         <a
-          href="#/sources"
-          :class="{ active: route.page === 'sources' }"
-          :aria-current="route.page === 'sources' ? 'page' : undefined"
-          :title="t('Source manager')"
-          ><Icon name="layers" /><span>{{ t("Source manager") }}</span></a
-        >
-        <a
           href="#/settings"
           :class="{ active: route.page === 'settings' }"
           :aria-current="route.page === 'settings' ? 'page' : undefined"
@@ -655,15 +650,16 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': ['sources','settings'].includes(route.page), 'tv-library-main':route.page === 'history', 'tv-search-main':route.page === 'search' }">
+      <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': route.page === 'settings', 'tv-library-main':['history','local','live'].includes(route.page), 'tv-search-main':route.page === 'search' }">
         <SearchView v-if="route.page === 'search'" ref="searchView" @open="openDetails" />
+        <LocalView v-else-if="route.page === 'local'" />
+        <LiveView v-else-if="route.page === 'live'" />
         <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
           <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
           <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
         </div>
-        <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
           <div class="page-heading">
             <div>
@@ -971,14 +967,6 @@ onBeforeUnmount(() => {
         </template>
 
         <HistoryView v-else-if="route.page === 'history'" :save-error="historySaveError" @open="openDetails" @resume="continueHistory" @retry-save="retryHistorySave" @removed="discardPendingHistory" />
-        <SourcesView
-          v-else-if="route.page === 'sources'"
-          :sources="sources"
-          :selected-source-id="sourceId"
-          @select="changeSource"
-          @toggle="toggleSource"
-          @add="addSource"
-        />
         <SettingsView
           v-else-if="route.page === 'settings'"
           v-model:speed="speed"
@@ -987,6 +975,7 @@ onBeforeUnmount(() => {
           @notice="notify"
           @language="changeLanguage"
           @palette="changePalette"
+          @select="selectNativeSource"
         />
         <footer class="page-footer">
           <span
@@ -1008,8 +997,10 @@ onBeforeUnmount(() => {
           route.page === 'home' && route.kind === item.kind ? 'page' : undefined
         "
         ><Icon :name="item.icon" :size="20" /><span>{{ item.label }}</span></a
-      ><a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined"><Icon name="history" :size="20" /><span>{{ t('History') }}</span></a><a href="#/sources" :class="{ active: route.page === 'sources' }"
-        ><Icon name="layers" :size="20" /><span>{{ t("Sources") }}</span></a
+      ><a href="#/local" :class="{ active: route.page === 'local' }" :aria-current="route.page === 'local' ? 'page' : undefined"><Icon name="folder" :size="20" /><span>{{ t('Local video') }}</span></a
+      ><a v-if="liveAvailable(appState.settings)" href="#/live" :class="{ active: route.page === 'live' }" :aria-current="route.page === 'live' ? 'page' : undefined"><Icon name="broadcast" :size="20" /><span>{{ t('Live') }}</span></a
+      ><a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined"><Icon name="history" :size="20" /><span>{{ t('History') }}</span></a><a href="#/settings" :class="{ active: route.page === 'settings' }" :aria-current="route.page === 'settings' ? 'page' : undefined"
+        ><Icon name="settings" :size="20" /><span>{{ t("Settings") }}</span></a
       >
     </nav>
     <NModal

@@ -34,6 +34,10 @@ pub const COMMANDS: &[&str] = &[
     "add_watchlist",
     "remove_watchlist",
     "search_catalog",
+    "get_live_channels",
+    "open_live",
+    "list_local_videos",
+    "open_local",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- Test-only page for T0.38-T0.45: the production frontend over an in-page fake host, used to inspect the merged Settings page in a browser. -->
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>X1 settings fixture</title></head>
+<body>
+<div id="app"></div>
+<script type="module">
+import defaults from "/src/data/defaultSources.json";
+const epoch = "11111111-1111-4111-8111-111111111111", TMDB = "5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40";
+let settings = { schema_version: 2, last_source_key: null, volume: 1, muted: false, auto_next: true, window_bounds: null,
+  source_configs: defaults.slice(0, 2), ui_locale: new URLSearchParams(location.search).get("locale") ?? "en", color_palette: "lime",
+  tmdb: { enabled: true, instance_url: "https://tmdb.elfhosted.com", language: "follow" },
+  // ?live=1 seeds one enabled live list (T0.39 menu condition).
+  live_configs: new URLSearchParams(location.search).get("live") ? [{ config_id: "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", name: "Live", url: "https://live.test/list.m3u", enabled: true }] : [] };
+window.x1Settings = () => settings;
+const synced = new Set(), log = [];
+let history = [], sequence = 0;
+window.x1Log = log;
+const configs = () => [...settings.source_configs, { kind: "stremio", config_id: TMDB, name: "TMDB", enabled: settings.tmdb.enabled, manifest_urls: [`${settings.tmdb.instance_url}/en-US/manifest.json`] }];
+const provider = config => {
+  const ready = config.enabled && synced.has(config.config_id);
+  return { id: `src-${config.config_id}`, source_revision: "r1", name: config.name, language: "", content_types: ["movie"],
+    capabilities: { home: ready, search: ready, details: ready, resolve: ready && config.kind === "maccms", sequential_home: false },
+    runtime_status: !config.enabled ? "disabled" : ready ? "ready" : "configured", kind: config.kind, error: null,
+    origin: config.kind === "maccms" ? { config_id: config.config_id, api_url: config.api_url } : { config_id: config.config_id, manifest_urls: config.manifest_urls } };
+};
+const sources = () => ({ providers: configs().map(provider), plugins: [] });
+const handlers = {
+  get_settings: () => settings,
+  save_settings: input => (settings = structuredClone(input), settings),
+  runtime_status: () => ({ platform: "macos", phase: "ready", engine_epoch: epoch, error: null,
+    health: { status: "ready", contract_version: "1.5.0", media_gateway_ready: true },
+    cloudstream: { phase: "stopped", engine_epoch: null, display_mode: "none", health: null, error: null } }),
+  get_sources: sources,
+  sync_catalog: input => { synced.add(input.config_id); return { kind: input.kind, config_id: input.config_id, changed: true, sources: sources(), cloudstream_result: null }; },
+  get_media_cache: () => ({ used_bytes: 0, max_bytes: 268435456, pending_bytes: 0, last_error: null }),
+  list_history: () => ({ entries: history, write_sequence: sequence }), list_watchlist: () => ({ items: [] }),
+  // T0.40: one M3U list with two groups and an unsupported multicast channel.
+  get_live_channels: input => ({ config_id: input.config_id, revision: "rev-1", format: "m3u", channels: [
+    { index: 0, name: "News One", group: "News", logo: null, url: "https://live.test/news.m3u8", supported: true },
+    { index: 1, name: "News Two", group: "News", logo: null, url: "https://live.test/news2.m3u8", supported: true },
+    { index: 2, name: "Sport One", group: "Sports", logo: null, url: "https://live.test/sport.m3u8", supported: true },
+    { index: 3, name: "Multicast", group: "Sports", logo: null, url: "rtp://239.0.0.1:5000", supported: false }] }),
+  open_live: input => ({ session_id: `live-${input.index}`, resolution_id: "live", stream_id: "live", source_id: `live:${input.config_id}`, source_revision: "rev-1",
+    episode_ref: { source_id: `live:${input.config_id}`, source_revision: "rev-1", data: String(input.index) }, stream_kind: "hls", mime_type: null,
+    media_url: `http://127.0.0.1:9/media/live-${input.index}/live`, subtitles: [], expires_at: "2030-01-01T00:00:00Z" }),
+  close_playback: () => ({ ok: true }),
+  // T0.45: a search answer whose title only approximately matches some queries.
+  search_catalog: input => ({ items: [{ id: "c1", title: "庆余年", kind: "series", ref: { source_id: input.source_id, source_revision: input.source_revision, data: "qyn" }, poster: null }] }),
+  // T0.42: a library scan, a playable demo file and history writes.
+  list_local_videos: () => ({ roots: (settings.local_paths ?? []).map(path => ({ path, available: true })),
+    items: (settings.local_paths ?? []).flatMap(path => [
+      { id: "a".repeat(64), name: "demo.mp4", path: `${path}/demo.mp4`, root: path, size: 2000000, supported: true },
+      { id: "b".repeat(64), name: "show.mkv", path: `${path}/show.mkv`, root: path, size: 9000000, supported: false }]) }),
+  open_local: input => ({ match_id: "local-1", session: { session_id: "local-session", resolution_id: "local", stream_id: "file", source_id: "local", source_revision: "local",
+      episode_ref: { source_id: "local", source_revision: "local", data: input.id }, stream_kind: "progressive", mime_type: "video/mp4", media_url: "/demo.mp4", subtitles: [{ id: "t2", label: "chi", language: "chi", format: "vtt", source_format: "srt", url: "/demo.vtt" }], expires_at: "2030-01-01T00:00:00Z" },
+    record: { content_id: "c".repeat(64), metadata_identity: { config_id: "0c5e1d2a-3b4c-4d5e-8f6a-7b8c9d0e1f2a", addon_key: "d".repeat(64), namespace: "local", type: "file", meta_id: input.id, canonical_id: input.id },
+      video_id: input.id, season_number: null, episode_number: null, title: "demo.mp4", kind: "other", poster_cache_key: null, source_id: "local", source_name: "Local video",
+      position_ms: 0, duration_ms: null, completed: false, updated_at: 1 } }),
+  save_history: input => { history = [input.record]; sequence = input.write_sequence; return input.record; },
+};
+window.__TAURI__ = { core: { invoke: async (command, args) => {
+  log.push({ command, input: args?.input ?? args });
+  // The native file picker returns absolute paths.
+  if (command === "plugin:dialog|open") return args.options.directory ? "/Users/test/Movies" : ["/Users/test/Clips/a.mp4"];
+  const handler = handlers[command];
+  return handler ? { request_id: args.request_id, engine_epoch: epoch, data: handler(args.input) }
+    : { request_id: args.request_id, engine_epoch: epoch, error: { code: "CAPABILITY_UNAVAILABLE", message: `fixture: ${command}`, retryable: false } };
+} }, event: { listen: async () => () => {} } };
+await import("/src/main.ts");
+</script>
+</body>
+</html>

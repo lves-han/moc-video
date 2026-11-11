@@ -527,3 +527,22 @@ ADR-061 用户授权 2026-11-10：用户在当前聊天明确指示“批准匹�
 ## ADR-064 2026-11-11 — 移除旧版本兼容
 
 用户明确要求删除旧版本兼容。移除旧偏好键和数据库回退、设置v1及数据库v1迁移、旧来源偏好和旧字幕接口；使用独立应用标识 app.moc.video。旧文件保留，当前版本不读取或迁移。此前改名兼容决定由本条取代。
+
+## ADR-065 2026-11-11 — 已采纳：本地视频、直播、设置重组、通用TMDB与MKV
+
+来源：用户 2026-11-11 聊天，要求左侧菜单加入本地视频、IPTV、直播源（后两者配置后才显示），来源管理并入播放设置，可添加的播放源与HTTP来源合并，TMDB 配置移入语言与元数据并做成通用 TMDB 源；随后决定 IPTV 与直播源合并、TMDB 同时支持官方 API 与 Stremio 扩展、MKV 使用 ffmpeg-next、不做旧版本兼容和迁移，并要求将计划放到 T0.37 之后。
+决定：新增 T0.38 至 T0.44，详细计划见 `docs/FOLLOWUP-LOCAL-LIVE-TMDB.md`。
+- IPTV 与直播源合并为一个「直播」菜单，按内容自动识别 M3U 与 TXT。
+- 通用 TMDB 源支持 Stremio 扩展（默认）与 TMDB 官方 API 两种方式，内容标识统一为 `tmdb:<id>`。
+- MKV 在 Rust 网关内用 ffmpeg-next 重新封装为 fMP4 HLS；放弃 ffmpeg.wasm（2 GB 输入上限、速度约为原生的 1/12–1/25、默认含 GPL 库）。T0.44 等待 T0.43 实验结论及用户对 FFmpeg 分发方式、网络 MKV 范围的决定。
+- 当前处于开发阶段，本组任务不做旧版本兼容与迁移，旧设置文件不做处理；旧 TMDB Stremio 配置及引用它的观看记录、`#/sources` 路由不保留。
+
+## ADR-066 2026-11-11 — 已采纳：MKV 支持采用 ffmpeg-next 与精简 FFmpeg
+
+来源：T0.43 实验（`experiments/mkv-remux/REPORT.md`，验收日志 `evidence/runs/20261111T052228703540-A1/output.log`）；用户 2026-11-11 聊天授权从 GitHub 克隆并编译 FFmpeg（「Allow, build both」）。
+决定：MKV 支持可行，T0.44 采用 ffmpeg-next 并链接自行编译的精简 LGPL FFmpeg（`--disable-everything` 后只开启 MKV/MP4/TS 解封装、HLS/MP4 封装、所需解析器与 BSF、探测用 H.264/HEVC 解码器、DTS/TrueHD/Vorbis 等音频解码器与 AAC 编码器）。实测程序增加约 5.0 MB（全量 build 约 17.0 MB），编译约 70 秒，两类样本在真实 WKWebView 播放。T0.44 的阶段门仍须用户决定 Q2（FFmpeg 以 dylib 放入 .app，或静态链接并提供可重新链接的目标文件；实验建议 dylib）与 Q3（是否覆盖网络来源 MKV）。
+
+## ADR-067 2026-11-11 — 已采纳：T0.44 的 FFmpeg 分发方式与 MKV 范围
+
+来源：用户 2026-11-11 聊天。Q2 选择「dylib in .app」；Q3 选择「Local files only (Recommended)」。
+决定：T0.44 把 ADR-066 的精简 LGPL FFmpeg 编成动态库随 .app 分发（用户可替换，满足 LGPL 重新链接要求），不静态链接进主程序；MKV 重新封装只覆盖本地视频库中的文件，网络来源返回的 MKV 不在范围内。

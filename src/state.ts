@@ -399,6 +399,17 @@ function requireBinding(condition: unknown, message: string): asserts condition 
   if (!condition) throw new ApiFailure({ code: "BAD_REQUEST", message, retryable: false });
 }
 
+// Metadata follows the TMDB language choice, or the app language when it follows the app.
+export const metadataLocale = (settings: Settings) => {
+  const chosen = settings.tmdb?.language;
+  return chosen && chosen !== "follow" ? chosen : settings.ui_locale ?? "en";
+};
+// The Live menu appears only while at least one live list is enabled.
+export const liveAvailable = (settings: Settings) => (settings.live_configs ?? []).some(config => config.enabled);
+export const TMDB_CONFIG_ID = "5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40";
+export const TMDB_DEFAULT_INSTANCE = "https://tmdb.elfhosted.com";
+export const TMDB_API_URL = "https://api.themoviedb.org/3";
+export const TMDB_IMAGE_URL = "https://image.tmdb.org/t/p";
 export type SourceDraft = { kind: "maccms" | "stremio"; name: string; urls: string };
 const draftUrls = (draft: SourceDraft) => draft.urls.split("\n").map(url => url.trim()).filter(Boolean);
 // SPEC 18.1: at most 32 configurations and 16 manifests, anonymous http(s) URLs only.
@@ -621,14 +632,14 @@ export class AppController {
     const provider = this.state.sources.data?.providers.find(item => item.id === source?.source_id);
     const value = { id: crypto.randomUUID(), source: source && clone(source), host: this.state.runtime.engine_epoch,
       guest: provider?.kind === "cloudstream" ? this.state.runtime.cloudstream.engine_epoch : undefined,
-      locale: this.state.settings.ui_locale ?? "en", epoch };
+      locale: metadataLocale(this.state.settings), epoch };
     this.requests.set(scope, value);
     return value;
   }
   private current(scope: string, ticket: Ticket) {
     const provider = this.state.sources.data?.providers.find(item => item.id === ticket.source?.source_id);
     return this.requests.get(scope) === ticket && ticket.host === this.state.runtime.engine_epoch
-      && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || ticket.locale === (this.state.settings.ui_locale ?? "en"))
+      && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || ticket.locale === (metadataLocale(this.state.settings)))
       && (ticket.guest === undefined || ticket.guest === this.state.runtime.cloudstream.engine_epoch)
       && (!["home", "details"].includes(scope) && !scope.startsWith("section:") || sameSource(ticket.source, this.state.selected_metadata_source)
         || scope === "details" && ticket.source && sameMacCmsSource(this.state, ticket.source))
@@ -667,7 +678,7 @@ export class AppController {
     const ticket = this.ticket('search', source, 0);
     try {
       const response = await this.api.call('search_catalog', { ...source, query }, ticket.id, ticket.host ?? undefined);
-      if (!this.current('search', ticket) || ticket.locale !== (this.state.settings.ui_locale ?? 'en')) return;
+      if (!this.current('search', ticket) || ticket.locale !== (metadataLocale(this.state.settings))) return;
       requireBinding(response.items.every(card => sameSource(card.ref, source)), 'Search result source differs');
       this.search.items = response.items; this.search.images = {}; this.searchImages.clear();
       this.search.phase = response.items.length ? 'ready' : 'empty';
@@ -678,7 +689,7 @@ export class AppController {
     const source = this.search.source, items = this.search.items;
     if (!card.poster || !source || !items.includes(card) || this.search.phase === 'loading') return;
     const scope = `search-image:${card.id}`, ticket = this.ticket(scope, source, 0);
-    const valid = () => this.current(scope, ticket) && this.search.items === items && ticket.locale === (this.state.settings.ui_locale ?? 'en');
+    const valid = () => this.current(scope, ticket) && this.search.items === items && ticket.locale === (metadataLocale(this.state.settings));
     try {
       // SearchResult keeps its existing {items} wire shape. Details is the
       // existing owner of signed image access; only visible posters hydrate it.
@@ -709,7 +720,7 @@ export class AppController {
   }
   rowKey(sectionRef: string, filter: HomeFilter = {}) {
     return JSON.stringify([this.state.selected_metadata_source, this.state.runtime.engine_epoch,
-      this.state.settings.ui_locale ?? "en", this.catalogGeneration, sectionRef, normalizedFilter(filter)]);
+      metadataLocale(this.state.settings), this.catalogGeneration, sectionRef, normalizedFilter(filter)]);
   }
   catalogRow(sectionRef: string, filter: HomeFilter = {}) {
     const key = this.rowKey(sectionRef, filter);
@@ -722,7 +733,7 @@ export class AppController {
     const key = this.rowKey(sectionRef, filter), row = this.catalogRow(sectionRef, filter);
     requireBinding(pageNumber === 1 || row.data?.page.sections[0]?.next_page === pageNumber, "Row pagination requires its current continuation");
     const descriptor = this.state.home.data?.page.sections.find(section => section.section_ref === sectionRef);
-    const locale = this.state.settings.ui_locale ?? 'en', host = this.state.runtime.engine_epoch;
+    const locale = metadataLocale(this.state.settings), host = this.state.runtime.engine_epoch;
     if (!background && pageNumber === 1 && row.phase === 'pending' && descriptor) {
       const saved = this.catalog.get(source, descriptor.id, normalizedFilter(filter), locale, host);
       if (saved) {
@@ -877,7 +888,7 @@ export class AppController {
     const previous = this.state.settings;
     const confirmed = await this.settings.update(change);
     this.state.settings = confirmed;
-    if ((previous.ui_locale ?? "en") !== (confirmed.ui_locale ?? "en")) {
+    if (metadataLocale(previous) !== metadataLocale(confirmed)) {
       this.cancelPages();
       // Active playback retains the same confirmed identity and session; only display DTOs reload.
       if (this.state.route.name === "home" && this.state.selected_metadata_source) void (this.catalogMode ? this.loadCatalog() : this.loadHome());
@@ -1038,7 +1049,7 @@ export class AppController {
   }
   async refreshOneMetadataIfDue(idle: () => boolean = () => true) {
     if (!idle() || this.requests.size || this.state.route.name === 'playback' || this.matching.pending) return;
-    const locale = this.state.settings.ui_locale ?? 'en', now = Date.now();
+    const locale = metadataLocale(this.state.settings), now = Date.now();
     const ref = this.metadata.due(locale, now).find(candidate => {
       const provider = this.state.sources.data?.providers.find(row => row.id === candidate.source_id && row.source_revision === candidate.source_revision);
       return provider?.runtime_status === 'ready' && (this.metadataRetry.get(JSON.stringify(candidate)) ?? 0) <= now;
@@ -1048,7 +1059,7 @@ export class AppController {
     try {
       const response = await this.api.call('get_details', { ref: clone(ref) }, ticket.id, ticket.host ?? undefined);
       const provider = this.state.sources.data?.providers.find(row => row.id === ref.source_id && row.source_revision === ref.source_revision);
-      if (!this.current('background-metadata', ticket) || ticket.locale !== (this.state.settings.ui_locale ?? 'en')) return;
+      if (!this.current('background-metadata', ticket) || ticket.locale !== (metadataLocale(this.state.settings))) return;
       requireBinding(sameRef(response.details.ref, ref) && response.metadata_ref && sameRef(response.metadata_ref.content_ref, ref)
         && response.details.groups.every(group => group.episodes.every(episode => sameSource(episode.ref, ref)))
         && provider && provider.kind !== 'cloudstream' && provider.origin.config_id === response.metadata_ref.identity.config_id,
@@ -1066,9 +1077,19 @@ export class AppController {
     const urls = draftUrls(draft), id = draft.config_id ?? crypto.randomUUID(), name = draft.name.trim();
     const config: HttpSourceConfig = draft.kind === "maccms" ? { kind: "maccms", config_id: id, name, enabled: draft.enabled, api_url: urls[0]! }
       : { kind: "stremio", config_id: id, name, enabled: draft.enabled, manifest_urls: urls };
-    await this.updateSettings(settings => ({ ...settings, source_configs: draft.config_id
-      ? settings.source_configs.map(row => row.config_id === id ? config : row) : [...settings.source_configs, config] }));
+    await this.updateSettings(settings => {
+      if (config.kind === "maccms" && settings.source_configs.some(row => row.kind === "maccms" && row.config_id !== id && new URL(row.api_url).href === new URL(config.api_url).href)) {
+        throw new Error("This playback source address is already added. / 该播放源地址已添加。");
+      }
+      return { ...settings, source_configs: draft.config_id
+        ? settings.source_configs.map(row => row.config_id === id ? config : row) : [...settings.source_configs, config] };
+    });
     try { if (config.enabled) await this.syncConfig(config.kind, id); }
+    finally { await this.loadSources(); }
+  }
+  async saveTmdb(tmdb: NonNullable<Settings["tmdb"]>) {
+    await this.updateSettings(settings => ({ ...settings, tmdb }));
+    try { if (tmdb.enabled) await this.syncConfig("stremio", TMDB_CONFIG_ID); }
     finally { await this.loadSources(); }
   }
   async setSourceEnabled(id: string, enabled: boolean) {

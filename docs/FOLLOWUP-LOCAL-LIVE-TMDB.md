@@ -3,7 +3,7 @@
 - 整理日期：2026-11-11
 - 来源：用户在 2026-11-11 会话中提出的需求与决定（下文“需求原文”一节）
 - 原则：不做旧版本兼容，不做数据迁移（D5）。
-- 状态：规划草案。尚未写入 `docs/TASKS.md`，开始开发前按项目工作流转成正式任务卡（建议卡号 T2.1–T2.7）。
+- 状态：已写入 `docs/TASKS.md` 正式任务卡 T0.38–T0.44（ADR-065）。本文的 T2.1–T2.7 依次对应 T0.38、T0.39、T0.40、T0.41、T0.42、T0.43、T0.44。
 
 ## 1. 需求原文与需求 ID
 
@@ -34,7 +34,7 @@
 - 来源管理：`src/views/NativeSourcesView.vue`。「可添加的播放源」是 `src/data/sourcePresets.ts` 从 `src/data/defaultSources.json` 过滤出的 MacCMS 预设，与「HTTP 来源」的 `source_configs` 同一数据类型。
 - TMDB 现为一个普通 Stremio 配置：`https://tmdb.elfhosted.com/zh-CN/manifest.json`，语言写死中文。按 D5 直接改为新的 TMDB 设置。
 - 观看记录靠 `origin.config_id` 找回元数据来源（`App.vue` 中 `source.origin.config_id === identity.config_id`）。新 TMDB 源需要一个固定的标识，保证新版本内切换语言或方式后观看记录仍可用。
-- 设置模型：`protocol/app.schema.json` → 生成 `src/models.ts`（`tests/acceptance/t05_models.py`），Rust 端校验在 `src-tauri/src/settings.rs`。现有的旧版本迁移分支（v1 → v2、补种 Stremio 预设等）按 D5 一并删除。
+- 设置模型：`protocol/app.schema.json` → 生成 `src/models.ts`（`tests/acceptance/t05_models.py`），Rust 端校验在 `src-tauri/src/settings.rs`。设置 v1 迁移已在 2026-11-11 按 ADR-064 删除；当前只接受 `schema_version` 2，格式不符时报错并保留诊断副本。
 - 播放：CSP 的 `media-src` 只允许 `'self' blob: http://127.0.0.1:*`，媒体统一经 `src-tauri/src/gateway.rs` 本机网关；网关已支持 HLS 清单改写（`transfer_manifest`）与 Range。
 - 新增后端命令需要在 `src-tauri/capabilities/main.json` 登记权限。
 
@@ -47,7 +47,7 @@
 - 交付：
   - 「语言与元数据」加入 TMDB 设置：启用开关、方式（本卡只实现 Stremio 扩展）、实例地址（默认 elfhosted，可改）、语言（默认跟随应用）。manifest 地址按语言生成。其他自定义 Stremio 扩展也放在这一节。
   - 「播放设置」加入：当前元数据源与播放源选择、统一播放源列表（已添加的可编辑、启用/禁用、删除；未添加的预设排在后面带「添加」）、诊断信息（可折叠）。
-  - 按 D5：`defaultSources.json` 删除 TMDB Stremio 条目，默认设置改为启用新 TMDB 设置；删除 `settings.rs` 中的旧版本迁移分支；删除 `#/sources` 路由与 `sources`/`setup` 页面。
+  - 按 D5：`defaultSources.json` 删除 TMDB Stremio 条目，默认设置改为启用新 TMDB 设置；删除已无用途的 TMDB 预设标记 `metadata_preset_applied`；删除 `#/sources` 路由与 `sources`/`setup` 页面。
 - 开工前验证：elfhosted 地址换成 `en-US` 等语言路径能否正常返回 manifest。
 - 验收要点：
   - 全新安装后首页直接显示 TMDB 内容，语言与应用一致。

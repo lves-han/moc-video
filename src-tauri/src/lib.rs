@@ -5,6 +5,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 pub mod commands;
 pub mod contracts;
 pub mod details;
+pub mod fuzzy;
 pub mod gateway;
 pub mod history;
 pub mod home;
@@ -12,6 +13,7 @@ pub mod host;
 pub mod matching;
 pub mod media_cache;
 pub mod requests;
+pub mod remux;
 pub mod resolution;
 pub mod settings;
 pub mod source_dispatch;
@@ -137,7 +139,7 @@ mod automation;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
     #[cfg(all(not(mobile), feature = "t01-automation"))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
         player_fullscreen,

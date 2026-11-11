@@ -2958,3 +2958,83 @@
 ## 移除旧版本兼容 2026-11-11
 - 用户要求删除旧版本兼容。已删除旧偏好键回退、旧数据库回退、设置v1和数据库v1迁移、旧来源偏好恢复、旧单字幕字段；应用使用 app.moc.video 独立标识。旧版数据文件保持原样，不被读取或迁移。
 - 当前格式初始化及旧格式拒绝7项原生检查通过，偏好/缓存/主题/播放器16项相关检查通过；前端类型检查通过。相关文档已标注旧升级验收为历史记录。
+
+## T0.38 设置页重组与通用TMDB（Stremio方式） 2026-11-11T03:25:35Z
+- 结果：DONE
+- 开工前实测：elfhosted `en-US`、`zh-CN`、`ja-JP` 三个语言路径的 manifest 均返回 200，`id` 为 `tmdb-addon`。
+- 实现：设置新增可选 `tmdb {enabled, instance_url, language}`；Host 由它生成固定 config_id `5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40` 的内置 Stremio 来源（排在用户来源之后），自建实例按内置标记做语言改写；元数据语言为 TMDB 选择或跟随应用。默认来源删除 TMDB Stremio 条目，删除 `metadata_preset_applied`。来源管理并入设置：语言与元数据含 TMDB 与其他 Stremio 扩展，播放设置含当前选择、统一播放源列表（未添加预设带「添加」）和可折叠诊断。删除 `#/sources` 入口、来源管理页和预览来源页，移动端底栏改为设置。按 ADR-065 不做旧版本迁移。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T032619113938-A1/output.log`；断言：真实 Host 跟随中文得到中文标题、选定英文/中文不随应用语言变化、语言切换前后来源 id/revision/ref/metadata_ref 不变、停用为 disabled、占用内置 id 与非 http 地址被拒；前端 3 项；契约检查与类型检查通过；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.38-settings-ui.json`，在 vite 开发页面以页内模拟 Host 实际操作添加预设、禁用、编辑、删除、添加 Stremio 扩展、切换 TMDB 语言和访问 `#/sources`，页面无错误。打包 WKWebView 窗口未实测。
+- 相关回归：Rust lib 205 通过、2 失败（`tv5_migration_*`，来自工作树中 ADR-064 删除数据库 v1 迁移的未提交改动，与本卡无关，已记 BACKLOG）；前端 230 项通过；vite 生产构建通过。
+- 未提交 Git：工作树含其他会话的未提交改动（改名、移除兼容），本卡改动与其交织。
+
+## T0.39 左侧菜单：本地视频与直播 2026-11-11T03:31:00Z
+- 结果：DONE
+- 实现：侧栏在「资料库」前加入「本地视频」`#/local`（一直显示）与「直播」`#/live`（存在已启用直播配置时显示），移动端底栏同步；新增占位页 LocalView/LiveView 及 folder、broadcast 图标。为菜单显示条件提前交付设置字段 `live_configs`（schema、Host 校验 http(s) 地址与 id 唯一、契约允许项），列表下载与解析仍归 T0.40。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T033032447495-A1/output.log`；断言：类型检查、前端直播条件测试 1 项、Host 设置校验测试、契约检查通过；记录的浏览器检查中菜单显隐、移动底栏和焦点顺序符合要求；4 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.39-navigation-ui.json`，通过真实 appController.updateSettings 加入、停用、删除直播配置，菜单即时显隐；方向键焦点依次到达本地视频与直播；375 宽度底栏 8 项可容纳；页面无错误。打包 WKWebView 未实测。
+- 相关回归：前端 231 项通过；vite 生产构建通过。
+
+## T0.40 直播（IPTV与直播源合并） 2026-11-11T04:35:00Z
+- 结果：DONE
+- 实现：新增 Rust `live.rs`，按内容识别 M3U/M3U8（`#EXTINF`、`group-title`、`tvg-logo`、`#EXTGRP`）与 TXT（`频道名,地址`、`#genre#`、`#` 分隔的备用地址取第一个），最多 10000 个频道。新增命令 `get_live_channels`（在提交锁外经现有公网 HTTP 客户端下载，列表修订为内容摘要）与 `open_live`（按修订和序号打开频道，非 http(s) 返回 MEDIA_UNSUPPORTED，修订变化返回 REVISION_MISMATCH），并登记契约、示例用例、命令表、权限。网关新增直播会话：不进媒体缓存、清单每次请求上游、登记超过 2048 项时只保留播放列表后由本次刷新重新登记分片。直播列表被编辑或删除时丢弃频道并停止其会话。前端设置新增「直播」分组（添加/编辑/启用/删除，EPG 地址只保存）；直播页为分组、频道、播放器三栏，切换或离开时关闭上一会话，自定义播放/静音/全屏控件，无进度条，不写观看记录。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T043411244380-A1/output.log`；断言：解析测试 3 项与真实 Host 直播测试 1 项通过（M3U/TXT 识别、清单两次请求均到上游、分片两次请求均到上游且缓存占用 0、观看记录为空、关闭与编辑后停止服务、各类错误码）；契约、类型检查和权限通过；记录的浏览器检查符合要求；7 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.40-live-ui.json`。打包 WKWebView 中的实际 HLS 解码未实测；局域网组播及内网 IPTV 地址受现有公网地址限制，不可访问。
+- 相关回归：Rust lib 209 通过、2 失败（同 T0.38 记录的 `tv5_migration_*`，与本卡无关）；前端 231 项通过；vite 生产构建通过。
+
+## T0.41 通用TMDB：官方API方式 2026-11-11T04:46:00Z
+- 结果：DONE
+- 决定：Q1 用户在 2026-11-11 聊天中选择「Settings file」，API Key 随设置文件保存。
+- 实现：设置 `tmdb` 新增可选 `mode`（stremio/api）、`api_key`、`api_url`、`image_url`。API 方式下内置 TMDB 来源注册虚拟扩展地址 `https://tmdb-api.invalid/<语言>/manifest.json`（只含非敏感指纹，Key 不进入任何来源地址），Stremio 模块唯一的网络入口拦截该主机，由新增 `tmdb_api.rs` 调用 TMDB v3 接口并返回与 TMDB Stremio 扩展相同结构的 manifest（12 个目录）、目录与详情；多语言、筛选、详情、搜索和播放源匹配全部复用现有 Stremio 逻辑。内容标识与扩展一致：`tmdb:<id>`，剧集分集为 `<IMDb>:<季>:<集>`，两种方式是同一个元数据来源。v3 Key 走查询参数，v4 令牌走 Authorization 头；401 返回 UNAUTHORIZED「TMDB API key was rejected」，错误信息不含请求地址。设置页「接入方式」可选 Stremio 扩展或 TMDB 官方 API，API 方式显示 Key（密码输入框）、API 地址、图片地址，保存时校验；切回 Stremio 保留已存 Key。顺带修正 T0.40 `live.rs` 一处 clippy 提示（合并 if，行为不变）。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T044512776647-A1/output.log`；断言：真实 Host 对 TMDB API 夹具完成同步、首页（含经网关加载海报）、电影详情（导演、演员角色）、剧集详情（`tt0903747:1:1`）、搜索、中文跟随、v4 令牌、错误 Key；两种方式来源 id 相同；三种 Key 均未出现在任何响应中；T0.38 Stremio 方式回归通过；契约与类型检查通过；记录的设置页检查符合要求；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.41-tmdb-api-ui.json`。真实 api.themoviedb.org 未实测（没有可用 Key）。
+- 相关回归：Rust lib 210 通过、2 失败（`tv5_migration_*`，同前，与本卡无关）；clippy 无警告；前端 231 项通过；vite 生产构建通过。
+
+## T0.42 本地视频（mp4/mov/m4v） 2026-11-11T05:03:00Z
+- 结果：DONE
+- 实现：新增依赖 `tauri-plugin-dialog =2.8.4`（随之引入 tauri-plugin-fs、rfd）并在应用启动时注册，权限只加 `dialog:allow-open`；tokio 开启 `fs` 特性。设置新增 `local_paths`（绝对路径，最多 256 个）。新增 Rust `local.rs`：扫描文件与文件夹（不跟随符号链接、跳过隐藏文件、深度 8、最多 20000 项），mp4/m4v/mov 可播放，mkv/webm/avi 等列出并标为不支持；打开前规范化路径并确认仍在某个库目录内。新增命令 `list_local_videos`（在提交锁外扫描）与 `open_local`（返回播放会话、匹配号和观看记录模板，会话绑定本地观看身份 namespace=local）。网关新增 file 资源，直接读磁盘，支持整段、区间、后缀区间、416 与 HEAD，不进媒体缓存。库目录变化时清空扫描结果并停止本地会话。前端本地视频页：添加文件/文件夹（原生选择框）、按目录分组、移除目录、播放器可拖动进度、按观看记录续播并每 10 秒及暂停/结束/离开时保存进度；资料库中本地条目的「继续观看」跳到本地视频页续播。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T050045354651-A1/output.log`；断言：扫描单元测试与真实 Host 本地测试通过（三个文件、mkv 不支持、库外文件与符号链接越界被拒、相对路径被拒、整段 200 与区间 206 内容逐字节一致、越界 416、缓存占用 0、进度写入并在 Host 重启后保留、文件移走报 SOURCE_NOT_FOUND、移除目录后停止服务）；契约、类型检查、权限与依赖版本通过；记录的浏览器检查符合要求；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.42-local-ui.json`。真实 macOS 文件选择框与打包 WKWebView 播放未实测。
+- 相关回归：Rust lib 212 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；应用二进制构建通过；前端 231 项通过；vite 生产构建通过。
+- 未完成：新增 Rust 依赖未写入 `licenses/dependencies.json` 与 `THIRD_PARTY_NOTICES.txt`，已记 BACKLOG。
+
+## T0.43 MKV可行性实验（ffmpeg-next） 2026-11-11T05:25:00Z
+- 结果：DONE
+- 授权：用户在 2026-11-11 聊天中选择「Allow, build both」，允许从 GitHub 克隆 FFmpeg 并从源码编译两种版本。期间按用户要求先清理磁盘（删除 application/target、src-tauri/target、旧 T20/T25 运行目录各保留最新一份、Mozilla sccache），可用空间由 7.5 GB 增至 49 GB。
+- 实现：`experiments/mkv-remux` 实验 crate（不改产品代码）：精简 FFmpeg 构建脚本、MKV→fMP4 HLS 转封装程序（视频复制、HEVC 标 hvc1、非 WebKit 音频转 AAC、SRT 提取）、真实 WKWebView 播放检查工具；报告 `experiments/mkv-remux/REPORT.md`；ADR-066。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T052614773635-A1/output.log`；断言：精简版静态链接、无 FFmpeg/homebrew 动态库；体积精简 5.49 MB、全量 17.51 MB、空程序 0.47 MB；两样本转封装后在真实 WKWebView 播放超过 3 秒无错误；两条路线 FFmpeg 许可证均为 LGPL 2.1+；6 个用例全部通过，退出码 0。
+- 稳定性：首次重跑 A1 时两项 WKWebView 播放间歇失败（加载完成但不前进），原因是检查程序窗口未激活被 WebKit 节流；检查程序改为激活应用后连续两次 A1 通过。
+- 未覆盖：边播边生成分片与 Cues 拖动、大于 4 GB 文件、发行打包与许可证声明，均归 T0.44。
+
+## T0.44 MKV支持 阶段门 2026-11-11T05:30:00Z
+- 结果：AUTHORIZED
+- 授权：T0.43 的 ADR-066 结论为可行；用户在 2026-11-11 聊天中对 Q2 回答「dylib in .app」，对 Q3 选择「Local files only (Recommended)」（见 ADR-067）。
+
+## T0.44 MKV支持 2026-11-11T06:56:00Z
+- 结果：DONE
+- 实现：`src-tauri/ffmpeg/build_ffmpeg.py` 从 GitHub release/9.0 编译精简 LGPL FFmpeg 动态库（install name 为 @rpath，固定前缀 /opt/moc-ffmpeg 避免库内出现本机路径）；根目录 `.cargo/config.toml` 以 FFMPEG_DIR 指向该构建，`build.rs` 加入 `@executable_path/../Frameworks` rpath（仅调试构建另加构建目录）；`tauri.conf.json` 把四个 dylib 打包进 Contents/Frameworks（ADR-067）。新增 `remux.rs`：打开 MKV 时读取 Cues 关键帧，按约 4 秒切成 VOD fMP4 HLS；每个分片请求从自身关键帧 seek 后只封装该段（frag_discont 保证 tfdt），视频直接复制、HEVC 标 hvc1、非 WebKit 音频转 AAC；内嵌 SRT/ASS 按需转 WebVTT（只读取该轨）；不支持的视频编码报 MEDIA_UNSUPPORTED。网关新增 remux 会话（播放列表、初始化段、分片、字幕），FFmpeg 工作在阻塞线程中执行，临时输出随即删除。Host 的 `open_local` 改为在提交锁外读取 MKV 索引。本地视频页原生播放 HLS（不设 crossorigin），字幕经 fetch 后以 blob: 轨道加载。`packaging/release.py` 允许 Frameworks 中与构建产物一致且不含本机路径的 FFmpeg 库，并把 FFmpeg（LGPL 文本、源码地址与 commit、configure 参数）写入许可证清单；补齐 tauri-plugin、ffmpeg-sys-next 的许可证补充材料，重新生成清单（444 项）并通过 `--verify-licenses`。T0.42 的 x5 测试把「不支持格式」示例由 mkv 改为 avi。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T065308353085-A1/output.log`；断言：remux 单元测试、本地 MKV Host 测试、>4 GiB 测试、T0.42 本地测试共 4 项通过；4.5 GB MKV 打开 12 ms，超过 4 GiB 偏移的分片 281 ms 生成且起点 892.345 秒正确，真实 WKWebView 跳到 95% 后继续播放；12 秒样本中间分片起点 4.000 秒，H.264+AAC 与 HEVC+DTS(→AAC) 在真实 WKWebView 跳转后播放且有音轨；SRT/ASS 转 WebVTT；关闭后不再提供内容、无 MKV 句柄与临时文件；MPEG-4 Part 2 报 MEDIA_UNSUPPORTED；许可证清单与 @rpath 动态库检查通过；7 个用例全部通过，退出码 0。
+- 手工检查：`evidence/manual/T0.44-bundle-ui.json`（实际构建 .app：Frameworks 中四个 dylib 与构建产物一致，release rpath 仅 Frameworks，ad-hoc 签名后 `codesign --verify --deep --strict` 通过且未改动 dylib，启动时从 Frameworks 加载；本地视频页字幕以 blob: 轨道加载 4 条）。完整 `release.py --build` 流程未在本卡运行。
+- 相关回归：Rust lib 215 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 231 项通过；vite 生产构建与契约检查通过。
+
+## T0.38–T0.44 复查 2026-11-11T07:15:00Z
+- 范围：用户要求复查 T0.38–T0.44 实现，确保功能可用。
+- 真实服务冒烟（临时测试，复查后已删除）：内置 TMDB（elfhosted）同步、中英文首页、中文搜索与详情均正常；iptv-org 中国列表 156 个频道解析正确，前 3 个频道经网关取到播放列表与首个分片均为 200；4.5 GB 带字幕 MKV 打开 9 ms、字幕读取 359 ms。
+- 发现并修复：
+  1. 直播列表上限 10000 过低：iptv-org 完整列表有 11452 个频道会被拒绝。上限提高到 50000（契约 LiveChannel/LiveChannelList/Args_open_live 与 `live.rs`）。
+  2. 精简 FFmpeg 缺少 PCM/MP2 解码器，含这类音轨的 MKV 整体无法播放。加入 mp2、pcm_s16le/s16be/s24le/s32le/f32le 解码器并重编动态库；PCM 的「未指定顺序」声道布局被 AAC 拒绝，改为按声道数使用标准布局，重采样器按首个解码帧创建。新增 `x7_h264_pcm.mkv` 夹具与单元断言；转出的音轨经 ffmpeg 解码有声音。许可证清单随 FFmpeg 配置重新生成，`--verify-licenses` 通过。
+- 复核：网关只接受 tauri://localhost 作为跨源 Origin，应用内字幕 fetch 可用；dialog 插件参数与返回格式与前端一致。
+- 复验：T0.38–T0.42、T0.44 六个验收脚本重跑全部通过（报告写在会话临时目录，未覆盖原卡证据）；Rust lib 215 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 231 项、类型检查、生产构建通过。
+- 未验证：打包应用中的界面实际操作（文件选择框、真实 MKV/直播播放）、TMDB 官方 API 真实 Key。
+
+## T0.45 近似搜索 2026-11-11T07:25:00Z
+- 结果：DONE
+- 来源：用户 2026-11-11 聊天「小功能改进 搜索是否能近似搜索」，随后对推荐方案回复「Implement it」。
+- 实现：新增 `fuzzy.rs`（全角转半角、去空格标点、ASCII 词间保留单空格；去「第 X 季/部/集」、Season/Part/S 编号、罗马数字与末尾续集数字；中文片名取前半段；按完全相同、前缀、包含、共同字符排序）。Host 的 MacCMS 搜索先按输入原样查询，无结果才依次放宽；仍无结果时用内置 TMDB 来源搜到的片名（最多 3 个，各试 3 种形式）再查，TMDB 不可用时保持空结果。结果按与输入接近程度排序。搜索页在没有结果包含输入文字时提示「没有完全匹配的片名，已显示相近结果」。桥接契约未改。顺带去掉 `build.rs` 中与 tauri-build 重复的 Frameworks rpath（消除链接警告）。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T072205486037-A1/output.log`；断言：fuzzy 单元测试与真实 Host 测试通过（原样可找到时不放宽、「复仇者联盟 4」「庆余年 第二季」放宽后找到、「流浪地球」最接近者在前、TMDB 就绪前后「Inception」分别为空与「盗梦空间」、不存在的片名为空）；前端提示测试与类型检查通过；记录的搜索页检查符合要求；5 个用例全部通过，退出码 0。
+- 真实来源核对：优质（1080zyku）对「复仇者联盟 4」「庆余年 第二季」返回 0 条、去空格后各找到；量子（lziapi）服务端本身宽松匹配，放宽不触发，排序把最接近片名排前。
+- 相关回归：Rust lib 217 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 232 项通过；vite 生产构建通过。
+
+## 体验安装包 2026-11-11T07:35:00Z
+- 用户要求构建 macOS 安装包体验。`packaging/release.py --build` 经 run.py（diag-experience-release-build）完成生产前端、`cargo tauri build`、ad-hoc 签名、发货文件检查与 dmg 生成，`hdiutil verify` 通过；脚本最后一步「Real build 1 predecessor required」（旧升级生命周期对比）失败，发生在 dmg 生成与校验之后，属 ADR-064 移除旧版兼容后的遗留检查，未改动。
+- 安装包：`evidence/releases/T23-20261111T072826-91036f4c/MocVideo-0.1.0-build2-macos-arm64-personal.dmg`（SHA256 ae8b0f375b117ba818948b79357973cba52c77c6cfa848d2ee1f3ae549ac3129，14.9 MB），副本 `/Users/eason/jp/deliverables/moc-video/`。挂载核对：Frameworks 含四个 FFmpeg dylib，`codesign --verify --deep --strict` 通过，rpath 仅 `@executable_path/../Frameworks`，可执行文件无本机路径。个人使用 ad-hoc 签名，未公证。

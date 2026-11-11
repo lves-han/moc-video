@@ -126,6 +126,17 @@ def collect():
                 source_crate=f"libsqlite3-sys@{package['version']}", source_file_sha256=digest(data),
                 scope="runtime-bundled-c", texts=[dict(path="sqlite3/sqlite3.c copyright header",
                     sha256=digest(notice.encode()), text=notice)]))
+    # The trimmed FFmpeg dylibs ship in Contents/Frameworks (ADR-066/067): LGPL text, exact source and configuration.
+    build = read(ROOT / "src-tauri/ffmpeg/dist/ffmpeg-build.json")
+    source = ROOT / "src-tauri/ffmpeg/src"
+    offer = (f"FFmpeg {build['branch']} commit {build['commit']} from {build['source']}, built as shared libraries by "
+             f"src-tauri/ffmpeg/build_ffmpeg.py with: {' '.join(build['configure'])}\n"
+             f"Configured license: {build['license']}. The dylibs in Contents/Frameworks may be replaced by a compatible build.\n")
+    packages.append(dict(ecosystem="bundled-binary", name="FFmpeg", version=f"{build['branch']}@{build['commit'][:12]}",
+        source=build["source"], license="LGPL-2.1-or-later", scope="runtime-bundled-dylib",
+        texts=[*(dict(path=name, sha256=digest((source / name).read_bytes()), text=(source / name).read_bytes().decode("utf-8"))
+                 for name in ("LICENSE.md", "COPYING.LGPLv2.1")),
+               dict(path="build configuration and source", sha256=digest(offer.encode()), text=offer)]))
     locks = {name: digest((ROOT / name).read_bytes()) for name in ("package-lock.json", "src-tauri/Cargo.lock")}
     return dict(schema_version=1, target=TARGET, locks=locks, cargo_metadata_argv=command,
         scope="Installed locked npm runtime/build packages and target Cargo non-dev closure including build dependencies; optional foreign-target npm binaries excluded. Alternatives are preserved. Packages omitting notices use hash-bound, individually attributed supplements. vdirs publishes an MIT declaration without a notice file; its declaration and standard MIT reference are distinctly labelled, not represented as an upstream copyright notice.",
@@ -197,6 +208,11 @@ def check_payload(app, frontend):
     require(executable.name == "moc-video" and os.access(executable, os.X_OK), "Shipping executable missing")
     allowed = {"Contents/Info.plist", "Contents/MacOS/moc-video", "Contents/_CodeSignature/CodeResources",
                "Contents/Resources/icon.icns", "Contents/Resources/licenses/dependencies.json", "Contents/Resources/licenses/THIRD_PARTY_NOTICES.txt"}
+    frameworks = [ROOT / "src-tauri" / path for path in config["bundle"]["macOS"].get("frameworks", [])]
+    allowed |= {f"Contents/Frameworks/{path.name}" for path in frameworks}
+    for path in frameworks:
+        data = (app / "Contents/Frameworks" / path.name).read_bytes()
+        require(data == path.read_bytes() and str(Path.home()).encode() not in data, f"Bundled FFmpeg library differs or holds a local path: {path.name}")
     files = tree(app)
     require(set(files) == allowed, "Unexpected or missing shipping files: " + str(sorted(set(files) ^ allowed)))
     require(info["CFBundleIconFile"] == "icon.icns"

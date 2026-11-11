@@ -3,20 +3,39 @@
   "productName": "墨客视频",
   "version": "0.1.0",
   "identifier": "app.moc.video",
-  "build": { "frontendDist": "../dist", "devUrl": "http://127.0.0.1:5173" },
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:5173"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [],
     "security": {
-      "capabilities": ["main"],
+      "capabilities": [
+        "main"
+      ],
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:*; media-src 'self' blob: http://127.0.0.1:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
     }
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/icon.icns"],
-    "targets": ["app"],
-    "macOS": { "minimumSystemVersion": "14.0", "infoPlist": "Info.plist", "bundleVersion": "2" },
+    "icon": [
+      "icons/icon.icns"
+    ],
+    "targets": [
+      "app"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "infoPlist": "Info.plist",
+      "bundleVersion": "2",
+      "frameworks": [
+        "ffmpeg/dist/lib/libavcodec.63.dylib",
+        "ffmpeg/dist/lib/libavformat.63.dylib",
+        "ffmpeg/dist/lib/libavutil.61.dylib",
+        "ffmpeg/dist/lib/libswresample.7.dylib"
+      ]
+    },
     "resources": {
       "../licenses/THIRD_PARTY_NOTICES.txt": "licenses/THIRD_PARTY_NOTICES.txt",
       "../licenses/dependencies.json": "licenses/dependencies.json"

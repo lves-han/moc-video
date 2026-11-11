@@ -9956,6 +9956,255 @@
           "url": "https://example.invalid"
         }
       }
+    },
+    {
+      "name": "args_get_live_channels",
+      "document": "app",
+      "schema": "Args_get_live_channels",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+        }
+      }
+    },
+    {
+      "name": "args_get_live_channels_url",
+      "document": "app",
+      "schema": "Args_get_live_channels",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "url": "https://example.invalid"
+        }
+      }
+    },
+    {
+      "name": "result_get_live_channels",
+      "document": "app",
+      "schema": "Result_get_live_channels",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "revision": "r1",
+          "format": "m3u",
+          "channels": [
+            {
+              "index": 0,
+              "name": "CCTV-1",
+              "group": "央视",
+              "logo": null,
+              "url": "https://live.example/cctv1.m3u8",
+              "supported": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "result_get_live_channels_bad_format",
+      "document": "app",
+      "schema": "Result_get_live_channels",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "revision": "r1",
+          "format": "xspf",
+          "channels": []
+        }
+      }
+    },
+    {
+      "name": "args_open_live",
+      "document": "app",
+      "schema": "Args_open_live",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "revision": "r1",
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "args_open_live_url",
+      "document": "app",
+      "schema": "Args_open_live",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "revision": "r1",
+          "index": 0,
+          "url": "https://example.invalid"
+        }
+      }
+    },
+    {
+      "name": "result_open_live",
+      "document": "app",
+      "schema": "Result_open_live",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "error": {
+          "code": "MEDIA_UNSUPPORTED",
+          "message": "unsupported channel",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "name": "result_open_live_missing_url",
+      "document": "app",
+      "schema": "Result_open_live",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "session_id": "s"
+        }
+      }
+    },
+    {
+      "name": "args_list_local_videos",
+      "document": "app",
+      "schema": "Args_list_local_videos",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {}
+      }
+    },
+    {
+      "name": "args_list_local_videos_path",
+      "document": "app",
+      "schema": "Args_list_local_videos",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "path": "/etc"
+        }
+      }
+    },
+    {
+      "name": "result_list_local_videos",
+      "document": "app",
+      "schema": "Result_list_local_videos",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "roots": [
+            {
+              "path": "/Users/x/Movies",
+              "available": true
+            }
+          ],
+          "items": [
+            {
+              "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "name": "movie.mp4",
+              "path": "/Users/x/Movies/movie.mp4",
+              "root": "/Users/x/Movies",
+              "size": 1024,
+              "supported": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "result_list_local_videos_bad_id",
+      "document": "app",
+      "schema": "Result_list_local_videos",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "roots": [],
+          "items": [
+            {
+              "id": "x",
+              "name": "movie.mp4",
+              "path": "/Users/x/Movies/movie.mp4",
+              "root": "/Users/x/Movies",
+              "size": 1024,
+              "supported": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "args_open_local",
+      "document": "app",
+      "schema": "Args_open_local",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "args_open_local_path",
+      "document": "app",
+      "schema": "Args_open_local",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "path": "/etc/passwd"
+        }
+      }
+    },
+    {
+      "name": "result_open_local",
+      "document": "app",
+      "schema": "Result_open_local",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "error": {
+          "code": "SOURCE_NOT_FOUND",
+          "message": "missing",
+          "retryable": false
+        }
+      }
+    },
+    {
+      "name": "result_open_local_missing_record",
+      "document": "app",
+      "schema": "Result_open_local",
+      "expected_valid": false,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "match_id": "m"
+        }
+      }
     }
   ],
   "semantic_cases": [

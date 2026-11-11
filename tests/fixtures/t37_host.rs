@@ -102,7 +102,6 @@ fn setup37(fixture: &Fixture) -> (TempDir, Arc<Host>) {
         json!({"kind":"stremio","config_id":METADATA_CONFIG,"name":"Metadata","enabled":true,"manifest_urls":[fixture.url("/tmdb/manifest.json")]}),
         json!({"kind":"maccms","config_id":"33333333-3333-4333-8333-333333333333","name":"Alternate","enabled":true,"api_url":fixture.url("/api?alternate=1")})
     ]);
-    settings["metadata_preset_applied"] = json!(true);
     settings["auto_next"] = json!(false);
     ok(&host, "save_settings", settings);
     prepare37(&host);

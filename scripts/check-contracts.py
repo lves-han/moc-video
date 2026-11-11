@@ -58,8 +58,11 @@ def check(directory):
     for name, definition in baseline_app['$defs'].items():
         actual = json.loads(json.dumps(app['$defs'][name]))
         if name == 'Settings':
-            assert 'metadata_preset_applied' not in actual['required'], 'Preset marker must remain optional'
-            assert actual['properties'].pop('metadata_preset_applied', None) == {'type': 'boolean'}, 'Preset marker contract changed'
+            # ADR-065: the built-in TMDB setting replaces the removed preset marker; old cases stay valid.
+            assert 'tmdb' not in actual['required'], 'TMDB setting must remain optional'
+            assert set(actual['properties'].pop('tmdb', {}).get('required', [])) == {'enabled', 'instance_url', 'language'}, 'TMDB setting contract changed'
+            assert 'local_paths' not in actual['required'] and actual['properties'].pop('local_paths', {}).get('maxItems') == 256, 'Local library contract changed'
+            assert 'live_configs' not in actual['required'] and actual['properties'].pop('live_configs', {}).get('maxItems') == 32, 'Live configuration contract changed'
             assert actual['properties'].pop('media_cache_max_bytes', None) == {'type': 'integer', 'minimum': 0, 'maximum': 9007199254740991, 'default': 268435456}, 'Cache setting contract changed'
         assert actual == definition, f'Existing DTO changed: {name}'
     for key in ('x-command-contracts', 'x-event-contracts', 'x-request-budgets', 'x-stremio-capability-rule'):
@@ -67,7 +70,7 @@ def check(directory):
             assert app[key][name] == definition, f'Existing {key} changed: {name}'
     commands = app['x-command-contracts']
     additions = set(commands) - set(baseline_app['x-command-contracts'])
-    assert additions == HISTORY | CACHE | WATCHLIST | {'search_catalog'}, 'History, media cache and watchlist commands must have their complete contracts'
+    assert additions == HISTORY | CACHE | WATCHLIST | {'search_catalog', 'get_live_channels', 'open_live', 'list_local_videos', 'open_local'}, 'History, media cache and watchlist commands must have their complete contracts'
     if (ROOT / 'src-tauri/src/history.rs').exists():
         assert HISTORY <= additions, 'Native history requires all four IPC contracts'
     for command in CACHE:

@@ -17,9 +17,10 @@ Vue 3 / TypeScript / Tauri 2 的个人使用视频应用。Rust 直接处理 Mac
 ["cargo", "install", "tauri-cli", "--version", "2.9.6", "--locked"]
 ["npm", "ci", "--no-audit", "--no-fund"]
 ["cargo", "fetch", "--locked", "--target", "aarch64-apple-darwin", "--manifest-path", "src-tauri/Cargo.toml"]
+["{python}", "-I", "src-tauri/ffmpeg/build_ffmpeg.py"]
 ```
 
-首次准备依赖需要可访问相应包仓库。具备本地 npm/Cargo 缓存时，以下 T25 复现命令直接离线安装并构建。先核对 `xcode-select -p` 与 `xcrun --show-sdk-version`；SDK 查询失败时保留错误并修复开发环境后继续。
+首次准备依赖需要可访问相应包仓库和 FFmpeg 源码仓库。FFmpeg 脚本检出固定版本并生成构建所需的动态库；已有源码检出须处于脚本指定的提交。具备本地 npm/Cargo 缓存及已构建的 FFmpeg 时，以下 T25 复现命令直接离线安装并构建。先核对 `xcode-select -p` 与 `xcrun --show-sdk-version`；SDK 查询失败时保留错误并修复开发环境后继续。
 
 T25 会原样读取并顺序执行下面的 `t25-reproduce` JSON。复现进程继承原资源执行器，工作目录为新解压源码；环境为 `CARGO_BUILD_JOBS=2`、`RUST_TEST_THREADS=1`、`ROLLDOWN_WORKER_THREADS=2`、`RAYON_NUM_THREADS=2`、`CARGO_TARGET_DIR={source}/target`，`RUSTFLAGS=--remap-path-prefix={home}=/build-user`。`{source}`、`{home}` 都以实际绝对路径替换。全新机器先完成上面的联网依赖准备。
 

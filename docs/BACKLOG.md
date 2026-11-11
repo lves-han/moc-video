@@ -50,3 +50,15 @@ validateSourceDraft直接返回英文文案，T0.17复巡evidence/reviews/202611
 ## 后续集数优先使用已验证线路 2026-11-10T06:39:00+00:00
 
 - 来源：外层在 T0.35 handoff 的 2026-11-10T06:36:25.305034+00:00 转达用户新增需求：某集尝试多条线路找到可用播放源后，同一剧集列表后续集数默认优先使用该可用线路；不可用时沿现有流程尝试其他线路。外层明确当前 T0.35 固定长播验收先继续，新需求后续单独调查实现。当前受验源码、任务和标准保持；后续确认跨集线路身份映射及失效行为后按当时授权实施。
+
+## 数据库 v1 迁移测试与 ADR-064 冲突 2026-11-11
+- T0.38 回归时 `tv5_migration_failure_rolls_back_and_old_database_remains_usable` 与 `tv5_migration_v1_keeps_all_history_fields` 失败，错误为 `Unsupported history database version`。原因是工作树中按 ADR-064 删除数据库 v1 迁移的 `history.rs` 未提交改动，这两项测试仍按旧迁移断言。需按 ADR-064 删除或改写这两项测试。
+
+## 新增 Rust 依赖未登记许可证 2026-11-11
+- T0.42 新增 `tauri-plugin-dialog 2.8.4`，随之引入 `tauri-plugin-fs`、`rfd` 等 crate；`licenses/dependencies.json` 与 `licenses/THIRD_PARTY_NOTICES.txt` 尚未更新。打包发行前需补齐（T0.44 引入 FFmpeg 时一并处理）。
+
+## 新增 Rust 依赖许可证已补齐 2026-11-11
+- T0.44 重新生成 `licenses/dependencies.json` 与 `THIRD_PARTY_NOTICES.txt`（444 项，含 FFmpeg、tauri-plugin-dialog/fs、rfd、ffmpeg-next/sys-next），`release.py --verify-licenses` 通过。上一条「新增 Rust 依赖未登记许可证」已处理。
+
+## release.py 末尾的旧版升级对比检查 2026-11-11
+- `packaging/release.py --build` 在 dmg 生成并校验后要求「Real build 1 predecessor」，用于旧的升级生命周期对比。ADR-064 已移除旧版本兼容，这一步应按 ADR-064 删除或改为可选。

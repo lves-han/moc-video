@@ -9,6 +9,8 @@ const paths: Record<string, string[]> = {
   short: ["M7 2h10v20H7zM10 8l5 4-5 4"],
   sports: ["M16 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM4 9l6-3 4 4 6 1M7 21l4-8 4 3 2 5M10 6l-1 7-6 3"],
   watchlist: ["M5 3h14v18l-7-4-7 4V3Z", "M9 9h6m-3-3v6"],
+  folder: ["M3 6h6l2 2h10v11H3z", "M10 12l4 2.5-4 2.5z"],
+  broadcast: ["M12 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z", "M8 8a5.5 5.5 0 0 0 0 7m8-7a5.5 5.5 0 0 1 0 7M5 5a9.5 9.5 0 0 0 0 13m14-13a9.5 9.5 0 0 1 0 13M12 13v8"],
   history: ["M3 10a9 9 0 1 1 .7 7M3 4v6h6", "M12 7v5l3 2"],
   trash: ["M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"],
   compass: [

@@ -38,6 +38,9 @@ fn plain(value: &str) -> String {
 }
 
 fn fetch(http: &Http, url: Url, job: &Job, config: bool) -> Result<Response, ApiError> {
+    if url.host_str() == Some(super::tmdb_api::HOST) {
+        return super::tmdb_api::respond(http, &url, job);
+    }
     if job.budget.max_concurrency == 1 {
         return http.get(url, HeaderMap::new(), job, LIMIT, false, config);
     }
@@ -98,12 +101,12 @@ fn tmdb_host(url: &Url) -> bool {
         && url.path().starts_with("/tmdb/")
 }
 
-fn language_url(url: &Url, language: &str) -> Result<Url, ApiError> {
+fn language_url(url: &Url, language: &str, tmdb: bool) -> Result<Url, ApiError> {
     let segments: Vec<_> = url
         .path_segments()
         .ok_or_else(|| ApiError::bad("Invalid manifest path"))?
         .collect();
-    if !tmdb_host(url) {
+    if !tmdb {
         return Ok(url.clone());
     }
     let language = if locale(language) == "en" {
@@ -114,11 +117,12 @@ fn language_url(url: &Url, language: &str) -> Result<Url, ApiError> {
     let mut segments: Vec<String> = segments.into_iter().map(str::to_owned).collect();
     // The test-only /tmdb/ prefix uses exactly the upstream's language segment.
     let prefix = usize::from(cfg!(test) && segments.first().is_some_and(|s| s == "tmdb"));
-    if segments.len() == prefix + 1 {
+    let count = segments.len();
+    if count == prefix + 1 {
         segments.insert(prefix, language.into());
-    } else if segments.len() == prefix + 2 && matches!(segments[prefix].as_str(), "en-US" | "zh-CN")
-    {
-        segments[prefix] = language.into();
+    } else if count >= 2 && matches!(segments[count - 2].as_str(), "en-US" | "zh-CN") {
+        // A self-hosted instance may live under a base path before the language segment.
+        segments[count - 2] = language.into();
     } else {
         // Opaque addon configuration belongs to the user; preserve it verbatim.
         // Only the language-segment convention above supports automatic localization.
@@ -243,6 +247,8 @@ struct Addon {
     key: String,
     manifest: Value,
     localized: bool,
+    // The built-in TMDB source or a known public TMDB addon host.
+    tmdb: bool,
 }
 
 impl Addon {
@@ -419,6 +425,7 @@ impl Catalog {
         let mut hashes = Vec::new();
         let mut bodies = Vec::new();
         let mut failures = Vec::new();
+        let builtin_tmdb = captured.config["tmdb"] == true;
         if cached.is_some_and(|rows| rows.len() != urls.len()) {
             return Err(SyncFailure {
                 error: upstream("Cached manifests are incomplete"),
@@ -437,7 +444,8 @@ impl Catalog {
                     if configured.query().is_some() {
                         return Err(ApiError::bad("Query-configured Stremio manifests require a verified request convention"));
                     }
-                    let url = language_url(&configured, "en")?;
+                    let tmdb = builtin_tmdb || tmdb_host(&configured);
+                    let url = language_url(&configured, "en", tmdb)?;
                     let body = match cached {
                         Some(rows) => URL_SAFE_NO_PAD.decode(&rows[chunk_index * 4 + offset]).map_err(|_| upstream("Cached manifest is damaged"))?,
                         None => fetch(http, url.clone(), job, true)?.body,
@@ -446,8 +454,9 @@ impl Catalog {
                     if body.len() > LIMIT { return Err(limited("Stremio manifest exceeds its byte limit")); }
                     let manifest: Value = serde_json::from_slice(&body).map_err(|_| upstream("Stremio manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest).map_err(|_| upstream("Stremio manifest fields are invalid"))?;
-                    let localized = tmdb_host(&url) && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
-                    Ok((Addon { key: identity("addon", &[url.as_str()]), url, manifest, localized }, format!("{:x}", Sha256::digest(&body)), URL_SAFE_NO_PAD.encode(&body)))
+                    let localized = tmdb && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
+                    let key = if builtin_tmdb { identity("addon", &[crate::settings::TMDB_CONFIG_ID]) } else { identity("addon", &[url.as_str()]) };
+                    Ok((Addon { key, url, manifest, localized, tmdb }, format!("{:x}", Sha256::digest(&body)), URL_SAFE_NO_PAD.encode(&body)))
                 })).collect::<Vec<_>>().into_iter().map(|worker| worker.join().unwrap_or_else(|_| Err(ApiError::internal("Stremio manifest worker failed")))).collect::<Vec<_>>()
             });
             for result in results {
@@ -723,7 +732,7 @@ impl Catalog {
         }
         let addon = &self.addons[addon_index];
         let url = if language == "zh-CN" {
-            language_url(&addon.url, language)?
+            language_url(&addon.url, language, addon.tmdb)?
         } else {
             addon.url.clone()
         };
@@ -1142,7 +1151,7 @@ impl Catalog {
                     return Ok(value);
                 }
                 let result = (|| {
-                    let response = fetch(http, language_url(&addon.url, language)?, job, true)?;
+                    let response = fetch(http, language_url(&addon.url, language, addon.tmdb)?, job, true)?;
                     let manifest: Value = serde_json::from_slice(&response.body)
                         .map_err(|_| upstream("Localized manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest)?;
@@ -1189,7 +1198,7 @@ impl Catalog {
 
     fn facets(&self, section: &Section, input: &Value, display: &Value, language: &str) -> Value {
         let addon = &self.addons[section.addon];
-        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
         let mut facets = crate::home::unavailable_filters();
         for dimension in ["genre", "year", "language"] {
             let id = if tmdb {
@@ -1308,7 +1317,7 @@ impl Catalog {
         let filter_key = Value::Object(filter.clone()).to_string();
         let selected = |key: &str| filter.get(key).and_then(Value::as_str);
         let addon = &self.addons[section.addon];
-        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
         let mut catalog_id = section.catalog_id.as_str();
         let mut server_genre = None;
         let mut server_dimension = "";
@@ -1664,6 +1673,10 @@ impl Catalog {
             .addons
             .iter()
             .position(|a| a.key == fields[1])
+            // Older built-in TMDB history recorded an addon key derived from its URL.
+            .or_else(|| (self.captured.config["tmdb"] == true
+                && fields[3].strip_prefix("tmdb:").is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())))
+                .then_some(0))
             .ok_or_else(|| ApiError::bad("Stremio addon is not registered"))?;
         let canonical_data = json!(["stremio", fields[1], fields[2], fields[3]]).to_string();
         if canonical_data.as_str() != reference["data"].as_str().expect("Reference data") {

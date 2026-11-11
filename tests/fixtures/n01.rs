@@ -6,6 +6,8 @@ mod t06;
 mod t07;
 #[path = "tv2.rs"]
 mod tv2;
+#[path = "x1.rs"]
+mod x1;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
@@ -1144,7 +1146,8 @@ fn n01_language_field_fallback_identity_cache_and_locale_mapping() {
     assert_eq!(
         language_url(
             &fixture.url("/tmdb/zh-CN/manifest.json").parse().unwrap(),
-            "ja"
+            "ja",
+            true
         )
         .unwrap()
         .as_str(),
@@ -1598,11 +1601,11 @@ fn t20_tmdb_opaque_configuration_is_preserved() {
         "https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json",
     )
     .unwrap();
-    assert_eq!(language_url(&url, "en").unwrap(), url);
-    assert_eq!(language_url(&url, "zh-CN").unwrap(), url);
+    assert_eq!(language_url(&url, "en", true).unwrap(), url);
+    assert_eq!(language_url(&url, "zh-CN", true).unwrap(), url);
     let legacy = Url::parse("https://tmdb.elfhosted.com/en-US/manifest.json").unwrap();
     assert!(
-        language_url(&legacy, "zh-CN")
+        language_url(&legacy, "zh-CN", true)
             .unwrap()
             .path()
             .ends_with("/zh-CN/manifest.json")

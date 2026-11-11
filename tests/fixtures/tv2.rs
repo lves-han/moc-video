@@ -422,10 +422,8 @@ fn tv2_live_builtin_tmdb_request_samples() {
                 .join(format!("TV2-live-{}", Uuid::new_v4()))
         });
     std::fs::create_dir_all(&folder).unwrap();
-    let bundled: Value =
-        serde_json::from_str(include_str!("../../src/data/defaultSources.json")).unwrap();
-    let configured = Url::parse(bundled[0]["manifest_urls"][0].as_str().unwrap()).unwrap();
-    let manifest = language_url(&configured, "en").unwrap();
+    let configured = Url::parse("https://tmdb.elfhosted.com/en-US/manifest.json").unwrap();
+    let manifest = language_url(&configured, "en", true).unwrap();
     let (_temp, host) = setup(vec![manifest.to_string()]);
     let http = Http::default();
     let mut records = Vec::new();
@@ -443,7 +441,7 @@ fn tv2_live_builtin_tmdb_request_samples() {
     .into_iter()
     .enumerate()
     {
-        let base = language_url(&configured, language).unwrap();
+        let base = language_url(&configured, language, true).unwrap();
         let mut url = resource_url(&base, "catalog", kind, id, None).unwrap();
         let path = url.path().trim_end_matches(".json");
         let extra = encode_extra(&[
