@@ -1,5 +1,12 @@
 import type { Bridge_Episode, Bridge_EpisodeGroup, DetailsViewData, MetadataRef, PlaybackContext, SourceKey } from './models.ts';
 
+// Route labels are a display preference, not proof of media availability.
+// Preserve the DTO order/identities used by history and native resolution.
+export function prioritizePlaybackGroups<T extends { title: string }>(groups: readonly T[]): T[] {
+  const direct = (group: T) => /m3u8|mp4/i.test(group.title);
+  return [...groups].sort((a, b) => Number(direct(b)) - Number(direct(a)));
+}
+
 // This shares the app's existing localStorage persistence. Only digests and
 // source identities cross this boundary; media references stay in live DTOs.
 export const LINE_PREFERENCE_KEY = 'moc-video.lines.v1';

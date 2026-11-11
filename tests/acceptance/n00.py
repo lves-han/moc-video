@@ -29,7 +29,7 @@ RUST_TESTS = {
     "n00_group_order_url_fidelity_and_stale_fingerprints": ("R39", "R49", "R59", "R64", "REQ-N00"),
     "n00_ambiguous_groups_and_unknown_metadata": ("R59", "REQ-N00"),
     "n00_type_probe_formats_html_unknown_and_bound": ("R46", "R49", "R59", "REQ-N00"),
-    "n00_public_addresses_dns_rebinding_and_peer": ("R46", "R49", "REQ-N00"),
+    "n00_http_local_addresses_and_dns_refresh": ("R46", "R49", "REQ-N00"),
     "n00_cancellation_interrupts_dns_lookup": ("R39", "R46", "REQ-N00"),
     "n00_redirect_origin_headers_proxy_and_limits": ("R46", "R49", "REQ-N00"),
     "n00_partial_home_retry_pagination_and_all_failed": ("U08", "R59", "REQ-N00"),

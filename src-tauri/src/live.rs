@@ -81,16 +81,25 @@ fn parse_m3u(body: &str) -> Vec<Channel> {
             let name = split.map(|i| &info[i + 1..]).unwrap_or("");
             let group = attribute(info, "group-title").unwrap_or_default();
             let fallback = attribute(info, "tvg-name").unwrap_or_default();
-            let name = if name.trim().is_empty() { fallback } else { name.to_owned() };
+            let name = if name.trim().is_empty() {
+                fallback
+            } else {
+                name.to_owned()
+            };
             pending = Some((name, group, attribute(info, "tvg-logo")));
         } else if let Some(group) = line.strip_prefix("#EXTGRP:") {
             if let Some(entry) = &mut pending
-                && entry.1.is_empty() {
-                    entry.1 = group.trim().to_owned();
-                }
+                && entry.1.is_empty()
+            {
+                entry.1 = group.trim().to_owned();
+            }
         } else if !line.starts_with('#') {
             let (name, group, logo) = pending.take().unwrap_or_default();
-            let name = if name.trim().is_empty() { line.to_owned() } else { name };
+            let name = if name.trim().is_empty() {
+                line.to_owned()
+            } else {
+                name
+            };
             channels.push(Channel {
                 name: clip(&name, 256),
                 group: clip(&group, 256),
@@ -105,7 +114,11 @@ fn parse_m3u(body: &str) -> Vec<Channel> {
 fn parse_txt(body: &str) -> Vec<Channel> {
     let mut channels = Vec::new();
     let mut group = String::new();
-    for line in body.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("//")) {
+    for line in body
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("//"))
+    {
         let Some((name, rest)) = line.split_once(',') else {
             continue;
         };
@@ -146,9 +159,19 @@ mod tests {
         let (format, channels) = parse(body).unwrap();
         assert_eq!(format, "m3u");
         assert_eq!(channels.len(), 3);
-        assert_eq!(channels[0], Channel { name: "CCTV-1 综合".into(), group: "央视, 频道".into(),
-            logo: Some("https://logo.test/1.png".into()), url: "https://live.test/cctv1.m3u8".into() });
-        assert_eq!((channels[1].name.as_str(), channels[1].group.as_str()), ("Backup", "卫视"));
+        assert_eq!(
+            channels[0],
+            Channel {
+                name: "CCTV-1 综合".into(),
+                group: "央视, 频道".into(),
+                logo: Some("https://logo.test/1.png".into()),
+                url: "https://live.test/cctv1.m3u8".into()
+            }
+        );
+        assert_eq!(
+            (channels[1].name.as_str(), channels[1].group.as_str()),
+            ("Backup", "卫视")
+        );
         assert_eq!(channels[2].group, "组播");
         assert!(channels[0].supported() && channels[1].supported() && !channels[2].supported());
         assert_eq!(channels[2].view(2)["supported"], false);
@@ -160,18 +183,33 @@ mod tests {
             // comment\nbroken line\n,http://a.test/x\n卫视频道,#genre#\n湖南卫视,rtmp://a.test/hn\n";
         let (format, channels) = parse(body).unwrap();
         assert_eq!(format, "txt");
-        assert_eq!(channels.iter().map(|c| (c.group.as_str(), c.name.as_str())).collect::<Vec<_>>(),
-            vec![("央视频道", "CCTV-1"), ("央视频道", "CCTV-2"), ("卫视频道", "湖南卫视")]);
+        assert_eq!(
+            channels
+                .iter()
+                .map(|c| (c.group.as_str(), c.name.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("央视频道", "CCTV-1"),
+                ("央视频道", "CCTV-2"),
+                ("卫视频道", "湖南卫视")
+            ]
+        );
         assert_eq!(channels[0].url, "http://a.test/1.m3u8");
         assert!(!channels[2].supported());
     }
 
     #[test]
     fn unrecognized_and_oversized_lists_fail_explicitly() {
-        for body in ["", "<html><body>Not found</body></html>", "just,text\nno urls here"] {
+        for body in [
+            "",
+            "<html><body>Not found</body></html>",
+            "just,text\nno urls here",
+        ] {
             assert_eq!(parse(body).unwrap_err().code, "UPSTREAM_FAILED", "{body}");
         }
-        let many: String = (0..50_001).map(|i| format!("c{i},http://a.test/{i}\n")).collect();
+        let many: String = (0..50_001)
+            .map(|i| format!("c{i},http://a.test/{i}\n"))
+            .collect();
         assert_eq!(parse(&many).unwrap_err().code, "RESOURCE_LIMIT");
     }
 }

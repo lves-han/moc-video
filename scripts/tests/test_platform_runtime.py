@@ -20,6 +20,46 @@ import platform_runtime as runtime
 
 
 class PlatformTests(unittest.TestCase):
+    def test_ci_darwin_overlay_uses_native_lock_without_changing_local_mac_default(self):
+        import workflow
+        cfg = json.loads((SCRIPTS.parent / "workflow.json").read_text(encoding="utf-8"))
+        original = cfg["heavy_lock"]
+        (self.base / "workflow.json").write_text(json.dumps(cfg), encoding="utf-8")
+        (self.base / "workflow.darwin.json").write_text('{"heavy_lock": null}\n', encoding="utf-8")
+        with patch.object(workflow, "REPO", self.base), patch.object(workflow.sys, "platform", "darwin"):
+            self.assertIsNone(workflow.config()["heavy_lock"])
+        self.assertEqual(json.loads((self.base / "workflow.json").read_text(encoding="utf-8"))["heavy_lock"], original)
+
+    def test_platform_lock_override_preserves_base_and_rejects_other_keys(self):
+        import workflow
+        cfg = json.loads((SCRIPTS.parent / "workflow.json").read_text(encoding="utf-8"))
+        cfg["heavy_lock"] = str(self.base / "original.lock")
+        (self.base / "workflow.json").write_text(json.dumps(cfg), encoding="utf-8")
+        overlay = self.base / f"workflow.{sys.platform}.json"
+        with patch.object(workflow, "REPO", self.base):
+            self.assertEqual(workflow.config()["heavy_lock"], cfg["heavy_lock"])
+            overlay.write_text(json.dumps({"heavy_lock": None}), encoding="utf-8")
+            self.assertIsNone(workflow.config()["heavy_lock"])
+            self.assertEqual(json.loads((self.base / "workflow.json").read_text())["heavy_lock"], cfg["heavy_lock"])
+            overlay.write_text(json.dumps({"memory_mib": 8192}), encoding="utf-8")
+            with self.assertRaises(runtime.WorkflowError):
+                workflow.config()
+
+    @unittest.skipUnless(os.name == "nt", "Windows npm shim")
+    def test_npm_variable_shim_resolves_without_a_shell(self):
+        entry = self.base / "node_modules/npm/bin/npm-cli.js"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("process.exit(0)")
+        shim = self.base / "npm.cmd"
+        shim.write_text('@ECHO OFF\nSET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"\n')
+        node = self.base / "node.exe"
+        node.touch()
+        self.assertEqual(runtime.resolve_argv([str(shim), "test"]), [str(node), str(entry), "test"])
+        other = self.base / "other.cmd"
+        other.write_text("@ECHO OFF\n")
+        with self.assertRaises(runtime.WorkflowError):
+            runtime.resolve_argv([str(other)])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="moc-runtime-中文-")
         self.addCleanup(self.temporary.cleanup)

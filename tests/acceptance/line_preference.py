@@ -84,7 +84,7 @@ def native(run):
     # These four source-defined test names are exactly capability-shaped. Reuse
     # the established inventory-aware logger; arbitrary values still fail it.
     t02.NATIVE = t02.NATIVE | {"t10_cross_origin_private_key_and_closed_cap", "t02_unusable_poster_is_treated_as_no_poster",
-        "n00_query_search_encoding_and_empty_results", "n00_public_addresses_dns_rebinding_and_peer"}
+        "n00_query_search_encoding_and_empty_results", "n00_http_local_addresses_and_dns_refresh"}
     output = run.command(["cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "--", "--test-threads=1"], timeout=600)
     require("t37_same_source_route_keeps_history_video_and_revalidates ... ok" in output and re.search(r"test result: ok\. [1-9]\d* passed; 0 failed;", output), "Current real Host regressions and same-source revalidation must pass")
     result = re.search(r"test result: ok\. (\d+) passed; 0 failed; (\d+) ignored;", output)

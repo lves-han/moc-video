@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "windows": { "nsis": { "installMode": "currentUser" } },
+    "resources": {
+      "ffmpeg/dist/bin/avcodec-63.dll": "avcodec-63.dll",
+      "ffmpeg/dist/bin/avformat-63.dll": "avformat-63.dll",
+      "ffmpeg/dist/bin/avutil-61.dll": "avutil-61.dll",
+      "ffmpeg/dist/bin/swresample-7.dll": "swresample-7.dll",
+      "../licenses/ffmpeg-windows/": "licenses/ffmpeg-windows/"
+    }
+  }
+}

@@ -5,6 +5,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 pub mod commands;
 pub mod contracts;
 pub mod details;
+mod fonts;
 pub mod fuzzy;
 pub mod gateway;
 pub mod history;
@@ -12,8 +13,10 @@ pub mod home;
 pub mod host;
 pub mod matching;
 pub mod media_cache;
-pub mod requests;
 pub mod remux;
+pub mod requests;
+#[cfg(not(mobile))]
+mod reset;
 pub mod resolution;
 pub mod settings;
 pub mod source_dispatch;
@@ -26,6 +29,57 @@ fn require_main(window: &WebviewWindow) -> Result<(), String> {
     } else {
         Err("Player command requires the packaged main WebView".into())
     }
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_reset(window: WebviewWindow) -> Result<(), String> {
+    require_main(&window)?;
+    tauri::process::current_binary(&window.app_handle().env())
+        .and_then(|path| reset::check_relaunch_path(&path))
+        .map_err(|e| format!("App restart is unavailable: {e}"))?;
+    let plan = reset::ResetPlan::for_app(window.app_handle())?;
+    let lock = plan
+        .schedule(&window.state::<reset::InstanceGuard>())
+        .map_err(|e| format!("Could not schedule app reset: {e}"))?;
+    static RESET_LOCK: std::sync::OnceLock<std::fs::File> = std::sync::OnceLock::new();
+    RESET_LOCK
+        .set(lock)
+        .map_err(|_| "App reset is already in progress".to_owned())?;
+    closing::STATE.store(closing::RELEASED, std::sync::atomic::Ordering::SeqCst);
+    window.app_handle().restart();
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_reset_recovery(window: WebviewWindow, action: String) -> Result<(), String> {
+    require_main(&window)?;
+    if window.try_state::<reset::RecoveryState>().is_none() {
+        return Err("App is not in reset recovery".into());
+    }
+    if !matches!(action.as_str(), "retry" | "cancel") {
+        return Err("Unknown reset recovery action".into());
+    }
+    tauri::process::current_binary(&window.app_handle().env())
+        .and_then(|path| reset::check_relaunch_path(&path))
+        .map_err(|e| format!("App restart is unavailable: {e}"))?;
+    if action == "cancel" {
+        reset::ResetPlan::for_app(window.app_handle())?
+            .cancel_pending(&window.state::<reset::InstanceGuard>())
+            .map_err(|e| e.to_string())?;
+    }
+    window.app_handle().restart();
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
+fn app_font_url(
+    window: WebviewWindow,
+    state: tauri::State<'_, std::sync::Arc<host::Host>>,
+    font_id: String,
+) -> Result<String, String> {
+    require_main(&window)?;
+    state.font_url(&font_id).map_err(|e| e.message)
 }
 
 #[cfg(not(mobile))]
@@ -147,6 +201,9 @@ pub fn run() {
         app_close_aborted,
         app_close_ready,
         window_bounds_now,
+        app_reset,
+        app_reset_recovery,
+        app_font_url,
         automation::t01_control
     ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
@@ -155,7 +212,10 @@ pub fn run() {
         app_close_started,
         app_close_aborted,
         app_close_ready,
-        window_bounds_now
+        window_bounds_now,
+        app_reset,
+        app_reset_recovery,
+        app_font_url
     ];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
@@ -222,6 +282,35 @@ pub fn run() {
     };
     builder
         .setup(|app| {
+            #[cfg(not(mobile))]
+            {
+                let plan = reset::ResetPlan::for_app(app)?;
+                let instance = match plan.acquire_instance(std::time::Duration::from_secs(15)) {
+                    Ok(guard) => guard,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        app.handle().exit(0);
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                let cleanup = plan.finish_startup(&instance);
+                app.manage(instance);
+                if let Err(error) = cleanup {
+                    app.manage(reset::RecoveryState);
+                    closing::STATE.store(closing::RELEASED, std::sync::atomic::Ordering::SeqCst);
+                    let recovery = serde_json::json!({"message":error.to_string()});
+                    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html#/reset-recovery".into()))
+                        .title("Moc Video · Reset recovery")
+                        .inner_size(760.0, 560.0)
+                        .data_directory(plan.recovery_profile())
+                        .incognito(true)
+                        .on_navigation(|url| (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
+                            || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost")))
+                        .initialization_script(format!("Object.defineProperty(window,'__MOC_RESET_RECOVERY__',{{value:{recovery}}});"))
+                        .build()?;
+                    return Ok(());
+                }
+            }
             let settings_path = app.path().app_data_dir()?.join("settings.json");
             let host = host::Host::open(settings_path)
                 .map_err(|error| std::io::Error::other(error.message))?;

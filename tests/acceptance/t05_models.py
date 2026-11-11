@@ -6,8 +6,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def generate():
-    app = json.loads((ROOT / "protocol/app.schema.json").read_text())
-    bridge = json.loads((ROOT / "protocol/bridge.openapi.json").read_text())
+    app = json.loads((ROOT / "protocol/app.schema.json").read_text(encoding="utf-8"))
+    bridge = json.loads((ROOT / "protocol/bridge.openapi.json").read_text(encoding="utf-8"))
 
     def translate(schema, owner):
         if schema is True:

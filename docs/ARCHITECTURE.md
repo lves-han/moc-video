@@ -50,9 +50,9 @@ C5 补充（ADR-061）：跨源影片由用户明确确认候选内容及线路�
 
 MacCMS匿名JSON、首个$拆条目而保留URL余串，组/集原顺序与歧义失败；类型探测有界。Stremio按完整manifest快照发布，首次失败unpublished且能力false，刷新失败保留旧快照；资源过滤/required extras/skip/同名栏目/配置路径query保持，详情按原扩展与顺序回退，warnings最多64。stream/inline媒体字段按元数据角色忽略。
 
-配置最多32、每Stremio配置1..16 manifests，UUID唯一，禁用/删除/重加的generation墓碑与sync_sequence防止旧提交。公共HTTP入口覆盖API/manifest/图像/媒体/字幕/HLS/key/探测：全部DNS A/AAAA与实际peer公网单播，IPv4映射IPv6还原，地址绑定连接，保持Host/TLS/SNI，逐跳最多5次且拒绝HTTPS降级，跨Origin清除敏感头，禁用环境代理。受控本机fixture只在测试构建固定允许列表中开放。
+配置最多32、每Stremio配置1..16 manifests，UUID唯一，禁用/删除/重加的generation墓碑与sync_sequence防止旧提交。共享HTTP入口覆盖API/manifest/图像/媒体/字幕/HLS/key/探测：允许公网、内网、回环、保留及代理Fake-IP地址，不校验DNS结果或实际peer的IP范围及一致性（ADR-068）。解析结果仍绑定连接，保持Host/TLS/SNI与证书校验；逐跳最多5次且拒绝HTTPS降级，跨Origin清除敏感头，禁用环境代理，支持系统TUN透明代理。
 
-ADR-049：应用公共HTTP域名只通过1.1.1.1:53和8.8.8.8:53解析A/AAAA，复用hickory异步解析器及其受操作总deadline约束的失败转移；不读取系统DNS、hosts、搜索域或环境DNS配置，无本机回退。IP字面量继续原地址检查。所有API/图片/媒体/字幕/HLS子资源及每次重定向共用此入口。两服务器均失败时明确返回DNS错误；即使公共DNS返回内网/保留地址或混合结果仍拒绝，resolve_to_addrs绑定及实际peer校验、原域名TLS/SNI与证书校验保持。测试专用nameserver/fixture映射仅cfg(test)。使用明文DNS可能受网络劫持，地址防护仍执行；真实网络诊断须区分解析成功、媒体成功及拦截失败，暂不增加DoH/代理功能或设置UI。
+ADR-049 的固定DNS继续生效：共享HTTP域名只通过1.1.1.1:53和8.8.8.8:53解析A/AAAA，复用hickory异步解析器及其受操作总deadline约束的失败转移；不读取系统DNS、hosts、搜索域或环境DNS配置，无本机回退。所有API/图片/媒体/字幕/HLS子资源及每次重定向共用此入口。空结果或两服务器均失败时明确返回DNS错误。IP字面量直接连接。测试专用nameserver/fixture映射仅cfg(test)。明文DNS可能被TUN拦截，Fake-IP按原结果连接；ADR-068取代原公网地址限制与peer核验。桌面字体下载经独立cap的本地字体网关，使用同一原生HTTP/DNS入口并校验固定大小及SHA256（ADR-070）。
 
 ### C7 请求预算与取消（SPEC §6.2/§7.3/§11.2）
 
@@ -175,7 +175,7 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 目录：`Bridge_MediaCard`、`Bridge_HomeSection`、`Bridge_HomeRequest`按T0.29扩展可选字段；Stremio组合筛选由Rust完成，服务端条件优先级为语言、年份、类型，单次最多扫描5页。MacCMS的服务端条件限于分类ID、分页和关键词。筛选含类型、年份、语言、地区、排序，每个栏目返回各维度可用性。TMDB的地区禁用；排序只在无语言和年份条件时可用。
 按ADR-059，`HomeRequest.catalog_only`可选，缺省或false保持原首页行为；true仅用于Stremio、page=1、无section_ref和filter，返回宿主登记栏目描述及空items、page=1、has_next=false、next_page=null、计数0，不请求目录内容、不登记图片或推进分页游标。其他来源和非法组合明确报错。引用、取消、来源修订及语言世代规则保持；内容排进入视口才请求该栏内容。
 描述阶段属于待加载，不能因空items判定为真实空结果；首个内容请求完成后才判断该排是否为空。页面排身份由来源及修订、语言世代、栏目引用和规范化筛选条件组成，加载、错误、结果、分页及重试各自隔离，旧响应不能覆盖当前排。catalog_only=true时section_ref和filter缺省或null等价，filter空对象视为非法组合。
-契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节、T0.29列名及ADR-059的可选字段（含`Settings.metadata_preset_applied`）；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
+契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节、T0.29列名及ADR-059的可选字段；ADR-065新增TMDB、直播、本地库可选设置，字体设置由ADR-070补充；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
 同源播放：`metadata_ref.identity.namespace`为`maccms`时，元数据与播放可来自同一MacCMS来源；Stremio元数据的跨源匹配和绑定校验保持。
 IPC与权限：在C11的23项基础上增加`list_watchlist`、`add_watchlist`、`remove_watchlist`、`search_catalog`，合计27项，沿用request_id、engine_epoch、预算和取消规则；`list_watchlist`输入为空，返回`{entries}`；`add_watchlist`输入观看身份字段、title、kind、poster_cache_key，`remove_watchlist`输入`{content_id}`；`search_catalog`输入`{source_id,source_revision,query}`，返回`{items}`，按default_metadata预算、每来源串行，界面取消旧请求；四项都拒绝URL、cap和Cookie；主窗口权限只增加这4项及`core:window:allow-start-dragging`。CSP、CORS、TLS和媒体网关策略保持。
 数据：SQLite版本升至2，新增watchlist表，`watch_history`结构保持。

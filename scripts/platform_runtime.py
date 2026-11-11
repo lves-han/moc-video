@@ -202,8 +202,16 @@ def resolve_argv(argv):
         return [sys.executable, "-B", str(path), *args[1:]]
     if os.name == "nt" and path.suffix.lower() in (".cmd", ".bat"):
         # npm CLI shims are batch files; launch their JS entry with Node instead of cmd.exe.
-        match = re.search(r'"%dp0%\\([^"%]+\.[cm]?js)"', path.read_text(encoding="utf-8", errors="replace")) if path.is_file() else None
-        entry = path.parent / match.group(1).replace("\\", "/") if match else None
+        # npm 11 uses a variable-based shim. Resolve only the known local entry;
+        # arbitrary batch files must still fail without invoking cmd.exe.
+        entry = None
+        if path.stem.lower() in ("npm", "npx"):
+            candidate = path.parent / "node_modules" / "npm" / "bin" / f"{path.stem.lower()}-cli.js"
+            if candidate.is_file():
+                entry = candidate
+        if entry is None:
+            match = re.search(r'"%dp0%\\([^"%]+\.[cm]?js)"', path.read_text(encoding="utf-8", errors="replace")) if path.is_file() else None
+            entry = path.parent / match.group(1).replace("\\", "/") if match else None
         node = path.parent / "node.exe"
         node_path = str(node) if node.is_file() else shutil.which("node")
         if entry and entry.is_file() and node_path:

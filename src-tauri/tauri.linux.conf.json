@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "linux": {
+      "deb": { "files": { "/usr/lib/moc-video/": "ffmpeg/dist/lib/" } },
+      "appimage": { "files": { "/usr/lib/moc-video/": "ffmpeg/dist/lib/" } }
+    }
+  }
+}

@@ -442,7 +442,8 @@ fn t10_cross_origin_private_key_and_closed_cap() {
         ),
         "/child.m3u8" => Reply::body("#EXTM3U\nsegment.ts\n", "application/vnd.apple.mpegurl"),
         "/segment.ts" => Reply::body(vec![4; 128], "video/mp2t"),
-        _ => panic!("unsafe target reached fixture"),
+        "/private-key" => Reply::body(vec![7; 16], "application/octet-stream"),
+        _ => panic!("unexpected HLS target"),
     });
     let gateway = Gateway::start().unwrap();
     let mut source = hls_link(fixture.url("/master.m3u8"));
@@ -458,17 +459,9 @@ fn t10_cross_origin_private_key_and_closed_cap() {
     let view = open(&gateway, &mut store, &r);
     let response = fetch(media(&view), "GET", &[]);
     let children = local_uris(text(&response), &view);
-    let denied = fetch(&children[0], "GET", &[]);
-    assert_eq!(denied.status, 502);
-    assert_eq!(
-        serde_json::from_slice::<Value>(&denied.body).unwrap()["error"]["details"]["reason"],
-        "unsafe_target"
-    );
-    assert_eq!(state(&gateway, &view)["error"]["code"], "UPSTREAM_FAILED");
-    assert_eq!(
-        state(&gateway, &view)["error"]["details"]["reason"],
-        "unsafe_target"
-    );
+    let key = fetch(&children[0], "GET", &[]);
+    assert_eq!(key.status, 200);
+    assert_eq!(key.body, vec![7; 16]);
     let child = fetch(&children[1], "GET", &[]);
     let segment = local_uris(text(&child), &view);
     assert_eq!(fetch(&segment[0], "GET", &[]).status, 200);
@@ -498,7 +491,7 @@ fn t10_cross_origin_private_key_and_closed_cap() {
     gateway.close(id(&view));
     assert_eq!(fetch(&children[1], "GET", &[]).status, 410);
     assert!(
-        !fixture
+        fixture
             .state
             .requests
             .lock()

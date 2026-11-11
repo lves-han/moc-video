@@ -37,6 +37,8 @@ T25 会原样读取并顺序执行下面的 `t25-reproduce` JSON。复现进程�
 
 `native-smoke` 在专用临时数据目录执行真实 Rust Host 初始化、网关 ready、设置保存/重启和失效资源诊断。实际运行结果写入本卡报告。GUI 安装、初始化、画面和用户声音观察由 T25-lifecycle 单独记录。
 
+Windows x64 使用 MSVC、LLVM/libclang 和 WebView2。通过 `scripts/run.py` 执行同一 FFmpeg 准备脚本会下载固定 SHA256 的 LGPLv3 共享 SDK；构建前将 `src-tauri/ffmpeg/dist/bin` 加入 PATH，并将 `LIBCLANG_PATH` 指向 LLVM 的 bin 目录。Windows 的项目解释器为 `.venv/Scripts/python.exe`，打包附加 `--config src-tauri/tauri.windows.conf.json`。Linux 安装 Tauri/WebKitGTK 构建依赖与 nasm，执行同一脚本编译固定的精简 LGPL 源码；打包附加 `--config src-tauri/tauri.linux.conf.json`。macOS 沿用现有源码构建及 Frameworks 布局。Windows 共享库来源和许可证见 `licenses/ffmpeg-windows/`。
+
 ## 运行和初始化
 
 构建后用 Finder 打开 `target/release/bundle/macos/墨客视频.app`，或执行 `["/usr/bin/open", "target/release/bundle/macos/墨客视频.app"]`。开发时先执行 `["npm", "run", "dev"]`，再在另一终端执行 `["cargo", "tauri", "dev"]`；前端地址为 `http://127.0.0.1:5173/`。浏览器预览用于前端开发，桌面业务通过 Tauri IPC 调用 Rust。
@@ -47,7 +49,7 @@ T25 会原样读取并顺序执行下面的 `t25-reproduce` JSON。复现进程�
 
 ## 诊断和测试
 
-来源页的 **Diagnostics / 诊断 → Copy redacted diagnostics / 复制脱敏诊断** 提供平台、宿主阶段、契约、来源登记状态、错误码与请求关联 ID。播放错误显示阶段与重试/换线入口。提交诊断时保留错误码和时间，敏感 URL、令牌及账户信息先脱敏。公共 DNS 使用 `1.1.1.1:53` 和 `8.8.8.8:53`；两者失败时显示 DNS 错误。站点访问控制、证书错误和媒体下架保留实际失败原因。
+来源页的 **Diagnostics / 诊断 → Copy redacted diagnostics / 复制脱敏诊断** 提供平台、宿主阶段、契约、来源登记状态、错误码与请求关联 ID。播放错误显示阶段与重试/换线入口。提交诊断时保留错误码和时间，敏感 URL、令牌及账户信息先脱敏。公共 DNS 使用 `1.1.1.1:53` 和 `8.8.8.8:53`；两者失败时显示 DNS 错误。来源及媒体允许内网、回环和代理 Fake-IP，已按用户要求取消 IP 范围及实际连接 IP 校验；支持系统 TUN 透明代理。站点访问控制、证书错误和媒体下架保留实际失败原因。
 
 开发工作区的构建、测试及服务通过原 `scripts/run.py` 执行，使用同一项目解释器和实际全局重锁，保持 4096MiB RSS 采样、并行 2、测试线程 1。macOS 实际后端为 `process-watchdog`，允许瞬时超限。可按修改范围选择直接相关检查：
 
@@ -74,6 +76,16 @@ A2 使用用户授权的本机隔离测试：核对当前安装包、独立测�
 桌面 T0.36 完成后停止桌面监管，T1.1 等待用户授权（ADR-007/062）：T1.1/M00 Android/iOS 真机可行性与版本基线；T1.2/M01 Android 本地 Rust 来源；T1.3/M02 移动页面与播放器；T1.4/M03 Android 安装发行；T1.5/M04 iOS 本地来源与网关；T1.6/M05 iOS 真机闭环及移动交付。移动适配、签名和真机测试均为 **NOT RUN**。
 
 [需求规格](docs/SPEC.md) · [契约](docs/ARCHITECTURE.md) · [任务/覆盖表](docs/TASKS.md) · [决定](docs/DECISIONS.md) · [原前端历史](docs/FRONTEND_BASELINE.md)。历史资料保存其当时状态，当前实现与发布范围沿已采纳 ADR 和上述真实证据追溯。
+
+## 字体设置
+
+播放设置 → 字体可选择免费开放授权（SIL OFL 1.1）的 Noto Sans SC 或 Noto Serif SC，并调整 90%–120% 的文字与控件缩放。首次使用某款字体时经原生固定 DNS（1.1.1.1/8.8.8.8）网关下载固定版本并校验 SHA256，随后从应用 WebView 的本地 IndexedDB 字体缓存读取，离线重启无需下载；清理应用 WebView 数据后会重新下载。首次下载界面使用随应用提供的开放字体子集。字体偏好通过原设置队列保存，旧配置缺省使用 Noto Sans SC / 100%。完整许可可在字体设置中查看，来源与缓存说明见 [字体许可](licenses/fonts/README.md)。三平台使用同一字体文件与字形度量，具体抗锯齿由各平台 WebView 渲染。
+
+## 重置应用
+
+设置 → 重置应用 → **清理全部缓存并重置**，确认后删除当前应用的设置、添加的来源、观看历史、收藏及全部媒体、来源和字体缓存。应用自动重启，恢复首次启动的默认来源与设置，并重新下载字体。原“清理媒体缓存”按钮仍可单独清理媒体缓存。
+
+重置目录按平台解析：Windows 使用应用专属 AppData；macOS 包含 Application Support、Caches、Logs、WebKit/HTTPStorages 与临时媒体目录；Linux 跟随 XDG 数据、配置和缓存目录，覆盖 WebKitGTK 存储。重启沿用 Tauri 的 macOS `.app` / Linux AppImage 处理，并在写入重置标记前检查可执行文件。只清理当前应用标识的目录，其他应用及共享父目录保留。同一资料目录只允许一个实例写入。清理失败时进入独立恢复窗口，可重试、取消剩余清理并打开保留的数据，或退出；再次启动会重试待完成的重置。恢复窗口使用随包字体，无需联网。
 
 ## 当前数据格式
 

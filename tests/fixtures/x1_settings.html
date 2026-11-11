@@ -60,6 +60,8 @@ const handlers = {
   save_history: input => { history = [input.record]; sequence = input.write_sequence; return input.record; },
 };
 window.__TAURI__ = { core: { invoke: async (command, args) => {
+  // Browser QA supplies the pinned bytes at this local gateway URL.
+  if (command === "app_font_url") return new URL(`/fonts/${args.font_id}?cap=fixture`, location.href).href;
   log.push({ command, input: args?.input ?? args });
   // The native file picker returns absolute paths.
   if (command === "plugin:dialog|open") return args.options.directory ? "/Users/test/Movies" : ["/Users/test/Clips/a.mp4"];

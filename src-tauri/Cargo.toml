@@ -34,6 +34,9 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-dialog = "=2.8.4"
 ffmpeg-next = { version = "=9.0.0", default-features = false, features = ["codec", "format", "software-resampling"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tauri = { version = "=2.12.5", features = ["test"] }
 

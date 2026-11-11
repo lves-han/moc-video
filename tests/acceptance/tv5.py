@@ -49,17 +49,17 @@ def security():
 
 def native(run):
     output = run.command(['cargo', 'test', '--locked', '--offline', '--manifest-path', 'src-tauri/Cargo.toml', '--lib', 'tv5_', '--', '--test-threads=1', '--nocapture', '--skip', 'tv5_packaged_host_bridge'], timeout=600)
-    expected = {'tv5_watchlist_crud_restart_and_closed_inputs', 'tv5_migration_v1_keeps_all_history_fields', 'tv5_migration_failure_rolls_back_and_old_database_remains_usable'}
+    expected = {'tv5_watchlist_crud_restart_and_closed_inputs', 'tv5_old_history_version_is_rejected_and_preserved', 'tv5_old_database_remains_usable_after_rejection'}
     names = re.findall(r'^test (?:\w+::)*(tv5_\w+) \.\.\.', output, re.M)
-    require(set(names) == expected and 'test result: ok. 3 passed; 0 failed; 0 ignored;' in output, 'three named native watchlist/upgrade/failure behaviors must pass')
+    require(set(names) == expected and 'test result: ok. 3 passed; 0 failed; 0 ignored;' in output, 'three named native watchlist/old-version/preservation behaviors must pass')
     rows = {}
-    for marker in ['TV5_CRUD', 'TV5_UPGRADE', 'TV5_MIGRATION_FAILURE']:
+    for marker in ['TV5_CRUD', 'TV5_OLD_VERSION', 'TV5_OLD_USABLE']:
         values = [json.loads(line.split(marker + ':', 1)[1]) for line in output.splitlines() if line.startswith(marker + ':')]
         require(len(values) == 1, 'one real native observation required: ' + marker)
         rows[marker] = values[0]
     run.observed['native'] = rows
-    require(rows['TV5_UPGRADE'] == dict(before=1, after=2, history_fields=19, history_kept=True), 'upgrade must preserve every v1 history field')
-    require(rows['TV5_MIGRATION_FAILURE'] == dict(explicit_error=True, old_version=1, old_data_usable=True, retry=2), 'failed transaction must leave old data usable and support explicit retry')
+    require(rows['TV5_OLD_VERSION'] == dict(rejected=True, version=1, bytes_preserved=True), 'ADR-064 must reject the old schema and preserve its bytes')
+    require(rows['TV5_OLD_USABLE'] == dict(explicit_error=True, version=1, old_data_usable=True), 'rejected old database must remain usable by its original owner')
     return rows
 
 

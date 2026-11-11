@@ -37,7 +37,7 @@ TOKENS = {
     "--tv-hero-duration": "600ms", "--tv-focus-scale": "1.08",
 }
 PERMISSIONS = "core:event:allow-listen core:event:allow-unlisten allow-player-fullscreen allow-runtime-status allow-runtime-prepare allow-get-sources allow-sync-catalog allow-get-home allow-get-details allow-resolve-episode allow-open-playback allow-close-playback allow-cancel-request allow-start-interaction allow-finish-interaction allow-get-settings allow-save-settings allow-get-resource-status allow-release-resolution allow-match-playback allow-list-history allow-save-history allow-remove-history allow-clear-history allow-get-media-cache allow-clear-media-cache allow-app-close-started allow-app-close-aborted allow-app-close-ready allow-window-bounds-now".split()
-CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:*; media-src 'self' blob: http://127.0.0.1:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:*; media-src 'self' blob: http://127.0.0.1:*; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 class Acceptance(t14.Acceptance):

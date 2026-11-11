@@ -1,14 +1,17 @@
 import { createApp, h } from "vue";
 import App from "./App.vue";
 import UiProvider from "./ui/UiProvider.vue";
+import FontGate from "./components/FontGate.vue";
 import "./style.css";
 import "./videojs";
 import { appController } from "./state";
 import { locale } from "./i18n";
 import { palette, normalizePalette } from "./ui/theme";
 import type { EngineStateChanged } from "./models";
+import { resetRecoveryInfo } from './resetRecovery';
 
-if (location.hash !== "#/prototype") {
+const recovery = resetRecoveryInfo();
+if (!recovery && location.hash !== "#/prototype") {
   const events = (window.__TAURI__ as typeof window.__TAURI__ & {
     event?: { listen<T>(name: string, callback: (event: { payload: T }) => void): Promise<() => void> };
   })?.event;
@@ -58,9 +61,10 @@ if (location.hash !== "#/prototype") {
   }
 }
 
-const View = location.hash === "#/prototype"
+const View = recovery ? (await import('./views/ResetRecoveryView.vue')).default : location.hash === "#/prototype"
   ? (await import("./views/PrototypeView.vue")).default
   : App;
 createApp({
-  render: () => h(UiProvider, null, { default: () => h(View) }),
+  render: () => recovery ? h(UiProvider, null, { default: () => h(View) })
+    : h(FontGate, null, { default: () => h(UiProvider, null, { default: () => h(View) }) }),
 }).mount("#app");

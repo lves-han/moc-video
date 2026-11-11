@@ -9,11 +9,55 @@ mod t22;
 #[path = "t24_cache_gateway.rs"]
 mod t24_cache;
 use super::*;
+
+#[test]
+fn font_gateway_accepts_only_fixed_ids_own_capability_and_packaged_origins() {
+    let gateway = Gateway::start().unwrap();
+    assert!(gateway.font_url("../settings.json").is_err());
+    let url = gateway.font_url("noto-sans-sc").unwrap();
+    let response = fetch(&url, "HEAD", &[("Origin", "http://tauri.localhost")]);
+    assert_eq!(response.status, 200);
+    assert_eq!(response.headers["content-length"], "17772300");
+    assert_eq!(
+        response.headers["access-control-allow-origin"],
+        "http://tauri.localhost"
+    );
+    assert_eq!(response.headers["cache-control"], "no-store");
+    assert_eq!(
+        fetch(
+            &url,
+            "OPTIONS",
+            &[
+                ("Origin", "http://tauri.localhost"),
+                ("Access-Control-Request-Method", "GET"),
+                ("Access-Control-Request-Headers", "cache-control, pragma")
+            ]
+        )
+        .status,
+        204
+    );
+    assert_eq!(
+        fetch(&url, "HEAD", &[("Origin", "https://example.com")]).status,
+        401
+    );
+    assert_eq!(
+        fetch(url.split('?').next().unwrap(), "HEAD", &[]).status,
+        401
+    );
+    assert_eq!(
+        fetch(&format!("{url}&url=https://example.com"), "HEAD", &[]).status,
+        401
+    );
+    assert_eq!(
+        fetch(&url.replace("noto-sans-sc", "unregistered"), "HEAD", &[]).status,
+        400
+    );
+}
 use crate::resolution::{Link, ResolutionStore, Subtitle};
 use sha2::{Digest, Sha256};
 use std::{
     io::{BufRead, BufReader},
-    net::{IpAddr, Ipv4Addr, UdpSocket},
+    net::{Ipv4Addr, UdpSocket},
     sync::atomic::AtomicUsize,
     time::Instant,
 };
@@ -173,7 +217,7 @@ fn fixture_serve(
     let _active = Active(state.clone());
     stream.set_nonblocking(false).unwrap();
     stream
-        .set_read_timeout(Some(Duration::from_millis(10)))
+        .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
     stream
         .set_write_timeout(Some(Duration::from_secs(2)))
@@ -205,6 +249,11 @@ fn fixture_serve(
         };
         req.headers.insert(k.to_ascii_lowercase(), v.trim().into());
     }
+    // Header arrival can be delayed by scheduling. Response-delay probes below
+    // still need short reads so cancellation and fixture shutdown stay prompt.
+    stream
+        .set_read_timeout(Some(Duration::from_millis(10)))
+        .unwrap();
     state.requests.lock().unwrap().push(req.clone());
     let reply = handler(&req, port);
     if !fixture_wait(&stream, &state, reply.header_delay, None) {
@@ -258,6 +307,25 @@ struct Response {
     status: u16,
     headers: HashMap<String, String>,
     body: Vec<u8>,
+}
+
+#[test]
+fn fixture_accepts_a_scheduled_delay_before_request_headers() {
+    let fixture = Fixture::new(|_, _| Reply::body("arrived", "text/plain"));
+    let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, fixture.port)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    wait_for(|| fixture.state.active.load(Ordering::SeqCst) == 1);
+    // A runnable client can be descheduled after connect on any desktop OS.
+    thread::sleep(Duration::from_millis(80));
+    let sent = stream.write_all(b"GET /delayed HTTP/1.1\r\nHost: fixture\r\n\r\n");
+    let mut response = String::new();
+    let read = stream.read_to_string(&mut response);
+    assert!(
+        sent.is_ok() && read.is_ok() && response.ends_with("arrived"),
+        "fixture closed a valid delayed request: sent={sent:?}, read={read:?}, response={response:?}"
+    );
 }
 fn connect(url: &str, method: &str, headers: &[(&str, &str)]) -> BufReader<TcpStream> {
     let url = url::Url::parse(url).unwrap();
@@ -776,7 +844,7 @@ fn t09_gzip_redirects_private_hops_and_html() {
         }
         "/redirect" => Reply::redirect("/gzip".into()),
         "/cross" => Reply::redirect(format!("http://other.fixture.test:{port}/capture")),
-        "/private" => Reply::redirect(format!("http://127.0.0.1:{port}/must-not-reach")),
+        "/private" => Reply::redirect(format!("http://127.0.0.1:{port}/local-target")),
         "/loop" => Reply::redirect("/loop".into()),
         "/html" => Reply::body("<html>upstream error</html>", "text/html"),
         "/hidden-html" => Reply::body("<html>upstream error</html>", "video/mp4"),
@@ -847,19 +915,21 @@ fn t09_gzip_redirects_private_hops_and_html() {
     for name in ["authorization", "cookie", "referer", "x-secret"] {
         assert!(!captured.headers.contains_key(name));
     }
-    for path in ["/private", "/loop", "/html", "/hidden-html"] {
+    let local = session(&gateway, fixture.url("/private"));
+    assert_eq!(fetch(media(&local), "GET", &[]).status, 200);
+    for path in ["/loop", "/html", "/hidden-html"] {
         let view = session(&gateway, fixture.url(path));
         assert_eq!(fetch(media(&view), "GET", &[]).status, 502);
         assert_eq!(state(&gateway, &view)["state"], "failed");
     }
     assert!(
-        !fixture
+        fixture
             .state
             .requests
             .lock()
             .unwrap()
             .iter()
-            .any(|r| r.target == "/must-not-reach")
+            .any(|r| r.target == "/local-target")
     );
     let bad = session(&gateway, fixture.url("/bad-partial"));
     assert_eq!(
@@ -1462,31 +1532,30 @@ impl Drop for Dns {
 }
 
 #[test]
-fn t09_ssrf_actual_peer_dns_mixture_and_rebinding() {
+fn t09_local_addresses_and_dns_refresh() {
     let fixture = Fixture::new(|_, _| Reply::body(vec![2; 128], "video/mp4"));
-    let generation = Arc::new(AtomicUsize::new(0));
-    let current = generation.clone();
+    let queries = Arc::new(AtomicUsize::new(0));
+    let observed = queries.clone();
     let dns = Dns::new(move |kind| {
         if kind == 1 {
-            if current.load(Ordering::SeqCst) == 0 {
-                vec![127, 0, 0, 1]
-            } else {
-                vec![10, 0, 0, 1]
-            }
+            observed.fetch_add(1, Ordering::SeqCst);
+            vec![127, 0, 0, 1]
         } else {
             vec![]
         }
     });
-    let http = Http {
-        nameserver: Some(vec![dns.address]),
-    };
-    let gateway = Gateway::with_http(Arc::new(MonotonicClock::default()), http.clone()).unwrap();
+    let gateway = Gateway::with_http(
+        Arc::new(MonotonicClock::default()),
+        Http {
+            nameserver: Some(vec![dns.address]),
+        },
+    )
+    .unwrap();
     let view = session(&gateway, fixture.url("/dns"));
-    assert_eq!(fetch(media(&view), "GET", &[]).status, 200);
-    assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
-    generation.store(1, Ordering::SeqCst);
-    assert_eq!(fetch(media(&view), "GET", &[]).status, 502);
-    assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
+    for _ in 0..2 {
+        assert_eq!(fetch(media(&view), "GET", &[]).status, 200);
+    }
+    assert_eq!(queries.load(Ordering::SeqCst), 2);
     let mixed = Dns::new(|kind| {
         if kind == 1 {
             vec![127, 0, 0, 1]
@@ -1502,31 +1571,9 @@ fn t09_ssrf_actual_peer_dns_mixture_and_rebinding() {
     )
     .unwrap();
     let view = session(&gateway, fixture.url("/mixed"));
-    assert_eq!(fetch(media(&view), "GET", &[]).status, 502);
-    assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
-    let url = http_url("https://public.invalid/video", false).unwrap();
-    let public: SocketAddr = "8.8.8.8:443".parse().unwrap();
-    assert!(http.check_addresses(&url, &[public], false).is_ok());
-    assert!(
-        http.check_addresses(&url, &[public, "10.0.0.1:443".parse().unwrap()], false)
-            .is_err()
-    );
-    assert!(
-        http.check_peer(&url, &[public], Some("127.0.0.1:443".parse().unwrap()))
-            .is_err()
-    );
-    assert!(http.check_peer(&url, &[public], None).is_err());
-    for value in [
-        "http://127.0.0.1/",
-        "http://[::ffff:127.0.0.1]/",
-        "http://169.254.169.254/",
-        "http://10.0.0.1/",
-    ] {
-        let gateway = Gateway::start().unwrap();
-        let view = session(&gateway, value.into());
-        assert_eq!(fetch(media(&view), "GET", &[]).status, 502);
-    }
-    assert!(!crate::host::maccms::public_ip(IpAddr::V4(
-        Ipv4Addr::LOCALHOST
-    )));
+    assert_eq!(fetch(media(&view), "GET", &[]).status, 200);
+    let target = format!("http://127.0.0.1:{}/literal", fixture.port);
+    let view = session(&gateway, target);
+    assert_eq!(fetch(media(&view), "GET", &[]).status, 200);
+    assert_eq!(fixture.state.requests.lock().unwrap().len(), 4);
 }

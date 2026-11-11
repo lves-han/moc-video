@@ -35,7 +35,7 @@ RUST_TESTS = {
     "t09_image_sliding_lease_readonly_status_lru_and_epoch": ("R25", "R31", "R44", "REQ-T09"),
     "t09_diagnostics_request_sequence_and_other_resource_success": ("R25", "R31", "R34", "R63", "REQ-T09"),
     "t09_same_episode_multiple_streams_and_late_close_release": ("R25", "R63", "REQ-T09"),
-    "t09_ssrf_actual_peer_dns_mixture_and_rebinding": ("R26", "R27", "R37", "R46", "REQ-T09"),
+    "t09_local_addresses_and_dns_refresh": ("R26", "R27", "R37", "R46", "REQ-T09"),
     "t09_host_session_bindings_switch_release_and_old_cleanup": ("R12", "R19", "R25", "R34", "R63", "REQ-T09"),
     "t09_host_image_maps_recursive_dedupe_and_generation": ("R31", "R63", "REQ-T09"),
     "t09_host_inflight_media_revoke_and_control_responsive": ("R25", "R44", "REQ-T09"),
