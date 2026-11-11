@@ -1,4 +1,9 @@
-# The app links the trimmed LGPL FFmpeg built by src-tauri/ffmpeg/build_ffmpeg.py (ADR-066/067),
+# The app links the platform LGPL FFmpeg prepared by src-tauri/ffmpeg/build_ffmpeg.py,
 # never a system copy found through pkg-config.
 [env]
 FFMPEG_DIR = { value = "src-tauri/ffmpeg/dist", relative = true }
+
+# bindgen/libclang overflows the default 1 MiB Windows main-thread stack while
+# processing FFmpeg headers. Other targets retain their existing linker flags.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/STACK:8388608"]

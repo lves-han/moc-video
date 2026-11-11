@@ -74,9 +74,17 @@ fn configured(host: &Host, configs: Vec<Value>) -> Value {
 fn t05_contract_commands_and_envelopes() {
     let (_temp, host) = setup();
     let schema: Value = serde_json::from_str(APP).unwrap();
-    assert_eq!(COMMANDS.len(), 27);
+    assert_eq!(COMMANDS.len(), 31);
     assert!(COMMANDS.contains(&"get_media_cache"));
     assert!(COMMANDS.contains(&"clear_media_cache"));
+    for command in [
+        "get_live_channels",
+        "open_live",
+        "list_local_videos",
+        "open_local",
+    ] {
+        assert!(COMMANDS.contains(&command));
+    }
     assert_eq!(
         schema["x-command-contracts"].as_object().unwrap().len(),
         COMMANDS.len()
@@ -160,12 +168,20 @@ fn t05_http_only_preparation_and_gateway() {
     assert_eq!(sources["plugins"], json!([]));
     let presets: Vec<Value> = serde_json::from_str(DEFAULT_SOURCES).unwrap();
     let providers = sources["providers"].as_array().unwrap();
-    assert_eq!(providers.len(), presets.len());
+    assert_eq!(providers.len(), presets.len() + 1);
     for (provider, preset) in providers.iter().zip(&presets) {
         assert_eq!(provider["name"], preset["name"]);
         assert_eq!(provider["kind"], preset["kind"]);
         assert_ne!(provider["kind"], "cloudstream");
     }
+    let tmdb = &providers[presets.len()];
+    assert_eq!(tmdb["name"], "TMDB");
+    assert_eq!(tmdb["kind"], "stremio");
+    assert_eq!(tmdb["origin"]["config_id"], settings::TMDB_CONFIG_ID);
+    assert_eq!(
+        tmdb["origin"]["manifest_urls"],
+        json!(["https://tmdb.elfhosted.com/en-US/manifest.json"])
+    );
     drop(host);
     assert!(TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_err());
 }
@@ -180,7 +196,11 @@ fn t05_settings_roundtrip_registry_and_identity() {
     let sources = ok(&host, "get_sources", json!({}));
     assert_eq!(sources["plugins"], json!([]));
     let providers = sources["providers"].as_array().unwrap();
-    assert_eq!(providers.len(), 2);
+    assert_eq!(providers.len(), 3);
+    assert_eq!(
+        providers[2]["origin"]["config_id"],
+        settings::TMDB_CONFIG_ID
+    );
     for (index, config) in [mac(), stremio()].iter().enumerate() {
         assert_eq!(providers[index]["kind"], config["kind"]);
         assert_eq!(providers[index]["runtime_status"], "configured");
@@ -341,12 +361,13 @@ fn t05_configuration_limits_and_utf8_budgets() {
         })
         .collect();
     let settings = configured(&host, configs);
+    assert_eq!(settings["source_configs"].as_array().unwrap().len(), 32);
     assert_eq!(
         ok(&host, "get_sources", json!({}))["providers"]
             .as_array()
             .unwrap()
             .len(),
-        32
+        33
     );
     let mut too_many = settings.clone();
     too_many["source_configs"]
@@ -828,7 +849,13 @@ fn t05_permissions_and_actual_tauri_handler() {
             cmd: (*command).into(),
             callback: tauri::ipc::CallbackFn(0),
             error: tauri::ipc::CallbackFn(1),
-            url: "tauri://localhost".parse().unwrap(),
+            url: if cfg!(windows) {
+                "http://tauri.localhost"
+            } else {
+                "tauri://localhost"
+            }
+            .parse()
+            .unwrap(),
             body: tauri::ipc::InvokeBody::Json(case["value"].clone()),
             headers: Default::default(),
             invoke_key: tauri::test::INVOKE_KEY.into(),

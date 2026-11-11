@@ -1151,7 +1151,12 @@ impl Catalog {
                     return Ok(value);
                 }
                 let result = (|| {
-                    let response = fetch(http, language_url(&addon.url, language, addon.tmdb)?, job, true)?;
+                    let response = fetch(
+                        http,
+                        language_url(&addon.url, language, addon.tmdb)?,
+                        job,
+                        true,
+                    )?;
                     let manifest: Value = serde_json::from_slice(&response.body)
                         .map_err(|_| upstream("Localized manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest)?;
@@ -1578,19 +1583,6 @@ impl Catalog {
             .join(value)
             .map_err(|_| upstream("Stremio image URL is invalid"))?;
         http_url(url.as_str(), false)?;
-        // DNS/peer validation happens again at image fetch through the same Http.
-        if let Some(host) = url.host() {
-            let ip = match host {
-                url::Host::Ipv4(ip) => Some(std::net::IpAddr::V4(ip)),
-                url::Host::Ipv6(ip) => Some(std::net::IpAddr::V6(ip)),
-                _ => None,
-            };
-            if ip.is_some_and(|ip| !super::maccms::public_ip(ip)) {
-                return Err(upstream(
-                    "unsafe_target: Stremio image address is not public",
-                ));
-            }
-        }
         let id = identity(
             "http_image",
             &[
@@ -1674,9 +1666,13 @@ impl Catalog {
             .iter()
             .position(|a| a.key == fields[1])
             // Older built-in TMDB history recorded an addon key derived from its URL.
-            .or_else(|| (self.captured.config["tmdb"] == true
-                && fields[3].strip_prefix("tmdb:").is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())))
-                .then_some(0))
+            .or_else(|| {
+                (self.captured.config["tmdb"] == true
+                    && fields[3]
+                        .strip_prefix("tmdb:")
+                        .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())))
+                .then_some(0)
+            })
             .ok_or_else(|| ApiError::bad("Stremio addon is not registered"))?;
         let canonical_data = json!(["stremio", fields[1], fields[2], fields[3]]).to_string();
         if canonical_data.as_str() != reference["data"].as_str().expect("Reference data") {
@@ -2118,15 +2114,7 @@ fn valid_local_image(value: &Value) -> bool {
     let Some(value) = text(value) else {
         return false;
     };
-    let Ok(url) = http_url(value, false) else {
-        return false;
-    };
-    match url.host() {
-        Some(url::Host::Ipv4(ip)) => super::maccms::public_ip(std::net::IpAddr::V4(ip)),
-        Some(url::Host::Ipv6(ip)) => super::maccms::public_ip(std::net::IpAddr::V6(ip)),
-        Some(_) => true,
-        None => false,
-    }
+    http_url(value, false).is_ok()
 }
 
 #[cfg(test)]

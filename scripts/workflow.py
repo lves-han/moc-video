@@ -41,9 +41,9 @@ DYNAMIC = (*APPEND_ONLY, "docs/TASKS.md", "docs/reviews/")
 def is_dynamic(name):
     return any(name == p or (p.endswith("/") and name.startswith(p)) for p in DYNAMIC)
 PROTECTED = ("AGENTS.md", "CLAUDE.md", "docs/SPEC.md", "docs/ARCHITECTURE.md", "docs/TASKS.md",
-             "workflow.json", ".gitattributes", "scripts/workflow.py", "scripts/platform_runtime.py", "scripts/windows_job.py", "scripts/task.py",
+             "workflow.json", "workflow.win32.json", "workflow.linux.json", "workflow.darwin.json", ".gitattributes", "scripts/workflow.py", "scripts/platform_runtime.py", "scripts/windows_job.py", "scripts/task.py",
              "scripts/run.py", "scripts/verify.py", "scripts/drive.py", "scripts/validate.py", "scripts/requirements.txt",
-             ".github/workflows/script-portability.yml",
+             ".github/workflows/script-portability.yml", ".github/workflows/desktop-compatibility.yml",
              "scripts/tests/", "docs/PROMPT-")
 
 
@@ -136,6 +136,12 @@ def validate_checks(checks, acceptance=False):
 
 def config():
     cfg = read_json(REPO / "workflow.json")
+    platform_path = REPO / f"workflow.{sys.platform}.json"
+    if platform_path.is_file():
+        platform_cfg = read_json(platform_path)
+        if not isinstance(platform_cfg, dict) or set(platform_cfg) - {"heavy_lock"}:
+            raise WorkflowError("平台配置仅允许覆盖 heavy_lock")
+        cfg.update(platform_cfg)
     if "lean_workflow" in cfg and type(cfg["lean_workflow"]) is not bool:
         raise WorkflowError("workflow.json: lean_workflow 须为布尔值")
     if "lean_from" in cfg and (not isinstance(cfg["lean_from"], str) or not re.fullmatch(r"T\d+\.\d+", cfg["lean_from"])):

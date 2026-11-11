@@ -364,7 +364,7 @@ fn t11_release_expiry_switch_and_cap_revocation() {
 }
 
 #[test]
-fn t11_cross_origin_and_unsafe_subtitle_targets() {
+fn t11_cross_origin_and_local_subtitle_targets() {
     let fixture = Fixture::new(|r, port| {
         if r.target == "/cross" {
             Reply::redirect(format!("http://other.fixture.test:{port}/captions.srt"))
@@ -399,24 +399,22 @@ fn t11_cross_origin_and_unsafe_subtitle_targets() {
     assert_eq!(fetch(track(&view, 0), "GET", &[]).status, 200);
     assert_eq!(fetch(track(&view, 1), "GET", &[]).status, 200);
     let response = fetch(track(&view, 2), "GET", &[]);
-    assert_eq!(response.status, 502);
-    assert_eq!(
-        serde_json::from_slice::<Value>(&response.body).unwrap()["error"]["details"]["reason"],
-        "unsafe_target"
-    );
+    assert_eq!(response.status, 200);
     let requests = fixture.state.requests.lock().unwrap();
-    for request in requests
-        .iter()
-        .filter(|r| matches!(r.target.as_str(), "/captions.srt" | "/direct.srt"))
-    {
+    for request in requests.iter().filter(|r| {
+        matches!(
+            r.target.as_str(),
+            "/captions.srt" | "/direct.srt" | "/never"
+        )
+    }) {
         for key in ["authorization", "cookie", "referer"] {
             assert!(!request.headers.contains_key(key));
         }
     }
-    assert!(!requests.iter().any(|r| r.target == "/never"));
+    assert!(requests.iter().any(|r| r.target == "/never"));
     println!(
         "T11_VECTOR:{}",
-        json!({"kind":"isolation","cross_origin_stripped":true,"direct_origin_stripped":true,"private_target_contacted":false})
+        json!({"kind":"isolation","cross_origin_stripped":true,"direct_origin_stripped":true,"private_target_contacted":true})
     );
 }
 

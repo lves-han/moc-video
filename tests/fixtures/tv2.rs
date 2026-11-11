@@ -458,7 +458,12 @@ fn tv2_live_builtin_tmdb_request_samples() {
                 false,
                 true,
             )
-            .unwrap_or_else(|e| panic!("live TMDB {id} {genre} {skip}: {}", e.code));
+            .unwrap_or_else(|e| {
+                panic!(
+                    "live TMDB {id} {genre} {skip}: {}",
+                    serde_json::to_string(&e).unwrap()
+                )
+            });
         let body: Value = serde_json::from_slice(&response.body).unwrap();
         let file = format!("sample-{index}.json");
         std::fs::write(folder.join(&file), &response.body).unwrap();

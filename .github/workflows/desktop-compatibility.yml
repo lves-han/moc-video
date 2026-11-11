@@ -1,0 +1,87 @@
+name: Desktop compatibility
+on: [pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.11.1'
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev nasm
+      - run: rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
+      - run: python -m venv .venv
+      - name: Use runner-owned resource lock on macOS
+        if: runner.os == 'macOS'
+        shell: python
+        run: |
+          from pathlib import Path
+          Path('workflow.darwin.json').write_text('{"heavy_lock": null}\n', encoding='utf-8')
+      - name: Dependencies
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          py = str(pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').resolve())
+          subprocess.run([py, '-m', 'pip', 'install', '-r', 'scripts/requirements.txt'], check=True)
+          from importlib.util import spec_from_file_location, module_from_spec
+          spec = spec_from_file_location('runtime', 'scripts/platform_runtime.py')
+          runtime = module_from_spec(spec); spec.loader.exec_module(runtime)
+          subprocess.run(runtime.resolve_argv(['npm', 'ci', '--no-audit', '--no-fund']), check=True)
+      - name: Prepare platform FFmpeg
+        shell: python
+        run: |
+          import os, pathlib, shutil, subprocess
+          py = str(pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').resolve())
+          subprocess.run([py, '-B', 'scripts/run.py', 'ci-ffmpeg', '--', py, '-I', 'src-tauri/ffmpeg/build_ffmpeg.py'], check=True)
+          if os.name == 'nt':
+              with open(os.environ['GITHUB_PATH'], 'a') as stream:
+                  stream.write(str(pathlib.Path('src-tauri/ffmpeg/dist/bin').resolve()) + '\n')
+              clang = shutil.which('clang')
+              if not clang:
+                  raise SystemExit('libclang is required for FFmpeg bindings')
+              with open(os.environ['GITHUB_ENV'], 'a') as stream:
+                  stream.write('LIBCLANG_PATH=' + str(pathlib.Path(clang).parent) + '\n')
+      - name: Native and shared regressions
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          py = str(pathlib.Path('.venv/Scripts/python.exe' if os.name == 'nt' else '.venv/bin/python').resolve())
+          # Linux must supply the project's systemd user scope; failure stays explicit.
+          checks = [
+              ('ci-frontend-tests', ['npm', 'test']),
+              ('ci-frontend-build', ['npm', 'run', 'build']),
+              ('ci-fmt', ['cargo', 'fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check']),
+              ('ci-clippy', ['cargo', 'clippy', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '--all-targets', '-j', '1', '--', '-D', 'warnings']),
+              ('ci-settings-atomic', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'atomic_replacement_', '--', '--test-threads=1']),
+              ('ci-fixture-headers', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'fixture_accepts_a_scheduled_delay_before_request_headers', '--', '--test-threads=1']),
+              ('ci-cache', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 't24_', '--', '--test-threads=1']),
+              ('ci-reset', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'reset::tests', '--', '--test-threads=1']),
+              ('ci-fonts', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'fonts::tests', '--', '--test-threads=1']),
+              ('ci-font-gateway', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'font_gateway_', '--', '--test-threads=1']),
+              ('ci-integration', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--test', 't05', '--test', 't25_delivery', '--', '--test-threads=1']),
+              ('ci-runtime', [py, '-B', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p', 'test_platform_runtime.py']),
+          ]
+          for name, argv in checks:
+              subprocess.run([py, '-B', 'scripts/run.py', name, '--', *argv], check=True)
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: desktop-${{ matrix.os }}
+          path: evidence/runs/

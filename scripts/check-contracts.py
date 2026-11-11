@@ -63,6 +63,12 @@ def check(directory):
             assert set(actual['properties'].pop('tmdb', {}).get('required', [])) == {'enabled', 'instance_url', 'language'}, 'TMDB setting contract changed'
             assert 'local_paths' not in actual['required'] and actual['properties'].pop('local_paths', {}).get('maxItems') == 256, 'Local library contract changed'
             assert 'live_configs' not in actual['required'] and actual['properties'].pop('live_configs', {}).get('maxItems') == 32, 'Live configuration contract changed'
+            for key, field in {
+                'font_family': {'type': 'string', 'enum': ['noto-sans-sc', 'noto-serif-sc'], 'default': 'noto-sans-sc'},
+                'font_scale': {'type': 'integer', 'enum': [90, 100, 110, 120], 'default': 100},
+            }.items():
+                assert key not in actual['required'], f'Font preference must remain optional: {key}'
+                assert actual['properties'].pop(key, None) == field, f'Font preference contract changed: {key}'
             assert actual['properties'].pop('media_cache_max_bytes', None) == {'type': 'integer', 'minimum': 0, 'maximum': 9007199254740991, 'default': 268435456}, 'Cache setting contract changed'
         assert actual == definition, f'Existing DTO changed: {name}'
     for key in ('x-command-contracts', 'x-event-contracts', 'x-request-budgets', 'x-stremio-capability-rule'):

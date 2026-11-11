@@ -39,7 +39,7 @@ NATIVE = {
     "t02_dns_one_silent_server_keeps_other_available",
     "t02_dns_both_failed_never_falls_back_to_hosts_or_system",
     "t02_dns_two_silent_servers_deadline_and_cancellation",
-    "t02_dns_fake_ip_mixed_results_and_redirect_rebinding_rejected",
+    "t02_dns_fake_ip_mixed_results_are_preserved",
     "t02_public_json_list_search_pagination_details_and_complete_groups",
     "t02_public_json_errors_zero_results_and_bounds_remain_explicit",
     "t02_json_media_removed_after_details_returns_no_links",

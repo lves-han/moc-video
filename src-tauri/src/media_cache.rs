@@ -505,7 +505,17 @@ impl MediaCache {
             {
                 return Err(std::io::Error::other("invalid cache file"));
             }
+            #[cfg(not(windows))]
             let mut file = File::open(path)?;
+            #[cfg(windows)]
+            let mut file = {
+                use std::os::windows::fs::OpenOptionsExt;
+                // Touching LRU timestamps requires FILE_WRITE_ATTRIBUTES on Windows.
+                // Keep the cached media bytes read-only.
+                fs::OpenOptions::new()
+                    .access_mode(0x80000000 | 0x100)
+                    .open(path)?
+            };
             file.seek(SeekFrom::Start(HEADER))?;
             file.set_times(fs::FileTimes::new().set_modified(SystemTime::now()))?;
             Ok(file)

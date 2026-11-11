@@ -1,14 +1,17 @@
-"""Build the trimmed LGPL FFmpeg 9.0 as dynamic libraries for the app (ADR-066/067).
+"""Prepare the platform's LGPL FFmpeg 9 shared libraries.
 
 Run with the project interpreter: .venv/bin/python -I src-tauri/ffmpeg/build_ffmpeg.py
-Writes src-tauri/ffmpeg/src (git checkout) and src-tauri/ffmpeg/dist (headers, @rpath dylibs).
-Cargo finds dist through FFMPEG_DIR in .cargo/config.toml; the app bundle copies the dylibs into Contents/Frameworks.
+POSIX builds the trimmed pinned source; Windows verifies a pinned x64 shared SDK.
+Cargo finds dist through FFMPEG_DIR in .cargo/config.toml.
 """
+import hashlib
 import json
+import platform
 import shutil
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -21,7 +24,7 @@ FAKE_PREFIX = "/opt/moc-ffmpeg"
 # re-encode it to AAC. LGPL 2.1+: no --enable-gpl/version3/nonfree.
 CONFIGURE = [
     "--disable-everything", "--disable-programs", "--disable-doc", "--disable-network", "--disable-autodetect",
-    "--enable-shared", "--disable-static", "--enable-pic", "--install-name-dir=@rpath",
+    "--enable-shared", "--disable-static", "--enable-pic",
     "--disable-avdevice", "--disable-avfilter", "--disable-swscale",
     "--enable-avcodec", "--enable-avformat", "--enable-swresample",
     "--enable-protocol=file",
@@ -33,6 +36,38 @@ CONFIGURE = [
     "--enable-encoder=aac",
 ]
 
+# Windows uses MSVC import libraries and LGPL shared DLLs, without a Unix shell.
+WINDOWS_ASSET = "ffmpeg-n9.0.2-48-gd4070a14ce-win64-lgpl-shared-9.0.zip"
+WINDOWS_URL = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-10-12-39/" + WINDOWS_ASSET
+WINDOWS_SHA256 = "cdc19c20aa80d46f78cfc69c8d87430ee34990864e30379db02d1447cd111e83"
+
+
+def windows_sdk():
+    if platform.machine().lower() not in {"amd64", "x86_64"}:
+        raise SystemExit("The pinned Windows FFmpeg SDK requires x64")
+    archive = HERE.parent.parent / ".cache" / "ffmpeg" / WINDOWS_ASSET
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    if not archive.exists():
+        run(["curl.exe", "--fail", "--location", "--output", str(archive), WINDOWS_URL], HERE)
+    with archive.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != WINDOWS_SHA256:
+            raise SystemExit(f"FFmpeg SDK SHA256 mismatch: {archive}")
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.infolist():
+            parts = Path(member.filename).parts[1:]
+            if not parts or member.is_dir():
+                continue
+            target = PREFIX.joinpath(*parts).resolve()
+            if not target.is_relative_to(PREFIX.resolve()):
+                raise SystemExit("FFmpeg SDK archive path escapes dist")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with bundle.open(member) as source, target.open("wb") as output:
+                shutil.copyfileobj(source, output)
+    report = dict(source=WINDOWS_URL, sha256=WINDOWS_SHA256, license="LGPL version 3 or later")
+    (PREFIX / "windows-sdk.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
+    print(f"Add {PREFIX / 'bin'} to PATH before invoking Cargo; libclang is also required.")
+
 
 def run(argv, cwd):
     print("+", " ".join(argv), flush=True)
@@ -40,6 +75,8 @@ def run(argv, cwd):
 
 
 def main():
+    if sys.platform == "win32":
+        return windows_sdk()
     started = time.monotonic()
     if not (SOURCE / "configure").exists():
         run(["git", "clone", "--no-checkout", "https://github.com/FFmpeg/FFmpeg", str(SOURCE)], HERE)
@@ -48,7 +85,10 @@ def main():
     if commit != COMMIT:
         raise SystemExit(f"FFmpeg source must be at {COMMIT}; existing checkout is {commit}")
     # FFmpeg embeds its configure line in the libraries; a fixed prefix keeps local paths out.
-    run(["./configure", f"--prefix={FAKE_PREFIX}", *CONFIGURE], SOURCE)
+    configure = [*CONFIGURE]
+    if sys.platform == "darwin":
+        configure.append("--install-name-dir=@rpath")
+    run(["./configure", f"--prefix={FAKE_PREFIX}", *configure], SOURCE)
     run(["make", "-j2"], SOURCE)
     stage = HERE / "stage"
     shutil.rmtree(stage, ignore_errors=True)
@@ -56,13 +96,14 @@ def main():
     run(["make", "install", f"DESTDIR={stage}"], SOURCE)
     shutil.move(str(stage / FAKE_PREFIX.lstrip("/")), PREFIX)
     shutil.rmtree(stage)
-    for library in (PREFIX / "lib").glob("*.dylib"):
+    pattern = "*.dylib" if sys.platform == "darwin" else "*.so*"
+    for library in (PREFIX / "lib").glob(pattern):
         require_clean = library.read_bytes()
         if str(Path.home()).encode() in require_clean:
             raise SystemExit(f"local path inside {library.name}")
-    libs = sorted(p.name for p in (PREFIX / "lib").glob("*.dylib") if not p.is_symlink())
+    libs = sorted(p.name for p in (PREFIX / "lib").glob(pattern) if not p.is_symlink())
     license_line = next(line for line in (SOURCE / "config.h").read_text().splitlines() if "FFMPEG_LICENSE" in line)
-    report = dict(source="https://github.com/FFmpeg/FFmpeg", branch=BRANCH, commit=commit, configure=CONFIGURE,
+    report = dict(source="https://github.com/FFmpeg/FFmpeg", branch=BRANCH, commit=commit, configure=configure,
                   license=license_line.split('"')[1], dylibs=libs, seconds=round(time.monotonic() - started))
     (PREFIX / "ffmpeg-build.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

@@ -884,11 +884,17 @@ fn n01_public_http_headers_cookies_addresses_and_foreign_refs() {
     let mut output = Output::default();
     for address in [
         "file:///etc/passwd",
-        "http://127.0.0.1/image",
-        "http://[::ffff:127.0.0.1]/image",
         "http://user:pass@public.example/image",
     ] {
         assert!(cat.image(0, Some(address), &mut output).is_err());
+    }
+    for address in [
+        "http://127.0.0.1/image",
+        "http://[::ffff:127.0.0.1]/image",
+        "http://172.19.0.59/image",
+    ] {
+        assert!(cat.image(0, Some(address), &mut output).is_ok());
+        assert!(valid_local_image(&json!(address)));
     }
     let mut foreign = home_input(&source);
     foreign["section_ref"] = json!("foreign");
@@ -904,14 +910,17 @@ fn n01_public_http_headers_cookies_addresses_and_foreign_refs() {
             "BAD_REQUEST",
         );
     }
-    configure(&host, vec!["http://127.0.0.1/manifest.json".into()]);
-    error(
-        &call(
+    configure(
+        &host,
+        vec![format!("http://127.0.0.1:{}/manifest.json", fixture.port)],
+    );
+    assert!(
+        call(
             &host,
             "sync_catalog",
             json!({"kind":"stremio","config_id":CONFIG}),
-        ),
-        "BAD_REQUEST",
+        )["error"]
+            .is_null()
     );
     if std::env::var("N01_PROXY_TEST").as_deref() == Ok("1") {
         for key in [

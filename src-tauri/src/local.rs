@@ -2,17 +2,25 @@
 //! Opening re-checks that a file still resolves inside one of those roots.
 use crate::{contracts::ApiError, source_dispatch::identity};
 use serde_json::{Value, json};
-use std::{fs::File, path::{Path, PathBuf}};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
 const SCAN_LIMIT: usize = 20_000;
 const DEPTH_LIMIT: usize = 8;
-const VIDEO: [&str; 9] = ["mp4", "m4v", "mov", "mkv", "webm", "avi", "ts", "flv", "wmv"];
+const VIDEO: [&str; 9] = [
+    "mp4", "m4v", "mov", "mkv", "webm", "avi", "ts", "flv", "wmv",
+];
 // Formats WKWebView decodes directly, plus MKV, which is remuxed to fMP4 HLS on demand.
 const PLAYABLE: [&str; 4] = ["mp4", "m4v", "mov", "mkv"];
 pub const CONFIG_ID: &str = "0c5e1d2a-3b4c-4d5e-8f6a-7b8c9d0e1f2a";
 
 fn extension(path: &Path) -> String {
-    path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
+    path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
 }
 
 pub fn file_id(path: &Path) -> String {
@@ -36,15 +44,25 @@ pub fn supported(path: &Path) -> bool {
 }
 
 pub fn roots(settings: &Value) -> Vec<PathBuf> {
-    settings["local_paths"].as_array().into_iter().flatten().filter_map(Value::as_str).map(PathBuf::from).collect()
+    settings["local_paths"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(PathBuf::from)
+        .collect()
 }
 
 fn hidden(path: &Path) -> bool {
-    path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.'))
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with('.'))
 }
 
 fn walk(dir: &Path, root: &Path, depth: usize, out: &mut Vec<(PathBuf, PathBuf, u64)>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut entries: Vec<_> = entries.flatten().map(|e| e.path()).collect();
     entries.sort();
     for path in entries {
@@ -52,7 +70,9 @@ fn walk(dir: &Path, root: &Path, depth: usize, out: &mut Vec<(PathBuf, PathBuf, 
             continue;
         }
         // symlink_metadata keeps the scan from following links out of the folder.
-        let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
         if meta.is_dir() && depth < DEPTH_LIMIT {
             walk(&path, root, depth + 1, out);
         } else if meta.is_file() && VIDEO.contains(&extension(&path).as_str()) {
@@ -92,9 +112,15 @@ pub fn checked(settings: &Value, path: &Path) -> Result<PathBuf, ApiError> {
     if !std::fs::metadata(&real).map_err(|_| missing())?.is_file() {
         return Err(missing());
     }
-    let inside = roots(settings).iter().filter_map(|root| std::fs::canonicalize(root).ok()).any(|root| real == root || real.starts_with(&root));
+    let inside = roots(settings)
+        .iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .any(|root| real == root || real.starts_with(&root));
     if !inside {
-        return Err(ApiError::new("UNAUTHORIZED", "Local file is outside the library"));
+        return Err(ApiError::new(
+            "UNAUTHORIZED",
+            "Local file is outside the library",
+        ));
     }
     Ok(real)
 }
@@ -103,15 +129,35 @@ pub fn checked(settings: &Value, path: &Path) -> Result<PathBuf, ApiError> {
 /// this descriptor for the entire session, including after a path is replaced.
 pub fn checked_file(settings: &Value, path: &Path) -> Result<(PathBuf, File), ApiError> {
     let resolved = checked(settings, path)?;
-    let file = File::open(&resolved).map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Local file was moved or deleted"))?;
+    let file = File::open(&resolved)
+        .map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Local file was moved or deleted"))?;
+    #[cfg(windows)]
+    {
+        let actual = checked(settings, &opened_path(&file)?)?;
+        let current = File::open(&actual)
+            .map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?;
+        if !same_file(&file, &current)? {
+            return Err(ApiError::new(
+                "UNAUTHORIZED",
+                "Local file changed during authorization",
+            ));
+        }
+        Ok((actual, file))
+    }
     #[cfg(target_os = "macos")]
     let actual = {
         use std::os::{fd::AsRawFd, unix::ffi::OsStrExt};
         let mut buffer = [0u8; libc::PATH_MAX as usize];
         if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buffer.as_mut_ptr()) } == -1 {
-            return Err(ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"));
+            return Err(ApiError::new(
+                "SOURCE_NOT_FOUND",
+                "Cannot verify opened local file",
+            ));
         }
-        let end = buffer.iter().position(|b| *b == 0).ok_or_else(|| ApiError::internal("Local file path is too long"))?;
+        let end = buffer
+            .iter()
+            .position(|b| *b == 0)
+            .ok_or_else(|| ApiError::internal("Local file path is too long"))?;
         PathBuf::from(std::ffi::OsStr::from_bytes(&buffer[..end]))
     };
     #[cfg(target_os = "linux")]
@@ -120,19 +166,84 @@ pub fn checked_file(settings: &Value, path: &Path) -> Result<(PathBuf, File), Ap
         std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
             .map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?
     };
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    return Err(ApiError::new("CAPABILITY_UNAVAILABLE", "Secure local playback is unavailable on this platform"));
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+    return Err(ApiError::new(
+        "CAPABILITY_UNAVAILABLE",
+        "Secure local playback is unavailable on this platform",
+    ));
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         let actual = checked(settings, &actual)?;
         use std::os::unix::fs::MetadataExt;
-        let opened = file.metadata().map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?;
-        let current = std::fs::metadata(&actual).map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?;
+        let opened = file
+            .metadata()
+            .map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?;
+        let current = std::fs::metadata(&actual)
+            .map_err(|_| ApiError::new("SOURCE_NOT_FOUND", "Cannot verify opened local file"))?;
         if opened.dev() != current.dev() || opened.ino() != current.ino() {
-            return Err(ApiError::new("UNAUTHORIZED", "Local file changed during authorization"));
+            return Err(ApiError::new(
+                "UNAUTHORIZED",
+                "Local file changed during authorization",
+            ));
         }
         Ok((actual, file))
     }
+}
+
+#[cfg(windows)]
+fn opened_path(file: &File) -> Result<PathBuf, ApiError> {
+    use std::os::windows::{ffi::OsStringExt, io::AsRawHandle};
+    use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+    let mut buffer = vec![0u16; 512];
+    loop {
+        let length = unsafe {
+            GetFinalPathNameByHandleW(
+                file.as_raw_handle(),
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                0,
+            )
+        } as usize;
+        if length == 0 || length > 65_535 {
+            return Err(ApiError::new(
+                "SOURCE_NOT_FOUND",
+                "Cannot verify opened local file",
+            ));
+        }
+        if length < buffer.len() {
+            return Ok(PathBuf::from(std::ffi::OsString::from_wide(
+                &buffer[..length],
+            )));
+        }
+        buffer.resize(length + 1, 0);
+    }
+}
+
+#[cfg(windows)]
+pub(crate) fn same_file(left: &File, right: &File) -> Result<bool, ApiError> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ID_INFO, FileIdInfo, GetFileInformationByHandleEx,
+    };
+    let identity = |file: &File| {
+        let mut info: FILE_ID_INFO = unsafe { std::mem::zeroed() };
+        if unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileIdInfo,
+                (&mut info as *mut FILE_ID_INFO).cast(),
+                std::mem::size_of::<FILE_ID_INFO>() as u32,
+            )
+        } == 0
+        {
+            return Err(ApiError::new(
+                "SOURCE_NOT_FOUND",
+                "Cannot verify local file identity",
+            ));
+        }
+        Ok((info.VolumeSerialNumber, info.FileId.Identifier))
+    };
+    Ok(identity(left)? == identity(right)?)
 }
 
 /// The durable identity a local file uses in watch history.
@@ -144,6 +255,24 @@ pub fn history_identity(id: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn authorized_handle_retains_identity_after_path_replacement() {
+        use std::io::Read;
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("movie.mp4");
+        std::fs::write(&path, b"original").unwrap();
+        let settings = json!({"local_paths": [folder.path().to_string_lossy()]});
+        let (actual, mut held) = checked_file(&settings, &path).unwrap();
+        assert!(same_file(&held, &File::open(&actual).unwrap()).unwrap());
+        std::fs::rename(&path, folder.path().join("held.mp4")).unwrap();
+        std::fs::write(&path, b"replacement").unwrap();
+        assert!(!same_file(&held, &File::open(&path).unwrap()).unwrap());
+        let mut bytes = Vec::new();
+        held.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"original");
+    }
 
     #[test]
     fn scan_lists_videos_marks_support_and_checks_scope() {
@@ -160,15 +289,39 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("link.mp4")).unwrap();
         let settings = json!({"local_paths": [root.to_string_lossy(), folder.path().join("gone").to_string_lossy()]});
         let (view, table) = scan(&settings);
-        let names: Vec<_> = view["items"].as_array().unwrap().iter().map(|i| (i["name"].as_str().unwrap().to_owned(), i["supported"].as_bool().unwrap())).collect();
-        assert_eq!(names, vec![("b.mkv".to_owned(), true), ("a.mp4".to_owned(), true)], "sorted path order");
+        let names: Vec<_> = view["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| {
+                (
+                    i["name"].as_str().unwrap().to_owned(),
+                    i["supported"].as_bool().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            names,
+            vec![("b.mkv".to_owned(), true), ("a.mp4".to_owned(), true)],
+            "sorted path order"
+        );
         assert_eq!(view["roots"][1]["available"], false);
         assert_eq!(table.len(), 2);
         assert!(checked(&settings, &root.join("a.mp4")).is_ok());
-        assert_eq!(checked(&settings, &outside).unwrap_err().code, "UNAUTHORIZED");
+        assert_eq!(
+            checked(&settings, &outside).unwrap_err().code,
+            "UNAUTHORIZED"
+        );
         #[cfg(unix)]
-        assert_eq!(checked(&settings, &root.join("link.mp4")).unwrap_err().code, "UNAUTHORIZED", "a link cannot escape the library");
+        assert_eq!(
+            checked(&settings, &root.join("link.mp4")).unwrap_err().code,
+            "UNAUTHORIZED",
+            "a link cannot escape the library"
+        );
         std::fs::remove_file(root.join("a.mp4")).unwrap();
-        assert_eq!(checked(&settings, &root.join("a.mp4")).unwrap_err().code, "SOURCE_NOT_FOUND");
+        assert_eq!(
+            checked(&settings, &root.join("a.mp4")).unwrap_err().code,
+            "SOURCE_NOT_FOUND"
+        );
     }
 }

@@ -116,7 +116,7 @@ export function resolveTheme(id: PaletteId, dark: boolean, desktop = false) {
       } : {}),
       placeholderColor: dark ? "#a3a8b0" : "#65707c",
       fontFamily:
-        '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        'var(--app-font, "Moc Bootstrap")',
     },
     Button: {
       textColorPrimary: ink,
