@@ -42,7 +42,7 @@ T25 会原样读取并顺序执行下面的 `t25-reproduce` JSON。复现进程�
 
 首次启动由原生宿主准备网关并加载内置来源设置。设置 → 来源中检查配置和同步状态：Stremio 提供元数据，MacCMS 提供播放；元数据来源与播放来源分别选择。首次跨源匹配按界面确认内容和线路，播放成功推进后记忆可靠对应。后续每集重新解析；歧义时显示确认。历史与待播清单保存在应用数据目录，刷新和重启后恢复。
 
-应用数据位置：`~/Library/Application Support/app.yingxiang.video/`，包含 `settings.json`、`moc-video.db` 和 `media-cache/`。WebKit 的网站存储另保留线路偏好；系统按应用标识管理。卸载 app 保留用户数据；显式清理按 [生命周期操作](packaging/T23.md) 仅删除本次可识别测试数据，原用户数据保留。
+应用数据位置：`~/Library/Application Support/app.moc.video/`，包含 `settings.json`、`moc-video.db` 和 `media-cache/`。WebKit 的网站存储另保留线路偏好；系统按应用标识管理。卸载 app 保留用户数据；显式清理按 [生命周期操作](packaging/T23.md) 仅删除本次可识别测试数据，原用户数据保留。
 
 ## 诊断和测试
 
@@ -74,9 +74,9 @@ A2 使用用户授权的本机隔离测试：核对当前安装包、独立测�
 
 [需求规格](docs/SPEC.md) · [契约](docs/ARCHITECTURE.md) · [任务/覆盖表](docs/TASKS.md) · [决定](docs/DECISIONS.md) · [原前端历史](docs/FRONTEND_BASELINE.md)。历史资料保存其当时状态，当前实现与发布范围沿已采纳 ADR 和上述真实证据追溯。
 
-## 改名兼容
+## 当前数据格式
 
-产品名统一为“墨客视频 / Moc Video”，代码包使用 `moc-video`。应用标识 `app.yingxiang.video` 作为已有安装的数据身份保留；旧数据库和旧偏好键仅用于兼容读取，用户设置、观看记录及已保存线路可继续使用。
+墨客视频使用独立标识 `app.moc.video`、`moc-video.db` 和 `moc-video.*` 偏好键。设置与历史数据库仅接受当前版本格式；首次使用直接创建当前格式，旧版本数据不迁移、不回退读取，磁盘上的旧文件保持原样。
 
 ## 源码仓库
 

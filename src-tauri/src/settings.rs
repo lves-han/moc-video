@@ -115,51 +115,12 @@ impl SettingsFile {
                             "Stored settings exceed one MiB",
                         ));
                     }
-                    let mut settings: Value = serde_json::from_slice(&data)
+                    let settings: Value = serde_json::from_slice(&data)
                         .map_err(|_| ApiError::internal("Stored settings JSON is damaged"))?;
-                    let migrate = settings["schema_version"] == 1;
-                    if migrate {
-                        if settings.get("source_configs").is_some() {
-                            return Err(ApiError::bad("Settings v1 must omit source_configs"));
-                        }
-                        settings["schema_version"] = json!(2);
-                        settings["source_configs"] = json!([]);
-                    } else if settings["schema_version"] != 2 {
+                    if settings["schema_version"] != 2 {
                         return Err(ApiError::bad("Unsupported settings schema_version"));
                     }
                     validate(&settings)?;
-                    let apply_preset = settings["metadata_preset_applied"] != true;
-                    if apply_preset {
-                        let configs = settings["source_configs"]
-                            .as_array_mut()
-                            .expect("Validated configs");
-                        if configs.is_empty() {
-                            *configs = initial_defaults()["source_configs"]
-                                .as_array()
-                                .expect("Defaults")
-                                .clone();
-                        } else if !configs.iter().any(|c| c["kind"] == "stremio") {
-                            if configs.len() >= 32 {
-                                return Err(ApiError::new(
-                                    "RESOURCE_LIMIT",
-                                    "TMDB preset requires one free source configuration slot",
-                                ));
-                            }
-                            let mut metadata = initial_defaults()["source_configs"][0].clone();
-                            if configs
-                                .iter()
-                                .any(|c| c["config_id"] == metadata["config_id"])
-                            {
-                                metadata["config_id"] = json!(Uuid::new_v4().to_string());
-                            }
-                            configs.push(metadata);
-                        }
-                        settings["metadata_preset_applied"] = json!(true);
-                        validate(&settings)?;
-                    }
-                    if migrate || apply_preset {
-                        store.save(&settings)?;
-                    }
                     Ok(settings)
                 })();
                 match result {
@@ -246,24 +207,18 @@ mod preset_tests {
     }
 
     #[test]
-    fn empty_profile_is_seeded_and_existing_disabled_choices_are_preserved() {
+    fn existing_empty_profile_is_not_migrated_or_reseeded() {
         let folder = tempfile::tempdir().unwrap();
         let store = SettingsFile {
             path: folder.path().join("settings.json"),
         };
-        let mut original = defaults();
-        original
+        let mut current = defaults();
+        current
             .as_object_mut()
             .unwrap()
             .remove("metadata_preset_applied");
-        original["volume"] = json!(0.25);
-        store.save(&original).unwrap();
-        let (_, mut seeded) = SettingsFile::load(store.path.clone()).unwrap();
-        assert_eq!(seeded["volume"], 0.25);
-        assert_eq!(seeded["source_configs"].as_array().unwrap().len(), 9);
-        seeded["source_configs"][0]["enabled"] = json!(false);
-        seeded["source_configs"].as_array_mut().unwrap().truncate(1);
-        store.save(&seeded).unwrap();
-        assert_eq!(SettingsFile::load(store.path).unwrap().1, seeded);
+        current["volume"] = json!(0.25);
+        store.save(&current).unwrap();
+        assert_eq!(SettingsFile::load(store.path).unwrap().1, current);
     }
 }

@@ -4,7 +4,7 @@ import type { Bridge_ApiError, PlaybackViewSession, PlayerEvent as ProtocolEvent
 export type PlayerState = "preparing" | "ready" | "playing" | "paused" | "buffering" | "position" | "ended" | "failed" | "stopped";
 export type PlayerEvent = { state: PlayerState; epoch: number; position_ms: number; duration_ms: number | null; error?: string };
 export type SubtitleSource = { id: string; label: string; language: string | null; url: string };
-export type PlaybackSource = { url: string; kind: "mp4" | "hls"; subtitle?: string; subtitles?: readonly SubtitleSource[] };
+export type PlaybackSource = { url: string; kind: "mp4" | "hls"; subtitles?: readonly SubtitleSource[] };
 export type PlayerBinding = { playback_epoch: number; engine_epoch: string | null; session_id: string | null };
 export class UnsupportedMedia extends Error {}
 
@@ -147,7 +147,7 @@ export function createPlayer(video: HTMLVideoElement, emit: (event: PlayerEvent)
     });
     video.crossOrigin = "anonymous";
     video.preload = "auto";
-    const subtitles = source.subtitles ?? (source.subtitle ? [{ id: "legacy", label: "样机字幕", language: "zh-CN", url: source.subtitle }] : []);
+    const subtitles = source.subtitles ?? [];
     for (const [index, subtitle] of subtitles.entries()) {
       const track = document.createElement("track");
       track.kind = "subtitles";

@@ -860,7 +860,7 @@ export class AppController {
       const playbackReady = ready.filter(source => source.kind !== "stremio" && source.capabilities.resolve);
       const metadata = metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === this.state.settings.last_metadata_config_id)
         ?? metadataReady.find(source => source.id === oldMetadata?.source_id) ?? metadataReady[0];
-      const playback = playbackReady.find(source => source.id === (this.state.settings.last_playback_source_key ?? this.state.settings.last_source_key))
+      const playback = playbackReady.find(source => source.id === this.state.settings.last_playback_source_key)
         ?? playbackReady.find(source => source.id === oldPlayback?.source_id) ?? playbackReady[0];
       this.state.selected_metadata_source = metadata ? { source_id: metadata.id, source_revision: metadata.source_revision } : null;
       this.state.selected_playback_source = playback ? { source_id: playback.id, source_revision: playback.source_revision } : null;

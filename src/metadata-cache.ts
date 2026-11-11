@@ -1,4 +1,3 @@
-import { readProductStorage } from './storage-compat.ts';
 import type { Bridge_MediaRef, DetailsViewData } from './models.ts';
 
 export const METADATA_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -17,7 +16,7 @@ export function metadataCache(store: () => Store = () => localStorage) {
   const key = (ref: Bridge_MediaRef, locale: string) => JSON.stringify([ref.source_id, ref.source_revision, ref.data, locale]);
   const read = (): Entry[] => {
     try {
-      const value: unknown = JSON.parse(readProductStorage(store(), KEY) ?? '[]');
+      const value: unknown = JSON.parse(store().getItem(KEY) ?? '[]');
       return Array.isArray(value) ? value.filter(row => row && typeof row.key === 'string'
         && typeof row.savedAt === 'number' && Number.isFinite(row.savedAt) && row.value?.details?.ref
         && typeof row.value.details.ref.source_id === 'string' && typeof row.value.details.ref.source_revision === 'string'

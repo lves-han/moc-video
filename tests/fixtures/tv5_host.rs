@@ -153,7 +153,7 @@ fn tv5_migration_failure_rolls_back_and_old_database_remains_usable() {
         failed["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("migration failed")
+            .contains("initialization failed")
     );
     assert_eq!(version5(&database), 1);
     let old = Connection::open(&database).unwrap();

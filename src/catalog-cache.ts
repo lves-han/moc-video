@@ -1,4 +1,3 @@
-import { readProductStorage } from './storage-compat.ts';
 import type { Bridge_HomeSection, Bridge_MediaCard, ImageAccessMap, SourceKey } from './models.ts';
 import { METADATA_TTL } from './metadata-cache.ts';
 
@@ -14,7 +13,7 @@ export function catalogCache(store: () => Store = () => localStorage) {
   const key = (source: SourceKey, section: string, filter: unknown, locale: string) => JSON.stringify([source.source_id, source.source_revision, section, filter, locale]);
   const read = (): Row[] => {
     try {
-      const rows: unknown = JSON.parse(readProductStorage(store(), KEY) ?? '[]');
+      const rows: unknown = JSON.parse(store().getItem(KEY) ?? '[]');
       return Array.isArray(rows) ? rows.filter(row => row && typeof row.key === 'string'
         && typeof row.savedAt === 'number' && Number.isFinite(row.savedAt) && Array.isArray(row.items)) : [];
     } catch { return []; }

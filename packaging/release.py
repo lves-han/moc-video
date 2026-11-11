@@ -188,7 +188,7 @@ def check_payload(app, frontend):
     """Check actual shipping bytes, not names of source dependencies."""
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     config = read(ROOT / "src-tauri/tauri.conf.json")
-    require(info["CFBundleIdentifier"] == config["identifier"] == "app.yingxiang.video", "Application identity differs")
+    require(info["CFBundleIdentifier"] == config["identifier"] == "app.moc.video", "Application identity differs")
     require(info["CFBundleShortVersionString"] == config["version"] == "0.1.0"
             and info["CFBundleVersion"] == config["bundle"]["macOS"]["bundleVersion"] == "2", "Display/build version differs")
     require(info["LSMinimumSystemVersion"] == "14.0" and info["NSHighResolutionCapable"], "macOS/DPI metadata differs")

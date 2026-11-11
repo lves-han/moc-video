@@ -242,7 +242,7 @@ def bundle(run, name, binary):
     executable.parent.mkdir(parents=True)
     shutil.copy2(binary, executable)
     info = plistlib.loads((ROOT / "src-tauri/Info.plist").read_bytes())
-    info.update(CFBundleExecutable="moc-video", CFBundleIdentifier="app.yingxiang.video",
+    info.update(CFBundleExecutable="moc-video", CFBundleIdentifier="app.moc.video",
         CFBundleName=name, CFBundleDisplayName="墨客视频", CFBundlePackageType="APPL",
         CFBundleShortVersionString="0.1.0", CFBundleVersion="1", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True)
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))

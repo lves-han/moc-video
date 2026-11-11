@@ -369,12 +369,12 @@ class EvidenceTests(unittest.TestCase):
             seal = app / "Contents/_CodeSignature/CodeResources"
             seal.parent.mkdir()
             seal.write_text("seal")
-            config = dict(identifier="app.yingxiang.video", version="0.1.0", bundle=dict(macOS=dict(bundleVersion="2")))
+            config = dict(identifier="app.moc.video", version="0.1.0", bundle=dict(macOS=dict(bundleVersion="2")))
             (root / "src-tauri/icons").mkdir(parents=True)
             (root / "src-tauri/tauri.conf.json").write_text(json.dumps(config))
             (root / "src-tauri/icons/icon.icns").write_bytes(b"project icon")
             (app / "Contents/Resources/icon.icns").write_bytes(b"project icon")
-            info = dict(CFBundleIdentifier="app.yingxiang.video", CFBundleShortVersionString="0.1.0", CFBundleVersion="2",
+            info = dict(CFBundleIdentifier="app.moc.video", CFBundleShortVersionString="0.1.0", CFBundleVersion="2",
                 CFBundleExecutable="moc-video", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True,
                 NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True), CFBundleIconFile="icon.icns")
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))

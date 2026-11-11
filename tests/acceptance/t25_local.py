@@ -88,7 +88,7 @@ def verify():
             and release.tree(backup / 'test-predecessor') == manifest['upgrade_from']['files'],
             'Test applications differ from the actual release and predecessor')
     for name, path in [('application', Path('/Applications/墨客视频.app')),
-                       ('data', support / 'app.yingxiang.video')]:
+                       ('data', support / 'app.moc.video')]:
         expected = json.loads((backup / (name + '-manifest.json')).read_text())
         require(path.is_dir() and tree(path) == expected, 'Restored ' + name + ' differs from backup')
     require(tree(backup / 'test-current-fresh') == tree(backup / 'test-current-upgraded'),

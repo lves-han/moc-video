@@ -1,4 +1,3 @@
-import { readProductStorage } from './storage-compat.ts';
 import type { Bridge_Episode, Bridge_EpisodeGroup, DetailsViewData, MetadataRef, PlaybackContext, SourceKey } from './models.ts';
 
 // This shares the app's existing localStorage persistence. Only digests and
@@ -94,7 +93,7 @@ export function createLinePreferences(storage: () => StoragePort = () => localSt
   // identity guard is checked immediately before replacement, with no await.
   function read(): LinePreference[] {
     let raw: string | null;
-    try { raw = readProductStorage(storage(), LINE_PREFERENCE_KEY); }
+    try { raw = storage().getItem(LINE_PREFERENCE_KEY); }
     catch { throw new Error('Line preference read failed (storage unavailable)'); }
     if (raw === null) return [];
     try {

@@ -990,7 +990,7 @@
       "package-lock.json": "c213eb7d0e57ed9362dce1ee0aae8a2211b277e883a15be193172f749065880c",
       "src-tauri/Cargo.toml": "d4fe9294ae59d4ff978b72af2f17b0cbcde0a3eb58c22c249475ae716b949fbe",
       "src-tauri/Cargo.lock": "a7defbeb9f42639f8160490b81d81c876207701cb30d500bcca6c730b15ca70e",
-      "src-tauri/tauri.conf.json": "472e8f40afe2225dcb5795dcf95df8f11b51ded7986177bb3866d8de7db1219e",
+      "src-tauri/tauri.conf.json": "f178dda2c42e93b1151b2894d5437f9f3a48f497163dd14ba2f5aab06c1fd2f0",
       "scripts/requirements.txt": "4f8a38c0fd2292e63d5eaf9678ea2a8865b7025de038ce0b02329925f84c5ff4",
       "licenses/dependencies.json": "0a8904ac66e2a4074b931b07ca51f4f6a936ea1d49797afaef1c75f12db96ec3",
       "licenses/THIRD_PARTY_NOTICES.txt": "2a5736fdeadc962e0b9524545df775c87cc71e0182217c7ac81c1c0f502dc4a7"

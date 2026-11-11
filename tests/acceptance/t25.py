@@ -138,7 +138,7 @@ def reproduce(run):
     app = source / "target/release/bundle/macos/墨客视频.app"
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     require((info["CFBundleShortVersionString"], info["CFBundleVersion"], info["CFBundleIdentifier"])
-            == ("0.1.0", "2", "app.yingxiang.video"), "Clean build application identity differs")
+            == ("0.1.0", "2", "app.moc.video"), "Clean build application identity differs")
     record["payload"] = t01.validate_production(source / "dist", app / "Contents/MacOS/moc-video")
     record["built_app"] = app.relative_to(ROOT).as_posix()
     record["scope"] = "README dependency init, both builds, real native Host smoke and diagnostics; GUI lifecycle is A2"

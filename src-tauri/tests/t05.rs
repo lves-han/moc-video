@@ -1,3 +1,11 @@
+use moc_video::{
+    commands,
+    contracts::{APP, COMMANDS, Contracts, authorized},
+    host::Host,
+    requests::{Clock, Requests, budgets},
+    settings,
+    source_dispatch::{SourceDispatch, identity},
+};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -11,14 +19,6 @@ use std::{
 };
 use tempfile::TempDir;
 use uuid::Uuid;
-use moc_video::{
-    commands,
-    contracts::{APP, COMMANDS, Contracts, authorized},
-    host::Host,
-    requests::{Clock, Requests, budgets},
-    settings,
-    source_dispatch::{SourceDispatch, identity},
-};
 
 const DEFAULT_SOURCES: &str = include_str!("../../src/data/defaultSources.json");
 const CONFIG: &str = "11111111-1111-4111-8111-111111111111";
@@ -303,32 +303,13 @@ fn t05_settings_validation_and_failure_atomicity() {
 }
 
 #[test]
-fn t05_migration_corruption_and_unknown_version() {
+fn t05_old_versions_corruption_and_unknown_versions_are_rejected() {
     let temp = TempDir::new().unwrap();
     let path = temp.path().join("settings.json");
-    let v1 = json!({"schema_version": 1, "last_source_key": "legacy-source", "volume": 0.37, "muted": true,
-        "auto_next": false, "window_bounds": {"x": -20, "y": 42, "width": 1200, "height": 800, "maximized": true}, "ui_theme": "dark"});
-    fs::write(&path, v1.to_string()).unwrap();
-    let host = Host::open(path.clone()).unwrap();
-    let migrated = ok(&host, "get_settings", json!({}));
-    assert_eq!(migrated["schema_version"], 2);
-    let presets: Value = serde_json::from_str(DEFAULT_SOURCES).unwrap();
-    assert_eq!(migrated["source_configs"], presets);
-    for key in [
-        "last_source_key",
-        "volume",
-        "muted",
-        "auto_next",
-        "window_bounds",
-        "ui_theme",
-    ] {
-        assert_eq!(migrated[key], v1[key]);
-    }
-    assert_eq!(
-        serde_json::from_slice::<Value>(&fs::read(&path).unwrap()).unwrap(),
-        migrated
-    );
-    drop(host);
+    let bytes = b"{\"schema_version\":1}";
+    fs::write(&path, bytes).unwrap();
+    assert!(Host::open(path.clone()).is_err());
+    assert_eq!(fs::read(&path).unwrap(), bytes);
     for bytes in [
         b"{damaged".as_slice(),
         b"{\"schema_version\":99}",
@@ -460,7 +441,7 @@ fn t05_same_lock_commits_and_atomic_cancel() {
 }
 
 #[test]
-fn t05_legacy_source_preferences_restore_by_kind() {
+fn t05_old_source_key_does_not_restore_role_preferences() {
     for config in [mac(), stremio()] {
         let temp = TempDir::new().unwrap();
         let path = temp.path().join("settings.json");
@@ -477,13 +458,8 @@ fn t05_legacy_source_preferences_restore_by_kind() {
         fs::write(&path, legacy.to_string()).unwrap();
         let recovered = Host::open(path).unwrap();
         let preferences = ok(&recovered, "get_settings", json!({}));
-        if legacy["source_configs"][0]["kind"] == "stremio" {
-            assert_eq!(preferences["last_metadata_config_id"], SECOND);
-            assert!(preferences["last_playback_source_key"].is_null());
-        } else {
-            assert_eq!(preferences["last_playback_source_key"], source_id);
-            assert!(preferences["last_metadata_config_id"].is_null());
-        }
+        assert!(preferences["last_metadata_config_id"].is_null());
+        assert!(preferences["last_playback_source_key"].is_null());
         assert_eq!(preferences["last_source_key"], source_id);
     }
 }

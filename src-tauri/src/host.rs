@@ -83,38 +83,16 @@ impl Host {
     }
 
     pub fn with_clock(path: PathBuf, clock: Arc<dyn Clock>) -> Result<Arc<Self>, ApiError> {
-        let current_history = path.with_file_name("moc-video.db");
-        // The application identifier stays stable across the product rename.
-        // Existing installations continue using their original database.
-        let legacy_history = path.with_file_name("yingxiang-video.db");
-        let history_path = if !current_history.exists() && legacy_history.exists() {
-            legacy_history
-        } else {
-            current_history
-        };
+        let history_path = path.with_file_name("moc-video.db");
         let cache_path = path.with_file_name("media-cache");
         let source_cache_path = path.with_file_name("source-cache");
-        let (store, mut settings) = SettingsFile::load(path)?;
+        let (store, settings) = SettingsFile::load(path)?;
         let mut sources = SourceDispatch::default();
         sources.replace_configs(
             settings["source_configs"]
                 .as_array()
                 .expect("Validated source configs"),
         );
-        let original = settings.clone();
-        if let Some(key) = original["last_source_key"].as_str()
-            && let Ok(source) = sources.source(key, None)
-        {
-            if source["kind"] == "stremio" && settings["last_metadata_config_id"].is_null() {
-                settings["last_metadata_config_id"] = source["origin"]["config_id"].clone();
-            } else if source["kind"] != "stremio" && settings["last_playback_source_key"].is_null()
-            {
-                settings["last_playback_source_key"] = json!(key);
-            }
-        }
-        if settings != original {
-            store.save(&settings)?;
-        }
         Ok(Arc::new(Self {
             host_epoch: Uuid::new_v4().to_string(),
             requests: Arc::default(),

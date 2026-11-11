@@ -13,7 +13,7 @@ const subtitles = ref(true);
 const playing = ref(false);
 const supported = ref("");
 let player: Player;
-let source: PlaybackSource = { url: "/demo.mp4", kind: "mp4", subtitle: "/demo.vtt" };
+let source: PlaybackSource = { url: "/demo.mp4", kind: "mp4", subtitles: [{ id: "demo", label: "字幕", language: "zh-CN", url: "/demo.vtt" }] };
 
 function event(value: PlayerEvent) {
   state.value = value.state;

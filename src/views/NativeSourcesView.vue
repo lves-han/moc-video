@@ -14,12 +14,6 @@ const metadataSources = computed(() => providers.value.filter(source => source.k
 const playbackSources = computed(() => providers.value.filter(source => source.kind !== "stremio" && source.runtime_status === "ready" && source.capabilities.resolve));
 const configs = computed(() => state.settings.source_configs);
 const presets = computed(() => SOURCE_PRESETS.map(preset => ({ ...preset, added: configs.value.some(config => config.kind === "maccms" && config.api_url === preset.api_url) })));
-// A saved choice stays until the user picks a new source, so older Cloudstream preferences are not silently replaced.
-const legacyPreference = computed(() => {
-  const key = state.settings.last_playback_source_key ?? state.settings.last_source_key;
-  return Boolean(key && state.sources.data && !providers.value.some(source => source.id === key));
-});
-
 const providerOf = (config: HttpSourceConfig) => providers.value.find(source => source.kind === config.kind && source.origin.config_id === config.config_id);
 function sourceError(config: HttpSourceConfig) {
   const provider = providerOf(config), result = provider && controller.lastSourceResult(provider.id);
@@ -89,7 +83,6 @@ async function copyDiagnostics() {
         <label>{{ t('Metadata provider') }}<select class="sources-metadata" :value="state.selected_metadata_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="source in metadataSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
         <label>{{ word('播放源', 'Playback source') }}<select class="sources-playback" :value="state.selected_playback_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'playback')"><option value="" disabled>{{ t('Choose a video source') }}</option><option v-for="source in playbackSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
       </div>
-      <p v-if="legacyPreference" class="sources-legacy" role="status">{{ word('之前选择的播放源已不可用，可能是已停止支持的 Cloudstream 来源。原偏好和历史都已保留，选择新的播放源后才会更新。', 'The previously selected playback source is unavailable; it may be a Cloudstream source, which is no longer supported. The preference and history are kept until you choose a new playback source.') }}<NButton v-if="state.selected_playback_source" size="small" class="sources-legacy-adopt sources-action" @click="emit('select', state.selected_playback_source.source_id, 'playback')">{{ word('改用当前播放源', 'Use the current playback source') }}</NButton></p>
       <p v-if="!metadataSources.length" class="sources-guidance" role="status">{{ word('请添加 Stremio 扩展的 manifest 地址，首页才能显示内容。', 'Add a Stremio add-on manifest URL so the home page has content.') }}</p>
       <p v-if="!playbackSources.length" class="sources-guidance" role="status">{{ word('请添加一个播放源。', 'Add a playback source.') }}</p>
           </div>

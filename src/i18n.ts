@@ -1,4 +1,3 @@
-import { readProductStorage } from './storage-compat.ts';
 import { ref } from "vue";
 
 export type AppLocale = "en" | "zh-CN";
@@ -12,7 +11,7 @@ export function getStremioLanguage(language: string): AppLocale {
 function readLocale(): AppLocale {
   if (typeof window === "undefined") return "en";
   try {
-    return getStremioLanguage(readProductStorage(localStorage, localeStorageKey) || "en");
+    return getStremioLanguage(localStorage.getItem(localeStorageKey) || "en");
   } catch {
     return "en";
   }

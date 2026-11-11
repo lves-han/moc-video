@@ -1,4 +1,3 @@
-import { readProductStorage } from '../storage-compat.ts';
 import type { Invoke } from "../api.ts";
 import { defaultSettings } from "../state.ts";
 import type { Settings, Bridge_Resolution } from "../models.ts";
@@ -46,7 +45,7 @@ export const previewInvoke: Invoke = async (command, args) => {
   const input = args.input as Record<string, any>;
   try { switch (command) {
     case "get_settings": {
-      const saved = readProductStorage(localStorage, "moc-video.settings");
+      const saved = localStorage.getItem("moc-video.settings");
       const settings = saved ? JSON.parse(saved) as Settings : defaultSettings();
       if (settings.schema_version !== 2 || !Array.isArray(settings.source_configs)) throw new Error("Invalid preview Settings");
       data = settings; break;

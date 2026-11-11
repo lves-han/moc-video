@@ -73,14 +73,7 @@ test("subtitle DTO tracks switch, disable, and release with the previous episode
   assert.equal(player.diagnostics().tracks, 0);
 });
 
-test("legacy subtitle remains supported and an explicit empty list disables it", () => {
-  const { player, video } = playerFixture(false, "maybe");
-  player.open({ kind: "mp4", url: "https://fixture.invalid/a.mp4", subtitle: "https://fixture.invalid/legacy.vtt" });
-  assert.equal(video.tracks.length, 1);
-  assert.equal(video.tracks[0].src, "https://fixture.invalid/legacy.vtt");
-  player.open({ kind: "mp4", url: "https://fixture.invalid/b.mp4", subtitle: "https://fixture.invalid/legacy.vtt", subtitles: [] });
-  assert.equal(video.tracks.length, 0);
-});
+
 
 test("HLS uses native playback when MSE is unavailable", () => {
   const { player, video, streams } = playerFixture(false, "maybe");

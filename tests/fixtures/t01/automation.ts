@@ -282,7 +282,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       case "open": {
         const activated = await foreground();
         const kind = command.kind ?? "mp4";
-        const opened = open({ url: url(`media/${kind === "mp4" ? "clip.mp4" : "index.m3u8"}`), kind, subtitle: url("media/subtitles.vtt") });
+        const opened = open({ url: url(`media/${kind === "mp4" ? "clip.mp4" : "index.m3u8"}`), kind, subtitles: [{ id: "fixture", label: "字幕", language: "zh-CN", url: url("media/subtitles.vtt") }] });
         await until(() => video.readyState >= 2 || Boolean(video.error), "Media did not become ready");
         assertCondition(!video.error, `MediaError ${video.error?.code}`);
         await click("play");
