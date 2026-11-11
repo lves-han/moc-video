@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "card": "T0.19",
+  "status": "ACCEPTED_FOR_T0.19",
+  "updated_utc": "2026-11-05T05:54:02.848904+00:00",
+  "implementation_basis": "Independent public HTTP responses; existing MacCMS adapter. Plugin source was used only for scope/risk investigation (C4, ADR-048).",
+  "aes": {
+    "basis": "C4 / ADR-048 static investigation of commit 25cdd2119be03f62ae6a5a2cf46b16f9484224a2",
+    "files": 15,
+    "finding": "aesDecrypt is defined in Utils.kt without callers; ordinary JSON requires no additional plugin AES decryption. encrypt=1/2 is escaping/Base64; Haiwaikan/JiangNan registration is commented out.",
+    "standard_hls_aes128": "Existing gateway/player verification remains required."
+  },
+  "runtime": {
+    "kind": "maccms",
+    "configuration": "Existing manual HTTP source manager (T0.17); preset UI belongs to T0.22.",
+    "historical_artifacts": [
+      "android-engine/",
+      "android-engine/packages/"
+    ],
+    "exclusion_basis": "src-tauri/tauri.conf.json has an empty bundle.resources; Cargo has no Android/DEX runtime dependency. Packaged artifact exclusion still requires A1.",
+    "packaged_exclusion": "PASS: production and automation bundles exclude android-engine artifacts"
+  },
+  "network": {
+    "current_native_probe": "ALL_CANDIDATES_SAMPLED",
+    "reason": "Each source samples up to 8 videos. A media host is skipped after one access-control refusal or two other failures; nothing is retried or bypassed.",
+    "privacy": "Public API endpoints only; signed media URLs, headers, capabilities and raw response bodies remain in native memory. Capture output replaces every media/image URL and omits unknown fields.",
+    "dns": [
+      "1.1.1.1:53",
+      "8.8.8.8:53"
+    ],
+    "backend": "process-watchdog; rss-sampled; 4096MiB; jobs=2; test_threads=1"
+  },
+  "sources": [
+    {
+      "name": "优质",
+      "api_url": "https://api.1080zyku.com/inc/apijson.php",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "量子",
+      "api_url": "https://cj.lziapi.com/api.php/provide/vod/",
+      "public_documentation": "https://www.lzizy.net/index.php/help.html",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "红牛",
+      "api_url": "https://www.hongniuzy2.com/api.php/provide/vod/",
+      "public_documentation": "https://hongniuziyuan.tv/index.php/help",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "无尽",
+      "api_url": "https://api.wujinapi.com/api.php/provide/vod/",
+      "public_documentation": "https://help.wujinapi.me/",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "光速",
+      "api_url": "https://api.guangsuapi.com/api.php/provide/vod/",
+      "public_documentation": "https://guangsuzy.tv/index.php/help",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "极速",
+      "api_url": "https://jszyapi.com/api.php/provide/vod/",
+      "public_documentation": "https://jszyapi.com/index.php/help/index.html",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "豪华",
+      "api_url": "https://hhzyapi.com/api.php/provide/vod/",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "淘片",
+      "api_url": "https://taopianapi.com/cjapi/mc/vod/json/m3u8.html",
+      "probe": true,
+      "supported": true,
+      "compatibility": "COMPATIBLE"
+    },
+    {
+      "name": "卧龙",
+      "api_url": "https://collect.wolongzyw.com/api.php/provide/vod/",
+      "probe": true,
+      "supported": false,
+      "compatibility": "SOURCE_UNAVAILABLE",
+      "source_state": "Public capture returned non-JSON; candidate stopped"
+    }
+  ],
+  "supported_sources": [
+    "优质",
+    "量子",
+    "红牛",
+    "无尽",
+    "光速",
+    "极速",
+    "豪华",
+    "淘片"
+  ],
+  "required_acceptance": {
+    "public_response_fixtures": "PASS in evidence/acceptance/T02-all.json",
+    "negative_fixtures_and_cap_isolation": "PASS in evidence/acceptance/T02-all.json",
+    "public_list_detail_episode_resolve_gateway_packaged_webview": "PASS in evidence/acceptance/T02-all.json",
+    "A1": "PASS in evidence/acceptance/T02-all.json",
+    "verify_all": "PASS in evidence/acceptance/T02-all.json"
+  },
+  "fixture": {
+    "path": "tests/fixtures/t02/public-responses.json",
+    "basis": "evidence/t02-public/3c1aeb86-0ebf-4baf-b06f-2f0e851bc02f/capture.json",
+    "sources": 8,
+    "execution": "PASS in T0.19 A1",
+    "privacy": "Projected response fields and full group order; media/image URLs replaced; no upstream signatures"
+  },
+  "judgement": "ADR-051: compatibility means the program parses and maps the public response; source availability, content and media playback are source state and never a program failure. Minimal shape tolerance only.",
+  "source_availability": "Media availability is source state and changes between runs. Each acceptance run records per-source samples and the short-play source in evidence/acceptance/T02-all.json; this file keeps only stable compatibility results."
+}

@@ -1,0 +1,32 @@
+{
+  "generator": "OpenAI built-in image_gen.imagegen",
+  "purpose": "Original fictional-film interface artwork. No commercial movie posters or original app assets used.",
+  "processing": "Generated PNG originals were retained at their original locations. Project-bound copies were encoded to WebP with Pillow at quality 85, preserving original dimensions. The local demo video pans across the wilderness artwork with locally synthesized ambient audio.",
+  "assets": [
+    {
+      "file": "public/artwork/wilderness.webp",
+      "original": "/Users/eason/.codex/generated_images/01a166b5-b34a-71b2-a25a-d051a227860d/exec-f021848d-450d-4696-b379-6bff053ff6fb.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: cinematic hero artwork for a premium Chinese film discovery application. Create a wide 16:9 cinematic film still, no UI, no typography, no logos, no watermark. Scene: a solitary traveler in a burnt-orange coat, very small in frame on the RIGHT third, looking over a vast misty mountain valley in the Scottish Highlands, calm lake in the lower right, cloud layers, early dawn with soft ivory light breaking through cool gray-green mountains. Atmospheric photographic realism, fine film grain, tactile grass and rock, restrained sophisticated natural colors, cinematic depth, rich shadow detail. Composition: panoramic landscape 1792x1024 or similar wide aspect, keep the LEFT half dark and relatively simple with deep charcoal-green foreground cliffs and fog so white interface text can be overlaid there. The scenery should feel like an independent road film, contemplative and expansive. No existing movie references or famous people."
+    },
+    {
+      "file": "public/artwork/city.webp",
+      "original": "/Users/eason/.codex/generated_images/01a166b5-b34a-71b2-a25a-d051a227860d/exec-1520f5b6-126c-4d05-8025-e0a68a9fbcce.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: original vertical film-poster artwork, 2:3 portrait, no text, no letters, no watermark, no UI. A lone detective seen from behind under a black umbrella on a rain-soaked Shanghai side street at midnight, warm muted amber storefront windows, old concrete apartments, red traffic light reflecting on puddles, a cinematic neo-noir mystery, atmospheric haze, photographic realism, sophisticated natural film grain, balanced black shadows, visually striking composition with subject small in lower third and architecture above. Avoid any recognizable movie or actor. Image itself only, no typography."
+    },
+    {
+      "file": "public/artwork/coast.webp",
+      "original": "/Users/eason/.codex/generated_images/01a166b5-b34a-71b2-a25a-d051a227860d/exec-9bf8fe3a-0eed-47f6-8b39-ad4ec7525191.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: original 2:3 vertical movie-poster artwork, no typography or UI. Sun-bleached Mediterranean seaside village, a young woman in a linen dress seen from behind at a weathered window with a billowing white curtain, deep turquoise sea, warm ochre stone, a distant sailboat, late summer sunlight. Quiet independent cinema, analog 35mm photography, refined creamy highlights and blue-green shadows, architectural framing, beautiful fine grain. Film still without recognizable actors or existing film references. No words, logos, watermark."
+    },
+    {
+      "file": "public/artwork/space.webp",
+      "original": "/Users/eason/.codex/generated_images/01a166b5-b34a-71b2-a25a-d051a227860d/exec-cc0c2579-3edc-466b-af73-e52c709d0e32.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: original 2:3 portrait science-fiction film-poster artwork without text or UI. A solitary astronaut walking toward a small warm luminous research station on a vast pale lunar plain, immense charcoal night sky filling upper half, a thin ringed planet and distant stars, physically plausible photographic cinematic realism, mysterious expansive silence, restrained silver, desaturated navy and warm ivory palette, fine analog film grain, strong vertical composition. No logos, no text, no recognizable existing movie imagery."
+    },
+    {
+      "file": "public/artwork/train.webp",
+      "original": "/Users/eason/.codex/generated_images/01a166b5-b34a-71b2-a25a-d051a227860d/exec-ad078882-66ce-4e40-9d4b-0ea17a6c716b.png",
+      "prompt": "Use case: illustration-story. Asset type: original portrait 2:3 animated film poster artwork without any typography. A tiny cream and moss-green local train crossing a lush coastal hillside in rural Japan in summer, viewed from a high grassy path with white wildflowers in foreground, turquoise ocean, a little red-roof station, huge fluffy ivory clouds in an intensely beautiful pale blue sky. Exquisite hand-painted watercolor and gouache animation background, nostalgic and tranquil, intricate greenery, warm hazy afternoon sunlight. Original scene, no existing film reference, no recognizable copyrighted characters, no text, no letters, no logos, no watermark."
+    }
+  ]
+}

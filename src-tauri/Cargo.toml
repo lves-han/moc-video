@@ -1,0 +1,40 @@
+[package]
+name = "moc-video"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+
+[lib]
+name = "moc_video"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = ["codegen"] }
+
+[dependencies]
+tauri = { version = "=2.12.5", features = [] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+url = "2"
+tempfile = "3"
+jsonschema = { version = "=0.33.0", default-features = false }
+getrandom = "0.4"
+reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "gzip"] }
+tokio = { version = "1", features = ["rt", "time", "net", "sync", "macros", "io-util"] }
+image = { version = "=0.25.9", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+base64 = "0.23"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+dom_query = "=0.28.0"
+hickory-resolver = "=0.26.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+tauri = { version = "=2.12.5", features = ["test"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+t01-automation = []

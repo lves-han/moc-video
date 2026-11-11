@@ -1,0 +1,1022 @@
+// Test-mode only. Runs the production App/PlaybackView/state/Api against a real Host.
+import { videoJsControl, videoJsControls } from "./videojs_controls.ts";
+import { createApp, h, nextTick, ref, type App as VueApp } from "vue";
+import App from "../../src/App.vue";
+import UiProvider from "../../src/ui/UiProvider.vue";
+import { appController, appState, navigatePlayback, type PlaybackController } from "../../src/state.ts";
+import { nativeInvoke, type Player } from "../../src/player.ts";
+import { locale } from "../../src/i18n";
+import { api } from "../../src/api.ts";
+import type { PlaybackContext, PlaybackMatchInput, PlaybackViewSession, DetailsViewData, AppSourceList } from "../../src/models.ts";
+
+type Command = { action?: string; payload?: unknown };
+type Bootstrap = { initial_context: PlaybackContext; match_inputs: PlaybackMatchInput[]; details: DetailsViewData; sources: AppSourceList };
+type Harness = {
+  app: VueApp; container: HTMLElement; video: HTMLVideoElement; controller: PlaybackController; matches: PlaybackMatchInput[];
+  rpc: (value: unknown) => Promise<any>; audio: AudioContext; source: MediaElementAudioSourceNode; analyser: AnalyserNode;
+  sampling: ReturnType<typeof createMediaSampler>; retiredTracks: WeakRef<HTMLTrackElement>[];
+  sampleAudio: boolean;
+  frames: number; callback: number; originalCore: NonNullable<Window["__TAURI__"]>["core"];
+  errors: string[]; stopErrors: () => void;
+  initialLocale: typeof locale.value; details: DetailsViewData;
+  enduranceAudit?: { read(): { active: boolean; count: number; events: Record<string, unknown>[] }; dispose(): void };
+};
+const diagnostic = (value: unknown) => String(value).replace(/([?&](?:cap|token|capability)=)[^\s"'<>]*/gi, "$1<redacted>");
+let harness: Harness | undefined;
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+function check(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
+
+// Passive, per-action observations: never retain an Event, track, frame or URL.
+// In particular, NETWORK_EMPTY is useful evidence, not proof that native
+// decoder/GPU allocations have already been returned to the OS.
+export function observeMediaLifecycle(video: HTMLVideoElement) {
+  const events: Record<string, unknown>[] = [];
+  let count = 0;
+  const snapshot = () => {
+    const quality = video.getVideoPlaybackQuality();
+    return { ready_state: video.readyState, network_state: video.networkState,
+      source_present: video.hasAttribute("src"), current_src_present: Boolean(video.currentSrc),
+      paused: video.paused, width: video.videoWidth, height: video.videoHeight,
+      buffered_seconds: Array.from({ length: video.buffered.length }, (_, i) => video.buffered.end(i) - video.buffered.start(i)),
+      text_tracks: video.textTracks.length, cues: Array.from(video.textTracks, track => track.cues?.length ?? null),
+      total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames };
+  };
+  const record = (stage: string, trusted: boolean | null) => {
+    count++;
+    events.push({ stage, trusted, at_ms: performance.now(), ...snapshot() });
+    if (events.length > 64) events.shift();
+  };
+  const names = ["abort", "emptied", "loadstart", "loadedmetadata", "loadeddata", "playing", "pause", "error"];
+  const listener = (event: Event) => record(event.type, event.isTrusted);
+  for (const name of names) video.addEventListener(name, listener);
+  return {
+    mark(stage: string) { record(stage, null); },
+    read: () => ({ count, events: events.map(event => ({ ...event })) }),
+    dispose() { for (const name of names) video.removeEventListener(name, listener); },
+  };
+}
+
+export async function releaseMediaObserver(current: Pick<Harness, "video" | "callback" | "source" | "analyser" | "audio" | "sampling">) {
+  check(current.video.paused && !current.video.hasAttribute("src") && current.video.networkState === 0,
+    "Observer release requires stopped formal media");
+  current.video.cancelVideoFrameCallback(current.callback);
+  current.source.disconnect(); current.analyser.disconnect();
+  if (current.audio.state !== "closed") await current.audio.close();
+  current.sampling.dispose();
+}
+
+async function until(predicate: () => boolean, message: string, timeout = 20000) {
+  const end = performance.now() + timeout;
+  while (!predicate()) { check(performance.now() < end, message); await delay(20); }
+}
+// Keep observer scratch storage bounded independently of readiness polling.
+// The previous 50-switch report contains 437 reads, each allocating 24 KiB
+// plus a canvas. Raw numeric observations still leave the WebView in full.
+export function createMediaSampler(video: HTMLVideoElement, analyser: AnalyserNode, sampleRate: number, sampleAudio = true) {
+  const bins = new Float32Array(analyser.fftSize);
+  const spectrum = new Float32Array(analyser.frequencyBinCount);
+  const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+  const drawing = canvas.getContext("2d", { colorSpace: "srgb", willReadFrequently: true });
+  check(drawing, "Media observation requires a canvas 2D context");
+  let reads = 0;
+  return {
+    read() {
+      reads++;
+      let peak = 0;
+      if (sampleAudio) {
+        analyser.getFloatTimeDomainData(bins);
+        analyser.getFloatFrequencyData(spectrum);
+        for (let i = 1; i < spectrum.length; i++) if (spectrum[i] > spectrum[peak]) peak = i;
+      }
+      drawing.clearRect(0, 0, 1, 1);
+      // The owned frames are uniform colors. Copy their center pixel 1:1 so
+      // WebKit need not materialize a full-frame conversion for a 1px sample.
+      if (video.readyState >= 2) drawing.drawImage(video, Math.floor(video.videoWidth / 2), Math.floor(video.videoHeight / 2), 1, 1, 0, 0, 1, 1);
+      const pixel = [...drawing.getImageData(0, 0, 1, 1).data];
+      // Retain only scalar pixels, not the video readback drawing surface.
+      canvas.width = 1;
+      return { audio_rms: sampleAudio ? Math.sqrt(bins.reduce((sum, v) => sum + v * v, 0) / bins.length) : null,
+        audio_peak_hz: sampleAudio ? peak * sampleRate / analyser.fftSize : null, pixel };
+    },
+    diagnostics: () => ({ reads, scratch_buffers: 2, scratch_bytes: bins.byteLength + spectrum.byteLength, scratch_canvases: 1 }),
+    dispose() { canvas.width = canvas.height = 0; },
+  };
+}
+function sample(current: Harness) {
+  const video = current.video;
+  const media = current.sampling.read();
+  const retained = current.retiredTracks.flatMap(reference => { const track = reference.deref(); return track ? [track] : []; });
+  return { position: video.currentTime, paused: video.paused, ready_state: video.readyState, network_state: video.networkState,
+    sampled_at: performance.now(), audio_state: current.audio.state, audio_time: current.sampleAudio ? current.audio.currentTime : null,
+    session_bound: Boolean(appState.playback.session && video.currentSrc === appState.playback.session.media_url),
+    source_present: video.hasAttribute("src"), tracks: video.querySelectorAll("track").length,
+    video_count: document.querySelectorAll("video").length, frames: current.frames, width: video.videoWidth, height: video.videoHeight,
+    ...media, media_error: video.error?.code ?? null,
+    resources: { dom_nodes: document.querySelectorAll("*").length, text_tracks: video.textTracks.length,
+      buffered_ranges: video.buffered.length, resource_timing_entries: performance.getEntriesByType("resource").length,
+      retired_tracks_observed: current.retiredTracks.length, retired_tracks_alive: retained.length,
+      retired_tracks_connected: retained.filter(track => track.isConnected).length,
+      retired_tracks_enabled: retained.filter(track => track.track.mode !== "disabled").length,
+      observer: current.sampling.diagnostics() },
+    phase: appState.playback.phase, epoch: appState.playback.playback_epoch, diagnostics: current.controller.diagnostics() };
+}
+
+// Video presentation and WebAudio render quanta become ready independently after
+// src changes. A silent PCM block with a smoothed old FFT peak proves neither.
+export async function waitForEpisodeSample(read: () => ReturnType<typeof sample>, index: number, deadline: number) {
+  const observations = [];
+  while (true) {
+    const value = read();
+    observations.push(value);
+    const [red, green, blue, alpha] = value.pixel;
+    const isRed = index % 2 === 0 || index === 51;
+    const frame = alpha === 255 && (isRed ? green < 50 && red > 180 && blue < 50 : green < 64 && blue > 180 && red < 50);
+    const audio = value.audio_state === "running" && value.audio_rms !== null && value.audio_rms > .001
+      && value.audio_peak_hz !== null && Math.abs(value.audio_peak_hz - (isRed ? 440 : 880)) < 40;
+    if (performance.now() >= deadline) throw new Error(`Current episode media did not become ready: ${JSON.stringify({ index, observations })}`);
+    if (value.session_bound && frame && (index === 51 || audio)) return { sample: value, observations };
+    await delay(20);
+  }
+}
+async function gesture(current: Harness) {
+  const button = current.container.querySelector<HTMLButtonElement>('[data-action="continue"]') ?? videoJsControl('play');
+  check(button && !button.hasAttribute('disabled') && button.getAttribute('aria-disabled') !== 'true', "Actual playback button is missing/disabled");
+  button.click();
+  await current.audio.resume();
+}
+async function playing(current: Harness) {
+  await until(() => current.video.readyState >= 2 || Boolean(current.video.error), "Formal media metadata missing");
+  check(!current.video.error, "Formal video failed before playback");
+  if (current.video.paused) await gesture(current);
+  await until(() => !current.video.paused && current.video.currentTime > .1, "Formal playback did not advance");
+  await current.audio.resume();
+}
+
+export function requireCodecMedia(session: PlaybackViewSession | null, currentSrc: string) {
+  check(session?.stream_kind === "progressive", "Codec stimulus requires a progressive MP4 session; an invalid HLS manifest fails at the gateway");
+  check(currentSrc === session.media_url, "Codec stimulus must use the current session media URL");
+}
+
+export async function observeNativeEos(current: Pick<Harness, "video" | "controller">, resume: () => Promise<void>) {
+  const video = current.video;
+  const snapshot = () => ({ position: video.currentTime, duration: video.duration, paused: video.paused,
+    ended: video.ended, seeking: video.seeking, ready_state: video.readyState, network_state: video.networkState,
+    media_error: video.error ? { code: video.error.code, message: diagnostic(video.error.message) } : null,
+    phase: appState.playback.phase, epoch: appState.playback.playback_epoch,
+    session_id: appState.playback.session?.session_id, diagnostics: current.controller.diagnostics() });
+  const before = snapshot();
+  const deadline = performance.now() + 20000;
+  const stages: { stage: string; state: ReturnType<typeof snapshot> }[] = [];
+  const events: { trusted: boolean; state: ReturnType<typeof snapshot> }[] = [];
+  const onEnded = (event: Event) => events.push({ trusted: event.isTrusted, state: snapshot() });
+  video.addEventListener("ended", onEnded);
+  try {
+    check(before.session_id, "EOS requires the current playback session");
+    check(Number.isFinite(video.duration) && video.duration > .25, "EOS requires a known playable duration");
+    // The real button toggles: clicking while playing would pause at the end.
+    // Resume before the seek so an already-ended video cannot restart at zero.
+    if (video.paused) { await resume(); stages.push({ stage: "resume", state: snapshot() }); }
+    await until(() => !video.paused, "EOS playback did not resume", Math.max(0, deadline - performance.now()));
+    current.controller.seek(video.duration - .25);
+    stages.push({ stage: "seek", state: snapshot() });
+    await until(() => appState.playback.phase === "ended", "Formal EOS event missing", Math.max(0, deadline - performance.now()));
+    const final = snapshot();
+    check(final.ended && final.epoch === before.epoch && final.session_id === before.session_id
+      && events.length === 1 && events[0]!.trusted && events[0]!.state.ended
+      && events[0]!.state.epoch === before.epoch && events[0]!.state.session_id === before.session_id,
+    "EOS requires one trusted native ended event from the current epoch/session");
+    return { ended: true, dom_events: events.length, before, stages, events, final };
+  } catch (cause) {
+    throw new Error(`Native EOS chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ before, stages, events, current: snapshot() }))}`);
+  } finally { video.removeEventListener("ended", onEnded); }
+}
+
+export async function formalPlayback(command: Command, prototype: { video: HTMLVideoElement; player: Player; base: string; cap: string; sampleAudio?: boolean }) {
+  const started = performance.now();
+  if (command.action === "start") {
+    check(!harness, "Formal App already mounted");
+    const payload = command.payload as Bootstrap;
+    check(payload.match_inputs.length === 52 && payload.initial_context.match_id && payload.details.metadata_ref, "Actual Host context/DTO inventory missing");
+    prototype.player.stop();
+    const initialLocale = locale.value;
+    locale.value = "en";
+    const container = document.getElementById("app") as HTMLElement & { __vue_app__?: VueApp };
+    check(container.__vue_app__, "Original native fixture root is missing");
+    container.__vue_app__.unmount();
+    const rpc = async (value: unknown) => {
+      const response = await fetch(`${prototype.base}control/invoke?cap=${prototype.cap}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
+      });
+      check(response.ok, "Real Host test transport failed");
+      return response.json();
+    };
+    check(window.__TAURI__, "Native Tauri invoke is required");
+    const originalCore = window.__TAURI__.core;
+    // The fixture changes only transport; every envelope and DTO is generated by Host.
+    window.__TAURI__.core = { ...originalCore, invoke: <T>(name: string, args?: Record<string, unknown>): Promise<T> =>
+      ["t01_control", "player_fullscreen", "window_bounds_now", "app_close_started", "app_close_aborted", "app_close_ready"].includes(name) ? originalCore.invoke<T>(name, args) : rpc({ command: name, args }) };
+    const errors: string[] = [];
+    const onError = (event: ErrorEvent) => errors.push(diagnostic(event.message));
+    const onRejection = (event: PromiseRejectionEvent) => errors.push(diagnostic(event.reason));
+    const oldError = console.error, oldWarn = console.warn;
+    console.error = (...args) => { errors.push(`console.error: ${args.map(diagnostic).join(" ")}`); oldError(...args); };
+    console.warn = (...args) => { errors.push(`console.warn: ${args.map(diagnostic).join(" ")}`); oldWarn(...args); };
+    window.addEventListener("error", onError); window.addEventListener("unhandledrejection", onRejection);
+    // Publish the untouched Host DTO only after LRU eviction in image-expire.
+    // Otherwise the already decoded poster can satisfy a same-src assignment
+    // from its legitimate 60s cache without any native network error.
+    appState.details.data = null; appState.details.request_epoch++;
+    appState.sources.data = payload.sources;
+    navigatePlayback(payload.initial_context);
+    const component = ref<InstanceType<typeof App>>();
+    const app = createApp({ render: () => h(UiProvider, null, { default: () => h(App, { ref: component }) }) });
+    app.mount(container); await nextTick();
+    const controller = component.value?.playbackController();
+    check(controller, "Actual App/PlaybackView public controller missing");
+    const video = container.querySelector("video")!;
+    check(video && document.querySelectorAll("video").length === 1, "Formal App must own exactly one video");
+    const audio = new AudioContext(); const source = audio.createMediaElementSource(video); const analyser = audio.createAnalyser();
+    analyser.fftSize = 4096; source.connect(analyser); analyser.connect(audio.destination);
+    const current: Harness = { app, container, video, controller, matches: payload.match_inputs, rpc, audio, source, analyser,
+      sampling: createMediaSampler(video, analyser, audio.sampleRate, prototype.sampleAudio), sampleAudio: prototype.sampleAudio !== false, retiredTracks: [],
+      frames: 0, callback: 0, originalCore, initialLocale, details: payload.details, errors, stopErrors: () => {
+        window.removeEventListener("error", onError); window.removeEventListener("unhandledrejection", onRejection);
+        console.error = oldError; console.warn = oldWarn;
+      } };
+    harness = current;
+    const onFrame: VideoFrameRequestCallback = () => { current.frames++; current.callback = video.requestVideoFrameCallback(onFrame); };
+    current.callback = video.requestVideoFrameCallback(onFrame);
+    await until(() => Boolean(appState.playback.session) || appState.playback.phase === "failed", "Formal session was not opened");
+    await playing(current);
+    current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+    await until(() => video.querySelector("track")!.readyState === 2, "Formal native subtitle did not load");
+  }
+  const current = harness;
+  check(current, "Formal App must be started first");
+  const video = current.video;
+  let result: Record<string, unknown> = {};
+  switch (command.action) {
+    case "t22-refresh-confirmations": {
+      const selection = current.matches[0]!.selection;
+      check(selection, 'Owned provider selection missing');
+      const fresh = await api.call('get_details', { ref: selection.content_ref });
+      check(JSON.stringify(fresh.details.ref) === JSON.stringify(selection.content_ref), 'Refreshed provider differs');
+      for (const input of current.matches) {
+        const selected = input.selection;
+        check(selected && fresh.details.groups.some(group => group.id === selected.group_id
+          && group.episodes.some(episode => episode.id === selected.episode_id)), 'Provider group/episode changed before confirmation');
+      }
+      result = { refreshed: true, selections: current.matches.length };
+      break;
+    }
+    case "t22-ready":
+    case "t24-ready": {
+      if (command.action === "t24-ready") {
+        const before = current.frames;
+        await until(() => current.frames > before + 1 && !video.paused && video.readyState >= 2,
+          'T24 current media did not present frames');
+        result = { sample: sample(current) };
+      } else result = await waitForEpisodeSample(() => sample(current), 0, performance.now() + 30000);
+      await until(() => !video.seeking, 'Initial media seek did not settle');
+      current.enduranceAudit?.dispose();
+      const events: Record<string, unknown>[] = [], abort = new AbortController();
+      let count = 0;
+      const record = (kind: string, event: Event) => {
+        count++;
+        events.push({ kind, trusted: event.isTrusted, at_ms: performance.now(), position: video.currentTime, rate: video.playbackRate });
+        if (events.length > 64) events.shift();
+      };
+      for (const kind of ['seeking', 'seeked', 'ratechange', 'pause', 'ended'])
+        video.addEventListener(kind, event => record(kind, event), { signal: abort.signal });
+      for (const kind of ['pointerdown', 'keydown']) current.container.addEventListener(kind, event => {
+        if (!event.composedPath().some(node => node instanceof HTMLElement && node.localName === 'video-player')) return;
+        // Record only navigation/control categories, never arbitrary typed text.
+        if (event instanceof KeyboardEvent && !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'j', 'l'].includes(event.key)) return;
+        record(kind === 'keydown' ? 'seek-key' : 'player-pointer', event);
+      }, { capture: true, signal: abort.signal });
+      current.enduranceAudit = {
+        read: () => ({ active: !abort.signal.aborted, count, events: events.map(event => ({ ...event })) }),
+        dispose: () => abort.abort(),
+      };
+      break;
+    }
+    case "t22-observe": {
+      const official = current.container.querySelector('video-player') as HTMLElement & { store: { currentTime: number } };
+      const quality = video.getVideoPlaybackQuality();
+      result = { input_audit: current.enduranceAudit?.read(), ui_position: official.store.currentTime, duration: video.duration,
+        total_frames: quality.totalVideoFrames, dropped_frames: quality.droppedVideoFrames,
+        visibility: document.visibilityState, focused: document.hasFocus(),
+        session_id: appState.playback.session?.session_id, playback_rate: video.playbackRate,
+        actual_gateway: video.currentSrc === appState.playback.session?.media_url };
+      break;
+    }
+    case "t22-ui": {
+      const responses = [];
+      const metadata_responses = [];
+      for (let i = 0; i < 30; i++) {
+        const begin = performance.now(), id = crypto.randomUUID();
+        const dto = await api.call("get_details", { ref: current.details.details.ref }, id);
+        check(dto.details.title === current.details.details.title && dto.metadata_ref, "Owned local metadata response differs");
+        metadata_responses.push({ milliseconds: performance.now() - begin, request_id: id, command: "get_details", valid: true });
+      }
+      for (let i = 0; i < 10; i++) {
+        const paused = video.paused, begin = performance.now();
+        videoJsControl('play').click();
+        await until(() => video.paused !== paused, "Pause/play click did not respond");
+        await nextTick();
+        responses.push({ action: paused ? "play" : "pause", milliseconds: performance.now() - begin,
+          paused: video.paused, phase: appState.playback.phase });
+      }
+      const layouts = [];
+      await nativeInvoke("t01_control", { action: "minimum" });
+      for (const zoom of [1, 1.25, 1.5, 2]) {
+        await nativeInvoke("t01_control", { action: "zoom", value: zoom }); await delay(200);
+        const controls = [...current.container.querySelectorAll<HTMLElement>('button,input,select')].filter(el => el.getClientRects().length);
+        const rects = controls.map(el => el.getBoundingClientRect());
+        check(controls.length > 0 && document.documentElement.scrollWidth <= innerWidth + 1
+          && rects.every(r => r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= innerWidth + 1), "Scaled formal controls overflow or clip");
+        const official = (['play', 'mute', 'seek', 'fullscreen'] as const).map(videoJsControl);
+        const officialRects = official.map(el => el.getBoundingClientRect());
+        check(officialRects.every(r => r.width > 0 && r.height > 0 && r.left >= -1 && r.right <= innerWidth + 1), "Scaled official skin controls overflow or vanish");
+        const play = videoJsControl('play');
+        play.scrollIntoView({ block: 'center' }); await delay(50);
+        const playRect = play.getBoundingClientRect();
+        check(playRect.top >= 0 && playRect.bottom <= innerHeight + 1, "Scaled play control is unreachable");
+        play.click(); await until(() => video.paused, "Scaled pause control failed");
+        play.click(); await until(() => !video.paused, "Scaled play control failed");
+        layouts.push({ zoom, width: innerWidth, height: innerHeight, controls: controls.length, no_overflow: true,
+          official_controls: official.length, play_pause: true,
+          native: await nativeInvoke("t01_control", { action: "identity" }) });
+      }
+      await nativeInvoke("t01_control", { action: "zoom", value: 1 });
+      await nativeInvoke("t01_control", { action: "width", value: 1200 });
+      const player = current.container.querySelector<HTMLElement>('video-player')!;
+      const originalWidth = player.getBoundingClientRect().width;
+      const fullscreenButton = videoJsControl('fullscreen');
+      fullscreenButton.click();
+      await until(() => fullscreenButton.hasAttribute('data-fullscreen'), 'Official fullscreen did not enter');
+      await until(() => {
+        const rect = player.getBoundingClientRect(), media = video.getBoundingClientRect();
+        return Math.abs(rect.left) <= 1 && Math.abs(rect.top) <= 1
+          && Math.abs(rect.width - innerWidth) <= 1 && Math.abs(rect.height - innerHeight) <= 1
+          && Math.abs(media.width - innerWidth) <= 1 && Math.abs(media.height - innerHeight) <= 1;
+      }, 'Native fullscreen player/video did not cover the viewport');
+      const fullscreenRect = player.getBoundingClientRect().toJSON();
+      const fullscreenViewport = { width: innerWidth, height: innerHeight };
+      const full = await nativeInvoke<any>("t01_control", { action: "identity" });
+      fullscreenButton.click();
+      await until(() => !fullscreenButton.hasAttribute('data-fullscreen') && !player.classList.contains('native-fullscreen'), 'Official fullscreen did not exit');
+      await until(() => Math.abs(player.getBoundingClientRect().width - originalWidth) <= 1, 'Player width did not restore after fullscreen');
+      const restored = await nativeInvoke<any>("t01_control", { action: "identity" });
+      check(full.fullscreen && !restored.fullscreen, "Native fullscreen/restore failed");
+      result = { responses, metadata_responses, layouts, fullscreen: full.fullscreen, fullscreen_covers_viewport: true,
+        fullscreen_rect: fullscreenRect, fullscreen_viewport: fullscreenViewport, restored: !restored.fullscreen };
+      break;
+    }
+    case "profile-native": {
+      // Diagnostic only: compare media/controller allocation with the official
+      // UI detached. A1 never calls this operation and retains its full skin.
+      const player = current.container.querySelector('video-player')!;
+      const rect = video.getBoundingClientRect();
+      current.container.append(video);
+      video.style.width = `${rect.width}px`; video.style.height = `${rect.height}px`;
+      player.remove();
+      result = { diagnostic_only: true, official_ui_removed: !current.container.querySelector('video-player'), native_media_kept: true };
+      break;
+    }
+    case "memory-variant": {
+      const variant=String(command.payload);
+      check(['no-glass','local-fade'].includes(variant),'Unknown memory diagnostic variant');
+      const stylesheet=document.createElement('style');
+      stylesheet.textContent=variant==='no-glass'
+        ? '.playback-view .playback-glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}'
+        : '.playback-chrome{opacity:1!important;transition:none!important}.playback-chrome>:is(.playback-header,.playback-bar,.playback-shade){opacity:1;transition:opacity 200ms}.playback-chrome:not([data-visible])>:is(.playback-header,.playback-bar,.playback-shade){opacity:0}';
+      current.container.append(stylesheet);
+      await delay(250);
+      result={diagnostic_only:true,variant,glass:getComputedStyle(current.container.querySelector('.playback-bar')!).getPropertyValue('-webkit-backdrop-filter'),
+        chrome_opacity:getComputedStyle(current.container.querySelector('.playback-chrome')!).opacity};
+      break;
+    }
+    case "start": result = { title: document.title, origin: location.origin, nonblank: Boolean(current.container.textContent?.includes("Now playing")),
+      framework_overlay: Boolean(document.querySelector("vite-error-overlay")) }; break;
+    case "color-play": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
+      video.loop=true;await playing(current);await delay(300);result=sample(current);break;
+    }
+    case "color-readback-paths":
+    case "paired-colors": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Paired diagnostic blue match missing');navigatePlayback(matched.context!);await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Paired diagnostic blue did not load');
+      video.loop=true;
+      await playing(current);
+      if(command.action==='color-readback-paths') {
+        const modes:CanvasRenderingContext2DSettings[]=[
+          {colorSpace:'srgb',willReadFrequently:true},
+          {colorSpace:'srgb',alpha:false,willReadFrequently:true},
+          {colorSpace:'display-p3',willReadFrequently:true},
+          {colorSpace:'srgb',desynchronized:true,willReadFrequently:true},
+        ];
+        const rows=[];
+        for(let i=0;i<4;i++) {
+          const before=current.frames;await until(()=>current.frames>before,'Readback diagnostic requires advancing frames',2000);
+          const frame=new VideoFrame(video);
+          try {
+            const samples=[];
+            for(const settings of modes) {
+              const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+              const ctx=canvas.getContext('2d',settings)!;
+              ctx.drawImage(video,0,0,1,1);
+              samples.push({path:'canvas',settings,actual:ctx.getContextAttributes(),pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});
+              canvas.width=canvas.height=0;
+            }
+            const offscreen=new OffscreenCanvas(1,1),ctx=offscreen.getContext('2d',{colorSpace:'srgb',willReadFrequently:true})!;
+            ctx.drawImage(video,0,0,1,1);
+            samples.push({path:'offscreen',pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});
+            for(const colorSpaceConversion of ['none','default'] as const) {
+              const bitmap=await createImageBitmap(video,{colorSpaceConversion});
+              try {ctx.drawImage(bitmap,0,0,1,1);samples.push({path:'bitmap',colorSpaceConversion,pixel:[...ctx.getImageData(0,0,1,1,{colorSpace:'srgb'}).data]});}
+              finally {bitmap.close();}
+            }
+            offscreen.width=offscreen.height=0;
+            const rect={x:960,y:540,width:2,height:2};
+            const raw=new Uint8Array(frame.allocationSize({rect}));
+            const layout=await frame.copyTo(raw,{rect});
+            rows.push({frames:current.frames,position:video.currentTime,paused:video.paused,format:frame.format,colorSpace:frame.colorSpace.toJSON(),raw:[...raw],layout,samples});
+          } finally {frame.close();}
+        }
+        result={diagnostic_only:true,rows};break;
+      }
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+      const drawing=canvas.getContext('2d',{colorSpace:'srgb',willReadFrequently:true})!;
+      const pairs=[];
+      try {
+        for(let i=0;i<24;i++) {
+          const before=current.frames;
+          await until(()=>current.frames>before,'Paired diagnostic requires advancing presented frames',2000);
+          const frame=new VideoFrame(video);
+          try {
+            drawing.drawImage(video,0,0,1,1);
+            const direct=[...drawing.getImageData(0,0,1,1).data];
+            drawing.drawImage(frame,0,0,1,1);
+            pairs.push({at:performance.now(),position:video.currentTime,frames:current.frames,paused:video.paused,
+              format:frame.format,colorSpace:frame.colorSpace.toJSON(),direct,frame:[...drawing.getImageData(0,0,1,1).data]});
+          } finally {frame.close();}
+        }
+      } finally {canvas.width=canvas.height=0;}
+      result={diagnostic_only:true,pairs};break;
+    }
+    case "color-diagnostic": {
+      const matched=await api.call('match_playback',current.matches[1]!);
+      const previous=appState.playback.session?.session_id;
+      check(matched.context,'Diagnostic blue match missing'); navigatePlayback(matched.context!); await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous)&&video.readyState>=2,'Diagnostic blue did not load');
+      video.loop=true; await playing(current);
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>video.querySelector('track')?.readyState===2 && current.frames>2,'Diagnostic caption/frame did not load');
+      await delay(200);
+      const first=sample(current);
+      const frame=new VideoFrame(video);
+      const frameInfo={ format:frame.format, colorSpace:frame.colorSpace.toJSON() };
+      const copied=new Uint8Array(4);
+      let copy:unknown;
+      try { await frame.copyTo(copied,{rect:{x:960,y:540,width:1,height:1},format:'RGBA'});copy={pixel:[...copied]}; }
+      catch(cause) {copy={error:String(cause)};}
+      const frameCanvas=document.createElement('canvas');frameCanvas.width=frameCanvas.height=1;
+      const frameContext=frameCanvas.getContext('2d')!;
+      frameContext.drawImage(frame,960,540,1,1,0,0,1,1);
+      const framePixel=[...frameContext.getImageData(0,0,1,1).data];
+      frame.close();frameCanvas.width=frameCanvas.height=0;
+      const rows=[];
+      for(const paused of [false,true]) {
+        if(paused) {video.pause();video.currentTime=.5;await until(()=>!video.seeking,'Diagnostic seek did not settle');}
+        const before=sample(current);
+        for(const settings of [undefined,{colorSpace:'srgb' as const},{colorSpace:'srgb' as const,willReadFrequently:true}]) for(const crop of [false,true]) for(const smooth of [true,false]) {
+          const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+          const ctx=canvas.getContext('2d',settings) as CanvasRenderingContext2D;
+          ctx.imageSmoothingEnabled=smooth;
+          if(crop)ctx.drawImage(video,960,540,1,1,0,0,1,1);else ctx.drawImage(video,0,0,1,1);
+          const pixel=[...ctx.getImageData(0,0,1,1).data];
+          ctx.fillStyle='blue';ctx.fillRect(0,0,1,1);
+          rows.push({paused,settings:settings??'default',crop,smooth,pixel,reference:[...ctx.getImageData(0,0,1,1).data],before:before.pixel});
+          canvas.width=canvas.height=0;
+        }
+      }
+      current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>Boolean(video.textTracks[0]?.activeCues?.length),'Diagnostic native cue missing');
+      let colorSpace:unknown=null;
+      if('VideoFrame' in window) {const frame=new VideoFrame(video);colorSpace=frame.colorSpace.toJSON();frame.close();}
+      result={rows,colorSpace,first,frameInfo,copy,framePixel,phase:appState.playback.phase,error:appState.playback.error,diagnostic:current.controller.ui.diagnostic,videoRect:video.getBoundingClientRect().toJSON(),sample:sample(current)};
+      break;
+    }
+    case "memory-no-readback": {
+      result={diagnostic_only:true,sample:{diagnostic_only:true,canvas_readback:false}};break;
+    }
+    case "memory-switch": {
+      const index=Number(command.payload),previous=appState.playback.session!.session_id,before=current.frames;
+      check(index>=1&&index<=10,'Memory isolation index outside ten switches');
+      const matched=await api.call('match_playback',current.matches[index]!);
+      check(matched.status==='matched'&&matched.context,'Memory isolation match missing');
+      navigatePlayback(matched.context!);await nextTick();
+      await until(()=>Boolean(appState.playback.session&&appState.playback.session.session_id!==previous),'Memory isolation session did not change');
+      await playing(current);current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+      await until(()=>video.querySelector('track')?.readyState===2&&current.frames>before+1,'Memory isolation frames/track did not advance');
+      result={diagnostic_only:true,index,session_changed:appState.playback.session!.session_id!==previous,new_frames:current.frames-before,
+        sample:{diagnostic_only:true,canvas_readback:false,session_bound:video.currentSrc===appState.playback.session!.media_url,
+          paused:video.paused,width:video.videoWidth,height:video.videoHeight,video_count:document.querySelectorAll('video').length}};
+      break;
+    }
+    case "switch": {
+      const index = Number(command.payload);
+      check(index >= 1 && index <= 51, "Episode index outside fixture");
+      const lifecycle = observeMediaLifecycle(video);
+      try {
+        lifecycle.mark("before-switch");
+        const oldTracks = [...video.querySelectorAll("track")]; const oldSession = appState.playback.session!.session_id;
+        current.retiredTracks.push(...oldTracks.map(track => new WeakRef(track)));
+        const before = current.frames;
+        // The production state action and App route feed the same mounted PlaybackView.
+        const matched = await api.call("match_playback", current.matches[index]!);
+        check(matched.status === "matched" && matched.context, "Next episode must be matched again before playing");
+        navigatePlayback(matched.context); await nextTick();
+        lifecycle.mark("route-updated");
+        await until(() => appState.playback.session?.session_id !== oldSession && Boolean(appState.playback.session), "New episode session not opened");
+        lifecycle.mark("session-opened");
+        await playing(current);
+        current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+        await until(() => video.querySelector("track")?.readyState === 2, "New episode subtitle failed");
+        await until(() => current.frames > before + 1, "New episode did not present frames");
+        const decoded = await waitForEpisodeSample(() => sample(current), index, started + 30000);
+        lifecycle.mark("current-media-observed");
+        result = { index, old_tracks_disabled: oldTracks.every(t => !t.isConnected && t.track.mode === "disabled"),
+          session_changed: appState.playback.session!.session_id !== oldSession, new_frames: current.frames - before,
+          actual_gateway: video.currentSrc === appState.playback.session!.media_url,
+          sample: decoded.sample, media_observations: decoded.observations,
+          lifecycle: lifecycle.read(),
+          host: await current.rpc({ operation: "observe" }) };
+      } catch (cause) {
+        throw new Error(`${diagnostic(cause)}; lifecycle=${JSON.stringify(lifecycle.read())}`);
+      } finally { lifecycle.dispose(); }
+      break;
+    }
+    case "controls": {
+      const official = current.container.querySelector('video-player') as HTMLElement & {
+        store: { currentTime: number; subscribe(callback: () => void): () => void }
+      };
+      let progressUpdates = 0, previousTime = official.store.currentTime;
+      const unsubscribe = official.store.subscribe(() => {
+        if (official.store.currentTime !== previousTime) { progressUpdates++; previousTime = official.store.currentTime; }
+      });
+      try { await delay(650); } finally { unsubscribe(); }
+      check(progressUpdates > 0 && progressUpdates <= 12, 'Official progress notifications are missing or still update every frame');
+      const paused = new Promise<void>(resolve => video.addEventListener('pause', () => resolve(), { once: true }));
+      videoJsControl('play').click();
+      await until(() => video.paused, "Formal pause control failed");
+      await paused;
+      check(Math.abs(official.store.currentTime - video.currentTime) < .05, 'Official settled pause position was coalesced');
+      const position = video.currentTime; await delay(300); check(Math.abs(video.currentTime - position) < .05, "Paused clock advanced");
+      const controls = videoJsControls();
+      const captions = controls.querySelector<HTMLElement>('media-captions-button')!;
+      check(captions, 'Official captions button missing');
+      captions.click(); await until(() => [...video.textTracks].every(track => track.mode === 'disabled') && appState.playback.subtitle_id === null, 'Official captions off failed');
+      captions.click(); await until(() => [...video.textTracks].some(track => track.mode === 'showing')
+        && appState.playback.subtitle_id === appState.playback.session!.subtitles[0]!.id, 'Official captions on failed');
+      const mute = videoJsControl('mute');
+      const volumeThumb = videoJsControl('volume').querySelector<HTMLElement>('media-slider-thumb')!;
+      mute.focus();
+      await until(() => videoJsControl('volume').getBoundingClientRect().width >= 96, 'Composed official volume slider did not expand on focus');
+      volumeThumb.focus();
+      volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+      await until(() => video.volume === 0 && appState.playback.volume === 0, 'Official volume did not reach state');
+      volumeThumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      await until(() => video.volume === 1 && appState.playback.volume === 1, 'Official volume did not restore');
+      const settings = controls.querySelector<HTMLElement>('media-playback-rate-button')!;
+      const rates = controls.querySelector<HTMLElement>('media-playback-rate-radio-group')!;
+      check(settings && rates, 'Official playback-rate menu missing');
+      for (const rate of [1.5, 1]) {
+        settings.click();
+        await until(() => Boolean(rates.closest('media-menu[data-open]')), 'Official playback-rate menu did not open');
+        const item = rates.querySelector<HTMLElement>(`media-menu-radio-item[data-rate="${rate}"]`)!;
+        await until(() => Boolean(item?.getClientRects().length), 'Official playback-rate option did not open'); item.click();
+        await until(() => video.playbackRate === rate && appState.playback.speed === rate, 'Official playback-rate did not reach media/state');
+      }
+      const seek = videoJsControl("seek") as HTMLElement & { disabled: boolean; step: number };
+      const slider = seek.querySelector<HTMLElement>("media-slider-thumb")!;
+      check(slider, "Official seek thumb missing");
+      const step = seek.step; seek.step = .5; await (seek as typeof seek & { updateComplete: Promise<unknown> }).updateComplete;
+      slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+      await until(() => !video.seeking && video.currentTime < .05, 'Official seek home failed');
+      slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      seek.step = step;
+      await until(() => !video.seeking && Math.abs(video.currentTime - .5) < .05, "Formal seek control failed");
+      const res = appState.playback.resolution!.id; const session = appState.playback.session!.session_id;
+      await current.controller.selectStream(appState.playback.resolution!.streams[1]!.id);
+      await until(() => video.readyState >= 2, "Alternate line metadata missing");
+      check(video.paused && Math.abs(video.currentTime - .5) < .05, "Line switch lost paused resume snapshot");
+      result = { official_progress_updates: progressUpdates, official_subtitles: true, official_volume: true, official_speed: true,
+        paused: video.paused, seek: video.currentTime, resolution_retained: res === appState.playback.resolution!.id,
+        session_changed: session !== appState.playback.session!.session_id };
+      break;
+    }
+    case "expire": {
+      const calls: Record<string, any>[] = [], events: Record<string, unknown>[] = [], stages: Record<string, unknown>[] = [];
+      const snapshot = () => {
+        const state = appState.playback, session = state.session;
+        return JSON.parse(diagnostic(JSON.stringify({ route: appState.route, context: state.context, resolution: state.resolution,
+          session: session && { session_id: session.session_id, resolution_id: session.resolution_id, stream_id: session.stream_id,
+            episode_ref: session.episode_ref, source_id: session.source_id, source_revision: session.source_revision,
+            stream_kind: session.stream_kind, media_path: new URL(session.media_url).pathname },
+          host_epoch: appState.runtime.engine_epoch, guest_epoch: appState.runtime.cloudstream.engine_epoch,
+          playback_epoch: state.playback_epoch, engine_epoch: state.engine_epoch, phase: state.phase, error: state.error,
+          ui: current.controller.ui, diagnostics: current.controller.diagnostics(), position: video.currentTime, paused: video.paused,
+          ready_state: video.readyState, network_state: video.networkState, seeking: video.seeking,
+          source_present: video.hasAttribute("src"), session_bound: Boolean(session && session.media_url === video.currentSrc),
+          media_error: video.error && { code: video.error.code, message: video.error.message } })));
+      };
+      const before = snapshot(), core = window.__TAURI__!.core;
+      const observe = (event: Event) => {
+        if (event.target === video) events.push({ type: event.type, trusted: event.isTrusted, state: snapshot() });
+      };
+      const names = ["error", "emptied", "loadstart", "loadedmetadata", "pause", "playing"];
+      for (const name of names) video.addEventListener(name, observe);
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const row = ["get_resource_status", "resolve_episode", "open_playback", "close_playback", "release_resolution"].includes(name)
+          ? { command: name, request_id: args?.request_id, input: args?.input, before: snapshot(), response: null as any,
+            started_ms: performance.now() - started, finished_ms: null as number | null } : null;
+        if (row) calls.push(row);
+        try {
+          const response = await core.invoke<any>(name, args);
+          if (row) row.response = name === "get_resource_status" ? response : { request_id: response.request_id,
+            engine_epoch: response.engine_epoch, error: response.error ?? null, id: response.data?.id, session_id: response.data?.session_id,
+            stream_id: response.data?.stream_id, stream_ids: response.data?.streams?.map((stream: { id: string }) => stream.id) };
+          return response;
+        } catch (cause) { if (row) Object.assign(row, { transport_error: diagnostic(cause) }); throw cause; }
+        finally { if (row) row.finished_ms = performance.now() - started; }
+      } };
+      try {
+        const old = appState.playback.session!.session_id, position = video.currentTime;
+        await current.rpc({ operation: "expire-session", session_id: old }); video.load();
+        await until(() => appState.playback.session?.session_id !== old && Boolean(appState.playback.session), "Expired session did not recover");
+        await until(() => video.readyState >= 2 && !video.seeking, "Recovered metadata/seek missing");
+        stages.push({ stage: "automatically-recovered", state: snapshot() });
+        result = { session_changed: old !== appState.playback.session!.session_id, restored: Math.abs(video.currentTime - position) < .1, paused: video.paused };
+        check(appState.playback.resolution!.id !== before.resolution.id
+          && !before.resolution.streams.some((stream: { id: string }) => stream.id === appState.playback.session!.stream_id), "Recovery reused a stale Resolution/stream handle");
+        // Automatic recovery is bounded for the same user action.
+        const recovered = appState.playback.session!.session_id;
+        await current.rpc({ operation: "expire-session", session_id: recovered }); video.load();
+        await until(() => appState.playback.error?.code === "SESSION_EXPIRED", "Second expiry must expose retry");
+        await until(() => current.controller.diagnostics().pending_requests === 0, "Second expiry query did not finish");
+        result.recovered_once = appState.playback.session?.session_id === recovered;
+        stages.push({ stage: "second-expiry-rejected", state: snapshot() });
+        check([old, recovered].every(id => events.some(event => event.type === "error" && event.trusted === true
+          && (event.state as { session: { session_id: string } | null }).session?.session_id === id)),
+        "Expiry recovery requires trusted native video errors bound to both exact sessions");
+        const queries = calls.filter(row => row.command === "get_resource_status");
+        check(queries.length === 2 && [old, recovered].every(id => queries.filter(row => row.input.target_id === id).length === 1)
+          && queries.every(row => row.input.kind === "playback" && row.response?.request_id === row.request_id
+            && row.response.engine_epoch === before.host_epoch && row.response.data?.target_id === row.input.target_id
+            && row.response.data.kind === "playback" && row.response.data.state === "expired" && row.response.data.error?.code === "SESSION_EXPIRED"),
+        "Expiry must query each exact session once with matching request/host/target and expired diagnosis");
+        check(calls.filter(row => row.command === "resolve_episode").length === 1
+          && calls.filter(row => row.command === "open_playback").length === 1, "Second expiry started another automatic recovery");
+        await nextTick();
+        const retry = current.container.querySelector<HTMLButtonElement>('[data-action="retry"]');
+        check(retry && !retry.disabled, "Expired session must expose its actual Retry button"); retry.click();
+        await until(() => Boolean(appState.playback.session) && appState.playback.session!.session_id !== recovered, "Manual expiry retry did not open a new session");
+        await playing(current);
+        stages.push({ stage: "manually-retried", state: snapshot() });
+        check(calls.filter(row => row.command === "resolve_episode").length === 2
+          && calls.filter(row => row.command === "open_playback").length === 2, "Manual expiry retry must resolve/open exactly once");
+        result.evidence = { before, calls, events, stages, final: snapshot() };
+      } catch (cause) {
+        throw new Error(`Native expiry chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ before, calls, events, stages, current: snapshot() }))}`);
+      } finally {
+        window.__TAURI__!.core = core;
+        for (const name of names) video.removeEventListener(name, observe);
+      }
+      break;
+    }
+    case "image-expire": {
+      const deadline = started + 30000;
+      const id = current.details.details.poster?.resource_id;
+      check(id && current.details.images[id], "Actual Host poster access is missing");
+      const access = current.details.images[id]!;
+      const host = appState.runtime.engine_epoch;
+      const pageEpoch = appState.details.request_epoch;
+      const events: Record<string, unknown>[] = [], calls: Record<string, unknown>[] = [], stages: string[] = [];
+      const evidence = { resource_id: id, url: diagnostic(access.url), page_epoch: pageEpoch, expected_host_epoch: host, events, calls, stages,
+        expired_http_status: null as number | null, before: null as any, after: null as any };
+      let dto: DetailsViewData | null = null;
+      const core = window.__TAURI__!.core;
+      const observe = (event: Event) => {
+        const image = event.target;
+        if (!(image instanceof HTMLImageElement) || !image.matches(".playback-backdrop")) return;
+        const owner = appState.details.data;
+        const ownerId = owner?.details.poster?.resource_id;
+        events.push({ type: event.type, trusted: event.isTrusted, resource_id: new URL(image.currentSrc || image.src).pathname.split("/").at(-1),
+          original_url: image.src === access.url, owning_url: Boolean(ownerId && image.src === owner?.images[ownerId]?.url), original_dto: owner === dto,
+          page_epoch: appState.details.request_epoch, natural_width: image.naturalWidth, at_ms: performance.now() - started });
+      };
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), Math.max(0, deadline - performance.now()));
+      current.container.addEventListener("load", observe, true);
+      current.container.addEventListener("error", observe, true);
+      // Observe the real transport; every request still reaches the real Host.
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const input = args?.input as any;
+        const row = name === "get_resource_status" || name === "get_details" ? {
+          command: name, request_id: args?.request_id, kind: input?.kind, target_id: input?.target_id,
+          ref: input?.ref, response_request_id: null as unknown, engine_epoch: null as unknown,
+          state: null as unknown, code: null as unknown, response_ref: null as unknown,
+          response_kind: null as unknown, response_target_id: null as unknown,
+          started_ms: performance.now() - started, finished_ms: null as number | null,
+        } : null;
+        if (row) calls.push(row);
+        const response = await core.invoke<any>(name, args);
+        if (row) Object.assign(row, { response_request_id: response.request_id, engine_epoch: response.engine_epoch,
+          state: response.data?.state ?? null, code: response.data?.error?.code ?? response.error?.code ?? null,
+          response_kind: response.data?.kind ?? null, response_target_id: response.data?.target_id ?? null,
+          response_ref: response.data?.details?.ref ?? null, finished_ms: performance.now() - started });
+        return response;
+      } };
+      try {
+        check(appState.details.data === null && !current.container.querySelector(".playback-backdrop"), "Poster was already published/cached by the formal view");
+        evidence.before = await current.rpc({ operation: "observe" }); stages.push("before-eviction");
+        await current.rpc({ operation: "evict-images" }); stages.push("4096-lru-evicted");
+        const response = await fetch(access.url, { cache: "no-store", signal: abort.signal });
+        evidence.expired_http_status = response.status;
+        await response.arrayBuffer(); stages.push("expired-http-read");
+        check(response.status === 410, "Actual expired poster HTTP must be 410");
+        appState.details.data = current.details; dto = appState.details.data;
+        stages.push("host-dto-published"); await nextTick();
+        await until(() => appState.details.data !== dto || Boolean(current.controller.ui.imageError), "Image error did not query/refresh its DTO", Math.min(20000, deadline - performance.now()));
+        stages.push("dto-recovery-finished"); await nextTick();
+        await until(() => events.some(event => event.type === "load" && event.trusted === true && event.original_dto === false), "Refreshed image did not emit native load", Math.min(20000, deadline - performance.now()));
+        const image = current.container.querySelector<HTMLImageElement>(".playback-backdrop");
+        check(image, "Refreshed image element is missing"); await image.decode();
+        stages.push("refreshed-image-decoded");
+        evidence.after = await current.rpc({ operation: "observe" });
+        check(performance.now() < deadline, "Image recovery exceeded its original 30s deadline");
+        result = { ...evidence, dto_refreshed: appState.details.data !== dto, decoded: image.naturalWidth > 0,
+          owning_ref: dto!.details.ref, refreshed_ref: appState.details.data!.details.ref,
+          refreshed_resource_id: appState.details.data!.details.poster?.resource_id,
+          page_epoch_after: appState.details.request_epoch, host_epoch_after: appState.runtime.engine_epoch,
+          image_error: current.controller.ui.imageError };
+      } catch (cause) {
+        // Keep all completed stages and native events even when a later gate fails.
+        throw new Error(`Image expiry chain failed: ${diagnostic(cause)}; evidence=${JSON.stringify(evidence)}`);
+      } finally {
+        clearTimeout(timer); abort.abort(); window.__TAURI__!.core = core;
+        current.container.removeEventListener("load", observe, true);
+        current.container.removeEventListener("error", observe, true);
+      }
+      break;
+    }
+    case "errors": {
+      const outcomes: Record<string, any>[] = [], calls: Record<string, any>[] = [], events: Record<string, any>[] = [];
+      let mode = 0;
+      const snapshot = () => {
+        const state = appState.playback, session = state.session;
+        return { epoch: state.playback_epoch, host_epoch: appState.runtime.engine_epoch, session_id: session?.session_id ?? null,
+          stream_kind: session?.stream_kind ?? null, source_id: session?.source_id ?? null, source_revision: session?.source_revision ?? null,
+          episode_ref: session?.episode_ref ?? null, session_path: session ? new URL(session.media_url).pathname : null,
+          current_path: video.currentSrc ? new URL(video.currentSrc).pathname : null,
+          session_bound: Boolean(session && session.media_url === video.currentSrc), assigned_bound: Boolean(session && session.media_url === video.src), phase: state.phase,
+          code: state.error?.code ?? null, action: current.controller.ui.action,
+          error: state.error ? JSON.parse(diagnostic(JSON.stringify(state.error))) : null,
+          media_error: video.error ? { code: video.error.code, message: diagnostic(video.error.message) } : null,
+          pending_requests: current.controller.diagnostics().pending_requests };
+      };
+      const observe = (event: Event) => {
+        if (event.target !== video && !(event.target instanceof HTMLTrackElement)) return;
+        events.push({ mode, trusted: event.isTrusted, target: event.target === video ? "video" : "track",
+          at_ms: performance.now() - started, ...snapshot() });
+      };
+      const core = window.__TAURI__!.core;
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, unknown>): Promise<T> => {
+        const input = args?.input as any;
+        const row = name === "get_resource_status" ? { mode, command: name, request_id: args?.request_id,
+          kind: input?.kind, target_id: input?.target_id, before: snapshot(), started_ms: performance.now() - started,
+          response: null as any, finished_ms: null as number | null } : null;
+        if (row) calls.push(row);
+        try {
+          const response = await core.invoke<any>(name, args);
+          if (row) Object.assign(row, { response, after: snapshot(), finished_ms: performance.now() - started });
+          return response;
+        } catch (cause) {
+          if (row) Object.assign(row, { transport_error: diagnostic(cause), finished_ms: performance.now() - started });
+          throw cause;
+        }
+      } };
+      current.container.addEventListener("error", observe, true);
+      try {
+        // The preceding native-HLS case remains intact. Corrupt MP4 bytes must
+        // reach a progressive decoder, rather than HLS syntax validation.
+        await current.rpc({ operation: "mode", value: 0 });
+        const matched = await api.call("match_playback", current.matches[50]!);
+        check(matched.status === "matched" && matched.context, "Codec episode match is missing");
+        navigatePlayback(matched.context); await nextTick(); await current.controller.settled(); await playing(current);
+        requireCodecMedia(appState.playback.session, video.currentSrc);
+        for (mode of [1, 2, 3]) {
+          const row: Record<string, any> = { mode, before: snapshot(), stages: [], call_start: calls.length, event_start: events.length };
+          outcomes.push(row); // Preserve the failing mode before any assertion.
+          const stimulus = await current.rpc({ operation: "mode", value: mode });
+          row.stages.push("stimulus-set");
+          await current.controller.retry(); row.stages.push("retry-opened"); row.opened = snapshot();
+          await until(() => appState.playback.phase === "failed" && Boolean(appState.playback.error), "Native resource failure not mapped");
+          await until(() => current.controller.diagnostics().pending_requests === 0, "Native error query still pending");
+          row.final = snapshot(); row.code = row.final.code; row.media_error = row.final.media_error?.code ?? null;
+          row.host = await current.rpc({ operation: "observe" });
+          row.requests = row.host.error_requests.slice(stimulus.request_start);
+          row.stages.push("diagnosis-finished");
+          check(row.code === (mode === 3 ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED"),
+            `Native classification differs: mode=${mode}, actual=${row.code}, media=${row.media_error}`);
+          // Start another real native load of the same URL after diagnosis has
+          // completed. Keep the formal controller/session/epoch and its listeners;
+          // neither a synthetic Event nor controller.retry() exercises this gap.
+          const repeat: Record<string, any> = { stimulus: "native video.load, same session URL after completed query",
+            before: snapshot(), started_ms: performance.now() - started, event_start: events.length, calls_before: calls.length };
+          row.repeat = repeat;
+          video.load();
+          await until(() => events.slice(repeat.event_start).some(event => event.target === "video" && event.trusted === true),
+            "Repeated same-session native video error missing after completed query");
+          await until(() => current.controller.diagnostics().pending_requests === 0, "Repeated native error left a pending query");
+          await nextTick();
+          repeat.after = snapshot(); repeat.finished_ms = performance.now() - started; repeat.calls_after = calls.length;
+          repeat.retry_button = Boolean(current.container.querySelector('[data-action="retry"]'));
+          check(repeat.after.code === row.code && repeat.after.action === row.final.action
+            && JSON.stringify(repeat.after.error) === JSON.stringify(row.final.error), "Repeated native error overwrote completed diagnosis/action");
+          check(repeat.calls_after === repeat.calls_before, "Repeated native error queried status again");
+          check(mode === 3 || repeat.retry_button, "Repeated native network error hid the formal retry button");
+        }
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        mode = 4;
+        const track: Record<string, any> = { mode, before: snapshot(), call_start: calls.length, event_start: events.length };
+        outcomes.push(track);
+        const stimulus = await current.rpc({ operation: "mode", value: 4 });
+        current.controller.selectSubtitle(appState.playback.session!.subtitles[0]!.id);
+        await until(() => current.container.querySelector("track")?.readyState === 3, "Native track error not raised");
+        await until(() => appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Native track status query did not finish");
+        track.final = snapshot(); track.host = await current.rpc({ operation: "observe" });
+        track.requests = track.host.error_requests.slice(stimulus.request_start);
+        check(appState.playback.error?.code === "UPSTREAM_FAILED", "Native track error lost gateway diagnosis");
+        const trackError = appState.playback.error.code;
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        const beforePrepare = (await current.rpc({ operation: "observe" })).command_counts.runtime_prepare ?? 0;
+        const beforeEpoch = appState.playback.playback_epoch;
+        const reconnect: Record<string, any> = { mode: "unauthorized-query", before: snapshot(), call_start: calls.length, event_start: events.length };
+        outcomes.push(reconnect);
+        await current.rpc({ operation: "unauthorized-query" }); mode = 2;
+        await current.rpc({ operation: "mode", value: 2 }); await current.controller.retry();
+        await until(() => appState.playback.playback_epoch >= beforeEpoch + 2 && appState.playback.phase === "failed" && current.controller.diagnostics().pending_requests === 0, "Unauthorized query did not reconnect and finish its bounded attempt");
+        reconnect.final = snapshot(); reconnect.host = await current.rpc({ operation: "observe" });
+        const reconnects = (reconnect.host.command_counts.runtime_prepare ?? 0) - beforePrepare;
+        check(reconnects === 1, "Unauthorized must reconnect exactly once");
+        mode = 0;
+        await current.rpc({ operation: "mode", value: 0 }); await current.controller.retry(); await playing(current);
+        result = { outcomes, calls, events, track_error: trackError, reconnects };
+      } catch (cause) {
+        throw new Error(`Native errors chain failed: ${diagnostic(cause)}; evidence=${diagnostic(JSON.stringify({ mode, outcomes, calls, events, current: snapshot() }))}`);
+      } finally {
+        window.__TAURI__!.core = core;
+        current.container.removeEventListener("error", observe, true);
+      }
+      break;
+    }
+    case "eos": {
+      result = await observeNativeEos(current, () => gesture(current));
+      break;
+    }
+    case "autoplay": {
+      current.controller.pause();
+      const original = video.play;
+      try {
+        video.play = () => Promise.reject(new DOMException("Injected system autoplay denial", "NotAllowedError"));
+        await current.controller.play(); await nextTick();
+        check(Boolean(current.container.querySelector('[data-action="continue"]')), "Continue button did not render for autoplay denial");
+      } finally { video.play = original; }
+      await gesture(current); await playing(current); await nextTick();
+      result = { continue_button: true, resumed: !current.container.querySelector('[data-action="continue"]'), stimulus: "injected NotAllowedError; actual component/button and native playback" };
+      break;
+    }
+    case "unknown-duration": {
+      const descriptor = Object.getOwnPropertyDescriptor(video, "duration");
+      try {
+        Object.defineProperty(video, "duration", { configurable: true, get: () => Infinity });
+        video.dispatchEvent(new Event("durationchange")); await nextTick();
+        const seek = videoJsControl("seek") as HTMLElement & { disabled: boolean; step: number };
+        result = { disabled: seek.disabled, unknown_text: current.container.textContent!.includes("Unknown duration"), stimulus: "injected nonfinite DOM duration; actual rendered state" };
+      } finally {
+        if (descriptor) Object.defineProperty(video, "duration", descriptor); else Reflect.deleteProperty(video, "duration");
+        video.dispatchEvent(new Event("durationchange")); await nextTick();
+      }
+      break;
+    }
+    case "layout": {
+      const width = Number(command.payload);
+      await nativeInvoke("t01_control", { action: "width", value: width }); await delay(200);
+      const controls = [...current.container.querySelectorAll<HTMLElement>("button,input,select")];
+      const rects = controls.filter(el => el.getClientRects().length).map(el => el.getBoundingClientRect());
+      check(document.documentElement.scrollWidth <= innerWidth + 1 && rects.every(r => r.width > 0 && r.left >= 0 && r.right <= innerWidth + 1), "Formal controls overflow or clip");
+      result = { width: innerWidth, controls: rects.length, no_overflow: true };
+      break;
+    }
+    case "stop": {
+      await current.controller.stop(); await delay(300); const before = current.frames; await delay(500);
+      const value = sample(current);
+      check(video.paused && !video.hasAttribute("src") && video.readyState === 0 && video.networkState === 0 && video.buffered.length === 0 && video.videoWidth === 0 && video.querySelectorAll("track").length === 0, "Formal media not released");
+      check(current.frames <= before + 1 && (!current.sampleAudio || (value.audio_rms !== null && value.audio_rms < .001)), "Old frames/audio remain after stop");
+      check(!value.diagnostics.listening && value.diagnostics.hls_instances === 0 && value.diagnostics.retiring === 0, "Formal controller retains transport/listeners/handles");
+      result = { source_removed: true, frames_after_stop: current.frames - before, host: await current.rpc({ operation: "observe" }) };
+      break;
+    }
+    case "source-rematch": {
+      // Native playback keeps hash #/playback; a source change must still reach its confirmation UI.
+      const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+      const input = current.matches[1]!, sources = appState.sources.data!;
+      const original = sources.providers.find(source => source.id === input.playback_source.source_id)!;
+      const otherId = `${original.id}-t13-other`, core = window.__TAURI__!.core;
+      appState.selected_metadata_source = { source_id: input.metadata_ref.content_ref.source_id, source_revision: input.metadata_ref.content_ref.source_revision };
+      appState.selected_playback_source = clone(input.playback_source);
+      // Host confirmed this video through its selection; the current details page must list it too.
+      const page = clone(current.details), metadata = clone(input.metadata_ref);
+      page.metadata_ref = metadata; page.details.ref = metadata.content_ref;
+      page.details.groups = [{ ...page.details.groups[0]!, episodes: [{ ...page.details.groups[0]!.episodes[0]!,
+        ref: { ...metadata.content_ref, data: JSON.stringify(["stremio_video", "addon", "series", "meta", input.video_id]) } }] }];
+      appState.details.data = page; appState.details.phase = "ready";
+      const stages: string[] = [];
+      const play = async () => {
+        check(await appController.match(input.video_id), "Real match did not return");
+        await until(() => Boolean(appState.playback.session) && appState.playback.phase !== "resolving", "Real session did not open after match");
+        const element = current.container.querySelector("video")!;
+        await until(() => !element.paused && element.currentSrc === appState.playback.session?.media_url, "Real playback did not start");
+      };
+      sources.providers.push({ ...clone(original), id: otherId, name: "T13 other source" });
+      window.__TAURI__!.core = { ...core, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
+        if (name === "match_playback" && args?.input?.playback_source?.source_id === original.id) return core.invoke<T>(name, { ...args, input }); // Host-confirmed selection
+        if (name !== "match_playback" || args?.input?.playback_source?.source_id !== otherId) return core.invoke<T>(name, args);
+        return { request_id: args.request_id, engine_epoch: appState.runtime.engine_epoch, data: { status: "needs_confirmation", metadata_ref: args.input.metadata_ref, video_id: args.input.video_id, context: null,
+          candidates: [{ title: "T13 candidate", content_ref: { source_id: otherId, source_revision: original.source_revision, data: "{}" } }] } } as T;
+      } };
+      const pick = async (id: string) => {
+        const element = document.querySelector<HTMLSelectElement>(".playback-source");
+        check(element, "Playback source picker missing");
+        element.value = id; element.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      try {
+        await play(); stages.push("playing");
+        await pick(otherId);
+        await until(() => Boolean(document.querySelector('[role="dialog"]')?.textContent?.includes("T13 candidate")), "Source change confirmation did not render");
+        stages.push("confirmation-visible");
+        const paused = { session: appState.playback.session, videos: document.querySelectorAll("video").length, route: appState.route.name };
+        [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button => button.textContent?.includes("Cancel"))!.click();
+        await until(() => !document.querySelector('[role="dialog"]') && document.querySelectorAll("video").length === 1, "Cancel did not return to the player");
+        stages.push("cancelled");
+        await appController.selectSource(original.id, "playback");
+        await play(); stages.push("playing-again");
+        const session = appState.playback.session!.session_id;
+        result = { stages, during_confirmation: paused, session, recovered: current.container.querySelector("video")!.currentSrc === appState.playback.session!.media_url };
+        appController.invalidatePlayback();
+        await until(() => !appState.playback.session && !appState.playback.resolution, "Playback did not stop");
+        await delay(500); // Host close/release run in the retiring queue.
+        result.host = await current.rpc({ operation: "observe" });
+      } finally {
+        window.__TAURI__!.core = core;
+        sources.providers = sources.providers.filter(source => source.id !== otherId);
+      }
+      break;
+    }
+    case "dispose": {
+      current.enduranceAudit?.dispose();
+      await current.controller.stop(); current.app.unmount(); await current.controller.settled();
+      video.cancelVideoFrameCallback(current.callback); current.source.disconnect(); current.analyser.disconnect();
+      // Failure diagnostics may have already closed the test-owned AudioContext.
+      if (current.audio.state !== "closed") await current.audio.close();
+      current.sampling.dispose();
+      current.container.remove(); current.stopErrors();
+      window.__TAURI__!.core = current.originalCore;
+      locale.value = current.initialLocale;
+      result = { audio_closed: current.audio.state === "closed", errors: current.errors, videos: document.querySelectorAll("video").length };
+      harness = undefined;
+      return { ...result, native: await nativeInvoke("t01_control", { action: "identity" }) };
+    }
+    case "release-observer": {
+      // Failure-only diagnostic, after the original 51 samples and RSS verdict.
+      // Stop the formal media first; this isolates test-owned frame/WebAudio
+      // observation from the subsequent Vue/DOM unmount. No new media is opened.
+      await releaseMediaObserver(current);
+      return { audio_closed: current.audio.state === "closed", observer: current.sampling.diagnostics(),
+        native: await nativeInvoke("t01_control", { action: "identity" }) };
+    }
+    default: throw new Error(`Unknown formal action ${command.action}`);
+  }
+  return { ...result, sample: result.sample ?? sample(current), errors: [...current.errors], ui_ms: performance.now() - started,
+    native: await nativeInvoke("t01_control", { action: "identity" }) };
+}

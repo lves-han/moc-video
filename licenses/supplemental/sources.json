@@ -1,0 +1,376 @@
+{
+  "css-render@0.15.14": [
+    {
+      "path": "licenses/supplemental/css-render0.15.14-LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/07akioni/css-render/9345145da71707d1d05a99c1d3a6e89315ac0574/LICENSE",
+      "kind": "pinned-upstream-license",
+      "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+    }
+  ],
+  "@lit-labs/ssr-dom-shim@1.6.0": [
+    {
+      "path": "licenses/supplemental/lit-labs-ssr-dom-shim1.6.0-LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/lit/lit/20afabd3c5bfd49fdcdf1b8518e05c7f99a46db6/LICENSE",
+      "kind": "pinned-upstream-license",
+      "sha256": "45d31799d0db956cc3eb5469346abbd9b7025babc5ff29fab10d7095da992ef1"
+    }
+  ],
+  "react-compiler-runtime@1.0.0": [
+    {
+      "path": "licenses/supplemental/react-compiler-runtime1.0.0-LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/facebook/react/5c15c1cd3442f28044217703b5625f98c40042ee/LICENSE",
+      "kind": "pinned-upstream-license",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93"
+    }
+  ],
+  "@css-render/plugin-bem@0.15.14": [
+    {
+      "path": "licenses/supplemental/css-render0.15.14-LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/07akioni/css-render/9345145da71707d1d05a99c1d3a6e89315ac0574/LICENSE",
+      "kind": "pinned-upstream-license",
+      "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+    }
+  ],
+  "@css-render/vue3-ssr@0.15.14": [
+    {
+      "path": "licenses/supplemental/css-render0.15.14-LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/07akioni/css-render/9345145da71707d1d05a99c1d3a6e89315ac0574/LICENSE",
+      "kind": "pinned-upstream-license",
+      "sha256": "306f57de421d7ef77f7dc145e1234f9c0ec76b710d28769b4d98ef3c4f8a64bd"
+    }
+  ],
+  "@rolldown/binding-darwin-arm64@1.2.15": [
+    {
+      "path": "licenses/supplemental/rolldown-1.2.15-LICENSE.txt",
+      "source_url": "https://registry.npmjs.org/rolldown/-/rolldown-1.2.15.tgz",
+      "kind": "same-version-parent-notice",
+      "from_package": "rolldown@1.2.15",
+      "sha256": "23ecfff35a5a2e80d92142f75228912c3b1abc4b5a8337a821ff4397e2f9f734"
+    },
+    {
+      "path": "licenses/supplemental/rolldown-1.2.15-THIRD-PARTY-LICENSE.txt",
+      "source_url": "https://registry.npmjs.org/rolldown/-/rolldown-1.2.15.tgz",
+      "kind": "same-version-parent-notice",
+      "from_package": "rolldown@1.2.15",
+      "sha256": "a877291d800ed43692f3f9ae09d8e01cc6f7293ad39d43896059c188ffbb8b7c"
+    }
+  ],
+  "vdirs@0.1.8": [
+    {
+      "path": "licenses/supplemental/vdirs-0.1.8-declaration.json",
+      "source_url": "https://registry.npmjs.org/vdirs/0.1.8",
+      "kind": "published-license-declaration-no-license-file",
+      "sha256": "7e76aa75c83d4103da5367ad7e487f5cec6a18d3cc5d6e1e0619a5dc6e908ad6"
+    },
+    {
+      "path": "licenses/supplemental/MIT-standard-reference.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "spdx-standard-reference-not-upstream-notice",
+      "sha256": "8ee52190537817b54fab536d5ed44a97f655108238ce4618fdb40c5efeb1f784"
+    }
+  ],
+  "cargo:alloc-stdlib@0.3.0": [
+    {
+      "path": "licenses/supplemental/alloc-stdlib-0.3.0-0.txt",
+      "source_url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/0a81fd6928ea3b33c8cd484aa4575d50ffb98012/LICENSE",
+      "git_ref": "0a81fd6928ea3b33c8cd484aa4575d50ffb98012",
+      "kind": "pinned-upstream-license",
+      "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae"
+    }
+  ],
+  "cargo:block2@0.6.2": [
+    {
+      "path": "licenses/supplemental/block2-0.6.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md",
+      "git_ref": "b4167b582b2f75f9a1be75495c41b765344fd03c",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    }
+  ],
+  "cargo:dispatch2@0.3.1": [
+    {
+      "path": "licenses/supplemental/dispatch2-0.3.1-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md",
+      "git_ref": "8852b424193ca41602281b3d7540d7c8ed51e49a",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2@0.6.5": [
+    {
+      "path": "licenses/supplemental/objc2-0.6.5-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+      "git_ref": "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    }
+  ],
+  "cargo:objc2-app-kit@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-app-kit-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-core-foundation@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-core-foundation-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-core-graphics@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-core-graphics-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-encode@4.1.0": [
+    {
+      "path": "licenses/supplemental/objc2-encode-4.1.0-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+      "git_ref": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    }
+  ],
+  "cargo:objc2-exception-helper@0.1.1": [
+    {
+      "path": "licenses/supplemental/objc2-exception-helper-0.1.1-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+      "git_ref": "8d214f5477365ffcbcbb7de058c86ed9a518efb7",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-io-surface@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-io-surface-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-quartz-core@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-quartz-core-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:objc2-web-kit@0.3.2": [
+    {
+      "path": "licenses/supplemental/objc2-web-kit-0.3.2-0.txt",
+      "source_url": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+      "git_ref": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+      "kind": "pinned-upstream-license",
+      "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54"
+    },
+    {
+      "path": "licenses/supplemental/MIT-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/MIT.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "65b97d73803eaa259fda7c26ffb9303a10a8e0231f9d04f12ab3ceca05e22b3d"
+    },
+    {
+      "path": "licenses/supplemental/Apache-2.0-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Apache-2.0.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "c8521e76d2a8242fa4400a25fce2f09caaa48c6052ab7180ab5c128d2449d70b"
+    },
+    {
+      "path": "licenses/supplemental/Zlib-SPDX-standard.txt",
+      "source_url": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/json/details/Zlib.json",
+      "kind": "upstream-referenced-standard-license",
+      "sha256": "7d3d5cf01c28993f8e2eedb32d89f0492b31de9c925926c63c4088343def8c16"
+    }
+  ],
+  "cargo:selectors@0.38.0": [
+    {
+      "path": "licenses/supplemental/selectors-0.38.0-0.txt",
+      "source_url": "https://raw.githubusercontent.com/servo/stylo/572ecba2d1600e7c3d490586692a209faf703baa/selectors/lib.rs",
+      "git_ref": "572ecba2d1600e7c3d490586692a209faf703baa",
+      "kind": "pinned-upstream-license-header",
+      "sha256": "766674381e88a468d55e07de3596987391cf0e8beebe51baf4fddf11078785b3"
+    },
+    {
+      "path": "licenses/supplemental/selectors-0.38.0-1.txt",
+      "source_url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+      "git_ref": "572ecba2d1600e7c3d490586692a209faf703baa",
+      "kind": "upstream-referenced-license-fulltext",
+      "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+    }
+  ],
+  "cargo:uuid-simd@0.8.0": [
+    {
+      "path": "licenses/supplemental/uuid-simd-0.8.0-0.txt",
+      "source_url": "https://raw.githubusercontent.com/Nugine/simd/d74c030d9dc4f3cae02146d1f497ff62726ef09a/LICENSE",
+      "git_ref": "d74c030d9dc4f3cae02146d1f497ff62726ef09a",
+      "kind": "pinned-upstream-license",
+      "sha256": "71674605ec4c087fe9eb534e3e4f9e26eb2e4aabcd76a29fd156c6a844d44b3d"
+    }
+  ],
+  "cargo:vsimd@0.8.0": [
+    {
+      "path": "licenses/supplemental/vsimd-0.8.0-0.txt",
+      "source_url": "https://raw.githubusercontent.com/Nugine/simd/d74c030d9dc4f3cae02146d1f497ff62726ef09a/LICENSE",
+      "git_ref": "d74c030d9dc4f3cae02146d1f497ff62726ef09a",
+      "kind": "pinned-upstream-license",
+      "sha256": "71674605ec4c087fe9eb534e3e4f9e26eb2e4aabcd76a29fd156c6a844d44b3d"
+    }
+  ]
+}

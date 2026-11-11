@@ -1,0 +1,4 @@
+# Fetched or rebuilt by tests/acceptance/t02.py; only the lock, patch and overlay are source.
+/upstream/
+/.tools/
+/packages/

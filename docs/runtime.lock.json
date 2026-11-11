@@ -1,0 +1,1092 @@
+{
+  "schema_version": 2,
+  "card": "T0.1",
+  "status": "WIP",
+  "observed_at": "2026-10-27T01:09:52.766978+00:00",
+  "completion_note": "ADR-010: implementation ready for outer execution; current acceptance/minimum builds NOT RUN. Immutable plan and prior observations stay here; each current result is written to its own evidence report.",
+  "binding": {
+    "root": "/Users/eason/jp/application",
+    "python": "/Users/eason/jp/application/.venv/bin/python",
+    "python_version": "3.12.14",
+    "source_baseline": "d2122afb0f0861f45e62cda3db5a3eed27df12e7",
+    "protected": "bca943a2f9ae74c2f9bdf6d617919b90ae7651a32d246f7788ca4239aaa8e78a",
+    "driver_lock": "/Users/eason/jp/application/evidence/drive/driver.lock",
+    "global_heavy_lock": "/Users/eason/Library/Caches/agent-project-workflow/heavy.lock",
+    "process_tree_inspection": "NOT RUN in development; current PID+creation-time ownership is checked by outer A1.",
+    "historical_driver_process": {
+      "pid": 8306,
+      "identity": "created:1793010717.56732",
+      "actual_identity": "created:1793010717.56732",
+      "argv": [
+        "/Users/eason/jp/application/.venv/bin/python",
+        "-B",
+        "scripts/drive.py",
+        "--once"
+      ]
+    },
+    "historical_agent_wrapper_process": {
+      "pid": 23551,
+      "identity": "created:1793063235.822286",
+      "actual_identity": "created:1793063235.822286"
+    },
+    "source_digest_method": "scripts/workflow.py snapshot(); current run and full verification must match stable source"
+  },
+  "host": {
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "architecture": "arm64",
+    "gpu": "NOT RUN",
+    "virtualization": "NOT RUN"
+  },
+  "observed_tools": {
+    "rustc": {
+      "path": "/Users/eason/.cargo/bin/rustc",
+      "argv": [
+        "/Users/eason/.cargo/bin/rustc",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "rustc 1.98.1 (48a229cea 2026-09-01)\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "cargo": {
+      "path": "/Users/eason/.cargo/bin/cargo",
+      "argv": [
+        "/Users/eason/.cargo/bin/cargo",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "rustup": {
+      "path": "/Users/eason/.cargo/bin/rustup",
+      "argv": [
+        "/Users/eason/.cargo/bin/rustup",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "rustup 1.29.2 (d8c92c676 2026-10-21)\n",
+      "stderr": "info: This is the version for the rustup toolchain manager, not the rustc compiler.\ninfo: the currently active `rustc` version is `rustc 1.98.1 (48a229cea 2026-09-01)`\n",
+      "status": "version_observed",
+      "observed_at": "2026-10-27T02:51:17.030925+00:00",
+      "observation_evidence": "evidence/task-state/T0.1/session-3/rustup-observation.json"
+    },
+    "node": {
+      "path": "/opt/homebrew/bin/node",
+      "argv": [
+        "/opt/homebrew/bin/node",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "v26.11.1\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "npm": {
+      "path": "/opt/homebrew/bin/npm",
+      "argv": [
+        "/opt/homebrew/bin/npm",
+        "--version"
+      ],
+      "exit": 0,
+      "stdout": "11.20.0\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "xcode-select": {
+      "path": "/usr/bin/xcode-select",
+      "argv": [
+        "/usr/bin/xcode-select",
+        "-p"
+      ],
+      "exit": 0,
+      "stdout": "/Applications/Xcode.app/Contents/Developer\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "xcrun": {
+      "path": "/usr/bin/xcrun",
+      "argv": [
+        "/usr/bin/xcrun",
+        "--show-sdk-version"
+      ],
+      "exit": 0,
+      "stdout": "27.0\n",
+      "stderr": "",
+      "status": "version_observed"
+    },
+    "java": {
+      "path": "/opt/homebrew/opt/openjdk/bin/java",
+      "argv": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-version"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "openjdk version \"27\" 2026-09-15\nOpenJDK Runtime Environment Homebrew (build 27)\nOpenJDK 64-Bit Server VM Homebrew (build 27, mixed mode, sharing)\n",
+      "status": "version_observed"
+    }
+  },
+  "webview": {
+    "source": "/System/Library/Frameworks/WebKit.framework/Resources/Info.plist",
+    "bundle_identifier": "com.apple.WebKit",
+    "version": "22625",
+    "build": "22625.1.29.11.28",
+    "status": "system_framework_metadata_observed",
+    "link_and_runtime": "NOT RUN; A1 compiles and runs tests/fixtures/t00/webkit.m; window/media is T01",
+    "acquisition": "Provided by installed macOS; Xcode selected at /Applications/Xcode.app/Contents/Developer"
+  },
+  "frontend": {
+    "packages": {
+      "vue": {
+        "version": "3.5.44",
+        "license": "MIT",
+        "source": "node_modules/vue/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "naive-ui": {
+        "version": "2.45.3",
+        "license": "MIT",
+        "source": "node_modules/naive-ui/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "typescript": {
+        "version": "5.9.3",
+        "license": "Apache-2.0",
+        "source": "node_modules/typescript/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "vite": {
+        "version": "8.3.5",
+        "license": "MIT",
+        "source": "node_modules/vite/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "@vitejs/plugin-vue": {
+        "version": "6.0.10",
+        "license": "MIT",
+        "source": "node_modules/@vitejs/plugin-vue/package.json",
+        "status": "installed_metadata_observed"
+      },
+      "vue-tsc": {
+        "version": "3.3.13",
+        "license": "MIT",
+        "source": "node_modules/vue-tsc/package.json",
+        "status": "installed_metadata_observed"
+      }
+    },
+    "lock": "package-lock.json",
+    "lock_sha256": "0ea6cdbeee8190a7ed2c37f4801d8938cb15c227614d221374d61c43369c9649",
+    "build_status": "NOT RUN for current source; outer A1 runs npm ci, type check and Vite build",
+    "reproduce_argv": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "A1",
+      "--",
+      "{python}",
+      "-B",
+      "tests/acceptance/t00.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/T00-all.json",
+      "--junit",
+      "evidence/acceptance/T00-all.xml"
+    ],
+    "npm_entry_resolution": "Uses original scripts/platform_runtime.py resolve_argv; Windows npm .cmd is resolved to Node plus official CLI JS without a command shell.",
+    "build_worker_overrides": {
+      "ROLLDOWN_WORKER_THREADS": "2",
+      "RAYON_NUM_THREADS": "2"
+    },
+    "worker_source": "https://rolldown.rs/guide/troubleshooting#containers-and-cpu-emulation",
+    "worker_note": "T00 command children explicitly receive these process-local settings under the original runner. Use the same process-local settings for outer verify.py all. They request two workers per build pool; actual backend remains RSS sampling/build jobs without a CPU quota on macOS."
+  },
+  "candidate_versions": {
+    "tauri": {
+      "major": 2,
+      "exact_version": "2.12.5",
+      "status": "candidate",
+      "source": "https://github.com/tauri-apps/tauri/releases/tag/tauri-v2.12.5",
+      "production_version": null,
+      "license": "Apache-2.0 OR MIT",
+      "validation": "NOT RUN; app crate and Cargo.lock are created/validated by T01/T05",
+      "license_source": "Exact release workspace.package.license; crates/tauri/Cargo.toml inherits workspace license"
+    },
+    "hls.js": {
+      "exact_version": "1.7.3",
+      "status": "candidate",
+      "source": "https://github.com/video-dev/hls.js/releases/tag/v1.7.3",
+      "production_version": null,
+      "license": "Apache-2.0",
+      "validation": "NOT RUN; installation/package-lock and native/MSE playback validation belong to T01",
+      "version_source": "Official npm metadata for 1.7.3; upstream tagged package.json has no version field"
+    },
+    "cloudstream": {
+      "repository": "https://github.com/recloudstream/cloudstream",
+      "commit": "a7ac454af8fbd64574c96847a936905855911720",
+      "status": "candidate",
+      "source": "https://github.com/recloudstream/cloudstream/tree/a7ac454af8fbd64574c96847a936905855911720",
+      "production_version": null,
+      "production_commit": null,
+      "validation": "NOT RUN; T02 must load all seven unchanged DEX archives before production promotion"
+    }
+  },
+  "android": {
+    "status": "BLOCKED",
+    "resume_cards": [
+      "T02",
+      "T04"
+    ],
+    "reason": "Candidate runtime ABI, matching Gradle/JDK, API35 image download/boot, SDK license review and virtualization/AVD operation await T02/T04. Existing API34 image is recorded separately.",
+    "sdk_root": "/Users/eason/Library/Android/sdk",
+    "dependency_plan": "android-engine/dependencies.lock.json",
+    "jdk_observed": "27",
+    "compatible_jdk": null,
+    "gradle": null,
+    "plan": {
+      "jdk": {
+        "selection": "JDK 17 LTS initial candidate; reconcile with pinned upstream build.gradle.kts/Gradle before T02",
+        "exact_version": null,
+        "status": "pending T02/T04",
+        "source": "https://developer.android.com/build/jdks"
+      },
+      "gradle": {
+        "selection": "Exact distributionUrl in fixed Cloudstream gradle/wrapper/gradle-wrapper.properties; A1 extracts the source candidate without claiming a build",
+        "exact_version": null,
+        "status": "pending T02/T04",
+        "source": "https://github.com/recloudstream/cloudstream/blob/a7ac454af8fbd64574c96847a936905855911720/gradle/wrapper/gradle-wrapper.properties"
+      },
+      "emulator": {
+        "selection": "35.2.10 / build 12414864 installed-metadata candidate; validate API35 compatibility in T04",
+        "exact_version": "35.2.10",
+        "status": "pending T02/T04",
+        "source": "/Users/eason/Library/Android/sdk/emulator/source.properties"
+      },
+      "sdk_tools": {
+        "selection": "Command-line Tools 16.0 installed-metadata candidate",
+        "exact_version": "16.0",
+        "status": "pending T02/T04",
+        "source": "/Users/eason/Library/Android/sdk/cmdline-tools/latest/source.properties"
+      },
+      "platform_tools": {
+        "selection": "35.0.2 installed-metadata candidate",
+        "exact_version": "35.0.2",
+        "status": "pending T02/T04",
+        "source": "/Users/eason/Library/Android/sdk/platform-tools/source.properties"
+      }
+    },
+    "system_image": {
+      "package": "system-images;android-35;default;arm64-v8a",
+      "revision": null,
+      "sha256": null,
+      "status": "planned",
+      "installed_verified": false,
+      "revision_selection": "A1 records official repository revision and archive checksums in observed.candidates.api35_candidates; T04 downloads and measures SHA256 before boot.",
+      "source": "https://dl.google.com/android/repository/sys-img/android/sys-img2-3.xml"
+    },
+    "avd": {
+      "cores": 2,
+      "memory_mib": 3072,
+      "status": "planned"
+    },
+    "installed_metadata": [
+      {
+        "path": "/Users/eason/Library/Android/sdk/build-tools/34.0.0/source.properties",
+        "sha256": "c727885baf3695c8fe4fbe566f092e8e114c6cee35ecb9fa95a7ff2ef058de04",
+        "properties": {
+          "Pkg.UserSrc": "false",
+          "Pkg.Revision": "34.0.0"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/build-tools/35.0.0/source.properties",
+        "sha256": "084847d70abc41284feee7ea717e7c92eab0d1be05f048c27445a359cfe109d8",
+        "properties": {
+          "Pkg.UserSrc": "false",
+          "Pkg.Revision": "35.0.0"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/cmdline-tools/latest/source.properties",
+        "sha256": "03f5b26666088084eb66618b5a4f39f937cc9f75a8f4c22acbd859487e50ad04",
+        "properties": {
+          "Pkg.Revision": "16.0",
+          "Pkg.Path": "cmdline-tools;16.0",
+          "Pkg.Desc": "Android SDK Command-line Tools"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/emulator/source.properties",
+        "sha256": "289c6f2e58c984922ee628836b23811fcf1a329f71ca76a72ee0ac739dfa6770",
+        "properties": {
+          "Pkg.UserSrc": "false",
+          "Pkg.Revision": "35.2.10",
+          "Pkg.Path": "emulator",
+          "Pkg.Desc": "Android Emulator",
+          "Pkg.BuildId": "12414864"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/platform-tools/source.properties",
+        "sha256": "a2abc4b12c27a0661ff872eb090c23bdc8d3cace2809359d21f30ff247153dfa",
+        "properties": {
+          "Pkg.UserSrc": "false",
+          "Pkg.Revision": "35.0.2"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/platforms/android-34/source.properties",
+        "sha256": "a2e2cf71d36c90fb1a2ab5af9d0cad186e4604147f3fb37416c214881bf58489",
+        "properties": {
+          "Pkg.Desc": "Android SDK Platform 14",
+          "Pkg.UserSrc": "false",
+          "Platform.Version": "14",
+          "Platform.CodeName": "",
+          "Pkg.Revision": "3",
+          "AndroidVersion.ApiLevel": "34",
+          "AndroidVersion.ExtensionLevel": "7",
+          "AndroidVersion.IsBaseSdk": "true",
+          "Layoutlib.Api": "15",
+          "Layoutlib.Revision": "1",
+          "Platform.MinToolsRev": "22"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/sources/android-34/source.properties",
+        "sha256": "1e54fa7ec898bb95323b1246b7ffebb454c55a6364f21cd89cb29cd5e6460d2c",
+        "properties": {
+          "Pkg.UserSrc": "false",
+          "Pkg.Revision": "1",
+          "AndroidVersion.ApiLevel": "34",
+          "AndroidVersion.ExtensionLevel": "7",
+          "AndroidVersion.IsBaseSdk": "true"
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      },
+      {
+        "path": "/Users/eason/Library/Android/sdk/system-images/android-34/google_apis/arm64-v8a/source.properties",
+        "sha256": "f14ac8cd5d86f69a757c3950ec81e6cdf3245ff59bb1ebd901ff59e7facd7212",
+        "properties": {
+          "Pkg.Desc": "System Image arm64-v8a with Google APIs.",
+          "Pkg.Revision": "8",
+          "Pkg.Dependencies": "emulator#32.1.8",
+          "AndroidVersion.ApiLevel": "34",
+          "AndroidVersion.ExtensionLevel": "7",
+          "AndroidVersion.IsBaseSdk": "true",
+          "SystemImage.Abi": "arm64-v8a",
+          "SystemImage.TagId": "google_apis",
+          "SystemImage.TagDisplay": "Google APIs",
+          "SystemImage.GpuSupport": "true",
+          "Addon.VendorId": "google",
+          "Addon.VendorDisplay": "Google Inc."
+        },
+        "status": "installed metadata observed; executable/boot validation NOT RUN"
+      }
+    ],
+    "license_action": "NOT RUN; user reviews and accepts the required Android SDK licenses before T02/T04; no automatic --licenses action.",
+    "build_and_boot": "NOT RUN"
+  },
+  "artifacts": {
+    "inventory": "replica-spec/references/plugin-artifact-inventory.json",
+    "inventory_sha256": "290f670e3f86719f76a7239a98dc21c2d0d112463e1543ceeecd0162023e516b",
+    "expected_count": 7,
+    "verified_count": 0,
+    "registry_snapshot": "replica-spec/references/plugins.snapshot.json",
+    "status": "NOT RUN; outer prepare downloads frozen URLs, all checks seven lengths/SHA256/ZIP/manifest bytes without fetching or repairing",
+    "directory": "evidence/t00/inputs"
+  },
+  "licenses": {
+    "npm_inventory": "licenses/npm-inventory.json",
+    "release_materials": "licenses/release-materials.json",
+    "status": "Metadata and available license texts inspected; all rechecks after npm ci. Upstream candidate texts acquired by prepare and reviewed by A1; final distribution materials remain pending T23.",
+    "cloudstream": "GPL-3.0 per frozen SOURCES.md S16; fixed source LICENSE must be fetched and inspected by A1",
+    "original_plugins": "Obtain per-package/source permission and notices before any redistribution; acquisition identity alone is recorded in T00.",
+    "license_acceptance": "Android SDK license action remains a human preparation step"
+  },
+  "platforms": [
+    {
+      "target": "macOS 14+ arm64",
+      "machine": "current local host",
+      "required": true,
+      "status": "NOT RUN",
+      "reason": "Current stable-source A1 NOT RUN; outer executes after development exits",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "A1",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "all",
+        "--report",
+        "evidence/acceptance/T00-all.json",
+        "--junit",
+        "evidence/acceptance/T00-all.xml"
+      ],
+      "id": "macos-arm64",
+      "ci": null,
+      "needed_machine": null,
+      "environment_detection_argv": [
+        "{python}",
+        "-c",
+        "import platform,sys; print(platform.platform(),platform.machine(),sys.version)"
+      ],
+      "reproduction_prerequisites": "Use the target project venv, Rust/Node and original run.py. Migration to another system requires authorized C1 root/venv/global-lock rebinding first. Environment suite records versions only; actual T01/Core/media/Android execution retains NOT RUN.",
+      "environment_probe_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-macos-arm64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-macos-arm64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-macos-arm64.xml"
+      ],
+      "tool_acquisition": "Apple Xcode/macOS WebKit; Rust via rustup; official Node archive. https://v2.tauri.app/start/prerequisites/",
+      "availability": "available local host"
+    },
+    {
+      "target": "macOS x86_64",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "Deferred by ADR-005/006; no operable target machine or CI established",
+      "id": "macos-x86_64",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-macos-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-macos-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-macos-x86_64.xml"
+      ],
+      "needed_machine": "macOS x86_64 machine; GPU/display and SDK virtualization required for later T01/T04",
+      "environment_detection_argv": [
+        "{python}",
+        "-c",
+        "import platform,sys; print(platform.platform(),platform.machine(),sys.version)"
+      ],
+      "reproduction_prerequisites": "Use the target project venv, Rust/Node and original run.py. Migration to another system requires authorized C1 root/venv/global-lock rebinding first. Environment suite records versions only; actual T01/Core/media/Android execution retains NOT RUN.",
+      "environment_probe_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-macos-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-macos-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-macos-x86_64.xml"
+      ],
+      "tool_acquisition": "Apple Xcode/macOS WebKit; Rust via rustup; official Node archive. https://v2.tauri.app/start/prerequisites/",
+      "availability": "BLOCKED: target machine/CI not established; execution deferred by ADR-005/006"
+    },
+    {
+      "target": "Windows 11 x86_64",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "Deferred by ADR-005/006; no operable target machine or CI established",
+      "id": "windows-x86_64",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-windows-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-windows-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-windows-x86_64.xml"
+      ],
+      "needed_machine": "Windows 11 x86_64 machine; GPU/display and SDK virtualization required for later T01/T04",
+      "environment_detection_argv": [
+        "{python}",
+        "-c",
+        "import platform,sys; print(platform.platform(),platform.machine(),sys.version)"
+      ],
+      "reproduction_prerequisites": "Use the target project venv, Rust/Node and original run.py. Migration to another system requires authorized C1 root/venv/global-lock rebinding first. Environment suite records versions only; actual T01/Core/media/Android execution retains NOT RUN.",
+      "environment_probe_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-windows-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-windows-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-windows-x86_64.xml"
+      ],
+      "tool_acquisition": "Windows 11 x64; Microsoft C++ Build Tools with desktop C++, WebView2 Runtime; Rust MSVC toolchain; official Node. https://v2.tauri.app/start/prerequisites/",
+      "availability": "BLOCKED: target machine/CI not established; execution deferred by ADR-005/006"
+    },
+    {
+      "target": "Ubuntu 24.04 x86_64 X11",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "Deferred by ADR-005/006; no operable target machine or CI established",
+      "id": "linux-x11",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-x11",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-x11.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-x11.xml"
+      ],
+      "needed_machine": "Ubuntu 24.04 x86_64 X11 machine; GPU/display and SDK virtualization required for later T01/T04",
+      "environment_detection_argv": [
+        "{python}",
+        "-c",
+        "import platform,sys; print(platform.platform(),platform.machine(),sys.version)"
+      ],
+      "reproduction_prerequisites": "Use the target project venv, Rust/Node and original run.py. Migration to another system requires authorized C1 root/venv/global-lock rebinding first. Environment suite records versions only; actual T01/Core/media/Android execution retains NOT RUN.",
+      "environment_probe_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-x11",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-x11.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-x11.xml"
+      ],
+      "tool_acquisition": "Ubuntu 24.04 x64 with X11 or Wayland display; install build-essential, pkg-config, libwebkit2gtk-4.1-dev, libssl-dev, libxdo-dev, libayatana-appindicator3-dev, librsvg2-dev, GStreamer codecs as documented. https://v2.tauri.app/start/prerequisites/",
+      "availability": "BLOCKED: target machine/CI not established; execution deferred by ADR-005/006"
+    },
+    {
+      "target": "Ubuntu 24.04 x86_64 Wayland",
+      "machine": null,
+      "ci": null,
+      "required": false,
+      "status": "NOT RUN",
+      "reason": "Deferred by ADR-005/006; no operable target machine or CI established",
+      "id": "linux-wayland",
+      "reproduce_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-wayland",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-wayland.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-wayland.xml"
+      ],
+      "needed_machine": "Ubuntu 24.04 x86_64 Wayland machine; GPU/display and SDK virtualization required for later T01/T04",
+      "environment_detection_argv": [
+        "{python}",
+        "-c",
+        "import platform,sys; print(platform.platform(),platform.machine(),sys.version)"
+      ],
+      "reproduction_prerequisites": "Use the target project venv, Rust/Node and original run.py. Migration to another system requires authorized C1 root/venv/global-lock rebinding first. Environment suite records versions only; actual T01/Core/media/Android execution retains NOT RUN.",
+      "environment_probe_argv": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-wayland",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-wayland.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-wayland.xml"
+      ],
+      "tool_acquisition": "Ubuntu 24.04 x64 with X11 or Wayland display; install build-essential, pkg-config, libwebkit2gtk-4.1-dev, libssl-dev, libxdo-dev, libayatana-appindicator3-dev, librsvg2-dev, GStreamer codecs as documented. https://v2.tauri.app/start/prerequisites/",
+      "availability": "BLOCKED: target machine/CI not established; execution deferred by ADR-005/006"
+    }
+  ],
+  "pending": [
+    "Outer executes toolchain acquisition, prepare, negative suite, exact A1 then verify all against stable source",
+    "T01/T05 create the actual Tauri app manifest and its Cargo.lock; T01 installs hls.js and validates real media",
+    "T02/T04 validate Android tools, JDK/Gradle, API35 boot and fixed Cloudstream ABI independently",
+    "T23 collects full distribution notices/source/licenses and signs/packages the application"
+  ],
+  "historical_resource_probe": {
+    "receipt": "evidence/runs/20261027T010843115773-t00-resource-probe/receipt.json",
+    "log": "evidence/runs/20261027T010843115773-t00-resource-probe/output.log",
+    "exit": 2,
+    "payload_started": false,
+    "backend": {
+      "python": "3.12.14",
+      "platform": "darwin",
+      "backend": "process-watchdog",
+      "memory_enforcement": "rss-sampled",
+      "cpu_enforcement": "build-jobs",
+      "memory_mib": 4096,
+      "jobs": 2,
+      "test_threads": 1
+    },
+    "note": "[Errno 1] Operation not permitted: '/Users/eason/Library/Caches/agent-project-workflow/heavy.lock'"
+  },
+  "commands": {
+    "rust_toolchain": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "t00-rust-toolchain",
+      "--",
+      "rustup",
+      "toolchain",
+      "install",
+      "1.98.1",
+      "--profile",
+      "minimal",
+      "--component",
+      "rustfmt",
+      "--component",
+      "clippy",
+      "--no-self-update"
+    ],
+    "prepare": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "t00-prepare",
+      "--",
+      "{python}",
+      "-B",
+      "tests/acceptance/t00.py",
+      "--suite",
+      "prepare",
+      "--report",
+      "evidence/acceptance/T00-prepare.json",
+      "--junit",
+      "evidence/acceptance/T00-prepare.xml"
+    ],
+    "negatives": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "t00-negatives",
+      "--",
+      "{python}",
+      "-B",
+      "tests/acceptance/t00.py",
+      "--suite",
+      "negatives",
+      "--report",
+      "evidence/acceptance/T00-negatives.json",
+      "--junit",
+      "evidence/acceptance/T00-negatives.xml"
+    ],
+    "acceptance": [
+      "{python}",
+      "-B",
+      "scripts/run.py",
+      "A1",
+      "--",
+      "{python}",
+      "-B",
+      "tests/acceptance/t00.py",
+      "--suite",
+      "all",
+      "--report",
+      "evidence/acceptance/T00-all.json",
+      "--junit",
+      "evidence/acceptance/T00-all.xml"
+    ],
+    "verify": [
+      "{python}",
+      "-B",
+      "scripts/verify.py",
+      "all"
+    ],
+    "environment": {
+      "macos-arm64": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-macos-arm64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-macos-arm64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-macos-arm64.xml"
+      ],
+      "macos-x86_64": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-macos-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-macos-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-macos-x86_64.xml"
+      ],
+      "windows-x86_64": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-windows-x86_64",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-windows-x86_64.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-windows-x86_64.xml"
+      ],
+      "linux-x11": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-x11",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-x11.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-x11.xml"
+      ],
+      "linux-wayland": [
+        "{python}",
+        "-B",
+        "scripts/run.py",
+        "t00-environment-linux-wayland",
+        "--",
+        "{python}",
+        "-B",
+        "tests/acceptance/t00.py",
+        "--suite",
+        "environment",
+        "--report",
+        "evidence/acceptance/T00-environment-linux-wayland.json",
+        "--junit",
+        "evidence/acceptance/T00-environment-linux-wayland.xml"
+      ]
+    }
+  },
+  "core_acquisition": {
+    "rust": {
+      "source": "https://www.rust-lang.org/tools/install",
+      "method": "Install official rustup for the host; then execute commands.rust_toolchain via original run.py. Exact rustc pin is rust-toolchain.toml.",
+      "version": "1.98.1"
+    },
+    "node": {
+      "source": "https://nodejs.org/dist/v26.11.1/",
+      "method": "Use official host package/archive for Node 26.11.1; verify SHASUMS256.txt/signature per Node release instructions. Preserve the observed npm 11.20.0.",
+      "version": "26.11.1",
+      "npm_version": "11.20.0"
+    },
+    "webview": {
+      "source": "https://v2.tauri.app/start/prerequisites/",
+      "method": "macOS supplies WebKit; install/launch Xcode from Apple, select its Developer directory, then A1 checks SDK/clang and links the system framework. Missing Rust/WebKit stops Core."
+    },
+    "npm_dependencies": {
+      "source": "package-lock.json",
+      "method": "A1 uses the installed Node executable and official npm-cli.js to execute ci --no-audit --no-fund, then run build; no source lock regeneration."
+    }
+  },
+  "native_lock": {
+    "path": "src-tauri/Cargo.lock",
+    "status": "NOT RUN; src-tauri/Cargo.toml is created in T01/T05",
+    "reason": "T00 compiles a dependency-free Rust fixture and links WebKit; Tauri dependency resolution follows with the actual app crate."
+  },
+  "candidate_inputs": [
+    {
+      "file": "cloudstream-LICENSE",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/a7ac454af8fbd64574c96847a936905855911720/LICENSE"
+    },
+    {
+      "file": "cloudstream-gradle-wrapper.properties",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/a7ac454af8fbd64574c96847a936905855911720/gradle/wrapper/gradle-wrapper.properties"
+    },
+    {
+      "file": "cloudstream-build.gradle.kts",
+      "url": "https://raw.githubusercontent.com/recloudstream/cloudstream/a7ac454af8fbd64574c96847a936905855911720/app/build.gradle.kts"
+    },
+    {
+      "file": "extensions-LICENSE",
+      "url": "https://raw.githubusercontent.com/821938089/cloudstream-extensions/25cdd2119be03f62ae6a5a2cf46b16f9484224a2/LICENSE",
+      "optional": true
+    },
+    {
+      "file": "hls-package.json",
+      "url": "https://raw.githubusercontent.com/video-dev/hls.js/v1.7.3/package.json"
+    },
+    {
+      "file": "hls-LICENSE",
+      "url": "https://raw.githubusercontent.com/video-dev/hls.js/v1.7.3/LICENSE"
+    },
+    {
+      "file": "tauri-Cargo.toml",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.12.5/crates/tauri/Cargo.toml"
+    },
+    {
+      "file": "nanohttpd.pom",
+      "url": "https://raw.githubusercontent.com/NanoHttpd/nanohttpd/nanohttpd-project-2.3.1/pom.xml"
+    },
+    {
+      "file": "android-images.xml",
+      "url": "https://dl.google.com/android/repository/sys-img/android/sys-img2-3.xml"
+    },
+    {
+      "file": "tauri-workspace.toml",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.12.5/Cargo.toml"
+    },
+    {
+      "file": "hls-release.json",
+      "url": "https://registry.npmjs.org/hls.js/1.7.3"
+    }
+  ],
+  "execution_order": [
+    "commands.rust_toolchain",
+    "commands.prepare",
+    "commands.acceptance",
+    "commands.verify"
+  ],
+  "plan_updated_utc": "2026-10-27T02:52:02.768924+00:00",
+  "negative_suite_note": "commands.negatives is an optional isolated diagnostic. Exact A1 already runs all 28 regression cases, including rejection of rustup self-update preparation; a separate negative run is unnecessary when A1 succeeds.",
+  "command_expansion": "Replace only the first {python} in an outer command array with the project interpreter. Preserve the {python} after run.py -- exactly as declared by task.py show; the original executor expands it for the payload.",
+  "current_desktop_release": {
+    "card": "T0.27",
+    "status": "WIP: source prepared; final build/A1/clean-machine lifecycle NOT RUN",
+    "target": "macos-arm64",
+    "minimum_macos": "14.0",
+    "display_version": "0.1.0",
+    "macos_bundle_version": "2",
+    "runtime": "Independent Rust JSON sources; local frontend; macOS system WebKit/media frameworks",
+    "dependencies": {
+      "tauri": "2.12.5",
+      "tauri-build": "2.7.4",
+      "rusqlite": "0.32.1",
+      "SQLite": "3.46.0",
+      "@videojs/core": "10.3.0",
+      "hls.js": "1.7.3"
+    },
+    "locks": [
+      "package-lock.json",
+      "src-tauri/Cargo.lock"
+    ],
+    "inventory": "licenses/dependencies.json",
+    "notices": "licenses/THIRD_PARTY_NOTICES.txt",
+    "current_manifest_pointer": "evidence/releases/T23-current.json",
+    "acceptance_report": "evidence/acceptance/T23-all.json",
+    "signing_policy": "Local ad-hoc resource seal; Developer ID/notarization pending; actual Gatekeeper/stapler outputs in manifest/A1",
+    "excluded": [
+      "original cs3 plugins",
+      "Cloudstream engine APK",
+      "Android SDK/emulator/system images",
+      "development/test bridge"
+    ],
+    "distribution": "Personal use only; public release and third-party content rights require separate authorization",
+    "deferred_platforms": {
+      "macos-x86_64": "NOT RUN (ADR-005/006)",
+      "windows-x86_64": "NOT RUN (ADR-005/006)",
+      "linux-x11": "NOT RUN (ADR-005/006)",
+      "linux-wayland": "NOT RUN (ADR-005/006)"
+    },
+    "handoff": "packaging/T23.md",
+    "historical_sections": "Earlier candidate/Android observations above are retained as historical evidence (ADR-048)"
+  },
+  "final_delivery": {
+    "card": "T0.36",
+    "version": "0.1.0",
+    "macos_bundle_version": "2",
+    "target": "macos-arm64",
+    "minimum_macos": "14.0",
+    "scope": "personal use only; not public distribution",
+    "historical_fields": "Other top-level fields preserve the T00 initialization plan/observations verbatim.",
+    "tools_observed_utc": "2026-11-10T10:15:23+00:00",
+    "tools": {
+      "python": "3.12.14",
+      "rustc": "1.98.1",
+      "cargo": "1.98.1",
+      "tauri_cli": "2.9.6",
+      "node": "26.11.1",
+      "npm": "11.20.0",
+      "macos": "27.0.1",
+      "arch": "arm64"
+    },
+    "locks": {
+      "package.json": "807f2e5560e7cb5a42b111cadb788ccce3148fae01ba075cd8f7785cf3f5de1d",
+      "package-lock.json": "c213eb7d0e57ed9362dce1ee0aae8a2211b277e883a15be193172f749065880c",
+      "src-tauri/Cargo.toml": "d4fe9294ae59d4ff978b72af2f17b0cbcde0a3eb58c22c249475ae716b949fbe",
+      "src-tauri/Cargo.lock": "a7defbeb9f42639f8160490b81d81c876207701cb30d500bcca6c730b15ca70e",
+      "src-tauri/tauri.conf.json": "472e8f40afe2225dcb5795dcf95df8f11b51ded7986177bb3866d8de7db1219e",
+      "scripts/requirements.txt": "4f8a38c0fd2292e63d5eaf9678ea2a8865b7025de038ce0b02329925f84c5ff4",
+      "licenses/dependencies.json": "0a8904ac66e2a4074b931b07ca51f4f6a936ea1d49797afaef1c75f12db96ec3",
+      "licenses/THIRD_PARTY_NOTICES.txt": "2a5736fdeadc962e0b9524545df775c87cc71e0182217c7ac81c1c0f502dc4a7"
+    },
+    "npm_versions": {
+      "@videojs/core": "10.3.0",
+      "@videojs/hlsjs-video": "10.3.0",
+      "@videojs/html": "10.3.0",
+      "naive-ui": "2.45.3",
+      "vue": "3.5.44"
+    },
+    "rust_versions": {
+      "tauri": "2.12.5",
+      "tauri-build": "2.7.4",
+      "rusqlite": "0.32.1",
+      "sqlite": "3.46.0"
+    },
+    "release_pointer": "evidence/releases/T23-current.json",
+    "reports": {
+      "A1": "evidence/acceptance/T25-all.json",
+      "A2": "evidence/acceptance/T25-lifecycle.json"
+    },
+    "historical_evidence": [
+      {
+        "card": "T0.35",
+        "path": "evidence/acceptance/T24-all.json",
+        "sha256": "d89d5e54c0faef4b2b2d4dccdf34ea2c038ebaef4a8898a0c04fd54b3f523848",
+        "source": "aad5387ef76a3b5843edd180aa6ff246ffdbf1e824d7c57e5fdb9a94c12e8d4a",
+        "scope": "Fixed pre-line-preference build; audio sampling skipped by user"
+      },
+      {
+        "card": "T0.37",
+        "path": "evidence/acceptance/LINE-PREFERENCE.json",
+        "sha256": "b42a28da2734b70191e59547daad86802f63d8fbaf8c75359c7295a0e7adcc50",
+        "source": "56eb1b06226c871681e270cc9763910fc4a289e83a81f14dcbb7c367f3f565bd",
+        "scope": "Line preference and related matching/playback/episode/history regressions"
+      }
+    ],
+    "deferred": [
+      {
+        "target": "macos-x86_64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "windows-x86_64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "linux-x11",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "linux-wayland",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "macos14-arm64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      }
+    ],
+    "mobile": [
+      {
+        "card": "T1.1",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.2",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.3",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.4",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.5",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.6",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      }
+    ]
+  }
+}

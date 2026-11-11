@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "card": "T0.1",
+  "status": "candidate; Android build and ABI NOT RUN",
+  "runtime": {
+    "repository": "https://github.com/recloudstream/cloudstream",
+    "candidate_commit": "a7ac454af8fbd64574c96847a936905855911720",
+    "production_commit": null,
+    "license": "GPL-3.0; inspect fixed upstream LICENSE in outer A1",
+    "promotion_gate": "T02 loads all seven unchanged original packages in ART using the upstream Application and loader"
+  },
+  "tools_and_image_plan": "docs/runtime.lock.json#/android",
+  "gradle_version_source": "gradle/wrapper/gradle-wrapper.properties at candidate_commit",
+  "jdk_candidate": "17 LTS; reconcile with fixed upstream Gradle/Android plugin before T02",
+  "bridge_http": {
+    "coordinate": "org.nanohttpd:nanohttpd:2.3.1",
+    "status": "candidate; POM acquired by outer prepare; integration and dependency lock verified in T02",
+    "source": "https://repo.maven.apache.org/maven2/org/nanohttpd/nanohttpd/2.3.1/nanohttpd-2.3.1.pom",
+    "license": "BSD-3-Clause candidate; verify POM and preserve notices in T23"
+  },
+  "dependency_resolution": "NOT RUN; retain fixed upstream dependency declarations and generate actual Gradle dependency locks with the T02 engine build",
+  "sdk_license_acceptance": "NOT RUN; user reviews and accepts required SDK licenses before preparing this branch"
+}

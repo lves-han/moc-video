@@ -1,0 +1,6012 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://replica.invalid/contracts/app.schema.json",
+  "title": "Tauri app IPC and UI state contract",
+  "description": "应用层结构与命令契约。bridge DTO通过相对引用复用；app状态按各$defs验证。HTTP资源与内部原生对象不经invoke字节传输。 $id仅为离线注册标识；验证器从本地文件注册app与bridge资源。 1.3.0新增MacCMS/Stremio配置、AppSource联合及宿主/Cloudstream独立运行状态；共用内容和播放DTO。 1.3.1补齐请求预算、部分失败warnings与get_resource_status。 1.4.0新增显式解析释放、栏目index与完整播放上下文绑定；Settings保持v2。 1.5.0按最新设定分离Stremio元数据与Cloudstream/MacCMS播放身份，新增match_playback、匹配绑定与目标历史DTO；底层provider同源约束保留。",
+  "$defs": {
+    "EmptyInput": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "SourceKey": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "source_id",
+        "source_revision"
+      ],
+      "additionalProperties": false
+    },
+    "WindowBounds": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 960
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 640
+        },
+        "maximized": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height",
+        "maximized"
+      ],
+      "additionalProperties": false
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "last_source_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "持久化稳定source_id；启动后重新取得revision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "旧最近源字段，迁移时按kind分别恢复元数据配置或播放源；新写入使用last_metadata_config_id/last_playback_source_key。",
+          "deprecated": true
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "auto_next": {
+          "type": "boolean"
+        },
+        "window_bounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WindowBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_configs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HttpSourceConfig"
+          },
+          "maxItems": 32
+        },
+        "ui_locale": {
+          "type": "string",
+          "enum": [
+            "en",
+            "zh-CN"
+          ],
+          "default": "en",
+          "description": "页面语言；缺省英文。Stremio元数据派生为中文zh-CN或英文en，语言写入沿用完整Settings单队列。"
+        },
+        "ui_theme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "description": "旧手动明暗偏好，仅兼容读取；显示始终跟随系统，新建设置省略该字段。",
+          "deprecated": true
+        },
+        "color_palette": {
+          "type": "string",
+          "enum": [
+            "lime",
+            "ocean",
+            "violet",
+            "rose",
+            "amber"
+          ],
+          "default": "lime",
+          "description": "用户色系；每种色系包含系统浅色/深色配色，明暗自动跟随系统。沿用Settings单写队列。"
+        },
+        "last_metadata_config_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_playback_source_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_cache_max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "default": 268435456
+        },
+        "metadata_preset_applied": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "last_source_key",
+        "volume",
+        "muted",
+        "auto_next",
+        "window_bounds",
+        "source_configs"
+      ],
+      "additionalProperties": false
+    },
+    "RuntimeStatus": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": [
+            "macos",
+            "windows",
+            "linux",
+            "android",
+            "ios"
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "unavailable",
+            "checking",
+            "preparing",
+            "starting",
+            "ready",
+            "stopping",
+            "failed"
+          ]
+        },
+        "engine_epoch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HostHealth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cloudstream": {
+          "$ref": "#/$defs/CloudstreamRuntime"
+        }
+      },
+      "required": [
+        "platform",
+        "phase",
+        "engine_epoch",
+        "health",
+        "error",
+        "cloudstream"
+      ],
+      "additionalProperties": false,
+      "description": "Rust应用运行状态。根engine_epoch为Rust host_epoch；cloudstream.engine_epoch为独立客体世代。ready由宿主网关决定。",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "health": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/HostHealth"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "const": "ready"
+                      }
+                    }
+                  }
+                ]
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "idle",
+                  "loading",
+                  "ready",
+                  "empty",
+                  "resolving",
+                  "preparing",
+                  "playing",
+                  "paused",
+                  "buffering",
+                  "ended",
+                  "unavailable",
+                  "checking",
+                  "starting",
+                  "stopping"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ResourceUrl": {
+      "type": "string",
+      "description": "D0只接受Rust当前引擎base派生的loopback资源URL；M04另行扩展受信HTTPS地址",
+      "format": "uri",
+      "pattern": "^http://127\\.0\\.0\\.1:[0-9]+/(images|media)/[^\\s]+[?&]cap=[A-Za-z0-9_-]{43}(&[^\\s]*)?$"
+    },
+    "ImageAccess": {
+      "type": "object",
+      "properties": {
+        "resource_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "$ref": "#/$defs/ResourceUrl"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "resource_id",
+        "url",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "ImageAccessMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ImageAccess"
+      }
+    },
+    "HomeViewData": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "$ref": "bridge.openapi.json#/components/schemas/HomePage"
+        },
+        "images": {
+          "$ref": "#/$defs/ImageAccessMap"
+        }
+      },
+      "required": [
+        "page",
+        "images"
+      ],
+      "additionalProperties": false
+    },
+    "DetailsViewData": {
+      "type": "object",
+      "properties": {
+        "details": {
+          "$ref": "bridge.openapi.json#/components/schemas/Details"
+        },
+        "images": {
+          "$ref": "#/$defs/ImageAccessMap"
+        },
+        "metadata_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetadataRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "details",
+        "images",
+        "metadata_ref"
+      ],
+      "additionalProperties": false,
+      "description": "Stremio页面详情返回metadata_ref；播放源候选详情供确认选集时为null。"
+    },
+    "SubtitleView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format": {
+          "const": "vtt"
+        },
+        "source_format": {
+          "type": "string",
+          "enum": [
+            "vtt",
+            "srt",
+            "ass",
+            "unknown"
+          ]
+        },
+        "url": {
+          "$ref": "#/$defs/ResourceUrl"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "language",
+        "format",
+        "source_format",
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackViewSession": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stream_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "episode_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "stream_kind": {
+          "type": "string",
+          "enum": [
+            "progressive",
+            "hls",
+            "dash"
+          ]
+        },
+        "mime_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_url": {
+          "$ref": "#/$defs/ResourceUrl"
+        },
+        "subtitles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubtitleView"
+          }
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "session_id",
+        "resolution_id",
+        "stream_id",
+        "source_id",
+        "source_revision",
+        "episode_ref",
+        "stream_kind",
+        "mime_type",
+        "media_url",
+        "subtitles",
+        "expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackContext": {
+      "type": "object",
+      "properties": {
+        "metadata_ref": {
+          "$ref": "#/$defs/MetadataRef"
+        },
+        "metadata_video_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "match_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "content_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "group_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "episode_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "episode_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "selected_stream_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "metadata_ref",
+        "metadata_video_id",
+        "match_id",
+        "content_ref",
+        "group_id",
+        "episode_id",
+        "episode_ref",
+        "selected_stream_id"
+      ],
+      "additionalProperties": false,
+      "description": "metadata_ref定位Stremio影片与metadata_video_id；content_ref/group_id/episode_id/episode_ref定位匹配的Cloudstream或MacCMS播放条目。后两种ref同播放源同修订；match_id绑定Rust已确认匹配，元数据源与播放源分别校验。"
+    },
+    "Route": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "home"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "details"
+            },
+            "ref": {
+              "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+            }
+          },
+          "required": [
+            "name",
+            "ref"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "playback"
+            },
+            "context": {
+              "$ref": "#/$defs/PlaybackContext"
+            }
+          },
+          "required": [
+            "name",
+            "context"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": [
+                "sources",
+                "setup",
+                "history",
+                "settings"
+              ]
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "BufferedRange": {
+      "type": "object",
+      "properties": {
+        "start_ms": {
+          "type": "integer",
+          "description": "毫秒；JSON安全整数",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "end_ms": {
+          "type": "integer",
+          "description": "毫秒；JSON安全整数",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "start_ms",
+        "end_ms"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackState": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "resolving",
+            "preparing",
+            "ready",
+            "playing",
+            "paused",
+            "buffering",
+            "ended",
+            "failed"
+          ]
+        },
+        "playback_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "engine_epoch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlaybackContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/Resolution"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "当前集的解析结果，供线路选择列出streams；session.resolution_id必须等于其id"
+        },
+        "session": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlaybackViewSession"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position_ms": {
+          "type": "integer",
+          "description": "毫秒；JSON安全整数",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "description": "毫秒；JSON安全整数",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "buffered": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BufferedRange"
+          }
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "subtitle_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "playback_epoch",
+        "engine_epoch",
+        "context",
+        "resolution",
+        "session",
+        "position_ms",
+        "duration_ms",
+        "buffered",
+        "volume",
+        "muted",
+        "speed",
+        "subtitle_id",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "ready",
+                  "playing",
+                  "paused",
+                  "buffering",
+                  "ended"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "session": {
+                "$ref": "#/$defs/PlaybackViewSession"
+              },
+              "context": {
+                "$ref": "#/$defs/PlaybackContext"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "resolution": {
+                "$ref": "bridge.openapi.json#/components/schemas/Resolution"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "idle",
+                  "loading",
+                  "ready",
+                  "empty",
+                  "resolving",
+                  "preparing",
+                  "playing",
+                  "paused",
+                  "buffering",
+                  "ended",
+                  "unavailable",
+                  "checking",
+                  "starting",
+                  "stopping"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "idle"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "session": {
+                "type": "null"
+              },
+              "resolution": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "resolving"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/PlaybackContext"
+              },
+              "session": {
+                "type": "null"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "resolution": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "preparing"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/PlaybackContext"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "resolution": {
+                "$ref": "bridge.openapi.json#/components/schemas/Resolution"
+              }
+            }
+          }
+        }
+      ],
+      "description": "当前上下文/候选/会话保持同集绑定；resolving时selected_stream_id=null；同集换线路关闭Session并保留Resolution。"
+    },
+    "HomeState": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "loading",
+            "ready",
+            "empty",
+            "failed"
+          ]
+        },
+        "request_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HomeViewData"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "request_epoch",
+        "request_id",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "ready",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/HomeViewData"
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "idle",
+                  "loading",
+                  "ready",
+                  "empty",
+                  "resolving",
+                  "preparing",
+                  "playing",
+                  "paused",
+                  "buffering",
+                  "ended",
+                  "unavailable",
+                  "checking",
+                  "starting",
+                  "stopping"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "loading"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DetailsState": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "loading",
+            "ready",
+            "empty",
+            "failed"
+          ]
+        },
+        "request_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DetailsViewData"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "request_epoch",
+        "request_id",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "ready",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/DetailsViewData"
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "idle",
+                  "loading",
+                  "ready",
+                  "empty",
+                  "resolving",
+                  "preparing",
+                  "playing",
+                  "paused",
+                  "buffering",
+                  "ended",
+                  "unavailable",
+                  "checking",
+                  "starting",
+                  "stopping"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "loading"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AppState": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "$ref": "#/$defs/Route"
+        },
+        "selected_metadata_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selected_playback_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "$ref": "#/$defs/SourcesState"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeStatus"
+        },
+        "home": {
+          "$ref": "#/$defs/HomeState"
+        },
+        "details": {
+          "$ref": "#/$defs/DetailsState"
+        },
+        "playback": {
+          "$ref": "#/$defs/PlaybackState"
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        }
+      },
+      "required": [
+        "route",
+        "selected_metadata_source",
+        "selected_playback_source",
+        "sources",
+        "runtime",
+        "home",
+        "details",
+        "playback",
+        "settings"
+      ],
+      "additionalProperties": false
+    },
+    "ResumeSnapshot": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/PlaybackContext"
+        },
+        "position_ms": {
+          "type": "integer",
+          "description": "毫秒；JSON安全整数",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "was_playing": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "context",
+        "position_ms",
+        "was_playing"
+      ],
+      "additionalProperties": false,
+      "description": "当前进程内前后台恢复快照；长期观看历史按开发规格11.4使用SQLite，持久化DTO与IPC在T18同步扩展契约。"
+    },
+    "CancelInput": {
+      "type": "object",
+      "properties": {
+        "target_request_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "target_request_id"
+      ],
+      "additionalProperties": false
+    },
+    "SessionInput": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "additionalProperties": false
+    },
+    "InteractionFinishInput": {
+      "type": "object",
+      "properties": {
+        "interaction_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "$ref": "bridge.openapi.json#/components/schemas/InteractionFinishRequest"
+        }
+      },
+      "required": [
+        "interaction_id",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    "RuntimeProgress": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "engine_epoch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "checking",
+            "downloading",
+            "installing",
+            "starting",
+            "ready",
+            "failed"
+          ]
+        },
+        "completed_bytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "字节数；未知为null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_bytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "字节数；未知为null"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "脱敏用户可读原因"
+        }
+      },
+      "required": [
+        "request_id",
+        "engine_epoch",
+        "phase",
+        "completed_bytes",
+        "total_bytes",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "EngineStateChanged": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "engine_epoch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeStatus"
+        }
+      },
+      "required": [
+        "request_id",
+        "engine_epoch",
+        "runtime"
+      ],
+      "additionalProperties": false
+    },
+    "PlayerEvent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "preparing"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ready"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "duration_ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "description": "毫秒；JSON安全整数",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id",
+            "duration_ms"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "playing"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "paused"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "buffering"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "percent": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id",
+            "percent"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "position"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "position_ms": {
+              "type": "integer",
+              "description": "毫秒；JSON安全整数",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id",
+            "position_ms"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ended"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "failed"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id",
+            "error"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "stopped"
+            },
+            "playback_epoch": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "session_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "playback_epoch",
+            "engine_epoch",
+            "session_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_runtime_status": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/EmptyInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_runtime_status": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "$ref": "#/$defs/RuntimeStatus"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "phase": {
+                        "const": "ready"
+                      }
+                    },
+                    "required": [
+                      "phase"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "engine_epoch": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_runtime_prepare": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/RuntimePrepareInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_runtime_prepare": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "$ref": "#/$defs/RuntimeStatus"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "data": {
+                    "properties": {
+                      "phase": {
+                        "const": "ready"
+                      }
+                    },
+                    "required": [
+                      "phase"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "engine_epoch": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_get_sources": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/EmptyInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_sources": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/AppSourceList"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_sync_catalog": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/SourceSyncInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_sync_catalog": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/SourceSyncResult"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_get_home": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/HomeRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_home": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/HomeViewData"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_get_details": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/DetailsRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_details": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/DetailsViewData"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_resolve_episode": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/ResolveEpisodeInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_resolve_episode": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Resolution"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_open_playback": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/PlaybackSessionRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_open_playback": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/PlaybackViewSession"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_close_playback": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/SessionInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_close_playback": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_cancel_request": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/CancelInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false,
+      "description": "request_id必须与input.target_request_id不同；跨字段不等式由语义校验及运行期BAD_REQUEST执行。"
+    },
+    "Result_cancel_request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/CancelResult"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_start_interaction": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/InteractionRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_start_interaction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Interaction"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_finish_interaction": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/InteractionFinishInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_finish_interaction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Interaction"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_get_settings": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/EmptyInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_settings": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "$ref": "#/$defs/Settings"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_save_settings": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/Settings"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false,
+      "description": "api.ts唯一写队列按最新已确认Settings构造完整对象；Rust提交锁串行写文件与发布来源世代。"
+    },
+    "Result_save_settings": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data": {
+              "$ref": "#/$defs/Settings"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SourcesState": {
+      "type": "object",
+      "description": "三类来源共用页面快照；host_epoch变化后整体重载，Cloudstream客体重启仅更新相关来源。",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "loading",
+            "ready",
+            "empty",
+            "failed"
+          ]
+        },
+        "request_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppSourceList"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "request_epoch",
+        "request_id",
+        "data",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "ready",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/AppSourceList"
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "idle",
+                  "loading",
+                  "ready",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "loading"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SourceKind": {
+      "type": "string",
+      "enum": [
+        "cloudstream",
+        "maccms",
+        "stremio"
+      ]
+    },
+    "MacCmsConfig": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "maccms"
+        },
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "api_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://[^\\s]+$"
+        }
+      },
+      "required": [
+        "kind",
+        "config_id",
+        "name",
+        "enabled",
+        "api_url"
+      ],
+      "additionalProperties": false,
+      "description": "一个MacCMS JSON接口作为一个来源；URL与凭据约束见开发规格18。"
+    },
+    "StremioConfig": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "stremio"
+        },
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "manifest_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://[^\\s]+$"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "config_id",
+        "name",
+        "enabled",
+        "manifest_urls"
+      ],
+      "additionalProperties": false,
+      "description": "一个Stremio来源配置可组合多个manifest，按资源/类型/ID前缀分派。"
+    },
+    "HttpSourceConfig": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MacCmsConfig"
+        },
+        {
+          "$ref": "#/$defs/StremioConfig"
+        }
+      ]
+    },
+    "CloudstreamOrigin": {
+      "type": "object",
+      "properties": {
+        "plugin_internal_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plugin_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "registration_key": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "plugin_internal_name",
+        "plugin_sha256",
+        "registration_key"
+      ],
+      "additionalProperties": false
+    },
+    "MacCmsOrigin": {
+      "type": "object",
+      "properties": {
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "api_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://[^\\s]+$"
+        }
+      },
+      "required": [
+        "config_id",
+        "api_url"
+      ],
+      "additionalProperties": false
+    },
+    "StremioOrigin": {
+      "type": "object",
+      "properties": {
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifest_urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://[^\\s]+$"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "config_id",
+        "manifest_urls"
+      ],
+      "additionalProperties": false
+    },
+    "AppSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "确定性provider实例ID",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "source_revision": {
+              "type": "string",
+              "description": "来源适用的制品/配置与映射修订摘要；公式见数据字典。",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "name": {
+              "type": "string",
+              "description": "源显示名"
+            },
+            "language": {
+              "type": "string",
+              "description": "源语言"
+            },
+            "content_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "保留源类型名"
+              }
+            },
+            "capabilities": {
+              "$ref": "bridge.openapi.json#/components/schemas/Capabilities"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtime_status": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "ready",
+                "failed",
+                "disabled"
+              ]
+            },
+            "kind": {
+              "const": "cloudstream"
+            },
+            "origin": {
+              "$ref": "#/$defs/CloudstreamOrigin"
+            }
+          },
+          "required": [
+            "id",
+            "source_revision",
+            "name",
+            "language",
+            "content_types",
+            "capabilities",
+            "runtime_status",
+            "kind",
+            "origin"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "runtime_status": {
+                    "const": "failed"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "error": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "确定性provider实例ID",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "source_revision": {
+              "type": "string",
+              "description": "来源适用的制品/配置与映射修订摘要；公式见数据字典。",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "name": {
+              "type": "string",
+              "description": "源显示名"
+            },
+            "language": {
+              "type": "string",
+              "description": "源语言"
+            },
+            "content_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "保留源类型名"
+              }
+            },
+            "capabilities": {
+              "$ref": "bridge.openapi.json#/components/schemas/Capabilities"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtime_status": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "ready",
+                "failed",
+                "disabled"
+              ]
+            },
+            "kind": {
+              "const": "maccms"
+            },
+            "origin": {
+              "$ref": "#/$defs/MacCmsOrigin"
+            }
+          },
+          "required": [
+            "id",
+            "source_revision",
+            "name",
+            "language",
+            "content_types",
+            "capabilities",
+            "runtime_status",
+            "kind",
+            "origin"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "runtime_status": {
+                    "const": "failed"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "error": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "确定性provider实例ID",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "source_revision": {
+              "type": "string",
+              "description": "完整manifest快照的修订摘要；首次未发布时保留unpublished且所有能力为false。",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "name": {
+              "type": "string",
+              "description": "源显示名"
+            },
+            "language": {
+              "type": "string",
+              "description": "源语言"
+            },
+            "content_types": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "保留源类型名"
+              }
+            },
+            "capabilities": {
+              "allOf": [
+                {
+                  "$ref": "bridge.openapi.json#/components/schemas/Capabilities"
+                },
+                {
+                  "properties": {
+                    "resolve": {
+                      "const": false
+                    }
+                  }
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtime_status": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "ready",
+                "failed",
+                "disabled"
+              ]
+            },
+            "kind": {
+              "const": "stremio"
+            },
+            "origin": {
+              "$ref": "#/$defs/StremioOrigin"
+            }
+          },
+          "required": [
+            "id",
+            "source_revision",
+            "name",
+            "language",
+            "content_types",
+            "capabilities",
+            "runtime_status",
+            "kind",
+            "origin"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "runtime_status": {
+                    "const": "failed"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "error": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "source_revision": {
+                    "const": "unpublished"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "runtime_status": {
+                    "enum": [
+                      "configured",
+                      "failed",
+                      "disabled"
+                    ]
+                  },
+                  "capabilities": {
+                    "properties": {
+                      "home": {
+                        "const": false
+                      },
+                      "search": {
+                        "const": false
+                      },
+                      "details": {
+                        "const": false
+                      },
+                      "resolve": {
+                        "const": false
+                      },
+                      "sequential_home": {
+                        "const": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Rust应用层来源联合；Android桥接Source保持Cloudstream结构。"
+    },
+    "AppSourceList": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AppSource"
+          }
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "$ref": "bridge.openapi.json#/components/schemas/PluginReport"
+          }
+        }
+      },
+      "required": [
+        "providers",
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "description": "providers含三类来源；plugins仅为已启动Cloudstream运行时的包报告，未启动时为[]。"
+    },
+    "HostHealth": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "initializing",
+            "ready",
+            "failed"
+          ]
+        },
+        "contract_version": {
+          "const": "1.5.0"
+        },
+        "media_gateway_ready": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "contract_version",
+        "media_gateway_ready"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_gateway_ready": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "CloudstreamRuntime": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "enum": [
+            "stopped",
+            "starting",
+            "ready",
+            "failed"
+          ]
+        },
+        "engine_epoch": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "headless",
+            "windowed",
+            "embedded",
+            "remote"
+          ]
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/Health"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "engine_epoch",
+        "display_mode",
+        "health",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "health": {
+                "allOf": [
+                  {
+                    "$ref": "bridge.openapi.json#/components/schemas/Health"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "const": "ready"
+                      }
+                    }
+                  }
+                ]
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RuntimePrepareInput": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "application",
+            "cloudstream"
+          ],
+          "default": "application"
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "description": "默认只准备Rust宿主；显式选择cloudstream时才初始化Android。"
+    },
+    "SourceSyncInput": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "cloudstream"
+            },
+            "request": {
+              "$ref": "bridge.openapi.json#/components/schemas/CatalogSyncRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "request"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "maccms",
+                "stremio"
+              ]
+            },
+            "config_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "config_id"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SourceSyncResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "config_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "sources": {
+          "$ref": "#/$defs/AppSourceList"
+        },
+        "cloudstream_result": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/CatalogSyncResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "config_id",
+        "changed",
+        "sources",
+        "cloudstream_result"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cloudstream"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "config_id": {
+                "type": "null"
+              },
+              "cloudstream_result": {
+                "$ref": "bridge.openapi.json#/components/schemas/CatalogSyncResult"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "config_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "cloudstream_result": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "description": "仅成功提交完整快照后返回。manifest失败返回error包络；未编辑配置的旧快照继续有效。"
+    },
+    "StremioManifest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "idPrefixes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "types"
+                ],
+                "additionalProperties": true
+              }
+            ]
+          }
+        },
+        "catalogs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "extra": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "isRequired": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "idPrefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "version",
+        "types",
+        "resources",
+        "catalogs"
+      ],
+      "additionalProperties": true
+    },
+    "MacCmsResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "const": 1
+        },
+        "page": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          ]
+        },
+        "pagecount": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          ]
+        },
+        "list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "vod_id": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "vod_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "vod_id",
+              "vod_name"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "code",
+        "list"
+      ],
+      "additionalProperties": true
+    },
+    "ResourceStatusInput": {
+      "$ref": "bridge.openapi.json#/components/schemas/ResourceStatusInput"
+    },
+    "ResourceStatus": {
+      "$ref": "bridge.openapi.json#/components/schemas/ResourceStatus"
+    },
+    "Args_get_resource_status": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/ResourceStatusInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_resource_status": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/ResourceStatus"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ResolutionInput": {
+      "type": "object",
+      "properties": {
+        "resolution_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "resolution_id"
+      ],
+      "additionalProperties": false
+    },
+    "Args_release_resolution": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/ResolutionInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_release_resolution": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MetadataIdentity": {
+      "type": "object",
+      "properties": {
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "addon_key": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "meta_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "canonical_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "config_id",
+        "addon_key",
+        "namespace",
+        "type",
+        "meta_id",
+        "canonical_id"
+      ],
+      "additionalProperties": false,
+      "description": "持久Stremio元数据定位；config_id/addon_key用于回源，namespace/type/canonical_id用于影片去重。addon_key基于英文基础manifest身份，语言变化保持。"
+    },
+    "MetadataRef": {
+      "type": "object",
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/MetadataIdentity"
+        },
+        "content_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        }
+      },
+      "required": [
+        "identity",
+        "content_ref"
+      ],
+      "additionalProperties": false,
+      "description": "当前修订下的Stremio元数据引用；content_ref用于get_details，长期历史只存identity。"
+    },
+    "PlaybackMatchCandidate": {
+      "type": "object",
+      "properties": {
+        "content_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 9999
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "content_ref",
+        "title",
+        "year"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackMatchSelection": {
+      "type": "object",
+      "properties": {
+        "content_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "episode_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "content_ref",
+        "group_id",
+        "episode_id"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackMatchInput": {
+      "type": "object",
+      "properties": {
+        "metadata_ref": {
+          "$ref": "#/$defs/MetadataRef"
+        },
+        "video_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "playback_source": {
+          "$ref": "#/$defs/SourceKey"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlaybackMatchSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "metadata_ref",
+        "video_id",
+        "playback_source",
+        "selection"
+      ],
+      "additionalProperties": false
+    },
+    "PlaybackMatchResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "matched",
+            "needs_confirmation",
+            "not_found"
+          ]
+        },
+        "metadata_ref": {
+          "$ref": "#/$defs/MetadataRef"
+        },
+        "video_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlaybackMatchCandidate"
+          },
+          "maxItems": 20
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlaybackContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "metadata_ref",
+        "video_id",
+        "candidates",
+        "context"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "matched"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/PlaybackContext"
+              },
+              "candidates": {
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "needs_confirmation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "candidates": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not_found"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "candidates": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ResolveEpisodeInput": {
+      "type": "object",
+      "properties": {
+        "episode_ref": {
+          "$ref": "bridge.openapi.json#/components/schemas/MediaRef"
+        },
+        "match_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "episode_ref",
+        "match_id"
+      ],
+      "additionalProperties": false,
+      "description": "Rust验证match_id与episode_ref、播放源/修订/宿主世代一致后，向底层适配器透传原ResolveRequest。"
+    },
+    "Args_match_playback": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/PlaybackMatchInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_match_playback": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/PlaybackMatchResult"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WatchHistoryRecord": {
+      "type": "object",
+      "properties": {
+        "content_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "metadata_identity": {
+          "$ref": "#/$defs/MetadataIdentity"
+        },
+        "video_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "season_number": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "episode_number": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "kind": {
+          "enum": [
+            "movie",
+            "series",
+            "anime",
+            "other"
+          ]
+        },
+        "poster_cache_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "source_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "position_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "updated_at": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "content_id",
+        "metadata_identity",
+        "video_id",
+        "season_number",
+        "episode_number",
+        "title",
+        "kind",
+        "poster_cache_key",
+        "source_id",
+        "source_name",
+        "position_ms",
+        "duration_ms",
+        "completed",
+        "updated_at"
+      ],
+      "additionalProperties": false,
+      "description": "SQLite目标记录DTO；content_id使用H(metadata,namespace,type,canonical_id)，跨字段进度约束由Rust与SQLite同时校验。本轮只定义契约，历史IPC与持久化在T18实现。"
+    },
+    "HistoryList": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WatchHistoryRecord"
+          }
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "entries",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryListInput": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "HistorySaveInput": {
+      "type": "object",
+      "properties": {
+        "record": {
+          "$ref": "#/$defs/WatchHistoryRecord"
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "match_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "playback_epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "record",
+        "session_id",
+        "match_id",
+        "playback_epoch",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryRemoveInput": {
+      "type": "object",
+      "properties": {
+        "content_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "content_id",
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "HistoryClearInput": {
+      "type": "object",
+      "properties": {
+        "write_sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "write_sequence"
+      ],
+      "additionalProperties": false
+    },
+    "Args_list_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryListInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_list_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/HistoryList"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_save_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistorySaveInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_save_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/WatchHistoryRecord"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_remove_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryRemoveInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_remove_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_clear_history": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/HistoryClearInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_clear_history": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MediaCacheStatus": {
+      "type": "object",
+      "properties": {
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "used_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pending_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entry_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "max_bytes",
+        "used_bytes",
+        "pending_bytes",
+        "entry_count",
+        "last_error"
+      ],
+      "additionalProperties": false
+    },
+    "Args_get_media_cache": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_media_cache": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/MediaCacheStatus"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_clear_media_cache": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_clear_media_cache": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/MediaCacheStatus"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WatchlistEntry": {
+      "type": "object",
+      "properties": {
+        "content_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "metadata_identity": {
+          "$ref": "#/$defs/MetadataIdentity"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "kind": {
+          "enum": [
+            "movie",
+            "series",
+            "anime",
+            "other"
+          ]
+        },
+        "poster_cache_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "content_id",
+        "metadata_identity",
+        "title",
+        "kind",
+        "poster_cache_key"
+      ],
+      "additionalProperties": false
+    },
+    "Watchlist": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WatchlistEntry"
+          }
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "Args_list_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/EmptyInput"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_list_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/Watchlist"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_add_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "#/$defs/WatchlistEntry"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_add_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/WatchlistEntry"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_remove_watchlist": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "content_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "content_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_remove_watchlist": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/Ack"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_search_catalog": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "$ref": "bridge.openapi.json#/components/schemas/SearchRequest"
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_search_catalog": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "bridge.openapi.json#/components/schemas/SearchResult"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "x-command-contracts": {
+    "runtime_status": {
+      "args": {
+        "$ref": "#/$defs/Args_runtime_status"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_runtime_status"
+      }
+    },
+    "runtime_prepare": {
+      "args": {
+        "$ref": "#/$defs/Args_runtime_prepare"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_runtime_prepare"
+      }
+    },
+    "get_sources": {
+      "args": {
+        "$ref": "#/$defs/Args_get_sources"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_sources"
+      }
+    },
+    "sync_catalog": {
+      "args": {
+        "$ref": "#/$defs/Args_sync_catalog"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_sync_catalog"
+      }
+    },
+    "get_home": {
+      "args": {
+        "$ref": "#/$defs/Args_get_home"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_home"
+      }
+    },
+    "get_details": {
+      "args": {
+        "$ref": "#/$defs/Args_get_details"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_details"
+      }
+    },
+    "resolve_episode": {
+      "args": {
+        "$ref": "#/$defs/Args_resolve_episode"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_resolve_episode"
+      }
+    },
+    "open_playback": {
+      "args": {
+        "$ref": "#/$defs/Args_open_playback"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_open_playback"
+      }
+    },
+    "close_playback": {
+      "args": {
+        "$ref": "#/$defs/Args_close_playback"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_close_playback"
+      }
+    },
+    "cancel_request": {
+      "args": {
+        "$ref": "#/$defs/Args_cancel_request"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_cancel_request"
+      }
+    },
+    "start_interaction": {
+      "args": {
+        "$ref": "#/$defs/Args_start_interaction"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_start_interaction"
+      }
+    },
+    "finish_interaction": {
+      "args": {
+        "$ref": "#/$defs/Args_finish_interaction"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_finish_interaction"
+      }
+    },
+    "get_settings": {
+      "args": {
+        "$ref": "#/$defs/Args_get_settings"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_settings"
+      }
+    },
+    "save_settings": {
+      "args": {
+        "$ref": "#/$defs/Args_save_settings"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_save_settings"
+      }
+    },
+    "get_resource_status": {
+      "args": {
+        "$ref": "#/$defs/Args_get_resource_status"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_resource_status"
+      }
+    },
+    "release_resolution": {
+      "args": {
+        "$ref": "#/$defs/Args_release_resolution"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_release_resolution"
+      }
+    },
+    "match_playback": {
+      "args": {
+        "$ref": "#/$defs/Args_match_playback"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_match_playback"
+      }
+    },
+    "list_history": {
+      "args": {
+        "$ref": "#/$defs/Args_list_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_list_history"
+      }
+    },
+    "save_history": {
+      "args": {
+        "$ref": "#/$defs/Args_save_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_save_history"
+      }
+    },
+    "remove_history": {
+      "args": {
+        "$ref": "#/$defs/Args_remove_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_remove_history"
+      }
+    },
+    "clear_history": {
+      "args": {
+        "$ref": "#/$defs/Args_clear_history"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_clear_history"
+      }
+    },
+    "get_media_cache": {
+      "args": {
+        "$ref": "#/$defs/Args_get_media_cache"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_media_cache"
+      }
+    },
+    "clear_media_cache": {
+      "args": {
+        "$ref": "#/$defs/Args_clear_media_cache"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_clear_media_cache"
+      }
+    },
+    "list_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_list_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_list_watchlist"
+      }
+    },
+    "add_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_add_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_add_watchlist"
+      }
+    },
+    "remove_watchlist": {
+      "args": {
+        "$ref": "#/$defs/Args_remove_watchlist"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_remove_watchlist"
+      }
+    },
+    "search_catalog": {
+      "args": {
+        "$ref": "#/$defs/Args_search_catalog"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_search_catalog"
+      }
+    }
+  },
+  "x-event-contracts": {
+    "runtime-progress": {
+      "$ref": "#/$defs/RuntimeProgress"
+    },
+    "engine-state-changed": {
+      "$ref": "#/$defs/EngineStateChanged"
+    }
+  },
+  "x-request-budgets": {
+    "transport_grace_ms": 2000,
+    "aggregate_finalize_ms": 1000,
+    "public_metadata_slots": 4,
+    "operations": {
+      "default_metadata": {
+        "total_ms": 30000,
+        "child_ms": 30000,
+        "max_concurrency": 1
+      },
+      "cloudstream_home": {
+        "total_ms": 60000,
+        "child_ms": 15000,
+        "max_concurrency": 1
+      },
+      "maccms_home": {
+        "total_ms": 45000,
+        "child_ms": 30000,
+        "max_concurrency": 4
+      },
+      "stremio_home": {
+        "total_ms": 45000,
+        "child_ms": 30000,
+        "max_concurrency": 4
+      },
+      "http_source_sync": {
+        "total_ms": 45000,
+        "child_ms": 15000,
+        "max_concurrency": 4
+      },
+      "resolve": {
+        "total_ms": 45000,
+        "child_ms": 45000,
+        "max_concurrency": 1
+      },
+      "health": {
+        "total_ms": 3000,
+        "child_ms": 3000,
+        "max_concurrency": 1
+      },
+      "get_resource_status": {
+        "total_ms": 3000,
+        "child_ms": 3000,
+        "max_concurrency": 1
+      },
+      "runtime_prepare": {
+        "total_ms": 120000,
+        "child_ms": 120000,
+        "max_concurrency": 1
+      },
+      "cloudstream_home_page": {
+        "total_ms": 30000,
+        "child_ms": 15000,
+        "max_concurrency": 1
+      },
+      "match_playback": {
+        "total_ms": 45000,
+        "child_ms": 15000,
+        "max_concurrency": 4
+      }
+    }
+  },
+  "x-stremio-capability-rule": {
+    "resolve_resources": [],
+    "meaning": "Stremio仅提供catalog/meta元数据；resolve固定false，stream及inline streams均不进入播放管线。默认元数据选择要求home/details。"
+  }
+}

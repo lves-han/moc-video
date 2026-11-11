@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-palette="lime">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="theme-color"
+      content="#101014"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f7f8fa"
+      media="(prefers-color-scheme: light)"
+    />
+    <script>
+      // Restore the palette before paint; CSS follows the system color scheme.
+      try {
+        const palette = localStorage.getItem("moc-video.palette");
+        if (["lime", "ocean", "violet", "rose", "amber"].includes(palette)) {
+          document.documentElement.dataset.palette = palette;
+        }
+      } catch {
+        /* Lime stays available when storage is disabled. */
+      }
+    </script>
+    <meta
+      name="description"
+      content="Moc Video. A place for good stories. Film discovery, details and embedded playback preview."
+    />
+    <title>Moc Video · Make time for a good story</title>
+    <link rel="icon" type="image/svg+xml" href="/mark.svg" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

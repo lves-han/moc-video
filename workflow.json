@@ -1,0 +1,106 @@
+{
+  "project": "墨客视频",
+  "agent_command": [
+    "codex",
+    "exec",
+    "-m",
+    "gpt-6.1-sol",
+    "-s",
+    "workspace-write",
+    "--color",
+    "never",
+    "-"
+  ],
+  "review_command": [
+    "codex",
+    "exec",
+    "-m",
+    "gpt-6.1-sol",
+    "-s",
+    "read-only",
+    "--color",
+    "never",
+    "-"
+  ],
+  "session_seconds": 10800,
+  "idle_seconds": 2700,
+  "max_sessions": 2,
+  "poll_seconds": 15,
+  "command_seconds": 7200,
+  "review_seconds": 1800,
+  "memory_mib": 4096,
+  "jobs": 2,
+  "heavy_lock": "/Users/eason/jp/application/evidence/drive/heavy.lock",
+  "verify": [
+    {
+      "id": "verify-workflow",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/tests",
+        "-p",
+        "test_*.py"
+      ],
+      "kind": "test",
+      "report": "unittest",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "verify-contracts",
+      "argv": [
+        "{python}",
+        "-B",
+        "replica-spec/validate_contracts.py",
+        "--report",
+        "evidence/contracts-validation.json"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-working-contracts",
+      "argv": [
+        "{python}",
+        "-B",
+        "scripts/check-contracts.py"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-frontend-tests",
+      "argv": [
+        "npm",
+        "test"
+      ],
+      "kind": "command",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "verify-frontend-build",
+      "argv": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "kind": "command",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "verify-project",
+      "argv": [
+        "{python}",
+        "-B",
+        "scripts/check-project.py"
+      ],
+      "kind": "command",
+      "timeout_seconds": 3600
+    }
+  ],
+  "lean_workflow": true,
+  "lean_from": "T0.34"
+}
