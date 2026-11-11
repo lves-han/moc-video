@@ -1,6 +1,6 @@
 # 墨客视频任务路线
 
-状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。45张桌面、6张后续移动：T0.28至T0.34为ADR-057新增的Apple TV化改造卡，原T0.28、T0.29按ADR-057顺延为T0.35、T0.36，已完成卡正文及其验收脚本中的“T0.28/A1”指顺延后的T0.35/A1；其余沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
+状态：T0.1至T0.17已完成；当前T0.19按ADR-048迁移为Rust播放源路线，后续业务验收NOT RUN。48张桌面、6张后续移动：T0.28至T0.34为ADR-057新增的Apple TV化改造卡，原T0.28、T0.29按ADR-057顺延为T0.35、T0.36，已完成卡正文及其验收脚本中的“T0.28/A1”指顺延后的T0.35/A1；其余沿用原卡号；已完成卡正文及历史保持。原SPEC逐字节归档，生效差异见ADR-005、ADR-044、ADR-048及ARCHITECTURE。
 
 平台范围（ADR-005/ADR-006，macOS first）：桌面必需验收目标只有macOS arm64（本机）。各卡“原始义务”及覆盖表中的macOS x86_64、Windows、Ubuntu X11/Wayland运行、安装、性能与签名要求降为非阻断记录项：代码保持cfg可移植，验收报告列为NOT RUN并给出复现命令，后续另行授权；本机macOS arm64缺测、失败或伪称其他平台通过时验收失败。
 
@@ -15,7 +15,9 @@
 本节优先于下文与之冲突的逐卡全量验证、提交、独立巡检和冻结修订流程；显式任务需求、用户决定以及必要的安全和数据完整性检查仍然有效。
 
 
-当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.27桌面验收→T0.28至T0.34桌面Apple TV化改造→T0.35独立验收→T0.37线路记忆→T0.36交付→T0.38至T0.44本地视频、直播、设置重组、通用TMDB与MKV（ADR-065）→T0.45近似搜索。原脚本按文件顺序及依赖选卡；每卡独立验收。当前开发授权来自2026-11-05聊天，文档独立CLEAR后执行。
+当前顺序：T0.19 SuperVod JSON→T0.20多源身份/完整性→T0.21原生请求上下文→T0.22宿主及来源管理→T0.18设置/SQLite→T0.23配置事务→T0.24至T0.27桌面验收→T0.28至T0.34桌面Apple TV化改造→T0.35独立验收→T0.37线路记忆→T0.36交付→T0.38至T0.44本地视频、直播、设置重组、通用TMDB与MKV（ADR-065）→T0.45近似搜索→T0.47至T0.49独立播放服务（ADR-077/078，取代ADR-075/076规划的T0.46）。原脚本按文件顺序及依赖选卡；每卡独立验收。本次用户 2026-11-11 明确要求仅修订与复审文档、先不开发；播放服务三张卡等待新的开发指令，T0.47 设置阶段门。
+
+播放服务 T0.47–T0.49 按个人娱乐应用验收（ADR-078）：一组直接相关自动检查加一次本机关键操作检查，可合并场景、复用已有检查。超时、缓存和并发值作为可调初值；长播、压力/容量、跨平台安装、完整故障矩阵和重复全量 verify 留待按需安排。保留找片/选集/选线/播放/续播、当前数据保留、基本鉴权与网络安全检查。仅调整这三张新卡，既有完成证据和其他卡保持其原范围；具体要求见方案第 10 节。
 
 M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌面T25完成后外层监管停止并交付移动待办；M00执行前须明确移动授权。验收入口只做当卡行为断言，任务状态、冻结与完成资格沿原脚本。未完成卡脚本由当卡交付，当前业务验收NOT RUN；已有验收入口及完成证据保持，运行缺入口必然失败。
 
@@ -71,6 +73,9 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | X6 | T0.43 | MKV可行性实验（ffmpeg-next） | 桌面 |
 | X7 | T0.44 | MKV支持 | 桌面 |
 | X8 | T0.45 | 近似搜索 | 桌面 |
+| SERVICE-1 | T0.47 | 播放服务一：元数据服务 | 桌面 |
+| SERVICE-2 | T0.48 | 播放服务二：播放服务与App选线 | 桌面 |
+| SERVICE-3 | T0.49 | 播放服务三：接口类来源 | 桌面 |
 | T25 | T0.36 | 开发交付与最终说明 | 桌面 |
 | M00 | T1.1 | Android / iOS 真机可行性与版本基线 | 后续移动 |
 | M01 | T1.2 | Android本地Rust来源接入 | 后续移动 |
@@ -99,7 +104,7 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | R03 / §2.2 | Rust宿主/公开JSON适配器运行，无Android环境前提 | T0.19/A1, T0.22/A1 | ADR-048取代原Application/加载器 |
 | R04 / §2.3 | 每个核准JSON来源独立身份/revision、配置UUID稳定 | T0.20/A1, T0.23/A1 | ADR-048取代包→provider全集 |
 | R05 / §2.4 | 原生媒体请求头/Referer与来源上下文保持、敏感字段留Rust | T0.7/A1, T0.8/A1, T0.21/A1, T0.25/A1 | ADR-048移除原插件interceptor语义 |
-| R06 / §2.5,3,3.1 | 单Rust crate、类型分发、原生HTTP与共用媒体路径 | T0.3/A1, T0.4/A1, T0.5/A1, T0.9/A1, T0.22/A1 | ADR-048移除Android执行分支 |
+| R06 / §2.5,3,3.1 | Rust crate、类型分发、原生HTTP与共用媒体路径 | T0.3/A1, T0.4/A1, T0.5/A1, T0.9/A1, T0.22/A1, T0.47/A1 | ADR-048移除Android执行分支；ADR-077/078改为App/服务两个可执行crate加按需共享库crate |
 | R07 / §3.2 | 核准Rust来源、内嵌视频、macOS arm64及真实数据交付 | T0.24/A1, T0.35/A1 | ADR-005/048；原包7/7与全集义务取代 |
 | R08 / §4 | 复用已有前端、api/models/player单入口、模块/cfg及协议权威 | T0.1/A1, T0.3/A1, T0.12/A1, T0.13/A1 | 按原规格完整保留 |
 | R09 / §5.1 | 目标系统/工具链与Rust来源实际资源测量 | T0.1/A1（历史）, T0.21/A1, T0.26/A1, T0.26/A2 | ADR-048移除AVD镜像及其预算 |
@@ -225,6 +230,9 @@ M系列按ADR-048改为本地Rust来源，保持后续独立授权阶段。桌�
 | REQ-X06 / 用户2026-11-11聊天、ADR-065、docs/FOLLOWUP-LOCAL-LIVE-TMDB.md | 通用TMDB源同时支持TMDB官方API与Stremio TMDB扩展 | T0.38/A1, T0.41/A1 | 桌面 |
 | REQ-X07 / 用户2026-11-11聊天、ADR-065、docs/FOLLOWUP-LOCAL-LIVE-TMDB.md | 用ffmpeg-next在程序内支持MKV，不用ffmpeg.wasm或外置ffmpeg可执行文件 | T0.43/A1, T0.44/A1 | 桌面 |
 | REQ-X08 / 用户2026-11-11聊天（「搜索是否能近似搜索」「Implement it」） | MacCMS 搜索规范化与逐步放宽、TMDB 片名兜底、按接近程度排序、相近结果提示 | T0.45/A1 | 桌面 |
+| REQ-SERVICE-META / 用户2026-11-11聊天（服务提供TMDB/Stremio元数据、每天更新主页排名与分类、代理TMDB；按审查意见修订并简化验收）、ADR-077/078 | 按需共享crate、持久令牌、本机/局域网接入、TMDB和自定义Stremio元数据、首次及每日首页、缓存、语言路由、当前历史/收藏与来源身份保留 | T0.47/A1, T0.47/A2 | 桌面；等开发指令 |
+| REQ-SERVICE-PLAY / 用户2026-11-11聊天（多源自动/手动选线、元数据解耦、应用语言搜索与两级筛选、缓存可用源；按审查意见修订并简化验收）、ADR-075/076/077/078 | MacCMS JSON/XML、正确匹配与确认/撤销、来源与候选/线路生命周期、缓存/刷新/统计；App查询和测速均结束后选线、换线续播、旧轮次隔离、来源导入及移除全局播放源与MacCMS元数据 | T0.48/A1, T0.48/A2 | 桌面；依赖第一期 |
+| REQ-SERVICE-PROVIDERS / 用户2026-11-11聊天（zyfun/TVBox/Stremio接口形式扩展；按审查意见修订并简化验收）、ADR-077/078 | T4查询式、DRPYJS0、T4 REST式、TVBox type 4、Stremio播放扩展的ID与能力适配、json解析；HTTP媒体支持状态 | T0.49/A1 | 桌面；向其他Stremio客户端输出stream为第四期可选 |
 | REQ-M00 / replica-spec/AI_TASKS.md M00 | ADR-048修订后的M00工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.1/A1 | 后续移动 |
 | REQ-M01 / replica-spec/AI_TASKS.md M01 | ADR-048修订后的Android本地Rust来源接入工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.2/A1 | 后续移动 |
 | REQ-M02 / replica-spec/AI_TASKS.md M02 | ADR-048修订后的M02工作/验收，原始义务见归档；其余性能强度沿ADR-044 | T1.3/A1 | 后续移动 |
@@ -2431,6 +2439,91 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "report": "junit:evidence/acceptance/T0.45-A1.xml",
     "cases": ["REQ-X08/relaxed-queries", "REQ-X08/ranking", "REQ-X08/tmdb-alias", "REQ-X08/approximate-hint"],
     "timeout_seconds": 1800
+  }
+]
+```
+
+### T0.47 播放服务一：元数据服务
+- [ ] 完成
+- 依赖：T0.45
+- 阶段门：用户另行明确要求开始播放服务开发；本次仅修订与复审文档（ADR-078）。
+- 环境：当前 macos-arm64 App；服务端与受控上游以本机 Docker 运行，沿用资源执行器并清理自建容器/临时数据。配置的局域网服务用代表性连接样本验证。
+- 需求：REQ-SERVICE-META → A1, A2
+- 范围：`Cargo.toml`（新增 workspace）, `Cargo.lock`, `crates/`, `server/`, `src-tauri/`, `src/`, `protocol/`, `tests/`, `packaging/`, `licenses/`, `docs/runtime.lock.json`, `docs/PROGRESS.md`
+- 交付物：按 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` 第 2.2、3、4、5.1、5.2、5.7、7.3、7.5、8.1、9、10 节实现。建立 workspace 与 `moc-core`，按本期实际调用迁入共用代码，保持现有播放。服务提供 axum/SQLite、持久令牌及环境变量优先级、health、TMDB 与自定义 Stremio 元数据登记/管理/配置导入、按元数据来源隔离的 manifest/catalog/meta 路由、原始片名和别名、缓存、首次无快照生成及每日首页（含综艺）、失败保留旧快照。App 服务访问支持本机/局域网地址，令牌限定配置 origin 和基础路径，本地服务域名可用系统 DNS；来源/媒体沿 ADR-068 允许内网、回环和 Fake-IP，保留 TLS 与跨 origin 凭据处理。App 增加服务设置，保留元数据来源选择与语言，适配自建服务语言和目录，维持当前 TMDB 与自定义 Stremio 的逻辑身份、历史和收藏；服务地址/令牌变化只更新传输配置。未连接服务时内置 TMDB 保留到第二期结束。提供 Dockerfile、反向代理日志关闭/脱敏示例、关键接口的 OpenAPI 文档及新增依赖许可记录。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "本机 Docker 服务接受控 TMDB 与一个自定义 Stremio 元数据样本：目录/搜索/分页/详情与关键字段正确，原始片名和别名可用于匹配，来源同名 ID 与语言缓存互相隔离；用可控时间验证缓存命中和过期、首次无快照后生成、综艺目录及更新失败保留旧快照。检查错误令牌被拒、自动令牌重启复用、环境变量优先，以及样例 App/服务/代理输出脱敏；本机/局域网服务可达，来源及私网媒体按 ADR-068 接受；令牌请求跨 origin 跳转被拒，普通跳转清除敏感头。workspace 构建与受拆分影响的既有相关检查通过，记录并清理自建容器。复用场景，校验关键接口即可。",
+    "argv": ["{python}", "-B", "tests/acceptance/playback_service.py", "--suite", "meta-server", "--report", "evidence/acceptance/T0.47-A1.json", "--junit", "evidence/acceptance/T0.47-A1.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T0.47-A1.xml",
+    "cases": ["REQ-SERVICE-META/metadata-and-language", "REQ-SERVICE-META/cache-and-home", "REQ-SERVICE-META/token-and-redaction", "REQ-SERVICE-META/configured-endpoints", "REQ-SERVICE-META/workspace"],
+    "timeout_seconds": 1800
+  },
+  {
+    "id": "A2",
+    "description": "一次本机 App 关键操作检查（可自动化，也可由验收入口记录实际操作）：保存本机服务地址与令牌，浏览 TMDB 和一个 Stremio 元数据源的目录/搜索/详情，切换语言；首期沿原播放流程短时播放并续播接入前保存的 TMDB 记录，收藏保持一份，自定义 Stremio 内容身份保留；更改服务地址或令牌后仍指向原内容。观察首次准备首页、错误鉴权和服务不可达的提示，未配置服务时内置 TMDB 可用；检查一次诊断脱敏。未完成的操作如实报告。",
+    "argv": ["{python}", "-B", "tests/acceptance/playback_service.py", "--suite", "meta-app", "--report", "evidence/acceptance/T0.47-A2.json", "--junit", "evidence/acceptance/T0.47-A2.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T0.47-A2.xml",
+    "cases": ["REQ-SERVICE-META/app-browse", "REQ-SERVICE-META/current-records", "REQ-SERVICE-META/app-errors-and-fallback"],
+    "timeout_seconds": 2400
+  }
+]
+```
+
+### T0.48 播放服务二：播放服务与App选线
+- [ ] 完成
+- 依赖：T0.47
+- 环境：当前 macos-arm64 App；服务和受控来源以本机 Docker 运行，沿用资源执行器并清理自建资源。
+- 需求：REQ-SERVICE-PLAY → A1, A2
+- 范围：`Cargo.toml`, `Cargo.lock`, `crates/`, `server/`, `src-tauri/`, `src/`, `protocol/`, `tests/`, `licenses/`, `docs/runtime.lock.json`, `docs/PROGRESS.md`
+- 交付物：按方案第 5.3–5.8、6.1–6.6、7.1–7.3、7.5、8.2–8.5、9、10 节实现。服务端接入 MacCMS JSON/XML，两次片名查询与两级筛选，未知类型需确认、标题年份冲突排除、唯一满足条件者自动确认；对应关系按元数据来源/类型/影片/播放来源保存，正常增集继续复用。实现 NDJSON 查询、确认/撤销/取消、短期缓存、句柄有效期、刷新与统计、来源管理与本期类型配置导入；第三期类型列入跳过清单。App 原生轮次保存地址，查询和待测均结束或整轮到期后自动选最快可播线路，手动可提前选择；确认/取消/切集丢弃迟到结果，过期重查且保留进度，失败按线路刷新一次再换线，上报失败仅影响统计。移除全局播放源、MacCMS 元数据和同源直通、App 内跨源匹配与线路记忆、短剧/体育入口及内置 TMDB 直连（Q5），保留服务 TMDB/Stremio 元数据选择与当前历史/收藏。来源上传按稳定 ID 幂等保存，成功项才移除本地配置。关键接口同步 OpenAPI，受影响的已有检查随行为调整并简记原因；普通媒体继续原安全规则。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "少量受控 JSON/XML 来源覆盖两次片名查询、全文结果过滤、衍生视频/季集错误/标题年份冲突排除、未知类型及多候选需确认、唯一一致候选自动确认。组合检查全部启用来源被查询、失败或超时互不阻断、查询结束后确认/撤销、增集复用与身份冲突重查；用可控时间检查短期缓存、刷新、过期/重启 410，取消和来源改配置后的旧确认被拒。检查导入成功项才移除本地配置、本期外类型跳过、统计与一次凭据脱敏/网络规则反例。",
+    "argv": ["{python}", "-B", "tests/acceptance/playback_service.py", "--suite", "play-server", "--report", "evidence/acceptance/T0.48-A1.json", "--junit", "evidence/acceptance/T0.48-A1.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T0.48-A1.xml",
+    "cases": ["REQ-SERVICE-PLAY/matching", "REQ-SERVICE-PLAY/mapping-lifecycle", "REQ-SERVICE-PLAY/cache-and-refresh", "REQ-SERVICE-PLAY/all-sources-and-failures", "REQ-SERVICE-PLAY/import-and-safety"],
+    "timeout_seconds": 1800
+  },
+  {
+    "id": "A2",
+    "description": "一次本机 App 关键流程检查：普通文件/HLS 线路显示查询与测速进度，模拟来源查询先结束而最快线路稍后测通，等待后自动选对并短时播放推进；手动提前选择、需确认后加入、换线保留进度、失败刷新一次再换线均可操作。切集或重新查找后旧结果不覆盖，过期重查保留进度；已有历史按新轮次续播，TMDB/自定义 Stremio 元数据仍可选择。观察地址和请求头留在宿主、测速绕过媒体缓存、来源导入及移除全局播放源/MacCMS 元数据；服务错误有重试入口，本地视频/直播抽查入口仍可用。",
+    "argv": ["{python}", "-B", "tests/acceptance/playback_service.py", "--suite", "play-app", "--report", "evidence/acceptance/T0.48-A2.json", "--junit", "evidence/acceptance/T0.48-A2.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T0.48-A2.xml",
+    "cases": ["REQ-SERVICE-PLAY/wait-probes-and-play", "REQ-SERVICE-PLAY/manual-confirm-and-switch", "REQ-SERVICE-PLAY/rounds-and-resume", "REQ-SERVICE-PLAY/settings-and-errors"],
+    "timeout_seconds": 2700
+  }
+]
+```
+
+### T0.49 播放服务三：接口类来源
+- [ ] 完成
+- 依赖：T0.48
+- 环境：当前 macos-arm64 App；服务和受控来源以本机 Docker 运行，沿用资源执行器并清理自建资源。
+- 需求：REQ-SERVICE-PROVIDERS → A1
+- 范围：`Cargo.toml`, `Cargo.lock`, `crates/`, `server/`, `src/`, `protocol/`, `tests/`, `licenses/`, `docs/runtime.lock.json`, `docs/PROGRESS.md`
+- 交付物：按方案第 1、6.6、6.7、7.2、10 节新增 `t4_query`（drpy-node/TVBox type 4）、`t4_drpyjs0`、`t4_rest`（CatVod）、`stremio_stream` 与 json 解析适配。以实际接口样本核对 T4 参数/初始化、字符串和交替数组 url、header 与 parse/jx，按 flag 选择 json 解析接口；需要嗅探时标明原因。Stremio 根据 manifest 能力与 ID 前缀，映射 TMDB/已核实元数据外部 ID 到电影 IMDb ID 或剧集 ID，缺 ID/类型或前缀不支持时继续其他来源；HTTP 媒体按播放器实际能力筛选。更新来源管理、导入与关键 OpenAPI；向其他 Stremio 客户端输出 stream 留在第四期。
+- 验收：
+```json
+[
+  {
+    "id": "A1",
+    "description": "每种新增适配类型一个代表性受控样本，合并核对搜索/详情/play 参数、T4 字符串和数组 url、header、json 解析及需嗅探状态，导入按实际类型接收或跳过。Stremio 样本覆盖电影和剧集 ID、两个元数据来源同名 ID 的隔离、缺 IMDb/前缀不匹配继续其他来源；BT 和播放器暂不支持的格式有明确处理。一次本机 App 操作实际播放一条 T4 与一条 Stremio HTTP 线路并观察进度。外部真实接口有条件时检查，其临时故障单独记录。",
+    "argv": ["{python}", "-B", "tests/acceptance/playback_service.py", "--suite", "providers", "--report", "evidence/acceptance/T0.49-A1.json", "--junit", "evidence/acceptance/T0.49-A1.xml"],
+    "kind": "test",
+    "report": "junit:evidence/acceptance/T0.49-A1.xml",
+    "cases": ["REQ-SERVICE-PROVIDERS/t4-samples", "REQ-SERVICE-PROVIDERS/stremio-ids", "REQ-SERVICE-PROVIDERS/parsers-and-import", "REQ-SERVICE-PROVIDERS/app-playback"],
+    "timeout_seconds": 2400
   }
 ]
 ```

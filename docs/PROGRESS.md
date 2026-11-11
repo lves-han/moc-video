@@ -3038,3 +3038,29 @@
 ## 体验安装包 2026-11-11T07:35:00Z
 - 用户要求构建 macOS 安装包体验。`packaging/release.py --build` 经 run.py（diag-experience-release-build）完成生产前端、`cargo tauri build`、ad-hoc 签名、发货文件检查与 dmg 生成，`hdiutil verify` 通过；脚本最后一步「Real build 1 predecessor required」（旧升级生命周期对比）失败，发生在 dmg 生成与校验之后，属 ADR-064 移除旧版兼容后的遗留检查，未改动。
 - 安装包：`evidence/releases/T23-20261111T072826-91036f4c/MocVideo-0.1.0-build2-macos-arm64-personal.dmg`（SHA256 ae8b0f375b117ba818948b79357973cba52c77c6cfa848d2ee1f3ae549ac3129，14.9 MB），副本 `/Users/eason/jp/deliverables/moc-video/`。挂载核对：Frameworks 含四个 FFmpeg dylib，`codesign --verify --deep --strict` 通过，rpath 仅 `@executable_path/../Frameworks`，可执行文件无本机路径。个人使用 ad-hoc 签名，未公证。
+
+## T0.46 元数据解耦与多源自动选线 阶段门 2026-11-11T09:00:00Z
+- 结果：AUTHORIZED
+- 授权：用户在 2026-11-11 聊天中对 ADR-069 的 D7 答复「按建议处理」（侧栏综艺改用 TMDB 真人秀/脱口秀类型，短剧、体育入口移除），并在前一条指示中要求「一起做优化」（见 ADR-069 及其补充）。
+- 备注：同日用户指示「只更新文档，不做代码实现」。T0.46 未开始开发；试做的按语言查询、第二级筛选与电影自动确认代码已撤回，实现要点记入方案文档 8.1、8.4 节。此前完成的第一级片名过滤（`fuzzy::related`）保留，未提交。
+
+## T0.46 取代记录 2026-11-11
+- 用户对 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` Q1–Q8 答复「按建议批准」（ADR-070）。T0.46 未开发，按 Q6 从 TASKS 删除，由 T0.47–T0.49 取代；上方 T0.46 阶段门授权记录作为历史保留。T0.47–T0.49 已规划，尚未开始开发。
+
+## 播放服务方案修订与复审 2026-11-11T15:33:23Z
+
+- 来源：用户要求按九项审查意见修订方案、任务卡和 ADR，再复审；并明确「先不开始开发」，按娱乐应用放宽验收。
+- 文档：更新 `FOLLOWUP-PLAYBACK-SERVICE.md` 第 2 版、T0.47–T0.49 及需求覆盖、架构补充，追加 ADR-071 和第四期 BACKLOG；补齐配置端点访问、逻辑身份/当前记录、自动确认、测速等待、候选/线路有效期、自定义 Stremio 元数据、ID 转换、首次快照、持久令牌与日志脱敏。
+- 验收收敛：以相关自动检查和一次本机关键操作为主；长播、压力、多平台和完整故障矩阵按需安排，参数作为可调初值。保留当前数据、基本安全及关键播放流程检查，既有完成证据保持。
+- 文档检查：原 `task.py check` 通过（54 张卡）；方案 8 个 JSON/NDJSON 示例对象解析成功；`git diff --check` 通过。三张服务卡均未完成，T0.47 `authorized=False`，阶段门等待用户新的开发指令。
+- 独立只读复审：`docs/reviews/doc-review/round-57.md`，`DOC-REVIEW-VERDICT: CLEAR`；受审 `protected` 为 `a405a44974ee2af44cf49322defe304c1d85e635deb475597894083f745085b0`，ADR-071 摘要为 `68a4b8391923141b78ab222abaff596835c33d0e8317aba422f4dd103f01dd19`。复审发现的后两卡依赖文件范围缺口已补齐并复核。
+- 实现状态：业务开发、构建和播放验收 NOT RUN。本次没有启动开发驱动或服务。
+
+## 播放服务文档与远端 main 合并复核 2026-11-11
+
+- 授权：用户随后要求「review完成之后拉取最新代码并合并，然后再推送到main里」。本次仍仅文档同步，服务开发阶段门保持关闭。
+- 基线：取远端 main `bca68af7f5a36f24f4cbee64c641cc38da22c305` 的最新源码和文档，在临时克隆内集成；原工作区未提交应用改动与原暂存状态保留。原开发工作区与远端各自具有独立 Git 历史，本次采用远端 main 为父提交追加文档，保留远端已有提交。
+- 编号：远端 ADR-068–ADR-074 完整保留；本地播放服务原 ADR-068/069/070/071 依次顺延为 ADR-075/076/077/078。上方合并前记录及 round-57 的旧编号、摘要仍指其当时基线，最终引用以本条和 round-58 为准。
+- 网络：按远端已批准 ADR-068 接受内网、回环与 Fake-IP，保留固定 DNS、TLS、协议与凭据处理；App 的服务令牌限定到配置端点，局域网服务域名可用系统 DNS。方案、任务卡、架构和新 ADR 已同步。
+- 独立复审：`docs/reviews/doc-review/round-58.md`，`DOC-REVIEW-VERDICT: CLEAR`。受审 protected 为 `f0cb326abf5b9501c976263fcb8983cdae8429a23dbc75d2d96e847982d54d07`，ADR-078 摘要为 `ac35750afc3ba7a4b28ba185458d8ee5dd360ed9e4af3dc1941cdfafc6920f8d`。
+- 检查：路线结构 54 卡、ADR 编号唯一、远端决定前缀完整、文档差异检查通过；提交范围限定为本次方案、相关规划与复审记录。业务实现和播放验收仍为 NOT RUN。

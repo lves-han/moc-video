@@ -62,3 +62,10 @@ validateSourceDraft直接返回英文文案，T0.17复巡evidence/reviews/202611
 
 ## release.py 末尾的旧版升级对比检查 2026-11-11
 - `packaging/release.py --build` 在 dmg 生成并校验后要求「Real build 1 predecessor」，用于旧的升级生命周期对比。ADR-064 已移除旧版本兼容，这一步应按 ADR-064 删除或改为可选。
+
+## 播放服务第四期（ADR-077，不建卡） 2026-11-11
+按 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` 第 11 节，第四期为可选：媒体转发 `/v1/media/{ticket}`（默认关闭，按来源开启，Q7）、热门影片对应关系预取、APP 后端接口（T3_APPYSV2、T3_APPGET，Q8 暂不做）。前三期稳定后再评估。
+
+## 播放服务第四期补充（ADR-078） 2026-11-11
+
+向其他 Stremio 客户端输出 `stream` 移到第四期可选；前三期对外只提供 catalog/meta，App 播放统一走 `/v1/lookups`。第三期接入第三方 Stremio 播放扩展继续保留。本次按个人娱乐应用简化三期验收，长播、容量压力、多平台安装及完整故障矩阵按实际需要再安排。本轮仅修订与复审文档，开发等待用户新指令。
