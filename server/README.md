@@ -11,5 +11,7 @@
 - `MOC_SERVICE_TOKEN`：可选访问令牌；设置时优先于令牌文件。
 - `MOC_TMDB_KEY`：TMDB v3 API key 或 v4 读取令牌，由服务持有。
 - `MOC_TMDB_API_URL`：可选 TMDB v3 接口地址，默认 `https://api.themoviedb.org/3`。
+- `TZ`：首页每日更新时区，默认 `Asia/Shanghai`；在当地时间 04:00 更新。
+- `MOC_HOME_POLL_SECONDS`：检查更新的间隔，默认 60 秒。
 
 需要远程访问时使用 HTTPS 反向代理；`packaging/playback-service.nginx.conf` 提供关闭访问日志的示例。

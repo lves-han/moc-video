@@ -13,6 +13,8 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         io::Error::new(error.kind(), format!("opening service database: {error}"))
     })?);
     let conn = rusqlite::Connection::open(path)?;
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+        CREATE TABLE IF NOT EXISTS metadata_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, expires_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS home_snapshots (revision TEXT PRIMARY KEY, built_at INTEGER NOT NULL, payload TEXT NOT NULL);")?;
     Ok(())
 }

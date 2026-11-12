@@ -21,6 +21,14 @@ pub struct Tmdb {
 }
 
 impl Tmdb {
+    pub fn revision(&self) -> String {
+        use sha2::{Digest, Sha256};
+        format!(
+            "{:x}",
+            Sha256::digest(format!("{}\0{}", self.base, self.key))
+        )
+    }
+
     pub fn is_configured(&self) -> bool {
         !self.key.trim().is_empty()
     }

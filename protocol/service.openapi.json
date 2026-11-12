@@ -72,6 +72,9 @@
           },
           "502": {
             "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
           }
         }
       }
@@ -128,6 +131,9 @@
           },
           "502": {
             "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
           }
         }
       }
@@ -192,6 +198,9 @@
           },
           "502": {
             "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
           }
         }
       }
@@ -248,6 +257,9 @@
           },
           "502": {
             "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
           }
         }
       }
@@ -281,11 +293,16 @@
             "type": "string"
           },
           "snapshot_at": {
-            "type": "string",
-            "nullable": true
+            "type": "integer",
+            "nullable": true,
+            "description": "Unix timestamp of the last successful home snapshot"
           },
           "sources": {
             "type": "integer"
+          },
+          "snapshot_error": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

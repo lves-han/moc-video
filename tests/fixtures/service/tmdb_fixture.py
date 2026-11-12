@@ -1,12 +1,28 @@
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlsplit
+import time
+
+STATE = {"fail": False, "delay": 0.0, "counts": {}}
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         query = parse_qs(url.query)
+        if url.path == "/control":
+            if "fail" in query: STATE["fail"] = query["fail"][0] == "1"
+            if "delay" in query: STATE["delay"] = float(query["delay"][0])
+            if "reset" in query: STATE["counts"].clear()
+            return self.send_json(STATE)
+        if url.path == "/stats":
+            return self.send_json(STATE)
+        STATE["counts"][url.path] = STATE["counts"].get(url.path, 0) + 1
+        time.sleep(STATE["delay"])
+        if STATE["fail"]:
+            self.send_response(503)
+            self.end_headers()
+            return
         if query.get("api_key") != ["fixture-key"]:
             self.send_response(401)
             self.end_headers()
@@ -29,6 +45,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
+        self.send_json(data)
+
+    def send_json(self, data):
         payload = json.dumps(data, ensure_ascii=False).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

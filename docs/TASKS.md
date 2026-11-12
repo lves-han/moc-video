@@ -2655,14 +2655,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.3 元数据缓存与首次、每日首页快照
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.2
 - 需求：REQ-SERVICE-META（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §4.2–4.3、5.7）→ A1
 - 上下文：方案 §4.2–4.3、5.7；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.2 元数据路由和目录；T1.1 SQLite、health；可控时钟夹具。
 - 不变量：缓存按来源及版本、类型、语言和筛选隔离；失败保留最后成功快照。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`server/src/metadata/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
+- 范围：`server/src/metadata/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `server/README.md`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/metadata/cache.rs`, `server/src/metadata/home.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.2 的目录/详情结果检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

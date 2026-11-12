@@ -166,6 +166,7 @@ class TmdbMetadata(ServiceCore):
         cls.addClassCleanup(subprocess.run, ["docker", "rm", "-f", cls.fixture], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         docker("run", "-d", "--name", cls.fixture, "--memory", str(256 * MIB),
                "-v", str(ROOT / "tests/fixtures/service/tmdb_fixture.py") + ":/fixture.py:ro",
+               "-v", cls.volume + ":/service-data",
                "python:3.12-slim", "python", "-u", "/fixture.py")
         docker("exec", cls.fixture, "python", "-c", "import socket,time\nfor _ in range(100):\n try:\n  socket.create_connection(('127.0.0.1',80),timeout=1).close(); break\n except OSError: time.sleep(.1)\nelse: raise SystemExit('fixture did not start')")
         address = docker("inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cls.fixture)
@@ -190,6 +191,10 @@ class TmdbMetadata(ServiceCore):
         self.assertEqual((status, manifest["id"], len(manifest["catalogs"])), (200, "tmdb-addon", 22))
         catalog_ids = {(item["type"], item["id"]) for item in manifest["catalogs"]}
         self.assertTrue({("movie", "tmdb.now_playing"), ("movie", "tmdb.upcoming"), ("series", "tmdb.on_air"), ("series", "tmdb.variety")} <= catalog_ids)
+        for attempt in range(200):
+            if self.request("app-token")[1].get("snapshot_at") is not None:
+                break
+            time.sleep(0.1)
         for kind, catalog in (("movie", "tmdb.upcoming"), ("series", "tmdb.on_air"), ("series", "tmdb.variety")):
             self.assertEqual(self.resource(f"zh-CN/catalog/{kind}/{catalog}.json")[0], 200)
         status, catalog = self.resource("zh-CN/catalog/movie/tmdb.search/search=film&skip=20.json")
@@ -223,20 +228,84 @@ class TmdbMetadata(ServiceCore):
         self.assertLessEqual(self.host_peak + BUILD_LIMIT + SERVICE_LIMIT + 256 * MIB, 4096 * MIB)
 
 
+class CacheHome(TmdbMetadata):
+    test_1_routes_fields = None
+    test_2_identity_language = None
+    test_3_auth_errors = None
+
+    @classmethod
+    def fixture_request(cls, path):
+        program = "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1" + path + "').read().decode())"
+        return json.loads(docker("exec", cls.fixture, "python", "-c", program))
+
+    @classmethod
+    def sql(cls, query):
+        program = "import sqlite3; c=sqlite3.connect('/service-data/service.sqlite3'); c.execute(" + repr(query) + "); c.commit()"
+        docker("exec", cls.fixture, "python", "-c", program)
+
+    def test_1_home_cold_start_daily(self):
+        unit = subprocess.run(["cargo", "test", "--locked", "--offline", "-p", "moc-service", "metadata::", "--", "--test-threads=1"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+        self.assertEqual(unit.returncode, 0, unit.stdout[-2000:])
+        self.assertIn("2 passed", unit.stdout)
+        self.fixture_request("/control?delay=0.02")
+        self.start("app-token", {**self.fixture_env, "MOC_HOME_POLL_SECONDS": "1"})
+        status, body = self.resource("zh-CN/catalog/movie/tmdb.top.json")
+        self.assertEqual((status, body["error"]["code"], body["error"]["retryable"]), (503, "ENGINE_NOT_READY", True))
+        self.assertEqual(self.resource("zh-CN/catalog/movie/tmdb.search/search=film.json")[0], 200)
+        self.assertEqual(self.resource("zh-CN/meta/movie/tmdb:42.json")[0], 200)
+        for attempt in range(300):
+            if self.request("app-token")[1].get("snapshot_at") is not None: break
+            time.sleep(0.1)
+        else: self.fail("first home snapshot did not finish")
+        self.fixture_request("/control?delay=0")
+        self.assertEqual(self.resource("zh-CN/catalog/movie/tmdb.top.json")[0], 200)
+        self.start("app-token", {**self.fixture_env, "MOC_HOME_POLL_SECONDS": "1"})
+        self.assertIsNotNone(self.request("app-token")[1]["snapshot_at"])
+        self.assertEqual(self.resource("zh-CN/catalog/movie/tmdb.top.json")[0], 200)
+
+    def test_2_cache_isolation_expiry(self):
+        self.sql("UPDATE metadata_cache SET expires_at=0")
+        self.fixture_request("/control?reset=1")
+        for path in ("zh-CN/catalog/movie/tmdb.search/search=film.json",)*2:
+            self.assertEqual(self.resource(path)[0], 200)
+        self.assertEqual(self.fixture_request("/stats")["counts"].get("/3/search/movie",0), 1)
+        self.assertEqual(self.resource("en-US/catalog/movie/tmdb.search/search=film.json")[0], 200)
+        self.assertEqual(self.resource("en-US/catalog/series/tmdb.search/search=film.json")[0], 200)
+        self.assertEqual(self.fixture_request("/stats")["counts"]["/3/search/movie"], 2)
+        self.assertEqual(self.fixture_request("/stats")["counts"]["/3/search/tv"], 1)
+        self.sql("UPDATE metadata_cache SET expires_at=0")
+        self.assertEqual(self.resource("zh-CN/catalog/movie/tmdb.search/search=film.json")[0], 200)
+        self.assertEqual(self.fixture_request("/stats")["counts"]["/3/search/movie"], 3)
+
+    def test_3_home_failure_retains_snapshot(self):
+        before = self.resource("zh-CN/catalog/movie/tmdb.top.json")[1]
+        self.fixture_request("/control?fail=1")
+        self.sql("UPDATE home_snapshots SET built_at=0")
+        self.start("app-token", {**self.fixture_env, "MOC_HOME_POLL_SECONDS": "1"})
+        for attempt in range(100):
+            if self.request("app-token")[1].get("snapshot_error"): break
+            time.sleep(0.1)
+        else: self.fail("home refresh failure was not reported")
+        self.assertEqual(self.resource("zh-CN/catalog/movie/tmdb.top.json"), (200, before))
+        self.assertEqual(self.request("app-token")[1]["snapshot_at"], 0)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = ServiceCore if args.suite == "service-core" else TmdbMetadata
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = (["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"] if args.suite == "service-core" else
-                ["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"])
+    case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+                "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
+                "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = (("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources") if args.suite == "service-core" else
-               ("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"))
+    methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+               "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
+               "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot")}[args.suite]
     for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:
