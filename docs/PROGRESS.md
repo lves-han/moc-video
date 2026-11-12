@@ -3130,3 +3130,17 @@
 - 终审基线：`protected=d42362df5dbf561f7c8dffa3c471ab90c3040b0939bc2748ac0fc0b2c9fca418`；ADR-080 摘要 `0fac3bd17d9141865a363e14865cc26f3ac0103eeb07148488f0c3cb23654bbe`。使用原控制器重新计算 protected/完整 ADR 映射，与 round-63 JSON 精确一致，报告末行为 CLEAR。
 - 实际检查：`task.py check` 退出码 0，共 66 卡、15 张 T1、18 项 T1 验收；原验收 argv、报告路径、kind、超时及全部旧 cases 保留，51 张 T0/T2 定义摘要与 HEAD 一致，既有 ADR 前缀保留。受审文件摘要、开发门、改动清单和 `git diff --check` 核对通过。
 - 实现状态：T1 全部待开发，T1.1/T2.1 授权门关闭；业务实现、构建、服务运行、第三方接口及 App 实际播放验收 NOT RUN。本轮仅变更 9 份文档/审查记录；控制脚本与业务源码未修改，已清理的 node_modules 和 Rust target 继续保持清理状态。
+
+## T1.1 阶段授权 2026-11-12T04:24:43+00:00
+
+- 结果：AUTHORIZED
+- 授权：用户在当前聊天明确指示「开始进行T1系列任务的实现」。
+- 范围：T1 系列；T2 的独立阶段门继续按原要求处理。
+
+## T1.1 服务骨架、共享代码与持久鉴权 2026-11-12T04:35:21+00:00
+
+- 结果：DONE
+- 来源：用户指示「开始进行T1系列任务的实现」并允许在当前聊天逐卡开发和跟进验收。
+- 实现：建立 Rust workspace、服务与共享 crate，提供配置、SQLite 初始化、Bearer 鉴权、health、私有持久令牌、Docker 与关闭访问日志的反向代理示例，并记录 OpenAPI 契约。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T043453088555-A1/output.log`；容器验收 3 项通过，覆盖健康响应、缺失/错误令牌、令牌重启复用、环境变量优先、数据库初始化、日志脱敏与资源清理。服务容器硬限制 512 MiB、构建硬限制 2048 MiB，宿主采样峰值和限制之和见 `evidence/acceptance/T1.1-A1.json`；实际构建容器曾核对硬限制 2147483648 字节。
+- 补充检查：稳定源码 `cargo check --locked --workspace` 通过，日志 `evidence/runs/20261112T042850924072-diag-t11-cargo-stable/output.log`；共享 App 代码未迁移。
