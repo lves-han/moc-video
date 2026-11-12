@@ -149,6 +149,7 @@ pub async fn propose(
         }
     }
     let mut candidates = Vec::new();
+    let mut missing_episode = false;
     for item in search_results {
         let title = item["vod_name"].as_str().unwrap_or("");
         let category = item["type_name"].as_str().unwrap_or("");
@@ -168,8 +169,12 @@ pub async fn propose(
         }
         let id = item["vod_id"].as_str().expect("validated adapter ID");
         let detail = crate::adapters::maccms::detail(source, id).await?;
+        if detail.to_string().len() > 256 * 1024 {
+            return Err("candidate exceeds memory limit");
+        }
         let lines = lines_for(metadata, &detail);
         if lines.is_empty() {
+            missing_episode = true;
             continue;
         }
         let exact = names
@@ -186,14 +191,16 @@ pub async fn propose(
             mismatch.push("year_missing");
         }
         let automatic = exact && actual_kind == Some(kind) && !revoked.contains(id);
-        candidates.push(json!({"content_id":id,"title":title,"year":structured.or(tail_year),"kind":actual_kind,"lines":lines,"mismatch":mismatch,"auto_eligible":automatic}));
+        candidates.push(json!({"content_id":id,"title":title,"year":structured.or(tail_year),"kind":actual_kind,"lines":lines,"detail":detail,"mismatch":mismatch,"auto_eligible":automatic}));
     }
     let eligible: Vec<_> = candidates
         .iter()
         .filter(|item| item["auto_eligible"] == true)
         .collect();
     let selected = (eligible.len() == 1).then(|| eligible[0]["content_id"].clone());
-    Ok(json!({"queries":names,"candidates":candidates,"selected":selected}))
+    Ok(
+        json!({"queries":names,"candidates":candidates,"selected":selected,"missing_episode":missing_episode}),
+    )
 }
 
 pub fn lines_for(metadata: &Value, detail: &Value) -> Vec<Value> {

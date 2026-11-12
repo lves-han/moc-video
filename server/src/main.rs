@@ -1,10 +1,14 @@
 mod adapters;
 mod config;
 mod db;
+mod line_cache;
+mod lookups;
 mod mappings;
 mod matching;
 mod metadata;
+mod reports;
 mod sources;
+mod state;
 
 use axum::{
     Json, Router,
@@ -27,6 +31,9 @@ struct AppState {
     sources: metadata::sources::Store,
     playback_sources: sources::Store,
     mappings: mappings::Store,
+    lookup_runtime: state::Runtime,
+    reports: reports::Store,
+    metadata_gate: Arc<tokio::sync::Mutex<()>>,
 }
 
 async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
@@ -285,8 +292,17 @@ async fn mapping_list(
 }
 
 async fn mapping_revoke(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    let mut registry = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
     match state.mappings.revoke(&id) {
-        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(true) => {
+            registry.cache.clear();
+            registry.mapping_generation = registry.mapping_generation.wrapping_add(1);
+            StatusCode::NO_CONTENT.into_response()
+        }
         Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Mapping not found"),
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -300,8 +316,18 @@ async fn playback_create(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
+    let mut registry = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
     match state.playback_sources.save(&input, None) {
-        Ok(item) => (StatusCode::CREATED, Json(item)).into_response(),
+        Ok(item) => {
+            if let Some(id) = item["id"].as_str() {
+                registry.changed(id);
+            }
+            (StatusCode::CREATED, Json(item)).into_response()
+        }
         Err(e) => api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
     }
 }
@@ -311,8 +337,16 @@ async fn playback_update(
     Path(id): Path<String>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
+    let mut registry = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
     match state.playback_sources.save(&input, Some(&id)) {
-        Ok(item) => Json(item).into_response(),
+        Ok(item) => {
+            registry.changed(&id);
+            Json(item).into_response()
+        }
         Err("source not found") => {
             api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found")
         }
@@ -321,8 +355,16 @@ async fn playback_update(
 }
 
 async fn playback_delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    let mut registry = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
     match state.playback_sources.remove(&id) {
-        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(true) => {
+            registry.changed(&id);
+            StatusCode::NO_CONTENT.into_response()
+        }
         Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found"),
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -431,8 +473,18 @@ async fn playback_import(
             .map(str::to_owned)
             .or_else(|| item["key"].as_str().map(|key| format!("import:{key}")));
         let candidate = json!({"client_config_id":client,"name":item["name"],"kind":kind,"api":item.get("api").or_else(||item.get("api_url")).cloned().unwrap_or(serde_json::Value::Null),"ext":item["ext"],"headers":item["headers"],"enabled":item.get("enabled").cloned().unwrap_or(json!(true)),"parse_ids":item["parse_ids"]});
+        let mut registry = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
         match state.playback_sources.save(&candidate, None) {
-            Ok(source) => results.push(json!({"status":"ok","source":source})),
+            Ok(source) => {
+                if let Some(id) = source["id"].as_str() {
+                    registry.changed(id);
+                }
+                results.push(json!({"status":"ok","source":source}))
+            }
             Err(error) => results.push(json!({"status":"failed","error":error})),
         }
     }
@@ -454,6 +506,7 @@ async fn import_sources(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
+    let _gate = state.metadata_gate.lock().await;
     let config = match metadata::sources::required(&input, "config_id") {
         Ok(v) => v,
         Err(e) => return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
@@ -509,6 +562,7 @@ async fn update_source(
     Path(id): Path<String>,
     Json(mut item): Json<serde_json::Value>,
 ) -> Response {
+    let _gate = state.metadata_gate.lock().await;
     let existing = match state.sources.get(&id) {
         Ok(Some(v)) => v,
         Ok(None) => {
@@ -544,6 +598,7 @@ async fn update_source(
 }
 
 async fn delete_source(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    let _gate = state.metadata_gate.lock().await;
     match state.sources.delete(&id) {
         Ok(true) => StatusCode::NO_CONTENT.into_response(),
         Ok(false) => api_error(
@@ -579,6 +634,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sources = metadata::sources::Store::new(&config.data_dir);
     let playback_sources = sources::Store::new(&config.data_dir);
     let mappings = mappings::Store::new(&config.data_dir);
+    let lookup_runtime = state::Runtime::from_env()?;
+    let reports = reports::Store::new(&config.data_dir);
     let home = Arc::new(tokio::sync::RwLock::new(metadata::home::initialize(
         &cache,
     )?));
@@ -602,8 +659,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/metadata-sources/import", post(import_sources))
         .route("/v1/sources", get(playback_list).post(playback_create))
         .route("/v1/sources/import", post(playback_import))
-        .route("/v1/mappings", get(mapping_list))
+        .route("/v1/mappings", get(mapping_list).post(lookups::confirm))
         .route("/v1/mappings/{id}", axum::routing::delete(mapping_revoke))
+        .route("/v1/lookups", post(lookups::create))
+        .route("/v1/lookups/{id}", axum::routing::delete(lookups::cancel))
+        .route("/v1/lines/{id}/refresh", post(lookups::refresh))
+        .route("/v1/reports", post(lookups::report))
         .route(
             "/v1/sources/{id}",
             axum::routing::put(playback_update).delete(playback_delete),
@@ -626,6 +687,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             sources,
             playback_sources,
             mappings,
+            lookup_runtime,
+            reports,
+            metadata_gate: Arc::new(tokio::sync::Mutex::new(())),
         });
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     eprintln!("Service listening on {}", listener.local_addr()?);

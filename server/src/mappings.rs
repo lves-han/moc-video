@@ -47,6 +47,7 @@ impl Store {
             })?;
         rows.collect()
     }
+    #[cfg(test)]
     pub fn save(
         &self,
         metadata: &Value,
@@ -54,6 +55,27 @@ impl Store {
         content_id: &str,
         evidence: &Value,
         confirmed_by: &str,
+    ) -> Result<Value, &'static str> {
+        self.save_inner(metadata, source, content_id, evidence, confirmed_by, false)
+    }
+    pub fn save_checked(
+        &self,
+        metadata: &Value,
+        source: &Value,
+        content_id: &str,
+        evidence: &Value,
+        confirmed_by: &str,
+    ) -> Result<Value, &'static str> {
+        self.save_inner(metadata, source, content_id, evidence, confirmed_by, true)
+    }
+    fn save_inner(
+        &self,
+        metadata: &Value,
+        source: &Value,
+        content_id: &str,
+        evidence: &Value,
+        confirmed_by: &str,
+        check_sources: bool,
     ) -> Result<Value, &'static str> {
         let metadata_source = required(metadata, "metadata_source_id")?;
         let kind = required(metadata, "type")?;
@@ -71,6 +93,32 @@ impl Store {
             .ok_or("invalid source revision")?;
         let mut conn = self.conn().map_err(|_| "mapping database failed")?;
         let tx = conn.transaction().map_err(|_| "mapping database failed")?;
+        if check_sources {
+            let current: Option<(u64, bool)> = tx
+                .query_row(
+                    "SELECT revision,enabled FROM playback_sources WHERE id=?1",
+                    [source_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .map_err(|_| "mapping database failed")?;
+            if current != Some((revision, true)) {
+                return Err("source changed");
+            }
+            if metadata_source != "tmdb" {
+                let current: Option<u64> = tx
+                    .query_row(
+                        "SELECT revision FROM metadata_sources WHERE id=?1",
+                        [metadata_source],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|_| "mapping database failed")?;
+                if current != metadata["metadata_revision"].as_u64() {
+                    return Err("metadata source changed");
+                }
+            }
+        }
         let existing:Option<Value>=tx.query_row("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4",params![metadata_source,kind,meta_id,source_id],row).optional().map_err(|_|"mapping database failed")?;
         if confirmed_by == "auto" {
             let revoked:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM mapping_revocations WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4 AND content_id=?5)",params![metadata_source,kind,meta_id,source_id,content_id],|r|r.get(0)).map_err(|_|"mapping database failed")?;
@@ -131,7 +179,11 @@ impl Store {
             .find(|row| row["source_id"] == source_id && row["revoked"] == false);
         let Some(row) = row else { return Ok(None) };
         let content = row["content_id"].as_str().ok_or("invalid stored mapping")?;
-        let detail = crate::adapters::maccms::detail(source, content).await?;
+        let detail = match crate::adapters::maccms::detail(source, content).await {
+            Ok(value) => value,
+            Err("MacCMS content identity is missing or ambiguous") => return Ok(None),
+            Err(error) => return Err(error),
+        };
         if crate::matching::evidence(metadata, &detail) != row["evidence"] {
             return Ok(None);
         }

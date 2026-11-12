@@ -1,9 +1,9 @@
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 import time
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "delay": 0.0, "media_url": "", "counts": {}}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -15,7 +15,9 @@ class Handler(BaseHTTPRequestHandler):
             if "fail_addon_b" in query: STATE["fail_addon_b"] = query["fail_addon_b"][0] == "1"
             if "add_episode" in query: STATE["add_episode"] = query["add_episode"][0] == "1"
             if "changed_title" in query: STATE["changed_title"] = query["changed_title"][0] == "1"
+            if "line_mode" in query: STATE["line_mode"] = query["line_mode"][0]
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
+            if "detail_delay" in query: STATE["detail_delay"] = float(query["detail_delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
             if "reset" in query: STATE["counts"].clear()
             return self.send_json(STATE)
@@ -31,18 +33,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(503)
             self.end_headers()
             return
-        if url.path.startswith(("/addon-a/", "/addon-b/")):
+        if url.path.startswith(("/addon-a/", "/addon-b/", "/addon-same/")):
             return self.addon(url)
         if url.path == "/maccms":
             movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
             return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})
-        if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid", "/maccms-match"):
+        if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid", "/maccms-match", "/maccms-slow"):
             if self.headers.get("X-Fixture") != "allowed":
                 self.send_response(403); self.end_headers(); return
             if "sig=" in url.query and "sig=a%2Fb+c" not in url.query:
                 self.send_response(400); self.end_headers(); return
             if url.path == "/maccms-invalid": return self.send_json({"code":0,"message":"closed"})
-            if url.path == "/maccms-match": return self.matching(query)
+            if url.path == "/maccms-slow": time.sleep(3)
+            if url.path in ("/maccms-match", "/maccms-slow"): return self.matching(query)
             if url.path == "/maccms-json":
                 return self.send_json({"code":1,"page":1,"pagecount":1,"list":[{"vod_id":101,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"hls$$$direct","vod_play_url":"Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2$$$https://media.test/direct"}]})
             data=b'<rss><list><video><id>101</id><name>Film</name><type>movie</type><year>2020</year><dl><dd flag="hls"><![CDATA[Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2]]></dd><dd flag="direct"><![CDATA[https://media.test/direct]]></dd></dl></video></list></rss>'
@@ -62,11 +65,14 @@ class Handler(BaseHTTPRequestHandler):
             movie = "/movie" in url.path
             suffix = " P2" if query.get("page") == ["2"] and query.get("query") == ["film"] else ""
             data = {"results":[{"id":42, "title":("电影" if lang == "zh-CN" else "Film") + suffix, "name":"剧集" if lang == "zh-CN" else "Series", "release_date":"2020-01-01", "first_air_date":"2021-01-01", "genre_ids":[18], "overview":"fixture", "vote_average":8.0}], "page": int(query.get("page",[1])[0]), "fixture_movie":movie}
-        elif url.path in ("/3/movie/42", "/3/movie/99", "/3/tv/42", "/3/tv/43"):
+        elif url.path in ("/3/movie/42", "/3/movie/45", "/3/movie/99", "/3/tv/42", "/3/tv/43", "/3/tv/44"):
             movie = url.path.startswith("/3/movie")
             data = {"id":43 if url.path == "/3/tv/43" else 42,"title":"电影" if lang == "zh-CN" else "Film","name":"剧集" if lang == "zh-CN" else "Series", "original_title":"Original Film", "original_name":"Original Series", "release_date":"2020-01-01", "first_air_date":"2021-01-01", "status":"Returning Series", "external_ids":{"imdb_id":None if url.path == "/3/tv/43" else "tt1234567"}, "seasons":[] if movie else [{"season_number":1}], "alternative_titles":{"titles":[{"iso_3166_1":"CN", "title":"别名"},{"iso_3166_1":"US", "title":"Alias"}]}, "credits":{"cast":[],"crew":[]}, "genres":[], "production_countries":[], "runtime":90}
-        elif url.path in ("/3/tv/42/season/1", "/3/tv/43/season/1"):
+            if url.path == "/3/movie/45": data.update(id=45,title="Same",original_title="Same",external_ids={"imdb_id":None})
+            if url.path == "/3/tv/44": data.update(id=44,name="Show",original_name="Show",first_air_date="2020-01-01",external_ids={"imdb_id":"tt7654321"})
+        elif url.path in ("/3/tv/42/season/1", "/3/tv/43/season/1", "/3/tv/44/season/1"):
             data = {"episodes":[{"episode_number":1,"name":"第一集" if lang == "zh-CN" else "Episode 1","air_date":"2021-01-01"}]}
+            if url.path == "/3/tv/44/season/1": data={"episodes":[{"episode_number":2,"name":"Episode 2"},{"episode_number":3,"name":"Episode 3"},{"episode_number":9,"name":"Episode 9"}]}
         else:
             self.send_response(404)
             self.end_headers()
@@ -86,7 +92,12 @@ class Handler(BaseHTTPRequestHandler):
             "203":video("203","Show",kind="电视剧",episodes="S01E03$https://media.test/3")}
         if STATE["add_episode"]: records["201"]["vod_play_url"] += "#S01E04$https://media.test/4"
         if STATE["changed_title"]: records["201"]["vod_name"] = "Different Show"
+        if STATE["line_mode"] == "reordered": records["201"]["vod_play_url"] = "S01E03$https://media.test/3#S01E02$https://media.test/new"
+        if STATE["line_mode"] == "missing": records["201"]["vod_play_url"] = "S01E03$https://media.test/3"
+        if STATE["line_mode"] == "duplicate": records["201"]["vod_play_url"] = "S01E02$https://media.test/a#S01E02$https://media.test/b"
         if "ids" in query:
+            STATE["counts"]["detail_started"] = STATE["counts"].get("detail_started", 0) + 1
+            time.sleep(STATE["detail_delay"])
             rows=[records[query["ids"][0]]] if query["ids"][0] in records else []
         else:
             text=query.get("wd",[""])[0]
@@ -101,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
     def addon(self, url):
         parts = [unquote(part) for part in url.path.strip('/').split('/')]
         addon = parts[0]
-        label = "Addon A" if addon == "addon-a" else "Addon B"
+        label = "Addon A" if addon == "addon-a" else "Addon B" if addon == "addon-b" else "Same"
         if parts[1:] == ["manifest.json"]:
             return self.send_json({"id":addon,"version":"1.0.0","name":label,"description":"fixture","resources":["catalog",{"name":"meta","types":["movie"],"idPrefixes":["same:"]}],"types":["movie"],"idPrefixes":["same:"],"catalogs":[{"type":"movie","id":"all","name":label,"extra":[{"name":"skip"}]},{"type":"movie","id":"catalog","name":label,"extra":[{"name":"search","isRequired":True},{"name":"skip"}]}]})
         if len(parts) == 4 and parts[1:3] == ["catalog", "movie"] and parts[3] == "all.json":
@@ -150,4 +161,4 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-HTTPServer(("0.0.0.0", 80), Handler).serve_forever()
+ThreadingHTTPServer(("0.0.0.0", 80), Handler).serve_forever()

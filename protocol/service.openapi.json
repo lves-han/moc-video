@@ -741,6 +741,64 @@
             "description": "Invalid token"
           }
         }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "lookup_id",
+                  "source_id",
+                  "candidate_id"
+                ],
+                "properties": {
+                  "lookup_id": {
+                    "type": "string"
+                  },
+                  "source_id": {
+                    "type": "string"
+                  },
+                  "candidate_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed line events",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "description": "Newline-delimited LookupEvent JSON objects."
+                },
+                "x-item-schema": {
+                  "$ref": "#/components/schemas/LookupEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
+          }
+        }
       }
     },
     "/v1/mappings/{id}": {
@@ -770,6 +828,222 @@
           },
           "404": {
             "description": "Mapping not found"
+          }
+        }
+      }
+    },
+    "/v1/lookups": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "metadata_source_id",
+                  "type",
+                  "meta_id",
+                  "video_id",
+                  "lang"
+                ],
+                "properties": {
+                  "metadata_source_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "movie",
+                      "series"
+                    ]
+                  },
+                  "meta_id": {
+                    "type": "string"
+                  },
+                  "video_id": {
+                    "type": "string"
+                  },
+                  "lang": {
+                    "type": "string",
+                    "enum": [
+                      "zh-CN",
+                      "en-US"
+                    ]
+                  },
+                  "sources": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lookup event stream",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "description": "Newline-delimited LookupEvent JSON objects."
+                },
+                "x-item-schema": {
+                  "$ref": "#/components/schemas/LookupEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
+          }
+        }
+      }
+    },
+    "/v1/lookups/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Lookup cancelled"
+          },
+          "410": {
+            "description": "Lookup expired"
+          }
+        }
+      }
+    },
+    "/v1/lines/{id}/refresh": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same line with refreshed playback info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackLine"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Line disappeared, ambiguous, expired or source changed"
+          },
+          "502": {
+            "description": "Upstream failed"
+          }
+        }
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "line_id",
+                  "outcome"
+                ],
+                "properties": {
+                  "line_id": {
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "playing",
+                      "failed"
+                    ]
+                  },
+                  "latency_ms": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "error_code": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
           }
         }
       }
@@ -988,6 +1262,275 @@
             "type": "boolean"
           }
         }
+      },
+      "LineTarget": {
+        "type": "object",
+        "required": [
+          "metadata_source_id",
+          "metadata_revision",
+          "type",
+          "meta_id",
+          "video_id"
+        ],
+        "properties": {
+          "metadata_source_id": {
+            "type": "string"
+          },
+          "metadata_revision": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series"
+            ]
+          },
+          "meta_id": {
+            "type": "string"
+          },
+          "video_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PlaybackLine": {
+        "type": "object",
+        "required": [
+          "line_id",
+          "source_id",
+          "source_revision",
+          "line_name",
+          "episode_label",
+          "kind",
+          "target",
+          "expires_at",
+          "history"
+        ],
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source_revision": {
+            "type": "integer"
+          },
+          "line_name": {
+            "type": "string"
+          },
+          "episode_label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "hls",
+              "unsupported"
+            ]
+          },
+          "quality": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "$ref": "#/components/schemas/LineTarget"
+          },
+          "expires_at": {
+            "type": "integer"
+          },
+          "history": {
+            "type": "object"
+          },
+          "play": {
+            "type": "object",
+            "required": [
+              "url",
+              "headers"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "LookupEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "lookup_id",
+              "lease_expires_at",
+              "sources"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "started"
+                ]
+              },
+              "lookup_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "lease_expires_at": {
+                "type": "integer"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "source_id",
+              "status"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "source"
+                ]
+              },
+              "source_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "searching",
+                  "done",
+                  "needs_confirmation",
+                  "not_found",
+                  "no_episode",
+                  "unsupported",
+                  "failed",
+                  "timeout"
+                ]
+              },
+              "lines": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "source_id",
+              "candidates"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "confirm"
+                ]
+              },
+              "source_id": {
+                "type": "string"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "candidate_id",
+                    "title"
+                  ],
+                  "properties": {
+                    "candidate_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "year": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "mismatch": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "line"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "line"
+                ]
+              },
+              "line": {
+                "$ref": "#/components/schemas/PlaybackLine"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "done"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "lease_expires_at": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        ]
       }
     }
   }

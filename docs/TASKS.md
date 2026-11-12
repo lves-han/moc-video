@@ -2891,14 +2891,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.8 线路查找流、确认与短期生命周期
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.7
 - 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.3–5.5、5.8–5.9、7.1、7.3）→ A1
 - 上下文：方案 §5.3–5.5、5.8、7.1、7.3；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.6 来源适配与 T1.7 匹配/对应关系核心；服务鉴权、缓存隔离及数据库。
 - 不变量：线路绑定目标集、来源版本与适配器逻辑定位信息；唯一定位后才更新原 line_id，消失/歧义返回 410；缓存和统计按同一逻辑线路键关联。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`server/src/lookups.rs`, `server/src/mappings.rs`, `server/src/line_cache.rs`, `server/src/reports.rs`, `server/src/state.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
+- 范围：`server/src/lookups.rs`, `server/src/matching.rs`, `server/src/mappings.rs`, `server/src/line_cache.rs`, `server/src/reports.rs`, `server/src/state.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/lookups.rs`, `server/src/line_cache.rs`, `server/src/mappings.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.7 的确认/撤销存储行为（接入 HTTP 时）。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

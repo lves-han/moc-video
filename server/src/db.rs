@@ -42,5 +42,11 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         source_id TEXT NOT NULL, content_id TEXT NOT NULL,
         PRIMARY KEY(metadata_source_id,media_type,meta_id,source_id,content_id));",
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS line_stats (
+        logical_key TEXT PRIMARY KEY, source_id TEXT NOT NULL, content_id TEXT NOT NULL,
+        ok_count INTEGER NOT NULL DEFAULT 0, fail_count INTEGER NOT NULL DEFAULT 0,
+        last_ok_at INTEGER, last_latency_ms INTEGER);",
+    )?;
     Ok(())
 }
