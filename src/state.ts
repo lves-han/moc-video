@@ -51,7 +51,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   ended: (context: PlaybackContext, epoch: number) => void = () => {},
   runtimeChanged: (runtime: RuntimeStatus) => void = runtime => { root.runtime = runtime; },
   advanced: (context: PlaybackContext, epoch: number, session: string) => void = () => {},
-  recoverService: (context: PlaybackContext) => void = () => {}) {
+  recoverService: (context: PlaybackContext, reason: 'expired' | 'failed') => void = () => {}) {
   const state = root.playback;
   const ui = reactive({ autoplayBlocked: false, diagnostic: "", action: "" as "" | "retry" | "reconnect", imageError: "" });
   let player: Player | undefined;
@@ -232,12 +232,15 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       if (error.code === "SESSION_EXPIRED" && !recovered) {
         recovered = true;
         const resume = snapshot();
-        if (resume && serviceContext(resume.context)) recoverService(resume.context);
+        if (resume && serviceContext(resume.context)) recoverService(resume.context, 'expired');
         else if (resume) await load(resume.context, { resume, recovery: true });
       } else if (error.code === "UNAUTHORIZED" && !reconnected) {
         reconnected = true;
         await reconnect(epoch);
-      } else fail({ ...error, details: { ...error.details, original_error: original } });
+      } else {
+        fail({ ...error, details: { ...error.details, original_error: original } });
+        if (state.context && serviceContext(state.context)) recoverService(structuredCloneContext(state.context), 'failed');
+      }
     } catch (cause) {
       if (current(epoch, session)) {
         const query = failure(cause);
@@ -275,7 +278,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       if (serviceContext(state.context)) reportService(state.session.session_id, event.playback_epoch, 'failed', event.error.code);
       if (event.error.details?.reason === "AUTOPLAY_BLOCKED") { fail(event.error); ui.autoplayBlocked = true; ui.action = ""; }
       else if (event.error.details?.resource_kind) void diagnose(event.error, event.playback_epoch, state.session!);
-      else fail(event.error);
+      else { fail(event.error); if (state.context && serviceContext(state.context)) recoverService(structuredCloneContext(state.context), 'failed'); }
     } else if (event.type === "stopped") state.phase = "idle";
     else {
       state.phase = event.type;
@@ -382,7 +385,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
         }
       });
     },
-    retry() { const resume = snapshot(); if (resume && serviceContext(resume.context)) { recoverService(resume.context); return Promise.resolve(); } return resume ? load(resume.context, { resume }) : retiring.length ? stop() : Promise.resolve(); },
+    retry() { const resume = snapshot(); if (resume && serviceContext(resume.context)) { recoverService(resume.context, 'expired'); return Promise.resolve(); } return resume ? load(resume.context, { resume }) : retiring.length ? stop() : Promise.resolve(); },
     selectStream(id: string) { const resume = snapshot(); return resume ? load(resume.context, { stream: id, resume }) : Promise.resolve(); },
     setVolume(value: number) { player?.setVolume(value); state.volume = value; },
     setMuted(value: boolean) { state.muted = value; if (video) video.muted = value; },
@@ -592,6 +595,7 @@ export class AppController {
   readonly serviceSources = reactive({ items: [] as ServiceSource[], error: '' });
   private serviceRoundId: string | null = null;
   private serviceGeneration = 0;
+  private triedServiceLines = new Set<string>();
   private preparedService: { match: string; resolution: Bridge_Resolution } | null = null;
   private requests = new Map<string, Ticket>();
   private imageAttempts = { home: { data: null as object | null, queried: new Set<string>(), refreshed: false },
@@ -1263,6 +1267,7 @@ export class AppController {
     ++this.serviceGeneration;
     const serviceRoundId = this.serviceRoundId;
     this.serviceRoundId = null;
+    this.triedServiceLines.clear();
     this.serviceRound.open = false; this.serviceRound.snapshot = null; this.serviceRound.error = ''; this.serviceRound.busy = false;
     if (serviceRoundId) void this.api.call('cancel_line_round', { round_id: serviceRoundId }).catch(() => {});
     const prepared = this.preparedService;
@@ -1349,6 +1354,7 @@ export class AppController {
         return;
       }
       this.preparedService = { match: result.context.match_id, resolution: result.resolution };
+      this.triedServiceLines.add(lineId);
       this.serviceRound.open = false;
       this.state.selected_playback_source = null;
       this.state.playback.context = clone(result.context); this.state.playback.phase = 'resolving';
@@ -1371,6 +1377,21 @@ export class AppController {
     try { this.serviceRound.snapshot = await this.api.call('confirm_line_candidate', { round_id: round, source_id: candidate.source_id, candidate_id: candidate.candidate_id }) as ServiceRoundView; }
     catch (cause) { this.serviceRound.error = failure(cause).message; }
     finally { this.serviceRound.busy = false; }
+  }
+  async tryNextServiceLine(context: PlaybackContext) {
+    if (!serviceContext(context) || !this.serviceRoundId || this.serviceRound.busy || this.state.playback.context?.match_id !== context.match_id) return false;
+    const generation = this.serviceGeneration, deadline = Date.now() + 45000;
+    while (generation === this.serviceGeneration && this.state.playback.context?.match_id === context.match_id) {
+      const snapshot = this.serviceRound.snapshot;
+      const line = snapshot?.lines.find(item => item.probe_status === 'ready' && !this.triedServiceLines.has(item.line_id));
+      if (line) {
+        await this.chooseServiceLine(line.line_id);
+        return this.state.playback.context?.match_id !== context.match_id;
+      }
+      if (!snapshot || snapshot.error || snapshot.query_done && snapshot.pending === 0 && snapshot.pending_confirm === 0 || Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    return false;
   }
   rememberLine(context: PlaybackContext, epoch: number, session: string) {
     const choice = this.playedLine, state = this.state.playback;

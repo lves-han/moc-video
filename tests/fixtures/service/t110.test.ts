@@ -14,7 +14,7 @@ function setup(call: (command: string, input: any) => Promise<any>) {
   const root = createAppState();
   root.settings = { ...defaultSettings(), playback_service: { enabled: true, url: 'http://service', token: 'token', groups: [] } };
   root.details.phase = 'ready';
-  root.details.data = { metadata_ref: { identity, content_ref: ref }, details: { groups: [{ episodes: [{ ref: { ...ref, data: JSON.stringify(['stremio_video', 'addon', 'series', 'tmdb:44', video]) } }] }] } } as any;
+  root.details.data = { metadata_ref: { identity: { ...identity }, content_ref: ref }, details: { groups: [{ episodes: [{ ref: { ...ref, data: JSON.stringify(['stremio_video', 'addon', 'series', 'tmdb:44', video]) } }] }] } } as any;
   const app = new AppController({ call } as any, {} as any, root, null);
   return { app, root };
 }
@@ -186,4 +186,60 @@ test('migration keeps local configuration if service changes during import', asy
   await app.migratePlaybackSources();
   assert.equal(stored.source_configs.length, 1);
   assert.match(app.serviceSources.error, /变化/);
+});
+
+test('failed service line switches to an untried ready line once', async () => {
+  const second = { ...line, line_id:'33333333-3333-4333-8333-333333333333', source_id:'other', latency_ms:30 };
+  const selections:string[] = [];
+  const { app, root } = setup(async (command, input) => {
+    if (command === 'start_line_round') return { ...view(input.round_id, true, line.line_id), lines:[line,second] };
+    if (command === 'play_line') { selections.push(input.line_id); return { context:{...context,match_id:'match-'+selections.length}, resolution }; }
+    throw new Error(command);
+  });
+  await app.startServiceRound(video);
+  const first = root.playback.context!;
+  assert.equal(await app.tryNextServiceLine(first), true);
+  assert.deepEqual(selections, [line.line_id,second.line_id]);
+  assert.equal(await app.tryNextServiceLine(root.playback.context!), false);
+  assert.equal(selections.length,2);
+});
+
+test('current media failure requests automatic service-line recovery', async () => {
+  const { fixture, context: makeContext, flush } = await import('../t12_player.ts');
+  const { createPlaybackController } = await import('../../../src/state.ts');
+  const f = fixture(); const ctx = makeContext();
+  ctx.episode_ref.data = JSON.stringify(['service_line','round','line']);
+  const resolution = { id:'test-resolution',source_id:'source',source_revision:'rev',episode_ref:ctx.episode_ref,streams:[{id:'a',kind:'progressive',label:'A',playable:true}],subtitles:[] };
+  const reasons:string[] = [];
+  const client = { call: async (command:string, input:any) => {
+    if (command === 'open_playback') return {session_id:'test-session',resolution_id:resolution.id,stream_id:'a',source_id:'source',source_revision:'rev',episode_ref:ctx.episode_ref,stream_kind:'progressive',media_url:'http://127.0.0.1/video',mime_type:'video/mp4',subtitles:[]};
+    if (command === 'get_resource_status') return {kind:'playback',target_id:input.target_id,state:'ready',error:null};
+    if (command === 'report_line_playback') return {ok:true,reported:true};
+    if (command === 'close_playback' || command === 'release_resolution' || command === 'cancel_request') return {ok:true};
+    throw new Error(command);
+  } };
+  const playback = createPlaybackController(f.root, client as any, undefined, undefined, undefined, (_context,reason) => reasons.push(reason));
+  playback.attach(f.video as any);
+  await playback.load(ctx,{resolution:resolution as any});
+  f.ready(); await flush(); f.error(); await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(reasons,['failed']);
+  await playback.stop();
+});
+
+test('automatic recovery waits for other in-flight probes after an early manual choice', async () => {
+  const second = { ...line, line_id:'33333333-3333-4333-8333-333333333333', source_id:'other', latency_ms:30 };
+  const selections:string[] = [];
+  const { app, root } = setup(async (command, input) => {
+    if (command === 'start_line_round') return view(input.round_id, false);
+    if (command === 'get_line_round') return { ...view(input.round_id, true, line.line_id), lines:[line,second] };
+    if (command === 'play_line') { selections.push(input.line_id); return { context:{...context,match_id:'match-'+selections.length}, resolution }; }
+    throw new Error(command);
+  });
+  const query = app.startServiceRound(video);
+  await new Promise(resolve => setTimeout(resolve, 10));
+  await app.chooseServiceLine(line.line_id);
+  const switched = app.tryNextServiceLine(root.playback.context!);
+  await query;
+  assert.equal(await switched, true);
+  assert.deepEqual(selections,[line.line_id,second.line_id]);
 });

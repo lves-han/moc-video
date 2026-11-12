@@ -16,9 +16,11 @@ const props = withDefaults(defineProps<{ category?: string; query?: string }>(),
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; resume: [entry: HistoryEntry] }>();
 const zh = computed(() => locale.value === 'zh-CN');
 const word = (cn: string, en: string) => zh.value ? cn : en;
-const categoryTitle = computed(() => ({ movie: word('电影', 'Movies'), series: word('电视剧', 'Series'), anime: word('动画', 'Animation'), documentary: word('纪录片', 'Documentaries') }[props.category] ?? ''));
+const categoryTitle = computed(() => ({ movie: word('电影', 'Movies'), series: word('电视剧', 'Series'), anime: word('动画', 'Animation'), documentary: word('纪录片', 'Documentaries'), variety: word('综艺', 'Variety') }[props.category] ?? ''));
 const sections = computed(() => state.home.phase === 'loading' ? [] : state.home.data?.page.sections ?? []);
-const base = computed(() => sections.value.find(section => section.kind === (props.category === 'series' ? 'series' : 'movie')) ?? sections.value[0]);
+const base = computed(() => props.category === 'variety'
+  ? sections.value.find(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title))
+  : sections.value.find(section => section.kind === (props.category === 'series' ? 'series' : 'movie')) ?? sections.value[0]);
 const lockedGenre = computed(() => props.category === 'anime' ? base.value?.filters?.genre.options.find(item => /^(Animation|动画)$/i.test(item.value))?.value : props.category === 'documentary' ? base.value?.filters?.genre.options.find(item => /^(Documentary|纪录)$/i.test(item.value))?.value : undefined);
 const selected = computed<HomeFilter>(() => {
   const params = new URLSearchParams(props.query), value: HomeFilter = {};
@@ -45,6 +47,7 @@ const rows = computed<Row[]>(() => {
   const movie = sections.value.find(item => item.kind === 'movie'), series = sections.value.find(item => item.kind === 'series');
   if (props.category) {
     const section = base.value, categoryFilter = lockedGenre.value ? { genre: lockedGenre.value } : {};
+    if (props.category === 'variety') { add(section, word('综艺', 'Variety'), {}); return result; }
     if (['anime', 'documentary'].includes(props.category) && !lockedGenre.value) return [];
     add(section, word('本周趋势', 'Trending this week'), { ...categoryFilter, sort: 'trending_week' });
     add(section, word('最新上线', 'New releases'), { ...categoryFilter, sort: 'latest' });

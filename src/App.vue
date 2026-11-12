@@ -37,6 +37,7 @@ const desktopNavigation = computed(() => [
   { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
   { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
   { page: 'browse', href: '#/browse/documentary', icon: 'library', label: t('Documentary') },
+  ...(native && appState.home.data?.page.sections.some(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title)) ? [{ page: 'browse', href: '#/browse/variety', icon: 'tv', label: t('Variety') }] : []),
   ...(['variety', 'short', 'sports'] as const).filter(category => !native && appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
@@ -253,6 +254,19 @@ async function playEpisode(videoId: string, explicitLine = false) {
     const result = await appController.match(videoId, null, !explicitLine);
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
+}
+let switchingServiceLine = false;
+async function switchFailedServiceLine(context: PlaybackContext) {
+  if (switchingServiceLine) return;
+  switchingServiceLine = true;
+  try {
+  const snapshot = appState.playback, epoch = snapshot.playback_epoch, session = snapshot.session?.session_id;
+  const position = snapshot.position_ms;
+  await flushHistory();
+  if (snapshot.playback_epoch !== epoch || snapshot.session?.session_id !== session || snapshot.context?.match_id !== context.match_id) return;
+  wantedResume = { video_id: context.metadata_video_id, position_ms: position };
+  if (!await appController.tryNextServiceLine(context)) wantedResume = null;
+  } finally { switchingServiceLine = false; }
 }
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;
@@ -505,7 +519,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @seek="flushHistory()" @update:auto-next="autoNext = $event">
+  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @service-failed="switchFailedServiceLine" @seek="flushHistory()" @update:auto-next="autoNext = $event">
   <template #preferences><div class="playback-preferences">
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>

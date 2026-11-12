@@ -8,12 +8,12 @@ import { locale } from "../i18n";
 import Icon from "../components/Icon.vue";
 
 const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean }>();
-const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; "update:autoNext": [value: boolean]; seek: [] }>();
+const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; 'service-failed': [context: PlaybackContext]; "update:autoNext": [value: boolean]; seek: [] }>();
 const playback = createPlaybackController(appState, undefined, onEnded, runtime => {
   if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
   else appController.applyRuntime(runtime);
 }, (context, epoch, session) => appController.rememberLine(context, epoch, session),
-context => emit('play', context.metadata_video_id, true));
+(context, reason) => reason === 'failed' ? emit('service-failed', context) : emit('play', context.metadata_video_id));
 const unbind = appController.bindPlayback(playback);
 const state = playback.state;
 const ui = playback.ui;

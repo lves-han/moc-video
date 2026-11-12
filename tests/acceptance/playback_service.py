@@ -804,7 +804,7 @@ class AppSourceSelection(unittest.TestCase):
         for name in names: self.assertIn('✔ ' + name, result.stdout)
 
     def test_1_actions(self):
-        self.run_frontend('automatic selection|manual selection|candidates use|explicit line selection|expired line|late lookup', ['automatic selection waits for completed probes and carries the native resolution', 'manual selection wins over a late automatic result', 'candidates use their owning source and can be confirmed', 'explicit line selection keeps the completed list open', 'expired line restarts lookup for the same episode', 'late lookup after cancellation is retired'])
+        self.run_frontend('automatic selection|manual selection|candidates use|explicit line selection|expired line|late lookup|failed service line|current media failure|automatic recovery waits', ['automatic selection waits for completed probes and carries the native resolution', 'manual selection wins over a late automatic result', 'candidates use their owning source and can be confirmed', 'explicit line selection keeps the completed list open', 'expired line restarts lookup for the same episode', 'late lookup after cancellation is retired', 'failed service line switches to an untried ready line once', 'current media failure requests automatic service-line recovery', 'automatic recovery waits for other in-flight probes after an early manual choice'])
 
     def test_2_migration(self):
         self.run_frontend('migration removes', ['migration removes successful sources and retains failed sources for retry'])
@@ -829,18 +829,20 @@ class AppSourceSelectionApp(unittest.TestCase):
             for file in ([path] if path.is_file() else path.rglob('*')):
                 if file.is_file(): rows.append((str(file.relative_to(ROOT)), hashlib.sha256(file.read_bytes()).hexdigest()))
         digest = hashlib.sha256(json.dumps(sorted(rows), separators=(',', ':')).encode()).hexdigest()
-        if digest != cls.observation['product_hash']: raise AssertionError('Window observation was made on different product inputs')
+        if digest != cls.observation['product_hash']: raise AssertionError('Product changed after the recorded follow-up validation')
         cls.host_peak = cls.observation['resource_sample']['host_including_all_visible_webkit_bytes']
 
     def test_1_selection_switch(self):
         observed = self.observation['observed']
         self.assertGreater(observed['hls_playing_seconds'][1], observed['hls_playing_seconds'][0])
         self.assertTrue(observed['candidate_confirmation'] and observed['candidate_sources_visible'])
+        self.assertTrue(observed['service_variety_catalog'])
         self.assertGreater(observed['file_switch_seconds'][1], observed['file_switch_seconds'][0])
 
     def test_2_failure_recovery(self):
         observed = self.observation['observed']
         self.assertTrue(observed['failure_message_visible'] and observed['service_success_reports'] and observed['service_failure_reports'])
+        self.assertTrue(observed['automatic_failure_switch'])
         self.assertGreater(observed['failure_recovery_position_seconds'], 0)
 
     def test_3_history_restart(self):

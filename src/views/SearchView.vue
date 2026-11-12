@@ -24,6 +24,7 @@ const groups = computed(() => [
 const genres = computed(() => [
   { kind:'movie', title:t('Movies'), icon:'film' }, { kind:'series', title:t('Series'), icon:'tv' },
   { kind:'anime', title:t('Animation'), icon:'sparkles' }, { kind:'documentary', title:t('Documentary'), icon:'documentary' },
+  ...(native && state.home.data?.page.sections.some(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title)) ? [{ kind:'variety', title:t('Variety'), icon:'variety' }] : []),
   ...(!native ? [{ kind:'variety', title:t('Variety'), icon:'variety' }, { kind:'short', title:t('Short dramas'), icon:'short' }] : []),
 ]);
 const approximate = computed(() => app.search.phase === 'ready' && approximateResults(app.search.query, app.search.items.map(item => item.title)));
