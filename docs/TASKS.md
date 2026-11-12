@@ -19,7 +19,7 @@
 
 T1 共同约定：
 
-- 需求依据为 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` 第 3 版及 ADR-077/078/079。当前事实：Rust 已有 MacCMS、Stremio 元数据、TMDB 映射、匹配和本地网关；各新适配接口的真实兼容范围待对应开发卡验证。模块路径为可修改/验收定位，不要求为占位而增加文件。
+- 需求依据为 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` 第 4 版及 ADR-077 至 ADR-080。当前事实：Rust 已有 MacCMS、Stremio 元数据、TMDB 映射、匹配和本地网关；各新适配接口的真实兼容范围待对应开发卡验证。模块路径为可修改/验收定位，不要求为占位而增加文件。
 - 沿用 `/Users/eason/jp/application`、项目 `.venv/bin/python`、原脚本和重任务锁。真实服务与上游夹具使用 Docker，宿主作为 App/测试客户端；为每个自建容器设置硬内存上限，并将上限合计与宿主 RSS 采样合算到原 4096MiB 预算，成功、失败、取消均清理自建资源。仅有宿主代码检查时沿原执行器运行。
 - 每卡仅做交付行为及实际影响的相关回归；旧执行器保持原版，不切换控制模式。`验收范围`/`回归`用于交接和人工判断，按现有入口执行。普通卡用代表样本，三期 App 操作分别在 T1.5、T1.10、T1.15 收口；参数是可调初值，长播/压力/跨平台专项按需安排。
 - 新增路由逐卡更新 `protocol/service.openapi.json`，App 命令/权限逐卡更新当前协议。复用统一验收入口和相应 suite，各卡报告路径唯一；该脚本与夹具随相应开发卡交付。JSON/JUnit 写真实操作和结果，业务验收目前均 NOT RUN。
@@ -283,6 +283,16 @@ T1 共同约定：
 | Stremio 播放扩展与电影、剧集 ID 适配 / §1 Stremio 播放、6.6–6.7 | T1.13/A1 | 后续查找/选线与适配 |
 | JSON 解析接口管理与按 flag 解析 / §5.6 parsers、6.6、5.8 | T1.14/A1 | 后续查找/选线与适配 |
 | 多类型配置导入与三期 App 联调 / §5.6、8.1、10 第三期、11 | T1.15/A1, T1.15/A2 | 本期 App 闭环 |
+
+## round-61 修订落点（ADR-080）
+
+| 问题 | 明确规则与可观察结果 | 直接验收 |
+|---|---|---|
+| D003 | 实际推进/失败经受限会话命令上报正确 line_id；去重，上报失败播放与保存继续 | T1.9/A1、T1.10/A1、T1.10/A2 |
+| D004 | 来源/版本、Resolution context、Session 与历史身份绑定；新记录写入并重启续播 | T1.9/A1、T1.10/A2 |
+| D005 | 服务不可达时本地文件、受控直播均实际推进 | T1.10/A2 |
+| D006 | 同配置多 manifest 的原身份、分组和顺序保留；部分失败保留原组，重试和重启可回读 | T1.4/A1、T1.5/A1、T1.5/A2 |
+| D007 | 唯一定位原逻辑线路才刷新旧 ID，重排不换线，消失/歧义 410 重查保进度 | T1.8/A1、T1.9/A1、T1.11/A1、T1.13/A1、T1.15/A2 |
 
 ## 任务卡
 
@@ -2690,21 +2700,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.3
 - 需求：REQ-SERVICE-META（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §4.4、5.2、9）→ A1
-- 上下文：方案 §4.4、5.2、9；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
-- 输入：T1.1–T1.3 的路由、缓存和数据库；一个已配置 Stremio manifest 及当前 App 元数据配置样本。
-- 不变量：每个元数据来源有持久 ID；保留上游原始内容/video ID 与原逻辑身份；不同扩展同名 ID 隔离。
+- 上下文：方案 §4.4、5.2、9；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
+- 输入：T1.1–T1.3 的路由、缓存和数据库；当前 App 原配置及其有序 manifest 列表，包含同一 config_id 下两个扩展的样本。
+- 不变量：按原 config_id 保持分组，每个 addon 的原 key、命名空间规则及顺序独立保留；不同扩展同名 ID 隔离，重复导入复用原映射。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`server/src/metadata/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/metadata/stremio.rs`, `server/src/metadata/sources.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.2–T1.3 的 TMDB 与缓存隔离检查（共享入口受影响时）。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：实现 metadata-sources 增删改查和按稳定 ID 幂等导入；按 manifest 的 resources/types/idPrefixes/extra 代理目录、搜索和详情，保留来源的语言能力并提示回退。沿用缓存和 CORS/路径编码约定，供 App 选择及导入使用。
+- 交付物：实现 metadata-sources 增删改查和逐扩展幂等导入；为原配置中每个 manifest 登记持久服务来源 ID，保存 config_id、addon_key、命名空间规则和原顺序，返回逐项结果。按 manifest 能力代理目录/搜索/详情，保留语言能力及回退；消费者 T1.5 按原配置恢复有序代理列表和各 addon 身份。沿用缓存、CORS 和路径编码。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "一个代表性扩展验证登记、搜索/分页/详情、required extra 和能力缺失提示；两个来源相同 ID 互不串用，导入重试保持一份且逻辑身份不变；已有 TMDB 路由仍可访问。",
+    "description": "代表样本验证登记及代理目录/搜索/分页/详情、required extra 和能力缺失提示。一个原配置包含两个 manifest，两者返回相同 type/meta_id 时仍独立路由并保持原 addon/命名空间规则与顺序；重复导入及服务重启后回读映射一致，部分失败返回逐项结果；已有 TMDB 路由可访问。",
     "argv": [
       "{python}",
       "-B",
@@ -2721,7 +2731,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-META/metadata-manifest-proxy",
       "REQ-SERVICE-META/metadata-source-identity-import",
-      "REQ-SERVICE-META/metadata-capabilities-fallback"
+      "REQ-SERVICE-META/metadata-capabilities-fallback",
+      "REQ-SERVICE-META/metadata-multi-manifest-import"
     ],
     "timeout_seconds": 1800
   }
@@ -2732,21 +2743,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.4
 - 需求：REQ-SERVICE-META（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §2.2、3、8.1、9、10 第一期）→ A1、A2
-- 上下文：方案 §2.2、3、8.1、9、10 第一期；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §2.2、3、8.1、9、10 第一期；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.1–T1.4 的服务、两种元数据源和导入接口；当前 App 中已保存的 TMDB/自定义 Stremio 历史与收藏。
-- 不变量：服务地址/令牌/语言与内容身份解耦；导入成功再移除本地元数据配置；原播放流程在第二期替换前继续可用。
+- 不变量：服务地址/令牌/语言与内容身份解耦；同配置组内全部扩展导入且回读成功后再切到服务，部分失败保留完整原组；原播放流程继续到第二期。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`src/`, `src-tauri/capabilities/`, `protocol/`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/src/`, `src-tauri/build.rs`, `src-tauri/tests/`, `scripts/check-contracts.py`, `tests/acceptance/t05_models.py`
 - 验收范围：`src/views/SettingsView.vue`, `src/views/SourceSettings.vue`, `src/state.ts`, `src/App.vue`, `src-tauri/src/settings.rs`, `src-tauri/src/stremio.rs`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：受接入影响的既有设置/历史相关检查；不重复桌面长播。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：新增播放服务地址/令牌/连接检查，服务令牌请求绑定配置 origin 和基础路径，本地服务域名可用系统 DNS；接通元数据来源选择、语言、增删改与配置上传。登记服务 TMDB 的固定身份和自定义扩展原身份，当前历史/收藏可继续使用；未连接服务时保留内置 TMDB 到 T1.10。首次就绪提示、服务错误、重试和诊断脱敏接入真实 App；同步本卡设置/元数据 IPC 的协议、生成类型、Tauri 入口和相关契约检查。
+- 交付物：新增服务设置及连接检查，令牌绑定配置 origin/基础路径，本地服务域名可用系统 DNS；接通元数据来源选择、语言及管理。按原 config_id 保持多 manifest 分组，有序登记代理 URL，并从已登记映射恢复原 addon key/命名空间规则。组内部分失败保留完整本地配置，重试幂等；全部成功并回读后切换。TMDB 固定身份及现有历史/收藏保留，未配置服务时原 TMDB 继续到 T1.10；首次准备、错误、重试和脱敏接入 App，同步相关协议、类型、权限及检查。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "真实宿主检查配置的本机/局域网服务、跨 origin 令牌跳转拒绝、元数据导入的成功/失败处理、稳定身份和凭据脱敏；两个来源/语言的结果符合关键契约。",
+    "description": "真实宿主核对本机/局域网服务端点、跨 origin 令牌跳转拒绝及凭据脱敏、稳定身份和错误提示。同一 config_id 下两个 manifest 分别保留 addon 身份、命名空间规则与顺序；模拟其中一个导入失败，完整原配置和记录仍保留且该组标记待迁入；整组成功并回读后启用一组代理配置，回读与服务重启后两条已有历史和收藏均指向原扩展。 App 搜索经服务代理到各扩展，两个来源/语言的结果与详情身份符合当前契约。",
     "argv": [
       "{python}",
       "-B",
@@ -2763,13 +2774,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-META/app-service-transport",
       "REQ-SERVICE-META/app-metadata-identity-import",
-      "REQ-SERVICE-META/app-service-errors"
+      "REQ-SERVICE-META/app-service-errors",
+      "REQ-SERVICE-META/app-multi-manifest-partial-import"
     ],
     "timeout_seconds": 1800
   },
   {
     "id": "A2",
-    "description": "一次当前 App 窗口检查：从服务浏览 TMDB 和一个 Stremio 元数据源的目录/搜索/详情并切换语言；接入前历史可沿原播放流程短时续播、收藏保持一份，修改端点/令牌后仍指向原内容。错误令牌、首页准备中、断连有明确提示，未配置服务时原 TMDB 可用。",
+    "description": "一次当前 App 窗口检查：浏览服务 TMDB 和同组两个 Stremio 扩展的目录/搜索/详情并切换语言；两个扩展返回相同 type/meta_id 时仍展示各自内容，两条既有历史/收藏均能回到正确扩展且位置保留，TMDB 记录沿原播放流程短时续播。修改端点/令牌后逻辑身份保持；准备中、鉴权或断连有提示，未配置服务时原 TMDB 可用。 实际搜索时观察服务收到请求，核对结果和后续详情均回到正确扩展。",
     "argv": [
       "{python}",
       "-B",
@@ -2785,7 +2797,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "report": "junit:evidence/acceptance/T1.5-A2.xml",
     "cases": [
       "REQ-SERVICE-META/app-metadata-browse",
-      "REQ-SERVICE-META/app-existing-records-resume"
+      "REQ-SERVICE-META/app-existing-records-resume",
+      "REQ-SERVICE-META/app-multi-manifest-records"
     ],
     "timeout_seconds": 2400
   }
@@ -2796,15 +2809,15 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.5
 - 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.6、6.6、7.1–7.2）→ A1
-- 上下文：方案 §5.6、6.6、7.1–7.2；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §5.6、6.6、7.1–7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：第一期服务及元数据；当前 MacCMS JSON 解析、XML 代表性响应和本地播放源配置样本。
-- 不变量：来源修改产生版本并使旧短期结果失效；只导入已实现类型，返回逐项成功/失败/跳过清单。
+- 不变量：来源修改产生版本并使旧短期结果失效；只导入已实现类型并逐项报告；分组/flag、剧集及子线路的逻辑定位信息随规范模型交给 lookup。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`Cargo.toml`, `Cargo.lock`, `server/src/sources.rs`, `server/src/adapters/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `crates/moc-core/`, `licenses/`, `docs/runtime.lock.json`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`
 - 验收范围：`server/src/sources.rs`, `server/src/adapters/maccms.rs`, `server/src/db.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；复用共享解析被修改时选择其已有相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：提供播放源列表、增删改/启停、check 和导入；JSON/XML 统一搜索、详情、分组和剧集地址模型，保留 header/ext 等配置。按当前本地 config_id 幂等上传，第三期类型暂列跳过。将搜索/详情/播放操作交给后续匹配与 lookup 使用；App 配置移除在 T1.10 完成。
+- 交付物：提供播放源列表、增删改/启停、check 和导入；JSON/XML 统一搜索、详情、分组与剧集模型，同时保留 resolver 所需的内容/目标集、分组及可核实的子线路定位信息，供 T1.8 按方案 5.9 刷新。保留 header/ext 等配置，按本地 config_id 幂等上传，第三期类型列跳过；App 配置移除在 T1.10 完成。
 - 验收：
 ```json
 [
@@ -2880,22 +2893,22 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ### T1.8 线路查找流、确认与短期生命周期
 - [ ] 完成
 - 依赖：T1.7
-- 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.3–5.5、5.8、7.1、7.3）→ A1
-- 上下文：方案 §5.3–5.5、5.8、7.1、7.3；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.3–5.5、5.8–5.9、7.1、7.3）→ A1
+- 上下文：方案 §5.3–5.5、5.8、7.1、7.3；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.6 来源适配与 T1.7 匹配/对应关系核心；服务鉴权、缓存隔离及数据库。
-- 不变量：候选和线路绑定 lookup、内容/目标集、来源和版本；取消、过期和来源改配置明确失效，统计失败不阻断播放。
+- 不变量：线路绑定目标集、来源版本与适配器逻辑定位信息；唯一定位后才更新原 line_id，消失/歧义返回 410；缓存和统计按同一逻辑线路键关联。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`server/src/lookups.rs`, `server/src/mappings.rs`, `server/src/line_cache.rs`, `server/src/reports.rs`, `server/src/state.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/lookups.rs`, `server/src/line_cache.rs`, `server/src/mappings.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.7 的确认/撤销存储行为（接入 HTTP 时）。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：实现 /lookups NDJSON、POST 确认、取消、线路 refresh 和 reports；部分来源失败独立返回，终止事件正确。按方案保留结束后的候选/线路、有界短期地址缓存和版本失效；确认提交前复核状态，410 后可重新查找。成败统计持久化，播放地址仅存内存，供宿主轮次调用。
+- 交付物：实现 /lookups NDJSON、POST 确认、取消、refresh 和 reports；来源失败独立返回。记录目标集、来源版本、解析参数及逻辑定位信息；刷新重排时唯一定位原线路才更新同一 ID，消失/歧义 410 重查。查找/候选与已签发线路分别保管；流断连终止在途工作，DELETE 取消查找和候选，已签发线路保留到自身有效期供刷新/上报。成败统计按原线路键持久化，地址仅存内存；确认提交前复核状态，支持上报失败不影响线路返回。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "两个可用来源加一个失败/超时来源逐条返回；查询结束后延迟确认有效，串用候选、取消和旧版本提交被拒。可控时间验证缓存命中、刷新、过期/重启 410，配置变更清除旧句柄；断流不误报完成，统计上报失败不影响已得线路。",
+    "description": "两个可用来源和一个失败/超时来源逐条返回，延迟确认有效，串用/取消/旧版本提交被拒。可控时间验证缓存、过期/重启 410 及配置变更后旧句柄失效；刷新列表重排仍更新原线路，原线路消失或定位重复则 410，旧 ID 和统计均不指向另一条。断流终止在途工作，DELETE 使查找/候选失效，已签发线路在有效期内仍可刷新/上报、到期返回 410；服务 reports 接收正确线路的结果，上报失败不影响线路返回。",
     "argv": [
       "{python}",
       "-B",
@@ -2913,7 +2926,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
       "REQ-SERVICE-PLAY/lookup-stream-partial-failure",
       "REQ-SERVICE-PLAY/lookup-confirm-cancel",
       "REQ-SERVICE-PLAY/line-cache-refresh-expiry",
-      "REQ-SERVICE-PLAY/line-report-isolation"
+      "REQ-SERVICE-PLAY/line-report-isolation",
+      "REQ-SERVICE-PLAY/line-refresh-identity"
     ],
     "timeout_seconds": 1800
   }
@@ -2924,21 +2938,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.8
 - 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §8.3、5.8）→ A1
-- 上下文：方案 §8.3、5.8；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
-- 输入：T1.5 服务客户端与身份；T1.8 lookup/确认/刷新接口；现有 Resolution、网关及播放器能力模型。
-- 不变量：地址与请求头留在宿主；轮次和播放会话独立；自动选线等待查找及待测结束或预算到期。
+- 上下文：方案 §8.3、5.8；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
+- 输入：T1.5 服务客户端与登记身份；T1.8 lookup/刷新/reports 接口；现有来源校验、Resolution、resolution_contexts、Session 绑定与 save_history 链路。
+- 不变量：媒体地址和头留宿主；来源/目标集/context 由原生核对后登记，Session 独立持有绑定；播放上报去重且不阻断媒体或进度保存。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`src-tauri/src/`, `src/api.ts`, `src/models.ts`, `src/state.ts`, `src/player.ts`, `protocol/`, `src-tauri/capabilities/`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/build.rs`, `src-tauri/tests/`, `scripts/check-contracts.py`, `tests/acceptance/t05_models.py`
-- 验收范围：`src-tauri/src/host.rs`, `src-tauri/src/resolution.rs`, `src-tauri/src/gateway.rs`, `src/api.ts`, `src/models.ts`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
+- 验收范围：`src-tauri/src/host.rs`, `src-tauri/src/resolution.rs`, `src-tauri/src/gateway.rs`, `src/api.ts`, `src/models.ts`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `src-tauri/src/history.rs`, `src-tauri/src/source_dispatch.rs`, `src/state.ts`
 - 回归：现有 Resolution/网关和原播放路径的直接相关用例。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：实现 start/get/confirm/cancel/play/refresh 六个宿主命令及预算/权限，同步 build.rs 权限生成、handler、T05 及契约白名单；读取 NDJSON、持有线路、执行绕过媒体缓存的 HLS/文件探测，记录查询结束与待测数量。接入选定线路到 Resolution/open_playback，处理迟到结果、取消、410 重查及进度参数，原 UI 播放路径暂保留供 T1.10 替换。
+- 交付物：实现 start/get/confirm/cancel/play/refresh/report 七个宿主命令，同步权限、handler 和契约检查。按既定规则测速及等待；play_line 核对目标归属与来源/版本，登记完整受信 Resolution context，open_playback 将其绑定 Session，保留历史接口所需关联句柄。旧匹配命令退出后历史校验仍有效。report_line_playback 仅接收 session_id、playback_epoch、outcome 和可选错误码，宿主从绑定取远端 line ID/延迟，同次同结果最多上报一次；迟到事件丢弃，失败记录诊断但播放/保存继续。已选 Resolution 独立持有 context 并传给 Session，取消父查找通过 DELETE 使候选失效；打开失败/取消播放/关闭会话按原 release/close 回收已选数据，活动 Session 独立保留绑定；410 重查保持目标和进度。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "真实宿主连接受控服务：查询先结束而最快线路稍后测通时等待正确；手动选择可提前生效，旧轮次结果与取消确认不改当前选择。文件/HLS 探测绕过缓存，地址和头不出现在 WebView DTO，选中线路可登记真实网关，过期重查保留目标集与进度。",
+    "description": "真实宿主连接受控服务，来源查询先结束而最快线路稍后测通时等待后正确选线、手动可提前生效且旧结果不覆盖。文件/HLS 探测绕过缓存，URL/头留宿主。选中服务线路通过实际来源/版本核验及 open_playback，建立独立 Session context；正确历史保存可回读，伪造元数据/目标集/来源或旧轮次被拒。报告命令按会话/轮次找到正确远端线路并去重，上报失败不阻断本地保存。覆盖 play_line 选定后、open_playback 前取消父轮次的时序，已选播放仍能打开、上报和保存；打开失败/取消播放沿原 release/close 回收，活动会话在短期记录过期后仍可保存进度，报告过期仅影响统计；410 重查保留目标和位置。",
     "argv": [
       "{python}",
       "-B",
@@ -2955,7 +2969,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-PLAY/native-round-waits-probes",
       "REQ-SERVICE-PLAY/native-round-cancel-stale",
-      "REQ-SERVICE-PLAY/native-round-probe-and-open"
+      "REQ-SERVICE-PLAY/native-round-probe-and-open",
+      "REQ-SERVICE-PLAY/native-session-history-binding",
+      "REQ-SERVICE-PLAY/native-playback-result-reporting"
     ],
     "timeout_seconds": 1800
   }
@@ -2966,21 +2982,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.9
 - 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §8.1–8.2、8.4–8.5、9、10 第二期）→ A1、A2
-- 上下文：方案 §8.1–8.2、8.4–8.5、9、10 第二期；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §8.1–8.2、8.4–8.5、9、10 第二期；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.5 元数据与当前记录；T1.6 配置管理；T1.9 宿主轮次和播放命令。
-- 不变量：换线/重查保留进度；每条失败线路本轮刷新一次后切下一条；成功上传配置后才移除本地副本。
+- 不变量：实际推进/失败才经宿主上报，同次重复事件去重；新播放进度写入本地 Session 绑定；服务断连时本地和直播媒体路径继续独立工作。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
 - 范围：`src/`, `protocol/`, `src-tauri/capabilities/`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/src/`, `src-tauri/build.rs`, `src-tauri/tests/`, `scripts/check-contracts.py`, `tests/acceptance/t05_models.py`
 - 验收范围：`src/views/DetailsView.vue`, `src/views/PlaybackView.vue`, `src/views/SourceSettings.vue`, `src/state.ts`, `src/App.vue`, `src-tauri/src/host.rs`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.5 的当前记录与元数据选择、T1.9 的轮次/网关相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：接通自动/手动选线、逐条进度、候选确认、线路状态与统计、刷新失败换线和历史续播；设置管理服务播放源并完成配置迁入。移除全局播放源、MacCMS 元数据路径/同源直通、App 内匹配和旧线路记忆、短剧/体育入口以及内置 TMDB 直连；保留 TMDB/Stremio 元数据选择，综艺走服务分类。本地视频和直播入口沿用；旧入口移除时同步权限生成、handler 与已批准变更对应的契约断言，保留其他检查。
+- 交付物：接通多源查询、自动/手动选线、确认、换线、过期重查与续播。将实际媒体时间推进/失败事件接到 report_line_playback，ready/seek/登记不触发 playing，上报失败只记录诊断。新服务播放保存实际进度到 SQLite，重启后通过新轮次恢复。来源上传成功后移除本地副本；移除全局播放源、MacCMS 元数据/同源直通、旧 App 匹配/线路记忆、短剧/体育和内置 TMDB 直连，同时保留 Session 历史校验及元数据选择。同步旧入口的权限/契约；服务断连时本地文件与受控直播实际播放。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "前端行为检查覆盖逐条结果、待测完成、提前手动选择、确认、失败刷新一次后换线、重查/换线保留进度、切集丢弃旧结果；配置迁入失败保留本地数据，历史和收藏身份保持，服务错误有重试入口。",
+    "description": "前端行为覆盖查询/待测结束、手动选择、确认和失败换线/过期重查保进度。登记、ready、seek 阶段不发 playing，实际推进后服务收到正确 line_id 的 playing，失败收到 failed；同会话重复事件去重、迟到事件丢弃，上报接口失败时播放和进度保存继续。来源迁入失败保留本地数据，元数据身份保持，移除项和重试入口正确。",
     "argv": [
       "{python}",
       "-B",
@@ -2997,13 +3013,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-PLAY/ui-line-round-actions",
       "REQ-SERVICE-PLAY/ui-config-migration-records",
-      "REQ-SERVICE-PLAY/ui-decoupled-metadata"
+      "REQ-SERVICE-PLAY/ui-decoupled-metadata",
+      "REQ-SERVICE-PLAY/ui-playing-failed-reporting"
     ],
     "timeout_seconds": 1800
   },
   {
     "id": "A2",
-    "description": "一次当前 App 窗口闭环：使用文件与 HLS 线路完成自动/手动播放并观察推进，需确认后加入线路、换线续播、失败后刷新再换线、退出/切集旧结果丢弃。观看记录能经新轮次续播，设置和菜单移除项正确；服务断开有解释，本地视频和直播抽查入口可用。",
+    "description": "一次当前 App 窗口闭环：文件/HLS 线路自动/手动播放推进，确认、换线、失败刷新及切集旧结果处理正确；服务观察到正确 playing/failed。新建一条服务播放记录，保存进度并从 SQLite 回读，关闭重启后按新轮次恢复该片/集和位置。服务强制不可达时分别短播本地文件与受控直播，均观察媒体时间推进，其播放请求走各自原生路径。复用现有短播样本和隔离资料目录。",
     "argv": [
       "{python}",
       "-B",
@@ -3019,7 +3036,9 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "report": "junit:evidence/acceptance/T1.10-A2.xml",
     "cases": [
       "REQ-SERVICE-PLAY/app-playback-selection-switch",
-      "REQ-SERVICE-PLAY/app-resume-service-errors"
+      "REQ-SERVICE-PLAY/app-resume-service-errors",
+      "REQ-SERVICE-PLAY/app-new-history-restart",
+      "REQ-SERVICE-PLAY/app-offline-local-live"
     ],
     "timeout_seconds": 2400
   }
@@ -3030,21 +3049,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 T4 查询式、5.6、6.6、7.2）→ A1
-- 上下文：方案 §1 T4 查询式、5.6、6.6、7.2；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §1 T4 查询式、5.6、6.6、7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.6 来源模型与 T1.8 解析管线；zyfun t4Drpys/t4DrpyJs0 的参数资料和代表性响应。
-- 不变量：按来源版本保存 ext/extend 与请求头；网页入口和直链区分；尚未配置解析器时显示需解析原因。
+- 不变量：按来源版本保留 ext/extend、头与逻辑线路定位信息；列表顺序仅展示，待解析状态明确，刷新唯一定位规则沿方案 5.9。
 - 未决项：TVBox type 4 的具体服务方参数存在差异；本卡先以维护方样例或实际响应核对，报告支持范围，不承诺任意同名接口。
-- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`
+- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/t4_query.rs`, `server/src/adapters/t4_drpyjs0.rs`, `server/src/sources.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；共用来源分发或 URL 解析被修改时复用 T1.6/T1.8 相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：按实际样本核对并实现 drpy-node/TVBox type 4 查询参数式和 DRPYJS0 的搜索、详情、播放；处理 ext/extend、flag、字符串/交替数组 URL 和 header。接入来源登记与查找；parse/jx 所需解析器待 T1.14 提供，当前返回明确待解析状态。
+- 交付物：核对并实现 drpy-node/TVBox type 4 查询式及 DRPYJS0 的搜索/详情/play；保留 ext/extend、flag、剧集/子线路定位信息，规范字符串/交替数组 URL 与头。接入来源与 lookup，列表重排按唯一逻辑定位刷新；缺少稳定特征时由公共刷新层返回 410。parse/jx 的解析器由 T1.14 接入，当前返回明确待解析状态。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "每种查询式一个代表样本核对参数编码、ext/extend、详情组选集、play 的字符串与数组 URL、请求头；parse/jx 结果分类正确，缺字段或网页内容有明确状态，已有 JSON/XML 来源继续可查。",
+    "description": "各查询式一个代表样本验证参数、ext/extend、分组选集、字符串/数组 URL 及头；对数组结果保留原逻辑线路信息，重排后刷新仍为原线路，无法唯一定位时明确 410。parse/jx 分类与缺字段/网页错误状态正确，原 JSON/XML 来源仍可查。",
     "argv": [
       "{python}",
       "-B",
@@ -3061,7 +3080,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-PROVIDERS/t4-query-parameters",
       "REQ-SERVICE-PROVIDERS/t4-drpyjs0-parameters",
-      "REQ-SERVICE-PROVIDERS/t4-play-shapes-headers"
+      "REQ-SERVICE-PROVIDERS/t4-play-shapes-headers",
+      "REQ-SERVICE-PROVIDERS/t4-query-refresh-identity"
     ],
     "timeout_seconds": 1800
   }
@@ -3072,15 +3092,15 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 T4 REST、5.6、6.6、7.2）→ A1
-- 上下文：方案 §1 T4 REST、5.6、6.6、7.2；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §1 T4 REST、5.6、6.6、7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：来源管理和 lookup 管线；CatVod /init、/home、/category、/detail、/search、/play 资料及样本。
-- 不变量：初始化与请求上下文归属对应来源及版本，修改/禁用时失效；请求头和媒体信息留原生。
+- 不变量：初始化/请求上下文归属来源版本；play 结果保留上游可验证的逻辑线路定位信息，按方案 5.9 交给公共刷新层。
 - 未决项：具体 REST 服务的鉴权/初始化字段在本卡用实际响应或维护方样例核对，并记录支持范围。
-- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`
+- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/t4_rest.rs`, `server/src/sources.rs`, `server/src/lookups.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；共用分发改动时复用 T1.6/T1.8 的相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：实现 REST 端点的初始化、搜索、详情与播放映射，按需要读取 home/category 的初始化数据；正确传入 ext、flag 和上下文，接入来源管理及查找。初始化/解析失败独立反映到该来源。
+- 交付物：实现 REST 初始化、搜索、详情和 play 映射，按需要读取 home/category 初始化数据；正确传入 ext、flag 和上下文，保留剧集及子线路逻辑定位信息供唯一刷新。接入来源管理和 lookup；初始化/解析失败独立反映到该来源。
 - 验收：
 ```json
 [
@@ -3113,21 +3133,21 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 Stremio 播放、6.6–6.7）→ A1
-- 上下文：方案 §1 Stremio 播放、6.6–6.7；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §1 Stremio 播放、6.6–6.7；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.2/T1.4 元数据的已核实 ID 与季集；来源模型和 lookup 管线；Stremio manifest/stream 协议。
-- 不变量：按资源、类型与前缀声明调用；缺 IMDb 或归属不明有原因且继续其他来源；播放器能力与元数据身份分开判断。
+- 不变量：按资源/类型/前缀调用并核对目标身份；保留可验证的流定位特征，未知/重复特征在刷新时返回 410，不依赖返回顺序。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`server/src/adapters/`, `server/src/metadata/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
+- 范围：`server/src/adapters/`, `server/src/metadata/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/stremio_stream.rs`, `server/src/metadata/`, `server/src/sources.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
-- 回归：T1.2/T1.4 的身份信息检查（共享元数据映射实际被修改时）。
+- 回归：T1.8 的刷新定位/统计归属；元数据映射受影响时复用 T1.2/T1.4 相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：登记并读取播放扩展 manifest，以 verified IMDb 或已登记原始 video ID 请求 stream，支持电影和明确季集；映射 HTTP(S) URL 与 proxyHeaders。BT 按既定范围忽略，DASH/网络 MKV 等显示当前支持状态；接入查找与来源能力列表。
+- 交付物：读取播放 manifest，用已核实 IMDb 或登记原始 video ID 请求电影/剧集 stream，映射 HTTP(S) URL 与头，按能力标记支持状态并忽略 BT。保留适配器可验证的逻辑线路定位特征；刷新重排时唯一定位原流，原流消失/同名多结果或稳定特征不足则 410，App 重查保进度。接入来源能力与 lookup，显示名用于展示。
 - 验收：
 ```json
 [
   {
     "id": "A1",
-    "description": "电影和剧集样本验证 manifest 筛选、TMDB 到 IMDb/季集转换与头传递；两个元数据来源同名 ID 不串用；缺 ID、前缀/类型不匹配及不支持格式有明确状态，其他来源继续返回。",
+    "description": "电影/剧集样本验证 manifest、ID 转换和头；不同元数据来源同名 ID 不串用，缺 ID/前缀不支持/格式不支持有原因。刷新返回列表重排仍更新原流，原流消失或同标签且无法唯一定位则 410，不把其他 URL 挂到旧 ID；其他来源继续返回。",
     "argv": [
       "{python}",
       "-B",
@@ -3144,7 +3164,8 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
     "cases": [
       "REQ-SERVICE-PROVIDERS/stremio-stream-ids",
       "REQ-SERVICE-PROVIDERS/stremio-stream-capabilities",
-      "REQ-SERVICE-PROVIDERS/stremio-stream-formats-headers"
+      "REQ-SERVICE-PROVIDERS/stremio-stream-formats-headers",
+      "REQ-SERVICE-PROVIDERS/stremio-refresh-identity"
     ],
     "timeout_seconds": 1800
   }
@@ -3155,15 +3176,15 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.11, T1.12
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.6 parsers、6.6、5.8）→ A1
-- 上下文：方案 §5.6 parsers、6.6、5.8；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §5.6 parsers、6.6、5.8；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T4 的 parse/jx/flag 输出；T1.8 缓存/刷新与来源版本规则；json 解析接口样例。
-- 不变量：仅按用户配置的解析接口处理；敏感头归属正确；解析配置变化使旧缓存失效，失败不变成伪造直链。
+- 不变量：按用户配置解析且头归属正确；保留调用方逻辑线路定位信息；解析配置变更使旧缓存失效，失败明确返回。
 - 未决项：不同 json 解析服务的字段名在配置中明确；以本卡样例核对编码与返回形态。
 - 范围：`server/src/parsers.rs`, `server/src/adapters/`, `server/src/lookups.rs`, `server/src/line_cache.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/parsers.rs`, `server/src/adapters/json_parse.rs`, `server/src/line_cache.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.8 的缓存/刷新、T1.11–T1.12 的待解析分支。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：实现解析接口增删改/启停，按 flags 与来源 parse_ids 选择，正确构造 api+页面地址并读取配置的 URL 字段和请求头。parse/jx 经解析得到直链；无解析器、返回网页或错误时给出原因。配置版本纳入缓存失效与 refresh，供最终导入/播放联调。
+- 交付物：实现 parser 增删改/启停、flags 与 parse_ids 选择，正确构造请求并读取 URL 字段和头。解析后的地址继续归属调用方原逻辑线路，供方案 5.9 刷新和统计；无配置、网页或错误结果有原因。解析配置版本纳入缓存失效与 refresh，供最终导入/联调。
 - 验收：
 ```json
 [
@@ -3197,7 +3218,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - [ ] 完成
 - 依赖：T1.13, T1.14
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.6、8.1、10 第三期、11）→ A1、A2
-- 上下文：方案 §5.6、8.1、10 第三期、11；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
+- 上下文：方案 §5.6、8.1、10 第三期、11；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.11–T1.14 所有适配器与 parser；TVBox/zyfun 代表性配置、T1.10 已接通 App。
 - 不变量：不同生态的 type 编号分别识别；导入失败保留原配置；脚本/jar/嗅探和其他排除项继续在跳过/不支持清单。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
@@ -3234,7 +3255,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
   },
   {
     "id": "A2",
-    "description": "一次当前 App 窗口联调：经配置导入分别播放一条 T4 和一条 Stremio HTTP 线路并观察进度；至少一次 header/解析分支生效，错误来源不阻断可用来源。记录运行环境和实际兼容范围，外部临时故障单独说明。",
+    "description": "一次当前 App 联调：经导入播放一条 T4 与一条 Stremio HTTP 线路并观察进度，至少一次 header/解析生效。模拟一条线路刷新后消失/歧义，App 接到 410 为原片/集重查并恢复进度，旧句柄不换成别条。失败来源不阻断可用来源，记录实际兼容范围和条件性实网结果。",
     "argv": [
       "{python}",
       "-B",
