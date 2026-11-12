@@ -52,6 +52,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type","application/xml"); self.send_header("Content-Length",str(len(data))); self.end_headers(); self.wfile.write(data); return
         if url.path == "/video.mp4":
             return self.media()
+        if url.path in ("/probe-fast.mp4", "/probe-slow.mp4", "/hls/segment.ts"):
+            time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
+            payload = b"controlled-media-bytes"
+            self.send_response(206 if self.headers.get("Range") else 200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if url.path in ("/hls/master.m3u8", "/hls/variant.m3u8"):
+            payload = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant.m3u8\n" if url.path.endswith("master.m3u8") else "#EXTM3U\n#EXTINF:1,\nsegment.ts\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if query.get("api_key") != ["fixture-key"]:
             self.send_response(401)
             self.end_headers()
@@ -90,6 +105,12 @@ class Handler(BaseHTTPRequestHandler):
             "201":video("201","Show",kind="电视剧",episodes="S01E02$https://media.test/2#S01E03$https://media.test/3"),
             "202":video("202","Show",kind="电视剧",episodes="S01E02$https://media.test/a#S01E02$https://media.test/b"),
             "203":video("203","Show",kind="电视剧",episodes="S01E03$https://media.test/3")}
+        if STATE["media_url"]:
+            flavor = self.headers.get("X-Probe", "fast")
+            path = {"fast": "/probe-fast.mp4", "slow": "/probe-slow.mp4", "hls": "/hls/master.m3u8"}.get(flavor, "/probe-fast.mp4")
+            records["201"]["vod_play_url"] = "S01E02$" + STATE["media_url"].rstrip("/") + path
+            for item in ("107", "108"):
+                records[item]["vod_play_url"] = "Full$" + STATE["media_url"].rstrip("/") + path
         if STATE["add_episode"]: records["201"]["vod_play_url"] += "#S01E04$https://media.test/4"
         if STATE["changed_title"]: records["201"]["vod_name"] = "Different Show"
         if STATE["line_mode"] == "reordered": records["201"]["vod_play_url"] = "S01E03$https://media.test/3#S01E02$https://media.test/new"

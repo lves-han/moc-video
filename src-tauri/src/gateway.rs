@@ -31,7 +31,7 @@ use tokio::{
 use uuid::Uuid;
 
 #[path = "hls.rs"]
-mod hls;
+pub(crate) mod hls;
 #[path = "subtitle.rs"]
 mod subtitle;
 

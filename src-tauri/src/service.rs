@@ -17,11 +17,17 @@ pub const HOST: &str = "moc-service.invalid";
 pub struct Config {
     base: Url,
     token: String,
+    fingerprint: String,
 }
 static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
 impl Config {
+    pub fn fingerprint(&self) -> String {
+        self.fingerprint.clone()
+    }
     pub fn parse(base: &str, token: &str) -> Result<Self, ApiError> {
+        use sha2::{Digest, Sha256};
+        let fingerprint = format!("{:x}", Sha256::digest(format!("{base}\0{token}")));
         let mut base = maccms::http_url(base, true)?;
         if base.query().is_some()
             || base.fragment().is_some()
@@ -36,6 +42,7 @@ impl Config {
         Ok(Self {
             base,
             token: token.into(),
+            fingerprint,
         })
     }
     fn endpoint(&self, segments: &[&str]) -> Result<Url, ApiError> {
@@ -99,6 +106,12 @@ impl Config {
                 "Playback service token was rejected",
             ));
         }
+        if response.status() == StatusCode::GONE {
+            return Err(ApiError::new(
+                "SESSION_EXPIRED",
+                "Playback service handle expired",
+            ));
+        }
         if response.status() == StatusCode::SERVICE_UNAVAILABLE {
             let mut error = ApiError::new(
                 "ENGINE_NOT_READY",
@@ -141,6 +154,133 @@ impl Config {
         serde_json::from_slice(&bytes)
             .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Playback service response is invalid"))
     }
+
+    pub async fn cancel_lookup(&self, id: &str) -> Result<(), ApiError> {
+        self.request(
+            Method::DELETE,
+            self.endpoint(&["v1", "lookups", id])?,
+            None,
+            true,
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn events(
+        &self,
+        path: &[&str],
+        body: Value,
+        mut callback: impl FnMut(Value) -> Result<(), ApiError>,
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<(), ApiError> {
+        use std::sync::atomic::Ordering;
+        let url = self.endpoint(path)?;
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(45))
+            .build()
+            .map_err(|_| ApiError::internal("Service client unavailable"))?;
+        let mut response = client
+            .post(url)
+            .header(AUTHORIZATION, format!("Bearer {}", self.token))
+            .header(CONTENT_TYPE, "application/json")
+            .body(body.to_string())
+            .send()
+            .await
+            .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Playback service connection failed"))?;
+        if response.status() == StatusCode::GONE {
+            return Err(ApiError::new("SESSION_EXPIRED", "Service lookup expired"));
+        }
+        if response.status() == StatusCode::UNAUTHORIZED {
+            return Err(ApiError::new(
+                "UNAUTHORIZED",
+                "Playback service token was rejected",
+            ));
+        }
+        if !response.status().is_success() {
+            return Err(ApiError::new(
+                "UPSTREAM_FAILED",
+                "Playback service lookup failed",
+            ));
+        }
+        let mut buffer = Vec::new();
+        let mut total = 0_usize;
+        let mut started = false;
+        let mut finished = false;
+        loop {
+            if stop.load(Ordering::SeqCst) && started {
+                return Err(ApiError::cancelled());
+            }
+            let chunk = tokio::select! { value=response.chunk()=>value.map_err(|_|ApiError::new("UPSTREAM_FAILED","Service stream failed"))?, _=tokio::time::sleep(Duration::from_millis(50))=>continue };
+            let Some(chunk) = chunk else { break };
+            total = total.saturating_add(chunk.len());
+            if total > 8 * 1024 * 1024 {
+                return Err(ApiError::new(
+                    "RESOURCE_LIMIT",
+                    "Service stream exceeds limit",
+                ));
+            }
+            buffer.extend_from_slice(&chunk);
+            while let Some(end) = buffer.iter().position(|byte| *byte == b'\n') {
+                let line: Vec<_> = buffer.drain(..=end).collect();
+                if line.len() > 1024 * 1024 {
+                    return Err(ApiError::new(
+                        "RESOURCE_LIMIT",
+                        "Service event exceeds limit",
+                    ));
+                }
+                let value: Value = serde_json::from_slice(&line)
+                    .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Service event is invalid"))?;
+                started |= value["event"] == "started" || path == ["v1", "mappings"];
+                finished |= value["event"] == "done";
+                callback(value)?;
+                if stop.load(Ordering::SeqCst) && started {
+                    return Err(ApiError::cancelled());
+                }
+            }
+            if buffer.len() > 1024 * 1024 {
+                return Err(ApiError::new(
+                    "RESOURCE_LIMIT",
+                    "Service event exceeds limit",
+                ));
+            }
+        }
+        if !buffer.is_empty() || !started || !finished {
+            return Err(ApiError::new(
+                "UPSTREAM_FAILED",
+                "Service stream ended before completion",
+            ));
+        }
+        Ok(())
+    }
+}
+
+pub fn current() -> Result<Config, ApiError> {
+    CONFIG
+        .lock()
+        .map_err(|_| ApiError::internal("Service configuration unavailable"))?
+        .clone()
+        .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Playback service is not configured"))
+}
+
+pub fn blocking_json(
+    config: &Config,
+    method: Method,
+    path: &[&str],
+    body: Option<Value>,
+    job: &Job,
+) -> Result<Value, ApiError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| ApiError::internal("Service runtime unavailable"))?;
+    let timeout = Duration::from_millis(job.child_timeout_ms()?);
+    runtime.block_on(maccms::watched(
+        job,
+        timeout,
+        config.json(method, path, body),
+    ))
 }
 
 pub fn configure(settings: &Value) {
@@ -529,5 +669,345 @@ mod tests {
             2
         );
         println!("T15_SERVICE_HOST:partial,retry,search,identity,history,watchlist,restart");
+    }
+    #[test]
+    #[ignore = "requires the controlled Docker playback service and fixtures"]
+    fn t19_native_service_round_and_session() {
+        let endpoint = std::env::var("T19_SERVICE_URL").unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let host = Host::open(temp.path().join("settings.json")).unwrap();
+        let mut settings = call(&host, "get_settings", json!({}));
+        settings["playback_service"] =
+            json!({"enabled":true,"url":endpoint,"token":"app-token","groups":[]});
+        call(&host, "save_settings", settings);
+        call(&host, "runtime_prepare", json!({}));
+        call(
+            &host,
+            "sync_catalog",
+            json!({"kind":"stremio","config_id":settings::TMDB_CONFIG_ID}),
+        );
+        let source = call(&host, "get_sources", json!({}))["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["origin"]["config_id"] == settings::TMDB_CONFIG_ID)
+            .unwrap()
+            .clone();
+        let reference = json!({"source_id":source["id"],"source_revision":source["source_revision"],"data":json!(["stremio",identity("addon",&[settings::TMDB_CONFIG_ID]),"series","tmdb:44"]).to_string()});
+        let detail = call(&host, "get_details", json!({"ref":reference}));
+        let round = uuid::Uuid::new_v4().to_string();
+        let input = json!({"round_id":round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"});
+        call(&host, "start_line_round", input);
+        let mut saw_wait = false;
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        let snapshot = loop {
+            assert!(std::time::Instant::now() < deadline, "line round timed out");
+            let state = call(&host, "get_line_round", json!({"round_id":round}));
+            assert!(state["error"].is_null(), "round error: {state}");
+            if state["query_done"] == true && state["pending"].as_u64().unwrap() > 0 {
+                saw_wait = true;
+                assert!(state["selected_line_id"].is_null());
+            }
+            if state["query_done"] == true && state["pending"] == 0 {
+                break state;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert!(saw_wait, "query must wait for probes: {snapshot}");
+        assert_eq!(snapshot["lines"].as_array().unwrap().len(), 3, "{snapshot}");
+        assert!(
+            snapshot["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|l| l["probe_status"] == "ready"),
+            "{snapshot}"
+        );
+        let selected = snapshot["selected_line_id"].as_str().unwrap();
+        let fastest = snapshot["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .min_by_key(|v| v["latency_ms"].as_u64().unwrap())
+            .unwrap();
+        assert_eq!(selected, fastest["line_id"]);
+        let visible = snapshot.to_string();
+        assert!(
+            !visible.contains("127.0.0.1")
+                && !visible.contains("X-Fixture")
+                && !visible.contains("app-token")
+        );
+        println!("T19:waits-probes");
+        let old_round = round;
+        let round = uuid::Uuid::new_v4().to_string();
+        call(
+            &host,
+            "start_line_round",
+            json!({"round_id":round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"}),
+        );
+        let stale = host.invoke(
+            "get_line_round",
+            json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"round_id":old_round}}),
+            true,
+        );
+        assert_eq!(stale["error"]["code"], "SESSION_EXPIRED");
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        let picked = loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "manual line timed out"
+            );
+            let state = call(&host, "get_line_round", json!({"round_id":round}));
+            if state["pending"].as_u64().unwrap() > 0 {
+                if let Some(line) = state["lines"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|v| v["probe_status"] == "ready")
+                {
+                    break line["line_id"].as_str().unwrap().to_owned();
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let playback = call(
+            &host,
+            "play_line",
+            json!({"round_id":round,"line_id":picked}),
+        );
+        let snapshot = loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "remaining probes timed out"
+            );
+            let state = call(&host, "get_line_round", json!({"round_id":round}));
+            assert_eq!(state["selected_line_id"], picked);
+            if state["query_done"] == true && state["pending"] == 0 {
+                break state;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        call(&host, "cancel_line_round", json!({"round_id":round}));
+        let stale = host.invoke(
+            "get_line_round",
+            json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"round_id":round}}),
+            true,
+        );
+        assert_eq!(stale["error"]["code"], "SESSION_EXPIRED");
+        println!("T19:cancel-stale");
+        let resolution = &playback["resolution"];
+        let context = &playback["context"];
+        let stream = &resolution["streams"][0]["id"];
+        let session = call(
+            &host,
+            "open_playback",
+            json!({"resolution_id":resolution["id"],"stream_id":stream}),
+        );
+        assert!(session["session_id"].is_string(), "{session}");
+        println!("T19:probe-open");
+        let metadata = &context["metadata_ref"]["identity"];
+        assert_eq!(metadata, &detail["metadata_ref"]["identity"]);
+        let content_id = identity(
+            "metadata",
+            &[
+                metadata["namespace"].as_str().unwrap(),
+                metadata["type"].as_str().unwrap(),
+                metadata["canonical_id"].as_str().unwrap(),
+            ],
+        );
+        let record = json!({"content_id":content_id,"metadata_identity":metadata,"title":"Show","kind":"series","poster_cache_key":null,"video_id":"tt7654321:1:2","season_number":1,"episode_number":2,"source_id":context["episode_ref"]["source_id"],"source_name":"Fixture","position_ms":7000,"duration_ms":20000,"completed":false,"updated_at":1000});
+        let save = json!({"write_sequence":1,"session_id":session["session_id"],"match_id":context["match_id"],"playback_epoch":1,"record":record});
+        let mut forged = save.clone();
+        forged["record"]["source_id"] = json!("forged");
+        let invalid = host.invoke(
+            "save_history",
+            json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":forged}),
+            true,
+        );
+        assert_eq!(invalid["error"]["code"], "BAD_REQUEST", "{invalid}");
+        call(&host, "save_history", save.clone());
+        assert_eq!(
+            call(&host, "list_history", json!({}))["entries"][0]["position_ms"],
+            7000
+        );
+        println!("T19:history-binding");
+        let report =
+            json!({"session_id":session["session_id"],"playback_epoch":1,"outcome":"playing"});
+        assert_eq!(
+            call(&host, "report_line_playback", report.clone())["reported"],
+            true
+        );
+        assert_eq!(
+            call(&host, "report_line_playback", report)["reported"],
+            false
+        );
+        let late=host.invoke("report_line_playback",json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"session_id":session["session_id"],"playback_epoch":2,"outcome":"failed"}}),true);
+        assert_eq!(late["error"]["code"], "CANCELLED", "{late}");
+        let chosen_source = snapshot["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|line| line["line_id"] == picked)
+            .unwrap()["source_id"]
+            .as_str()
+            .unwrap();
+        let refresh_round = uuid::Uuid::new_v4().to_string();
+        call(
+            &host,
+            "start_line_round",
+            json!({"round_id":refresh_round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"}),
+        );
+        let refresh_line =
+            loop {
+                assert!(
+                    std::time::Instant::now() < deadline + Duration::from_secs(30),
+                    "refresh round timed out"
+                );
+                let state = call(&host, "get_line_round", json!({"round_id":refresh_round}));
+                if let Some(line) = state["lines"].as_array().unwrap().iter().find(|line| {
+                    line["source_id"] == chosen_source && line["probe_status"] == "ready"
+                }) {
+                    break line["line_id"].as_str().unwrap().to_owned();
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            };
+        call(
+            &host,
+            "refresh_line",
+            json!({"round_id":refresh_round,"line_id":refresh_line}),
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let config = Config::parse(&endpoint, "app-token").unwrap();
+        let mut source = runtime
+            .block_on(config.json(Method::GET, &["v1", "sources"], None))
+            .unwrap()["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == chosen_source)
+            .unwrap()
+            .clone();
+        source["enabled"] = json!(false);
+        runtime
+            .block_on(config.json(Method::PUT, &["v1", "sources", chosen_source], Some(source)))
+            .unwrap();
+        let expired = host.invoke("refresh_line", json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"round_id":refresh_round,"line_id":refresh_line}}), true);
+        assert_eq!(expired["error"]["code"], "SESSION_EXPIRED", "{expired}");
+        call(
+            &host,
+            "cancel_line_round",
+            json!({"round_id":refresh_round}),
+        );
+        let failed = call(
+            &host,
+            "report_line_playback",
+            json!({"session_id":session["session_id"],"playback_epoch":1,"outcome":"failed"}),
+        );
+        assert_eq!(failed["reported"], false, "{failed}");
+        assert!(failed["diagnostic"].is_string());
+        let mut save_after_failure = save;
+        save_after_failure["write_sequence"] = json!(2);
+        save_after_failure["record"]["position_ms"] = json!(9000);
+        call(&host, "save_history", save_after_failure);
+        assert_eq!(
+            call(&host, "list_history", json!({}))["entries"][0]["position_ms"],
+            9000
+        );
+        let retry_round = uuid::Uuid::new_v4().to_string();
+        call(
+            &host,
+            "start_line_round",
+            json!({"round_id":retry_round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"}),
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            assert!(std::time::Instant::now() < deadline, "requery timed out");
+            let state = call(&host, "get_line_round", json!({"round_id":retry_round}));
+            assert!(state["error"].is_null(), "{state}");
+            if state["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|line| line["probe_status"] == "ready")
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            call(&host, "list_history", json!({}))["entries"][0]["video_id"],
+            "tt7654321:1:2"
+        );
+        assert_eq!(
+            call(&host, "list_history", json!({}))["entries"][0]["position_ms"],
+            9000
+        );
+        call(&host, "cancel_line_round", json!({"round_id":retry_round}));
+        let stale_open = host.invoke("open_playback", json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"resolution_id":resolution["id"],"stream_id":stream}}), true);
+        assert_eq!(
+            stale_open["error"]["code"], "REVISION_MISMATCH",
+            "{stale_open}"
+        );
+        let confirm_round = uuid::Uuid::new_v4().to_string();
+        call(
+            &host,
+            "start_line_round",
+            json!({"round_id":confirm_round,"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:45","video_id":"tmdb:45"}),
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        let candidate = loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "candidate lookup timed out"
+            );
+            let state = call(&host, "get_line_round", json!({"round_id":confirm_round}));
+            assert!(state["error"].is_null(), "{state}");
+            if let Some(candidate) = state["candidates"].as_array().unwrap().first() {
+                break candidate.clone();
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        let bad = host.invoke("confirm_line_candidate", json!({"request_id":uuid::Uuid::new_v4().to_string(),"input":{"round_id":confirm_round,"source_id":"wrong","candidate_id":candidate["candidate_id"]}}), true);
+        assert_eq!(bad["error"]["code"], "BAD_REQUEST");
+        call(
+            &host,
+            "confirm_line_candidate",
+            json!({"round_id":confirm_round,"source_id":candidate["source_id"],"candidate_id":candidate["candidate_id"]}),
+        );
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "candidate confirmation timed out"
+            );
+            let state = call(&host, "get_line_round", json!({"round_id":confirm_round}));
+            assert!(state["error"].is_null(), "{state}");
+            if state["pending_confirm"] == 0
+                && state["lines"].as_array().unwrap().iter().any(|line| {
+                    line["source_id"] == candidate["source_id"] && line["probe_status"] == "ready"
+                })
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        call(
+            &host,
+            "cancel_line_round",
+            json!({"round_id":confirm_round}),
+        );
+        println!("T19:report-dedup");
+        call(
+            &host,
+            "close_playback",
+            json!({"session_id":session["session_id"]}),
+        );
+        call(
+            &host,
+            "release_resolution",
+            json!({"resolution_id":resolution["id"]}),
+        );
     }
 }

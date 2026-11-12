@@ -31,7 +31,7 @@ export class UnknownCommit extends Error {
 }
 
 const commands: readonly Command[] = ["runtime_status", "runtime_prepare", "get_sources", "sync_catalog", "get_home",
-  "get_details", "resolve_episode", "open_playback", "close_playback", "cancel_request", "start_interaction",
+  "get_details", "resolve_episode", "start_line_round", "get_line_round", "confirm_line_candidate", "cancel_line_round", "play_line", "refresh_line", "report_line_playback", "open_playback", "close_playback", "cancel_request", "start_interaction",
   "finish_interaction", "get_settings", "save_settings", "get_resource_status", "release_resolution", "match_playback",
   "list_history", "save_history", "remove_history", "clear_history", "get_media_cache", "clear_media_cache", "list_watchlist", "add_watchlist", "remove_watchlist", "search_catalog", "get_live_channels", "open_live", "list_local_videos", "open_local"];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

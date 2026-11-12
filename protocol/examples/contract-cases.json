@@ -3,6 +3,562 @@
   "schema_version": "1.5.0",
   "cases": [
     {
+      "name": "args_start_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Args_start_line_round",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "metadata_source_id": "tmdb",
+          "type": "series",
+          "meta_id": "tmdb:44",
+          "video_id": "tt7654321:1:2"
+        }
+      }
+    },
+    {
+      "name": "result_start_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Result_start_line_round",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_get_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Args_get_line_round",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        }
+      }
+    },
+    {
+      "name": "result_get_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Result_get_line_round",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_confirm_line_candidate_missing_request_id",
+      "document": "app",
+      "schema": "Args_confirm_line_candidate",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "source_id": "source",
+          "candidate_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_confirm_line_candidate_missing_request_id",
+      "document": "app",
+      "schema": "Result_confirm_line_candidate",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_cancel_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Args_cancel_line_round",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        }
+      }
+    },
+    {
+      "name": "result_cancel_line_round_missing_request_id",
+      "document": "app",
+      "schema": "Result_cancel_line_round",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "args_play_line_missing_request_id",
+      "document": "app",
+      "schema": "Args_play_line",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "line_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_play_line_missing_request_id",
+      "document": "app",
+      "schema": "Result_play_line",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "resolution": {
+            "id": "resolution_fixture_001",
+            "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+            "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+            "episode_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"episode\":\"2\",\"route\":\"0\"}"
+            },
+            "expires_at": "2026-10-23T10:05:00Z",
+            "streams": [
+              {
+                "id": "stream_fixture_001",
+                "label": "示例1080p",
+                "quality": 1080,
+                "quality_label": "1080p",
+                "kind": "hls",
+                "has_interceptor": true,
+                "playable": true,
+                "reason": null,
+                "mime_type": "application/vnd.apple.mpegurl"
+              }
+            ],
+            "subtitles": [
+              {
+                "id": "subtitle_fixture_001",
+                "label": "中文",
+                "language": "zh",
+                "format": "srt"
+              }
+            ]
+          },
+          "context": {
+            "content_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"kind\":\"series\"}"
+            },
+            "group_id": "7445c5454436c848638dbda31066f3492ab5e754242f0f1294785b90736259fc",
+            "episode_id": "59842e22fe0abde99218e557ab1b975231877085300fbd145d0dc103cc42bc06",
+            "episode_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"episode\":\"2\",\"route\":\"0\"}"
+            },
+            "selected_stream_id": null,
+            "metadata_ref": {
+              "identity": {
+                "config_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "addon_key": "64cf241df85ce8144197f77672442933501d16cb16f472b72353c1a4c931b8ed",
+                "namespace": "imdb",
+                "type": "series",
+                "meta_id": "tt1234567",
+                "canonical_id": "tt1234567"
+              },
+              "content_ref": {
+                "source_id": "b74071fb6c56166a5e5437170d21b992261d9be1617f5e7ad0d60860cb7bca8d",
+                "source_revision": "e2ed4eda1801837579514f61627cc396f38edc90aa1fd8612b61c0f8ca715967",
+                "data": "{\"addon_key\":\"64cf241df85ce8144197f77672442933501d16cb16f472b72353c1a4c931b8ed\",\"type\":\"series\",\"meta_id\":\"tt1234567\"}"
+              }
+            },
+            "metadata_video_id": "tt1234567:1:2",
+            "match_id": "match_fixture_001"
+          }
+        }
+      }
+    },
+    {
+      "name": "args_refresh_line_missing_request_id",
+      "document": "app",
+      "schema": "Args_refresh_line",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "line_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_refresh_line_missing_request_id",
+      "document": "app",
+      "schema": "Result_refresh_line",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_report_line_playback_missing_request_id",
+      "document": "app",
+      "schema": "Args_report_line_playback",
+      "expected_valid": false,
+      "value": {
+        "input": {
+          "session_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "playback_epoch": 1,
+          "outcome": "playing"
+        }
+      }
+    },
+    {
+      "name": "result_report_line_playback_missing_request_id",
+      "document": "app",
+      "schema": "Result_report_line_playback",
+      "expected_valid": false,
+      "value": {
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true,
+          "reported": true
+        }
+      }
+    },
+    {
+      "name": "result_report_line_playback",
+      "document": "app",
+      "schema": "Result_report_line_playback",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true,
+          "reported": true
+        }
+      }
+    },
+    {
+      "name": "args_report_line_playback",
+      "document": "app",
+      "schema": "Args_report_line_playback",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "session_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "playback_epoch": 1,
+          "outcome": "playing"
+        }
+      }
+    },
+    {
+      "name": "result_refresh_line",
+      "document": "app",
+      "schema": "Result_refresh_line",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_refresh_line",
+      "document": "app",
+      "schema": "Args_refresh_line",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "line_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_play_line",
+      "document": "app",
+      "schema": "Result_play_line",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "resolution": {
+            "id": "resolution_fixture_001",
+            "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+            "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+            "episode_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"episode\":\"2\",\"route\":\"0\"}"
+            },
+            "expires_at": "2026-10-23T10:05:00Z",
+            "streams": [
+              {
+                "id": "stream_fixture_001",
+                "label": "示例1080p",
+                "quality": 1080,
+                "quality_label": "1080p",
+                "kind": "hls",
+                "has_interceptor": true,
+                "playable": true,
+                "reason": null,
+                "mime_type": "application/vnd.apple.mpegurl"
+              }
+            ],
+            "subtitles": [
+              {
+                "id": "subtitle_fixture_001",
+                "label": "中文",
+                "language": "zh",
+                "format": "srt"
+              }
+            ]
+          },
+          "context": {
+            "content_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"kind\":\"series\"}"
+            },
+            "group_id": "7445c5454436c848638dbda31066f3492ab5e754242f0f1294785b90736259fc",
+            "episode_id": "59842e22fe0abde99218e557ab1b975231877085300fbd145d0dc103cc42bc06",
+            "episode_ref": {
+              "source_id": "04bd23f968fe965c0aa92cc7681836a3e5381004d67b66031f3375a5555a7045",
+              "source_revision": "9fee7b53b9aa8074cc191518c02aab591e62da804d5dbc94cdcd2beb983ece9f",
+              "data": "{\"vod_id\":\"合成样例-001\",\"episode\":\"2\",\"route\":\"0\"}"
+            },
+            "selected_stream_id": null,
+            "metadata_ref": {
+              "identity": {
+                "config_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "addon_key": "64cf241df85ce8144197f77672442933501d16cb16f472b72353c1a4c931b8ed",
+                "namespace": "imdb",
+                "type": "series",
+                "meta_id": "tt1234567",
+                "canonical_id": "tt1234567"
+              },
+              "content_ref": {
+                "source_id": "b74071fb6c56166a5e5437170d21b992261d9be1617f5e7ad0d60860cb7bca8d",
+                "source_revision": "e2ed4eda1801837579514f61627cc396f38edc90aa1fd8612b61c0f8ca715967",
+                "data": "{\"addon_key\":\"64cf241df85ce8144197f77672442933501d16cb16f472b72353c1a4c931b8ed\",\"type\":\"series\",\"meta_id\":\"tt1234567\"}"
+              }
+            },
+            "metadata_video_id": "tt1234567:1:2",
+            "match_id": "match_fixture_001"
+          }
+        }
+      }
+    },
+    {
+      "name": "args_play_line",
+      "document": "app",
+      "schema": "Args_play_line",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "line_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_cancel_line_round",
+      "document": "app",
+      "schema": "Result_cancel_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "args_cancel_line_round",
+      "document": "app",
+      "schema": "Args_cancel_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        }
+      }
+    },
+    {
+      "name": "result_confirm_line_candidate",
+      "document": "app",
+      "schema": "Result_confirm_line_candidate",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_confirm_line_candidate",
+      "document": "app",
+      "schema": "Args_confirm_line_candidate",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "source_id": "source",
+          "candidate_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "result_get_line_round",
+      "document": "app",
+      "schema": "Result_get_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_get_line_round",
+      "document": "app",
+      "schema": "Args_get_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        }
+      }
+    },
+    {
+      "name": "result_start_line_round",
+      "document": "app",
+      "schema": "Result_start_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "engine_epoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "data": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "lookup_id": null,
+          "query_done": false,
+          "pending": 0,
+          "pending_confirm": 0,
+          "selected_line_id": null,
+          "lines": [],
+          "sources": [],
+          "candidates": [],
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "args_start_line_round",
+      "document": "app",
+      "schema": "Args_start_line_round",
+      "expected_valid": true,
+      "value": {
+        "request_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "input": {
+          "round_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "metadata_source_id": "tmdb",
+          "type": "series",
+          "meta_id": "tmdb:44",
+          "video_id": "tt7654321:1:2"
+        }
+      }
+    },
+    {
       "name": "valid_Source",
       "document": "bridge",
       "schema": "Source",

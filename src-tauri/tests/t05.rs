@@ -74,7 +74,7 @@ fn configured(host: &Host, configs: Vec<Value>) -> Value {
 fn t05_contract_commands_and_envelopes() {
     let (_temp, host) = setup();
     let schema: Value = serde_json::from_str(APP).unwrap();
-    assert_eq!(COMMANDS.len(), 31);
+    assert_eq!(COMMANDS.len(), 38);
     assert!(COMMANDS.contains(&"get_media_cache"));
     assert!(COMMANDS.contains(&"clear_media_cache"));
     for command in [
@@ -82,6 +82,13 @@ fn t05_contract_commands_and_envelopes() {
         "open_live",
         "list_local_videos",
         "open_local",
+        "start_line_round",
+        "get_line_round",
+        "confirm_line_candidate",
+        "cancel_line_round",
+        "play_line",
+        "refresh_line",
+        "report_line_playback",
     ] {
         assert!(COMMANDS.contains(&command));
     }

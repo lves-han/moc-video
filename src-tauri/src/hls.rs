@@ -3,9 +3,9 @@
 use crate::contracts::ApiError;
 use std::ops::Range;
 
-pub(super) const LIMIT: usize = 8 * 1024 * 1024;
+pub(crate) const LIMIT: usize = 8 * 1024 * 1024;
 
-pub(super) struct Reference {
+pub(crate) struct Reference {
     pub span: Range<usize>,
     pub playlist: bool,
     pub cacheable: bool,
@@ -71,7 +71,7 @@ fn attributes(text: &str) -> Result<Vec<(&str, Range<usize>)>, ApiError> {
     Ok(found)
 }
 
-pub(super) fn references(text: &str) -> Result<Vec<Reference>, ApiError> {
+pub(crate) fn references(text: &str) -> Result<Vec<Reference>, ApiError> {
     if text.len() > LIMIT {
         return Err(ApiError::new(
             "RESOURCE_LIMIT",

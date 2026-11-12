@@ -6383,9 +6383,831 @@
           "additionalProperties": false
         }
       ]
-    }
+    },
+      "LineRoundStartInput": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metadata_source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series"
+            ]
+          },
+          "meta_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "video_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "round_id",
+          "metadata_source_id",
+          "type",
+          "meta_id",
+          "video_id"
+        ],
+        "additionalProperties": false
+      },
+      "LineRoundIdInput": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "round_id"
+        ],
+        "additionalProperties": false
+      },
+      "LineRoundCandidateInput": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "candidate_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "round_id",
+          "source_id",
+          "candidate_id"
+        ],
+        "additionalProperties": false
+      },
+      "LineRoundLineInput": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "line_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "round_id",
+          "line_id"
+        ],
+        "additionalProperties": false
+      },
+      "LineReportInput": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "playback_epoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "playing",
+              "failed"
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "session_id",
+          "playback_epoch",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "LineRoundSnapshot": {
+        "type": "object",
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lookup_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query_done": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pending_confirm": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selected_line_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "round_id",
+          "lookup_id",
+          "query_done",
+          "pending",
+          "pending_confirm",
+          "selected_line_id",
+          "lines",
+          "sources",
+          "candidates",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "LinePlayResult": {
+        "type": "object",
+        "properties": {
+          "resolution": {
+            "$ref": "bridge.openapi.json#/components/schemas/Resolution"
+          },
+          "context": {
+            "$ref": "#/$defs/PlaybackContext"
+          }
+        },
+        "required": [
+          "resolution",
+          "context"
+        ],
+        "additionalProperties": false
+      },
+      "LineReportResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "reported": {
+            "type": "boolean"
+          },
+          "diagnostic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "reported"
+        ],
+        "additionalProperties": false
+      },
+      "LineRoundOk": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "additionalProperties": false
+      },
+      "Args_start_line_round": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundStartInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_start_line_round": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineRoundSnapshot"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_get_line_round": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundIdInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_get_line_round": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineRoundSnapshot"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_confirm_line_candidate": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundCandidateInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_confirm_line_candidate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineRoundSnapshot"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_cancel_line_round": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundIdInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_cancel_line_round": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineRoundOk"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_play_line": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundLineInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_play_line": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LinePlayResult"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_refresh_line": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineRoundLineInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_refresh_line": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineRoundSnapshot"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Args_report_line_playback": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "input": {
+            "$ref": "#/$defs/LineReportInput"
+          }
+        },
+        "required": [
+          "request_id",
+          "input"
+        ],
+        "additionalProperties": false
+      },
+      "Result_report_line_playback": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "data": {
+                "$ref": "#/$defs/LineReportResult"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "engine_epoch": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+              }
+            },
+            "required": [
+              "request_id",
+              "engine_epoch",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
   },
   "x-command-contracts": {
+      "start_line_round": {
+        "args": {
+          "$ref": "#/$defs/Args_start_line_round"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_start_line_round"
+        }
+      },
+      "get_line_round": {
+        "args": {
+          "$ref": "#/$defs/Args_get_line_round"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_get_line_round"
+        }
+      },
+      "confirm_line_candidate": {
+        "args": {
+          "$ref": "#/$defs/Args_confirm_line_candidate"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_confirm_line_candidate"
+        }
+      },
+      "cancel_line_round": {
+        "args": {
+          "$ref": "#/$defs/Args_cancel_line_round"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_cancel_line_round"
+        }
+      },
+      "play_line": {
+        "args": {
+          "$ref": "#/$defs/Args_play_line"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_play_line"
+        }
+      },
+      "refresh_line": {
+        "args": {
+          "$ref": "#/$defs/Args_refresh_line"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_refresh_line"
+        }
+      },
+      "report_line_playback": {
+        "args": {
+          "$ref": "#/$defs/Args_report_line_playback"
+        },
+        "result": {
+          "$ref": "#/$defs/Result_report_line_playback"
+        }
+      },
     "runtime_status": {
       "args": {
         "$ref": "#/$defs/Args_runtime_status"

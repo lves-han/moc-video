@@ -3210,3 +3210,10 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261112T070659724903-A1/output.log`；5 项通过，覆盖多来源与失败、候选串用、延迟确认、取消与确认并发、来源/元数据变更、短期缓存、过期与重启、线路重排/消失/歧义、断流终止及统计隔离。容器硬上限和宿主峰值见 `evidence/acceptance/T1.8-A1.json`。
 - 相关回归：T1.7 匹配/撤销四项通过 `evidence/runs/20261112T070607359698-diag-t18-matching-regression-latest/output.log`；Stremio 登记/代理四项通过 `evidence/runs/20261112T065936538801-diag-t18-stremio-regression/output.log`。OpenAPI 已补充查找事件与线路结构并通过验证。
 - 范围：补入 `server/src/matching.rs`，向查找核心交付确认所需的内部详情与缺集状态。外部来源实网 NOT RUN。
+
+## T1.9 App 原生查找轮次、测速与播放接线 2026-11-12
+
+- 结果：DONE
+- 实现：接入七个宿主命令，原生保存线路地址和请求头，核对元数据目标及来源版本；并发探测文件和 HLS，支持人工选择、候选确认、刷新、取消及过期重查。选定线路登记独立播放上下文，播放会话绑定历史与结果上报；重复和迟到上报被拦截，上报失败保留诊断并继续保存进度。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T073706088534-A1/output.log`；5 项通过。覆盖探测等待与手动优先、候选确认、取消后打开已选线路、会话历史校验、来源变更及 410 重查、结果去重和上报失败后的保存。受控服务和上游容器及资源采样见 `evidence/acceptance/T1.9-A1.json`。
+- 相关回归：宿主契约、权限和网关 16 项通过，`evidence/runs/20261112T073517488795-T19-host-regression-fixed/output.log`；前端接口和播放器 58 项通过，`evidence/runs/20261112T073529632082-T19-api-regression/output.log`；类型检查和契约检查通过。回归中发现旧测试将命令数固定为 31，已更新为包含新增七项的 38 并复验。外部来源实网及其他平台实机 NOT RUN。
