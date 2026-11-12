@@ -1,6 +1,6 @@
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 import time
 
 STATE = {"fail": False, "delay": 0.0, "counts": {}}
@@ -23,6 +23,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(503)
             self.end_headers()
             return
+        if url.path.startswith(("/addon-a/", "/addon-b/")):
+            return self.addon(url)
         if query.get("api_key") != ["fixture-key"]:
             self.send_response(401)
             self.end_headers()
@@ -46,6 +48,20 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         self.send_json(data)
+
+    def addon(self, url):
+        parts = [unquote(part) for part in url.path.strip('/').split('/')]
+        addon = parts[0]
+        label = "Addon A" if addon == "addon-a" else "Addon B"
+        if parts[1:] == ["manifest.json"]:
+            return self.send_json({"id":addon,"version":"1.0.0","name":label,"resources":["catalog",{"name":"meta","types":["movie"],"idPrefixes":["same:"]}],"types":["movie"],"idPrefixes":["same:"],"catalogs":[{"type":"movie","id":"catalog","name":label,"extra":[{"name":"search","isRequired":True},{"name":"skip"}]}]})
+        if len(parts) == 5 and parts[1:4] == ["catalog", "movie", "catalog"]:
+            extras = parse_qs(parts[4].removesuffix('.json'))
+            return self.send_json({"metas":[{"id":"same:42","type":"movie","name":label,"query":extras.get("search"),"skip":extras.get("skip")} ]})
+        if len(parts) == 4 and parts[1:3] == ["meta", "movie"]:
+            return self.send_json({"meta":{"id":parts[3].removesuffix('.json'),"type":"movie","name":label}})
+        self.send_response(404)
+        self.end_headers()
 
     def send_json(self, data):
         payload = json.dumps(data, ensure_ascii=False).encode()

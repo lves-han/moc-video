@@ -36,11 +36,19 @@
         }
       }
     },
-    "/stremio/{token}/tmdb/{lang}/manifest.json": {
+    "/stremio/{token}/{source}/{lang}/manifest.json": {
       "get": {
         "parameters": [
           {
             "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
             "in": "path",
             "required": true,
             "schema": {
@@ -75,15 +83,26 @@
           },
           "503": {
             "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
           }
         }
       }
     },
-    "/stremio/{token}/tmdb/{lang}/catalog/{type}/{id}.json": {
+    "/stremio/{token}/{source}/{lang}/catalog/{type}/{id}.json": {
       "get": {
         "parameters": [
           {
             "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
             "in": "path",
             "required": true,
             "schema": {
@@ -134,15 +153,26 @@
           },
           "503": {
             "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
           }
         }
       }
     },
-    "/stremio/{token}/tmdb/{lang}/catalog/{type}/{id}/{extra}.json": {
+    "/stremio/{token}/{source}/{lang}/catalog/{type}/{id}/{extra}.json": {
       "get": {
         "parameters": [
           {
             "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
             "in": "path",
             "required": true,
             "schema": {
@@ -201,15 +231,26 @@
           },
           "503": {
             "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
           }
         }
       }
     },
-    "/stremio/{token}/tmdb/{lang}/meta/{type}/{id}.json": {
+    "/stremio/{token}/{source}/{lang}/meta/{type}/{id}.json": {
       "get": {
         "parameters": [
           {
             "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
             "in": "path",
             "required": true,
             "schema": {
@@ -260,6 +301,148 @@
           },
           "503": {
             "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List metadata sources"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import addons with per-item results"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources/import": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import addons with per-item results"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update a registered addon"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete a registered addon"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "204": {
+            "description": "Deleted"
           }
         }
       }

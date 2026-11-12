@@ -4,11 +4,11 @@ mod metadata;
 
 use axum::{
     Json, Router,
-    extract::{Path, Request, State},
+    extract::{OriginalUri, Path, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -20,6 +20,7 @@ struct AppState {
     tmdb: Arc<metadata::tmdb::Tmdb>,
     cache: metadata::cache::Cache,
     home: Arc<tokio::sync::RwLock<metadata::home::Home>>,
+    sources: metadata::sources::Store,
 }
 
 async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
@@ -118,8 +119,28 @@ async fn meta(
 
 async fn stremio(
     State(state): State<AppState>,
-    Path((token, lang, resource)): Path<(String, String, String)>,
+    Path((token, source, lang, _resource)): Path<(String, String, String, String)>,
+    OriginalUri(uri): OriginalUri,
 ) -> Response {
+    let raw = uri.path().splitn(6, '/').nth(5).unwrap_or("");
+    let decoded: Result<Vec<String>, _> = raw
+        .split('/')
+        .map(|segment| {
+            percent_encoding::percent_decode_str(segment)
+                .decode_utf8()
+                .map(|s| s.into_owned())
+        })
+        .collect();
+    let decoded = match decoded {
+        Ok(value) => value,
+        Err(_) => {
+            return api_error(
+                StatusCode::BAD_REQUEST,
+                "BAD_REQUEST",
+                "Invalid resource encoding",
+            );
+        }
+    };
     let result = if !bool::from(token.as_bytes().ct_eq(state.token.as_bytes())) {
         Err((
             StatusCode::UNAUTHORIZED,
@@ -132,8 +153,39 @@ async fn stremio(
             "BAD_REQUEST",
             "Unsupported language",
         ))
+    } else if source != "tmdb" {
+        match state.sources.get(&source) {
+            Ok(Some(source)) => metadata::stremio::response(&source, &state.cache, &lang, &decoded)
+                .await
+                .map_err(|message| {
+                    if message.starts_with("unsupported") {
+                        (
+                            StatusCode::NOT_IMPLEMENTED,
+                            "CAPABILITY_UNAVAILABLE",
+                            message,
+                        )
+                    } else if message.starts_with("invalid")
+                        || message.starts_with("required")
+                        || message.starts_with("unknown")
+                    {
+                        (StatusCode::BAD_REQUEST, "BAD_REQUEST", message)
+                    } else {
+                        (StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message)
+                    }
+                }),
+            Ok(None) => Err((
+                StatusCode::NOT_FOUND,
+                "NOT_FOUND",
+                "Metadata source not found",
+            )),
+            Err(_) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL",
+                "Metadata database failed",
+            )),
+        }
     } else {
-        let parts: Vec<_> = resource.split('/').collect();
+        let parts: Vec<_> = decoded.iter().map(String::as_str).collect();
         let strip = |s: &str| s.strip_suffix(".json").map(str::to_owned);
         let data = match parts.as_slice() {
             ["manifest.json"] => state.tmdb.manifest(&lang).await,
@@ -174,6 +226,134 @@ async fn stremio(
     response
 }
 
+fn api_error(status: StatusCode, code: &str, message: &str) -> Response {
+    (
+        status,
+        Json(json!({"error":{"code":code,"message":message,"retryable":status.is_server_error()}})),
+    )
+        .into_response()
+}
+
+async fn list_sources(State(state): State<AppState>) -> Response {
+    match state.sources.list() {
+        Ok(items) => Json(json!({"sources":items})).into_response(),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL",
+            "Metadata database failed",
+        ),
+    }
+}
+
+async fn import_sources(
+    State(state): State<AppState>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    let config = match metadata::sources::required(&input, "config_id") {
+        Ok(v) => v,
+        Err(e) => return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
+    };
+    let addons = match input["addons"].as_array() {
+        Some(v) if !v.is_empty() && v.len() <= 16 => v,
+        _ => {
+            return api_error(
+                StatusCode::BAD_REQUEST,
+                "BAD_REQUEST",
+                "Expected 1 to 16 addons",
+            );
+        }
+    };
+    let mut keys = std::collections::HashSet::new();
+    let mut orders = std::collections::HashSet::new();
+    for item in addons {
+        let key = match metadata::sources::required(item, "addon_key") {
+            Ok(v) => v,
+            Err(e) => return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
+        };
+        let order = match item["order"].as_u64().filter(|n| *n < 16) {
+            Some(v) => v,
+            None => {
+                return api_error(
+                    StatusCode::BAD_REQUEST,
+                    "BAD_REQUEST",
+                    "Invalid addon order",
+                );
+            }
+        };
+        if !keys.insert(key) || !orders.insert(order) {
+            return api_error(
+                StatusCode::BAD_REQUEST,
+                "BAD_REQUEST",
+                "Duplicate addon key or order",
+            );
+        }
+    }
+    let mut results = Vec::new();
+    for item in addons {
+        let key = item["addon_key"].as_str().expect("validated key");
+        match state.sources.register(config, item).await {
+            Ok(source) => results.push(json!({"addon_key":key,"source":source,"status":"ok"})),
+            Err(error) => results.push(json!({"addon_key":key,"status":"failed","error":error})),
+        }
+    }
+    Json(json!({"config_id":config,"results":results})).into_response()
+}
+
+async fn update_source(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(mut item): Json<serde_json::Value>,
+) -> Response {
+    let existing = match state.sources.get(&id) {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return api_error(
+                StatusCode::NOT_FOUND,
+                "NOT_FOUND",
+                "Metadata source not found",
+            );
+        }
+        Err(_) => {
+            return api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL",
+                "Metadata database failed",
+            );
+        }
+    };
+    let Some(map) = item.as_object_mut() else {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "BAD_REQUEST",
+            "Expected a source object",
+        );
+    };
+    map.insert("addon_key".into(), existing["origin_addon_key"].clone());
+    let config = existing["origin_config_id"]
+        .as_str()
+        .expect("stored config");
+    match state.sources.register(config, &item).await {
+        Ok(source) => Json(source).into_response(),
+        Err(e) => api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
+    }
+}
+
+async fn delete_source(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    match state.sources.delete(&id) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => api_error(
+            StatusCode::NOT_FOUND,
+            "NOT_FOUND",
+            "Metadata source not found",
+        ),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL",
+            "Metadata database failed",
+        ),
+    }
+}
+
 async fn stremio_options() -> impl IntoResponse {
     (
         StatusCode::NO_CONTENT,
@@ -191,6 +371,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = Arc::<str>::from(config.token);
     let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env()?);
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
+    let sources = metadata::sources::Store::new(&config.data_dir);
     let home = Arc::new(tokio::sync::RwLock::new(metadata::home::initialize(
         &cache,
     )?));
@@ -207,9 +388,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     metadata::home::start(cache.clone(), tmdb.clone(), home.clone(), zone, poll);
     let app = Router::new()
         .route("/v1/health", get(health))
+        .route(
+            "/v1/metadata-sources",
+            get(list_sources).post(import_sources),
+        )
+        .route("/v1/metadata-sources/import", post(import_sources))
+        .route(
+            "/v1/metadata-sources/{id}",
+            axum::routing::put(update_source).delete(delete_source),
+        )
         .route_layer(middleware::from_fn_with_state(token.clone(), authorize))
         .route(
-            "/stremio/{token}/tmdb/{lang}/{*resource}",
+            "/stremio/{token}/{source}/{lang}/{*resource}",
             get(stremio).options(stremio_options),
         )
         .with_state(AppState {
@@ -217,6 +407,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tmdb,
             cache,
             home,
+            sources,
         });
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     eprintln!("Service listening on {}", listener.local_addr()?);

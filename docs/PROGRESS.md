@@ -3167,3 +3167,10 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261112T050239814459-A1/output.log`；3 项容器场景通过，覆盖准备中搜索/详情、缓存命中与过期、身份隔离、重启和失败保留；受控时间单元检查每日时区切点。资源限制和宿主峰值见 `evidence/acceptance/T1.3-A1.json`。
 - 相关回归：T1.2 元数据目录、详情及鉴权三项通过，日志 `evidence/runs/20261112T050426796115-diag-t13-tmdb-regression-final/output.log`。真实 TMDB 网络请求 NOT RUN；按计划使用受控上游。
 - 范围：补充 `server/README.md`，说明更新时区和检查间隔。
+
+## T1.4 Stremio 元数据登记、代理与配置导入 2026-11-12T05:20:33+00:00
+
+- 结果：DONE
+- 实现：服务提供鉴权来源列表、逐扩展导入、更新和删除，持久保存原配置、扩展键、命名空间规则及顺序；重复导入复用来源 ID。按 manifest 声明代理目录、搜索、分页和详情，保留路径编码、缓存、CORS 与语言状态。已识别的 TMDB 扩展沿原语言路径规则处理。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T051739614776-A1/output.log`；4 项通过，覆盖两个扩展同 ID 隔离、部分失败、重复导入、重启回读、所需 extra、能力状态和含斜杠 ID；单元检查跨地址凭据及已知语言路径。
+- 相关回归：TMDB 三项通过 `evidence/runs/20261112T051927877800-diag-t14-tmdb-regression-verified/output.log`；首页缓存三项通过 `evidence/runs/20261112T051952285136-diag-t14-home-regression-verified/output.log`。容器硬限制与宿主峰值见 `evidence/acceptance/T1.4-A1.json`；外部扩展实网 NOT RUN。

@@ -246,7 +246,8 @@ class CacheHome(TmdbMetadata):
     def test_1_home_cold_start_daily(self):
         unit = subprocess.run(["cargo", "test", "--locked", "--offline", "-p", "moc-service", "metadata::", "--", "--test-threads=1"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
         self.assertEqual(unit.returncode, 0, unit.stdout[-2000:])
-        self.assertIn("2 passed", unit.stdout)
+        self.assertIn("daily_cutoff_uses_configured_timezone ... ok", unit.stdout)
+        self.assertIn("cache_keys_separate_sources_types_and_languages ... ok", unit.stdout)
         self.fixture_request("/control?delay=0.02")
         self.start("app-token", {**self.fixture_env, "MOC_HOME_POLL_SECONDS": "1"})
         status, body = self.resource("zh-CN/catalog/movie/tmdb.top.json")
@@ -290,22 +291,106 @@ class CacheHome(TmdbMetadata):
         self.assertEqual(self.request("app-token")[1]["snapshot_at"], 0)
 
 
+class StremioMetadata(TmdbMetadata):
+    test_1_routes_fields = None
+    test_2_identity_language = None
+    test_3_auth_errors = None
+
+    @classmethod
+    def native(cls, method, path, body=None):
+        url = cls.url.rsplit("/v1/health", 1)[0] + path
+        headers = {"Authorization":"Bearer app-token"}
+        if body is not None: headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(), headers=headers, method=method)
+        try: response = urllib.request.urlopen(request, timeout=20)
+        except urllib.error.HTTPError as error: response = error
+        with response:
+            content = response.read()
+            return response.status, json.loads(content) if content else None
+
+    @classmethod
+    def proxy(cls, source, path):
+        url = cls.url.rsplit("/v1/health", 1)[0] + f"/stremio/app-token/{source}/{path}"
+        try: response = urllib.request.urlopen(url, timeout=20)
+        except urllib.error.HTTPError as error: response = error
+        with response: return response.status, json.load(response)
+
+    @classmethod
+    def group(cls):
+        base = cls.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3")
+        return {"config_id":"original-config", "addons":[
+            {"addon_key":"first-key","manifest_url":base+"/addon-a/manifest.json","order":0,"namespace_rule":{"kind":"addon"}},
+            {"addon_key":"second-key","manifest_url":base+"/addon-b/manifest.json","order":1,"namespace_rule":{"kind":"verified-tmdb"}}]}
+
+    def test_1_manifest_proxy(self):
+        unit = subprocess.run(["cargo", "test", "--locked", "--offline", "-p", "moc-service", "metadata::", "--", "--test-threads=1"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+        self.assertEqual(unit.returncode, 0, unit.stdout[-2000:])
+        self.assertIn("redirects_protect_credentials_and_tls ... ok", unit.stdout)
+        self.assertIn("recognized_tmdb_language_paths_are_localized ... ok", unit.stdout)
+        self.start("app-token", self.fixture_env)
+        status, result = self.native("POST", "/v1/metadata-sources/import", self.group())
+        self.assertEqual(status, 200)
+        self.assertEqual([r["status"] for r in result["results"]], ["ok", "ok"])
+        sources = [r["source"] for r in result["results"]]
+        type(self).source_ids = [source["metadata_source_id"] for source in sources]
+        self.assertNotEqual(*self.source_ids)
+        for source, label in zip(self.source_ids, ["Addon A", "Addon B"]):
+            self.assertEqual(self.proxy(source, "en-US/manifest.json")[1]["name"], label)
+            status, catalog = self.proxy(source, "en-US/catalog/movie/catalog/search=film&skip=20.json")
+            self.assertEqual((status, catalog["metas"][0]["name"], catalog["metas"][0]["skip"]), (200, label, ["20"]))
+            self.assertEqual(self.proxy(source, "en-US/meta/movie/same:42.json")[1]["meta"]["name"], label)
+
+    def test_2_source_identity_import(self):
+        status, result = self.native("POST", "/v1/metadata-sources", self.group())
+        sources = [r["source"] for r in result["results"]]
+        self.assertEqual([s["metadata_source_id"] for s in sources], self.source_ids)
+        self.assertEqual([s["revision"] for s in sources], [1, 1])
+        self.start("app-token", self.fixture_env)
+        rows = self.native("GET", "/v1/metadata-sources")[1]["sources"]
+        self.assertEqual([s["metadata_source_id"] for s in rows], self.source_ids)
+        self.assertEqual([s["origin_order"] for s in rows], [0, 1])
+        self.assertEqual([s["origin_namespace_rule"]["kind"] for s in rows], ["addon", "verified-tmdb"])
+
+    def test_3_capabilities_fallback(self):
+        source = self.source_ids[0]
+        self.assertEqual(self.proxy(source, "zh-CN/catalog/movie/catalog.json")[0], 400)
+        self.assertEqual(self.proxy(source, "zh-CN/meta/series/same:42.json")[0], 501)
+        self.assertEqual(self.proxy(source, "zh-CN/meta/movie/other:42.json")[0], 501)
+        status, body = self.proxy(source, "zh-CN/meta/movie/same:part%2F42.json")
+        self.assertEqual((status, body["meta"]["id"]), (200, "same:part/42"))
+        self.assertEqual(self.native("GET", "/v1/metadata-sources")[1]["sources"][0]["language_status"], "original")
+
+    def test_4_multi_manifest_import(self):
+        group = self.group(); group["config_id"] = "partial-config"
+        group["addons"][1]["manifest_url"] = group["addons"][1]["manifest_url"].replace("/addon-b/", "/missing/")
+        status, result = self.native("POST", "/v1/metadata-sources/import", group)
+        self.assertEqual((status, [r["status"] for r in result["results"]]), (200, ["ok", "failed"]))
+        first = result["results"][0]["source"]["metadata_source_id"]
+        self.assertEqual(self.native("POST", "/v1/metadata-sources/import", group)[1]["results"][0]["source"]["metadata_source_id"], first)
+        self.assertEqual(self.native("PUT", "/v1/metadata-sources/"+first, group["addons"][0])[0], 200)
+        self.assertEqual(self.native("DELETE", "/v1/metadata-sources/"+first)[0], 204)
+        self.assertEqual(self.proxy(first, "en-US/manifest.json")[0], 404)
+        self.assertEqual(self.resource("en-US/manifest.json")[0], 200)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
-                "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"]}[args.suite]
+                "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
+                "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
     methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
-               "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot")}[args.suite]
+               "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
+               "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import")}[args.suite]
     for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:
@@ -318,7 +403,7 @@ def main():
     args.report.write_text(json.dumps({"suite": args.suite, "tests": result.testsRun, "successful": result.wasSuccessful(),
                                        "host_peak_bytes": test_class.host_peak, "build_memory_cap": BUILD_LIMIT,
                                        "service_memory_cap": SERVICE_LIMIT}, indent=2) + "\n")
-    return 0 if result.wasSuccessful() and result.testsRun == 3 else 1
+    return 0 if result.wasSuccessful() and result.testsRun == len(case_ids) else 1
 
 
 if __name__ == "__main__":

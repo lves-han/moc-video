@@ -1,19 +1,6 @@
-use hickory_resolver::{
-    config::{NameServerConfig, ResolveHosts, ResolverConfig},
-    net::runtime::TokioRuntimeProvider,
-};
-use reqwest::{
-    header::{AUTHORIZATION, HeaderMap},
-    redirect::Policy,
-};
+use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde_json::{Value, json};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
 use url::Url;
-
-const MAX_BODY: usize = 8 * 1024 * 1024;
 
 pub struct Tmdb {
     base: Url,
@@ -72,67 +59,12 @@ impl Tmdb {
         }
         url.query_pairs_mut()
             .extend_pairs(params.iter().map(|(k, v)| (*k, v.as_str())));
-        let host = url.host_str().ok_or("invalid TMDB endpoint")?;
-        let port = url.port_or_known_default().ok_or("invalid TMDB endpoint")?;
-        let addresses = if let Ok(ip) = host.parse::<IpAddr>() {
-            vec![SocketAddr::new(ip, port)]
-        } else {
-            let mut set = tokio::task::JoinSet::new();
-            for ip in [Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(8, 8, 8, 8)] {
-                let mut builder = hickory_resolver::TokioResolver::builder_with_config(
-                    ResolverConfig::from_name_servers(vec![NameServerConfig::udp(ip.into())]),
-                    TokioRuntimeProvider::default(),
-                );
-                builder.options_mut().use_hosts_file = ResolveHosts::Never;
-                let resolver = builder
-                    .build()
-                    .map_err(|_| "TMDB DNS initialization failed")?;
-                let host = format!("{}.", host.trim_end_matches('.'));
-                set.spawn(async move {
-                    resolver.lookup_ip(host).await.map(|ips| {
-                        ips.iter()
-                            .map(|ip| SocketAddr::new(ip, port))
-                            .collect::<Vec<_>>()
-                    })
-                });
-            }
-            let mut found = None;
-            while let Some(result) = set.join_next().await {
-                if let Ok(Ok(ips)) = result {
-                    if !ips.is_empty() {
-                        found = Some(ips);
-                        break;
-                    }
-                }
-            }
-            found.ok_or("TMDB DNS lookup failed")?
-        };
-        let client = reqwest::Client::builder()
-            .redirect(Policy::none())
-            .timeout(Duration::from_secs(8))
-            .resolve_to_addrs(host, &addresses)
-            .build()
-            .map_err(|_| "TMDB HTTP initialization failed")?;
-        let mut response = client
-            .get(url)
-            .headers(headers)
-            .send()
+        super::http::json(url, headers)
             .await
-            .map_err(|_| "TMDB request failed")?;
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err("TMDB API key was rejected");
-        }
-        if !response.status().is_success() {
-            return Err("TMDB upstream request failed");
-        }
-        let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|_| "TMDB response failed")? {
-            if bytes.len() + chunk.len() > MAX_BODY {
-                return Err("TMDB response exceeds limit");
-            }
-            bytes.extend_from_slice(&chunk);
-        }
-        serde_json::from_slice(&bytes).map_err(|_| "TMDB response is invalid")
+            .map_err(|error| match error {
+                super::http::Error::Unauthorized => "TMDB API key was rejected",
+                super::http::Error::Failed => "TMDB upstream request failed",
+            })
     }
 
     async fn genres(&self, kind: &str, lang: &str) -> Result<Vec<(u64, String)>, &'static str> {

@@ -1031,6 +1031,7 @@ dependencies = [
  "chrono-tz",
  "hickory-resolver",
  "moc-core",
+ "percent-encoding",
  "reqwest",
  "rusqlite",
  "serde_json",
