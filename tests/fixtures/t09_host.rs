@@ -27,6 +27,16 @@ mod t37;
 mod tv3;
 #[path = "tv4_host.rs"]
 mod tv4;
+#[path = "x3_live_host.rs"]
+mod x3;
+#[path = "x4_tmdb_api_host.rs"]
+mod x4;
+#[path = "x5_local_host.rs"]
+mod x5;
+#[path = "x7_mkv_host.rs"]
+mod x7;
+#[path = "x8_search_host.rs"]
+mod x8;
 
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());

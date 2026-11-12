@@ -48,7 +48,7 @@ fn listed(host: &Host) -> Value {
 }
 
 fn database(playing: &Playing) -> std::path::PathBuf {
-    playing.temp.path().join("yingxiang-video.db")
+    playing.temp.path().join("moc-video.db")
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn t18_migration_failure_and_newer_version_keep_the_file() {
     let temp = TempDir::new().unwrap();
     let path = temp.path().join("中文 目录").join("settings.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let database = path.with_file_name("yingxiang-video.db");
+    let database = path.with_file_name("moc-video.db");
     let connection = Connection::open(&database).unwrap();
     // A half-made table makes version 1 fail; the transaction must leave these rows.
     connection

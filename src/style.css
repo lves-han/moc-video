@@ -2846,3 +2846,20 @@ main {
   ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*) { animation-duration: .01ms; }
 }
 .playback-line-error { position: absolute; left: 24px; right: 24px; bottom: 100px; z-index: 6; padding: 12px; color: #fff; background: #34271feb; border-radius: 8px; }
+
+/* All application dialogs share the same surface and spacing. */
+.tv-dialog.n-card, .tv-dialog.n-dialog {
+  max-width: min(640px, calc(100vw - 32px));
+  border: 1px solid var(--tv-hairline, var(--border));
+  border-radius: 20px;
+  background: var(--tv-glass, var(--surface));
+  -webkit-backdrop-filter: var(--tv-glass-filter, none);
+  backdrop-filter: var(--tv-glass-filter, none);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .24);
+  --n-padding-left: 28px;
+  --n-padding-right: 28px;
+  --n-padding-top: 28px;
+  --n-padding-bottom: 28px;
+}
+.tv-dialog .n-card-header__main, .tv-dialog .n-dialog__title { font-size: 20px; font-weight: 600; }
+.tv-dialog .n-card__content, .tv-dialog .n-dialog__content { line-height: 1.55; }

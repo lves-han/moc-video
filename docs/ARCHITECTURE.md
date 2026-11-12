@@ -1,4 +1,21 @@
-# 映象视频架构与契约
+# 墨客视频架构与契约
+
+当前版本已按用户要求移除旧版本兼容：使用 `app.moc.video` 和 `moc-video.db`，仅读取当前格式；下文旧版升级验收保留为历史记录。
+
+## 当前验收与流程（ADR-062）
+
+自 T0.34 起仅验证当前任务及受本次改动影响的行为；全量 verify、逐卡提交、独立巡检和冻结修订的手工基线/复审均按需要执行。后文与本条冲突的全量流程为历史要求；既有证据保留。T0.28–T0.34 的验收标准需扩大时仍须用户批准。
+
+## 播放服务阶段的生效补充（ADR-077/078）
+
+T0.47–T0.49 以 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` 第 2 版和对应任务卡为准；本次用户仅授权文档修订与复审，T0.47 设开发阶段门。下文描述的本地来源架构保留为已有实现与迁移起点，服务阶段的差异如下：
+
+- R06 按已采纳 ADR-077 改为 App、服务和按需抽取的共享库组成的 Cargo workspace；App 保留本地媒体网关和测速，跨源匹配及元数据请求逐步移到服务。
+- 第一期同时提供 TMDB 与自定义 Stremio 元数据，按稳定元数据来源 ID 隔离。当前 TMDB 与自定义 Stremio 的逻辑身份、历史和收藏在接入前后保留；服务端点、令牌与语言只影响传输。原 MacCMS 元数据退出规则沿 ADR-076。
+- 网络沿 ADR-068 允许内网、回环与代理 Fake-IP；共享来源/媒体继续固定 DNS、证书校验、跨 origin 凭据清除和资源上限。已配置服务的令牌请求限定 origin 和基础路径，本地服务域名可用系统 DNS，跨 origin 重定向报错。路径令牌在 App、服务和代理日志中隐藏，自动令牌持久保存并复用。
+- 确认内容时核对明确的电影/剧集类型和已有年份证据，未知类型供人工确认，标题中与元数据冲突的年份排除；正常增集继续复用内容对应关系。lookup/candidate/line 为有界短期记录，结束后允许确认，取消和过期明确报错。
+- App 等来源查询及待测线路完成/超时或本轮预算到期后自动选线；手动可提前选择。旧轮次结果丢弃，句柄过期重查并保留进度。首次无首页快照立即后台生成，已有快照在刷新失败时保留。
+- 验收按个人娱乐使用规模：相关自动检查与一次当前 macOS 的关键操作，可合并场景。性能数值为调优观察，长播、容量压力、多平台安装及完整故障矩阵按需安排；数据保护、基本鉴权、关键网络规则与真实结果记录继续执行。已完成卡的历史证据保持，测试环境沿原资源执行器并清理自建资源。
 
 状态：T0.1至T0.17已完成，Rust来源路线按ADR-048修订，T0.19及后卡实现验收NOT RUN。需求原文保留逐字节归档的SPEC 1.5.0及replica-spec机器契约；当前批准差异由ADR-005、ADR-044、ADR-048及以下契约定义。原规格中的application/前缀映射到本项目根，docs/progress.md映射到docs/PROGRESS.md（ADR-001）。
 
@@ -40,13 +57,17 @@ match_playback每次一个选中provider，最多2次查询×10候选，最多20
 
 C5 补充（ADR-061）：跨源影片由用户明确确认候选内容及线路、当前会话实际播放推进后，可对该元数据影片与所确认来源内容建立受限偏好。后续每集重新获取当前来源内容和线路数据，仅当来源修订一致、内容仍为已确认的同一内容、目标季集及已确认线路均可由可审计标识唯一对应时，允许使用该偏好自动选定该集；可审计对应至少绑定用户确认的元数据影片身份、来源及修订、已确认来源内容；来源没有结构化季集字段时，只有能与目标季集互相校验且唯一的季集标签可作为证据，数组下标、单个旧 group_id 或仅标题相似均不足。即使来源 revision 和内容 ID 未变，也须用首次确认时的非敏感稳定内容证据交叉核验当前快照；字段冲突或无法证明同一内容时回确认。重复或缺失集号、跨季歧义、线路重排或同名导致无法唯一确认、内容标识变化时走 needs_confirmation。旧的 match/Resolution/Session/Stream 及 URL 均不得复用或持久化；来源修订变化、已确认内容失效或用户选择其他来源时偏好不得越权。没有受限偏好的首次跨源匹配仍执行原已验证外部ID、类型及唯一季集门。
 
+C5 补充（ADR-075）：播放查找按轮次覆盖全部就绪且可解析的播放源，每个来源独立查询、失败互不阻断，单来源的查询次数与候选上限沿用本节原规定。缺少共同已验证外部 ID 时，仅当规范化片名或别名一致、类型一致、双方都有年份时年份一致、目标季集可唯一对应，且该来源内恰好一个候选满足全部条件，才可自动确认；同名多候选、年份冲突、缺少年份且同名候选不止一个、季集无法唯一对应时 needs_confirmation。自动确认的线路按本轮测速延迟排序选择；测速沿用媒体网关的当前 DNS、跳转与请求头规则（IP 范围按 ADR-068）并绕过媒体缓存，不打开会话、不登记 Resolution、不持久化地址或凭据。轮次之间互相隔离，迟到结果丢弃，正在播放的 match 不因新轮次失效。已验证外部 ID 的原自动确认规则及 ADR-061 受限偏好保持，后者只用于免去重复确认。
+
+C5 补充（ADR-076）：产品元数据只来自 TMDB/Stremio，MacCMS 只作播放源，不再有 maccms 元数据命名空间与同源直通。跨源搜索的两次查询依次使用当前元数据语言片名与原始片名（缺时英文片名）；每次查询结果先按规范化片名包含关系过滤，过滤后最多 10 条，再排除衍生内容（解说、预告等）及类型、年份、季集不符的候选，剩余候选按 ADR-075 自动确认门判定。
+
 ### C6 HTTP与网络（SPEC §12/§12.1/§18.2/§18.3）
 
 MacCMS匿名JSON、首个$拆条目而保留URL余串，组/集原顺序与歧义失败；类型探测有界。Stremio按完整manifest快照发布，首次失败unpublished且能力false，刷新失败保留旧快照；资源过滤/required extras/skip/同名栏目/配置路径query保持，详情按原扩展与顺序回退，warnings最多64。stream/inline媒体字段按元数据角色忽略。
 
-配置最多32、每Stremio配置1..16 manifests，UUID唯一，禁用/删除/重加的generation墓碑与sync_sequence防止旧提交。公共HTTP入口覆盖API/manifest/图像/媒体/字幕/HLS/key/探测：全部DNS A/AAAA与实际peer公网单播，IPv4映射IPv6还原，地址绑定连接，保持Host/TLS/SNI，逐跳最多5次且拒绝HTTPS降级，跨Origin清除敏感头，禁用环境代理。受控本机fixture只在测试构建固定允许列表中开放。
+配置最多32、每Stremio配置1..16 manifests，UUID唯一，禁用/删除/重加的generation墓碑与sync_sequence防止旧提交。共享HTTP入口覆盖API/manifest/图像/媒体/字幕/HLS/key/探测：允许公网、内网、回环、保留及代理Fake-IP地址，不校验DNS结果或实际peer的IP范围及一致性（ADR-068）。解析结果仍绑定连接，保持Host/TLS/SNI与证书校验；逐跳最多5次且拒绝HTTPS降级，跨Origin清除敏感头，禁用环境代理，支持系统TUN透明代理。
 
-ADR-049：应用公共HTTP域名只通过1.1.1.1:53和8.8.8.8:53解析A/AAAA，复用hickory异步解析器及其受操作总deadline约束的失败转移；不读取系统DNS、hosts、搜索域或环境DNS配置，无本机回退。IP字面量继续原地址检查。所有API/图片/媒体/字幕/HLS子资源及每次重定向共用此入口。两服务器均失败时明确返回DNS错误；即使公共DNS返回内网/保留地址或混合结果仍拒绝，resolve_to_addrs绑定及实际peer校验、原域名TLS/SNI与证书校验保持。测试专用nameserver/fixture映射仅cfg(test)。使用明文DNS可能受网络劫持，地址防护仍执行；真实网络诊断须区分解析成功、媒体成功及拦截失败，暂不增加DoH/代理功能或设置UI。
+ADR-049 的固定DNS继续生效：共享HTTP域名只通过1.1.1.1:53和8.8.8.8:53解析A/AAAA，复用hickory异步解析器及其受操作总deadline约束的失败转移；不读取系统DNS、hosts、搜索域或环境DNS配置，无本机回退。所有API/图片/媒体/字幕/HLS子资源及每次重定向共用此入口。空结果或两服务器均失败时明确返回DNS错误。IP字面量直接连接。测试专用nameserver/fixture映射仅cfg(test)。明文DNS可能被TUN拦截，Fake-IP按原结果连接；ADR-068取代原公网地址限制与peer核验。桌面字体下载经独立cap的本地字体网关，使用同一原生HTTP/DNS入口并校验固定大小及SHA256（ADR-070）。
 
 ### C7 请求预算与取消（SPEC §6.2/§7.3/§11.2）
 
@@ -99,7 +120,7 @@ Settings v2新增可选media_cache_max_bytes（整数0..9007199254740991，缺�
 
 ### C12 历史与数据完整性（SPEC §11.4）
 
-Rust应用数据目录yingxiang-video.db，PRAGMA user_version独立迁移，事务失败保留数据，参数化SQL。watch_history完整列及索引按SPEC逐项落实；长期仅保存MetadataIdentity/video/季集/source与展示快照，临时URL/cap/Session/Cookie/令牌留在原生命周期。
+Rust应用数据目录moc-video.db，PRAGMA user_version独立迁移，事务失败保留数据，参数化SQL。watch_history完整列及索引按SPEC逐项落实；长期仅保存MetadataIdentity/video/季集/source与展示快照，临时URL/cap/Session/Cookie/令牌留在原生命周期。
 
 按影片合并最近一集/今天昨天更早；约5秒为成功调度写入目标，暂停/seek/切集/离页/退出/后台提交捕获快照；世代与单调写序号防乱序/时钟回拨。删除/清空确认及写队列共用串行入口，旧快照作废，写错保留可重试快照并显示未保存。续播先定位原config/addon→当前详情/video→重新匹配播放源→新会话，loadedmetadata后恢复且裁剪新时长；EOS仅当前集完成，重播0。T18/T20 macOS arm64真实SQLite跨重启与失败证据。
 
@@ -169,7 +190,7 @@ Session在创建时独立保有已确认的MetadataIdentity/video_id/播放sourc
 目录：`Bridge_MediaCard`、`Bridge_HomeSection`、`Bridge_HomeRequest`按T0.29扩展可选字段；Stremio组合筛选由Rust完成，服务端条件优先级为语言、年份、类型，单次最多扫描5页。MacCMS的服务端条件限于分类ID、分页和关键词。筛选含类型、年份、语言、地区、排序，每个栏目返回各维度可用性。TMDB的地区禁用；排序只在无语言和年份条件时可用。
 按ADR-059，`HomeRequest.catalog_only`可选，缺省或false保持原首页行为；true仅用于Stremio、page=1、无section_ref和filter，返回宿主登记栏目描述及空items、page=1、has_next=false、next_page=null、计数0，不请求目录内容、不登记图片或推进分页游标。其他来源和非法组合明确报错。引用、取消、来源修订及语言世代规则保持；内容排进入视口才请求该栏内容。
 描述阶段属于待加载，不能因空items判定为真实空结果；首个内容请求完成后才判断该排是否为空。页面排身份由来源及修订、语言世代、栏目引用和规范化筛选条件组成，加载、错误、结果、分页及重试各自隔离，旧响应不能覆盖当前排。catalog_only=true时section_ref和filter缺省或null等价，filter空对象视为非法组合。
-契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节、T0.29列名及ADR-059的可选字段（含`Settings.metadata_preset_applied`）；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
+契约检查：`scripts/check-contracts.py`收紧为归档字段逐项相等，只放行本节、T0.29列名及ADR-059的可选字段；ADR-065新增TMDB、直播、本地库可选设置，字体设置由ADR-070补充；命令追加集按卡递增，T0.32为HISTORY、CACHE、WATCHLIST，T0.34再加`search_catalog`。上文“原有DTO兼容”按此解释。
 同源播放：`metadata_ref.identity.namespace`为`maccms`时，元数据与播放可来自同一MacCMS来源；Stremio元数据的跨源匹配和绑定校验保持。
 IPC与权限：在C11的23项基础上增加`list_watchlist`、`add_watchlist`、`remove_watchlist`、`search_catalog`，合计27项，沿用request_id、engine_epoch、预算和取消规则；`list_watchlist`输入为空，返回`{entries}`；`add_watchlist`输入观看身份字段、title、kind、poster_cache_key，`remove_watchlist`输入`{content_id}`；`search_catalog`输入`{source_id,source_revision,query}`，返回`{items}`，按default_metadata预算、每来源串行，界面取消旧请求；四项都拒绝URL、cap和Cookie；主窗口权限只增加这4项及`core:window:allow-start-dragging`。CSP、CORS、TLS和媒体网关策略保持。
 数据：SQLite版本升至2，新增watchlist表，`watch_history`结构保持。

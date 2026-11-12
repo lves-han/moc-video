@@ -1,4 +1,4 @@
-# 映象视频 进度
+# 墨客视频 进度
 
 初始化工作流；业务实现和验收 NOT RUN。后续仅追加真实记录，格式见 AGENTS.md。
 
@@ -529,7 +529,7 @@
 
 - 同源码build20261028T012457708373、negatives20261028T012516066745均exit0，41Python及36Node通过；短原生20261028T012535049239 exit0：初次stop/再次open、MP4控制、5布局、4缩放、最终stop及正常关闭全部通过、零owned残留。
 - 准确A1 20261028T012635432552 exit1：首个5秒区间document hidden/focused=false，native focused=false，视频帧125→275/媒体5.83→10.83秒/音频RMS0.062仍推进；所有owned进程、fixture线程/端口及请求已清理。同源码/保护摘要/generation1保持，原JUnit13pass7fail4skip及原样本保留。
-- 环境诊断：原t01-focus-transition-diagnostic20261028T012912639671 exit0记录全屏退出后前台由映象视频转Safari；再原20261028T013004776870-t01-focus-recovery-diagnostic exit0记录全屏之前、之后及再次激活后的每段12次OS前台采样均持续映象视频。当前稳定条件已恢复，尚缺稳定复现的产品故障证据。沿现有原前台守卫/全部长播门，同源码重跑准确A1；保留全部旧失败，持续观察真实设备使用情况。
+- 环境诊断：原t01-focus-transition-diagnostic20261028T012912639671 exit0记录全屏退出后前台由墨客视频转Safari；再原20261028T013004776870-t01-focus-recovery-diagnostic exit0记录全屏之前、之后及再次激活后的每段12次OS前台采样均持续墨客视频。当前稳定条件已恢复，尚缺稳定复现的产品故障证据。沿现有原前台守卫/全部长播门，同源码重跑准确A1；保留全部旧失败，持续观察真实设备使用情况。
 
 
 ## T0.2 真实GUI长测等待用户安排 2026-10-28T01:35:38.345815+00:00
@@ -2471,7 +2471,7 @@
 - 授权：用户要求将新 Logo 嵌入程序并重新打包，仅做相关必要验证，不继续后续任务卡。
 - 修改：新增 src-tauri/icons/icon.icns 及 bundle.icon 配置；基于已验收的正式 app 添加图标和 CFBundleIconFile，重新 ad-hoc 签封并生成独立 DMG/ZIP，原发行证据及任务状态保留。
 - 验证：diag-logo-package 首次比较未排除真实主程序签名字节而失败，已先 note；修正后退出 0。验证 plist、图标字节、签名密封、移除签名后的主程序逐字节一致、其余原资源一致、ZIP 解包签名与图标、DMG 校验及 SHA256。日志：`evidence/runs/20261108T095408975888-diag-logo-package/output.log`。
-- 交付：`/Users/eason/jp/deliverables/yingxiang-video/logo-embedded/`。本次仅图标重打包专项验证，未重跑播放、生命周期及独立巡检；未启动后续卡。
+- 交付：`/Users/eason/jp/deliverables/moc-video/logo-embedded/`。本次仅图标重打包专项验证，未重跑播放、生命周期及独立巡检；未启动后续卡。
 
 ## T0.27 交付后默认来源补充 2026-11-08T10:12:49.728347+00:00
 
@@ -2479,7 +2479,7 @@
 - 授权：用户要求把已确认中文 TMDB 和默认来源内置，免去手工添加；延续仅必要验证、停止后续任务卡的约束。
 - 修改：首次启动或已有来源列表为空时自动保存中文 TMDB 和 8 个默认 JSON 播放源；非空配置和禁用选择保留。Rust 初始化与来源管理共用 src/data/defaultSources.json。每次启动同步 configured 来源，ready/disabled 来源跳过，失败保留诊断；同步期间先显示界面。新安装包保留新 Logo。全部删除来源后下次启动恢复默认，可通过禁用保留关闭选择。
 - 验证：Rust settings::preset_tests 2/2 PASS（初始化、重启无重复、空配置补齐、音量和禁用选择保留），日志 `evidence/runs/20261108T101119684975-diag-default-sources-settings/output.log`；前端定向来源同步回归 1/1 PASS，日志 `evidence/runs/20261108T101112567796-diag-default-sources-state/output.log`。首次类型构建失败已 note 并修正来源类型收窄；最终 npm run build 与正式 cargo tauri build PASS，包内 Logo、ad-hoc 密封、ZIP 解包签名及 DMG 校验 PASS，日志 `evidence/runs/20261108T101203115408-diag-default-sources-package/output.log`。
-- 交付：`/Users/eason/jp/deliverables/yingxiang-video/default-sources/`；未重跑真实窗口首播或完整历史任务验收，未启动后续卡。
+- 交付：`/Users/eason/jp/deliverables/moc-video/default-sources/`；未重跑真实窗口首播或完整历史任务验收，未启动后续卡。
 
 ## T0.27 交付后默认来源真实窗口专项 2026-11-08T10:40:24.299016+00:00
 
@@ -2870,3 +2870,197 @@
 - Remaining：macos-arm64必需验收通过；macos-x86_64、windows-x86_64、linux-x11/wayland及真实macOS14 NOT RUN，沿既有矩阵记录。本会话随后仅执行原task.py done核对并退出；Git受验完成提交和固定提交独立review-only由外层收尾，当前均待执行；不accept-review、不进入其他卡。
 - 证据目录更正：上文A1原始目录中的`LINE-PREFERENCE-97042dd8ec5641f7950496f1d4055632`为记录误写；已读回最终JSON的commands与native_sessions，准确目录为`evidence/acceptance/LINE-PREFERENCE-1b02932e282648d785f424c71c76c3b9/`，首窗口日志`native-1.log`。准确A1运行日志、报告路径、收据及摘要均保持上文已核对值；按只追加规则保留并明确更正误写。
 - 收尾：原task.py scope及task.py done T0.37均实际exit0，当前授权基线下最近准确A1与完整verify完成资格已核对；完成后git diff --check再次exit0。本会话只追加本收尾记录及最终handoff，受验源码保持，随后明确退出；外层保存受验完成提交并执行固定提交独立巡检。
+
+## 用户决定：任务卡精简验收 2026-11-10
+- 用户要求：每卡只做必要验收，不强制全量验证、提交和独立巡检；自 0.34 起禁止验收其他任务内容，除非受本卡改动影响。冻结内容调整免手工基线和强制复审。保留已有历史以及 0.28–0.34 验收标准扩大的批准要求。
+- 正在调整控制器和文档，并对新旧行为做直接相关验证。
+
+## 精简验收流程实施 2026-11-10
+- 控制器对 T0.34 及后续启用精简模式：卡片验收保留，按影响选取验证；不强制全量 verify、提交、逐卡独立巡检及手工 rebaseline，既有模式和旧完成记录继续识别。连续未提交任务以各自开始时的文件状态核对范围，验收后的产品或测试代码变化仍拒绝沿用旧结果。
+- 针对控制器的9项回归通过，覆盖新旧模式、范围、源码变更、文档调整和可选巡检；task.py check 通过。一次脚本全量自检因与精简原则不符而主动中止，未作为完成依据。
+- 用户指定 T0.36 在本机干净 macOS UTM 虚拟机验收；实际系统状态和首播声音须在本卡中确认。
+
+## 精简验收流程边界验证 2026-11-10
+- 针对控制器运行10项测试，全部通过；覆盖 T0.34 起生效、此前卡保持原规则、无需全量验证和提交、可选巡检、保留旧完成证据、范围隔离及验收后源码变化。
+
+## T0.36 交付实现与第1会话交接 2026-11-10T10:28:11.652317+00:00
+- 状态：WIP；本卡尚未完成，A1/A2 与最终源码构建均 NOT RUN。
+- 开工：先读 AGENTS.md，以指定项目解释器执行原 task.py check、start T0.36，实际 exit0；驱动已选定本卡，会话1/2。开始前已有 AGENTS/ARCHITECTURE/DECISIONS/PROGRESS/PROMPT/TASKS/WORKFLOW、workflow.json 及 workflow.py/test_workflow.py 的用户授权精简流程修改，保持原样。
+- Changed：重写 README，给出实际桌面功能、准确 argv、依赖准备、构建、运行、初始化、诊断、发布状态及移动清单；新增 docs/release-evidence/T25.md 和 runtime.lock.json 的 final_delivery，保留原 T00 历史字段。新增 tests/acceptance/t25.py、test_t25.py 与 src-tauri/tests/t25_delivery.rs，复用现有资源检查、报告、包/许可/签名/归档验证与诊断用例；计划在干净源码目录执行 README 六步 argv，保留源码 ZIP、文件索引、命令日志及当前包的摘要。
+- Why：README 仍描述早期会话内前端，构建 manifest 与 artifact 原校验固定 T0.27，生命周期 SQLite 判据仍为全程v1。现按 ADR-058 将本卡构建归属统一 T0.36，历史 T23/T24 调用保持原格式；原始数据库升级前v1、升级后及卸载后v2，升级前已有Stremio；设置比较仅排除window_bounds及新增metadata_preset_applied，完整历史逐行保留。首播保存实际进度与用户声音原话，有录制时仍保留用户确认。同步本卡正负例，尚待执行。
+- 历史衔接：T0.35固定提交e6c9b946636adb29afe1bc849f536d2244b1dc38和T0.37源码56eb1b06226c871681e270cc9763910fc4a289e83a81f14dcbb7c367f3f565bd分别绑定原报告。保留T0.35音频采样授权跳过；本卡交付/安装生命周期的实际声音仍待用户确认。
+- Verified：task.py check exit0（43 cards）、task.py scope exit0（all changes inside scope）、git diff --check exit0；5份修改/新增Python文件AST解析成功，README的六步JSON及runtime.lock JSON解析成功。以上为静态检查，Rust编译和行为断言尚未执行。实际工具只读版本为Python3.12.14、rustc/cargo1.98.1、tauri-cli2.9.6、Node26.11.1、npm11.20.0、macOS27.0.1 arm64；xcode-select指向Xcode，但当前沙箱xcrun SDK查询exit1，保留note，未改系统配置。
+- 验证受阻：首个原run.py diag-t25-oracles exit125，日志evidence/runs/20261110T101326936402-diag-t25-oracles/output.log，receipt.json状态cleanup_failed、raw_exit=null、tests=null。失败位置为sysctl进程树采样/清理权限拒绝；原payload PID65581、identity=created:1794305607.385078。已task.py note并保留全部现场，未重复启动重任务。外层须核对真实身份及清理状态，按原recover恢复后重跑相同argv。
+- 旧生命周期保留：原evidence/releases/T23-clean-macos目录未改；已完整复制至evidence/releases/T23-clean-macos-history-20261110T102444，38份文件SHA256逐一相同；索引evidence/releases/T25-lifecycle-history-20261110T102444.json。本卡新观察尚未写入，T23-current仍指向历史构建。
+- UTM：用户已指定本机运行的macOS虚拟机；CUA工具返回Computer Use was not approved to use UTM。未操作VM、快照、安装应用或用户数据。已提前询问专用系统clean状态与默认安全设置，回答待取得；本次首播仍需用户本人确认声音。
+- Remaining：外层核对并recover上述原屏障；先执行README两组反例，再diag-t23-release-build和准确A1；以本次最终包在UTM保存新安装/初始化/画面及进度/用户声音/真实升级/保留数据卸载/显式测试数据清理观察，再执行准确A2。全过程保持源码稳定，失败历史和原收据保留。最终包、源码ZIP、A1/A2报告路径由T25交付索引定位，当前尚未生成；未勾卡、未done、未进入移动阶段。macos-x86_64、windows-x86_64、linux-x11/wayland、真实macOS14及移动运行均NOT RUN。每卡全量verify、Git提交与独立巡检按ADR-062选择必要项。
+
+## T0.36 第2会话交付范围收敛与执行交接 2026-11-10T13:03:24+00:00
+- 结果：BLOCKED
+- Changed：按本次交接移除 README t25-reproduce 中旧 tests/sources.test.ts diagnostics，复用 t25_delivery 原生 Host 的资源失效诊断，README 现为五步 argv；同步 t25.py、test_t25.py 和交付索引。T25 只选新增的最终构建归属反例；T25 lifecycle 只选升级、Stremio/v1→v2、完整设置/历史保留和卸载相关五项用例，并检查所选用例全部实际运行。packaging/T23.md 同步当前顺序，单独诊断按需要使用。保留第1会话实现与用户已有工作流修改。
+- Why：用户明确仅验本卡及本次改动影响的行为；复用当前本卡原生诊断，避免旧来源套件和其他卡整套重复验收。生命周期迁移预期继续遵循 ADR-058/C17，判据保持。
+- Verified：指定解释器执行 task.py check、start T0.36、scope 均 exit0（43 cards；all changes inside scope）；相关 git diff --check exit0；5份相关 Python 文件 AST 及 README 五步 JSON、runtime.lock JSON 解析成功。上述静态检查已执行；原生 Host 冒烟与干净源码复现仍待 A1。
+- 已核对外层实际测试：T25交付4/4通过，原收据 evidence/runs/20261110T103505041026-diag-t25-delivery/receipt.json，日志 evidence/runs/20261110T103505041026-diag-t25-delivery/output.log；本卡相关安装/升级/安全/卸载8/8通过，原收据 evidence/runs/20261110T103517229800-diag-t25-lifecycle/receipt.json，日志 evidence/runs/20261110T103517229800-diag-t25-lifecycle/output.log。两收据均finished、exit=raw_exit=0，source=after_source=c6ad8466660f20979253342d78345c315a9f40027780b44808dd0d00320aacc2。
+- 最终构建：外层原 diag-t23-release-build 已finished、exit=raw_exit=0；收据 evidence/runs/20261110T103542877137-diag-t23-release-build/receipt.json，日志 evidence/runs/20261110T103542877137-diag-t23-release-build/output.log。构建前后同一上述source；protected=2dedb8ea741415b09ecd70375b33a6d1b9f09cf2c5cab955b7451ae8aa43c604，generation=0；实际后端process-watchdog，4096MiB RSS采样、jobs2、测试线程1，peak_rss_bytes=1839775744。构建约44分42秒；430项许可验证、前端/原生构建、资源签名密封与ZIP/DMG生成成功。该成功属于最终构建，A1/A2仍未执行。
+- 安装包：evidence/releases/T23-20261110T103543-d9824d74/manifest.json，SHA256=7532444885e5b23f62e740571ccc2b6ede45179f941a61d114e5075d55da5cd6；同目录MocVideo-0.1.0-build2-macos-arm64-personal.zip，10603652字节，SHA256=ab50039498936e24d11d742a40f7a9184034e7751631fa4320294da45be28d6a；同名.dmg，12162510字节，SHA256=bde188d7a8cd1b62619ee5a0f1b468d09538471af78970346e0dcdcda16614c1。app及真实build1升级归档保留同目录，当前指针evidence/releases/T23-current.json。Developer ID、公证及默认系统接受仍为待办/实际观察项。
+- 失败保留：当前CLI尝试原构建入口，在sysctl进程采样/边界清理处exit125，原收据 evidence/runs/20261110T103147833270-diag-t23-release-build/receipt.json、日志原样保留；已先note。外层已按身份核对并recover，该旧收据现finished、exit125、raw_exit=null；随后外层同入口构建成功。未重复启动受阻重任务，未修改执行器权限或原资源限制。
+- 明确阻塞：A1批准超时7200秒，本会话截止2026-11-10T13:29:43.609286+00:00，当前剩余约26分钟；完整命令预算尚缺，已请求外层确认独立完整执行预算或由用户延长当前截止。保持原超时、会话额度及失败历史。A2还缺当前manifest/source/protected绑定的新干净系统观察和用户声音原话；本会话Computer Use访问UTM再次被拒绝，工具仅返回“Computer Use was not approved to use UTM”，无详细原因；已请求外层操作渠道或用户实际观察。
+- Remaining：源码在上述通过测试及构建后保持稳定。外层落实完整预算后按README准确A1执行；再用本次最终包完成干净系统安装、初始化、首播画面/进度和用户声音确认、真实build1升级、保留数据卸载及显式测试数据清理，执行准确A2。旧T23-clean-macos及其38文件备份保持；新观察写入前继续保留旧身份。最终源码ZIP及evidence/acceptance/T25-all.json、T25-lifecycle.json当前均未生成；docs/runtime.lock.json的final_delivery及docs/release-evidence/T25.md为交付索引。未勾卡、未done、未进入移动阶段；其余平台/最低macOS14及移动仍NOT RUN。依当前规则未强制全量verify、提交或额外独立巡检。
+
+## T0.36 继续交付验收 2026-11-10
+- 结果：RESOLVED
+- 决定：用户明确要求“继续完成0.36”。现由外层直接运行本卡 A1，保留既有源码、构建和失败记录，不增加开发会话；A2 使用用户指定的本机 UTM，首播声音须用户实际确认。
+
+## T0.36 交付验收 A1 2026-11-10
+- 验收 A1：PASS；日志：`evidence/runs/20261110T131910840813-A1/output.log`；主体8/8、JUnit13/13。当前包、归档及独立源码目录构建复现通过。
+- A2 尚待用户指定 UTM 虚拟机上的实际安装、首播及声音、升级和卸载观察；本会话的 UTM 控制接口不可用，正在准备供用户操作的材料。
+
+## T0.36 本机生命周期待确认 2026-11-10
+- 结果：BLOCKED
+- 已完成：按用户指示停止 UTM 测试及临时传输服务；本机安装应用与当前安装包逐文件一致，现有数据库版本2且 quick_check 正常；用户实际反馈“画面和声音正常”。原始记录 evidence/acceptance/T25-local-observation-20261110.json。
+- 待决定：本机存在用户应用及数据，完整安装/升级/卸载测试需要临时隔离现有文件；已在用户目录创建仅本机可读的逐文件校验备份，原件未移动或删除，待确认后才执行并在结束恢复。备份路径 /Users/eason/Library/Application Support/.t036-backup-b9y1ha0y。
+
+## T0.36 本机隔离测试授权 2026-11-10
+- 结果：RESOLVED
+- 决定：用户明确答复“同意，按这个方式继续完成测试，结束后请恢复原有应用和数据”。本机现有应用及数据仅临时隔离；测试数据单独存放，结束后恢复原件并核对。用户随后确认应用已正常退出。
+
+## T0.36 本机生命周期实测 2026-11-10
+- 用户授权临时隔离后，本机执行当前包安装和独立配置初始化、真实旧版应用与受控 v1 测试数据升级至 v2、卸载并保留测试数据；设置与观看历史一致。原有应用及数据已恢复，分别与备份逐文件一致。
+- 本机实际播放画面和声音由用户确认；测试报告 evidence/acceptance/T25-local-lifecycle-20261110/observations.json，用户确认 evidence/acceptance/T25-local-observation-20261110.json。此为本机隔离测试，干净系统未验证。
+
+## T0.36 本机交付与生命周期 2026-11-10
+- 结果：DONE
+- 交付：当前 macOS arm64 安装包、许可、签名状态和独立源码目录构建复现已核对。用户决定停止 UTM，改为本机隔离测试，原有应用和数据已逐文件恢复。
+- 验收 A1：PASS；日志：`evidence/runs/20261110T131910840813-A1/output.log`；主体8/8、JUnit13/13；后续仅将 A2 调整为用户授权的本机测试，A1 的命令及产品输入保持。
+- 验收 A2：PASS；日志：`evidence/runs/20261110T141247260185-A2/output.log`；JUnit4/4。本机独立测试配置完成安装与初始化，受控旧版 v1 数据升级至 v2，设置和一条历史保持；卸载测试保留测试数据，原有应用及数据与校验备份一致。用户确认当前应用画面和声音正常。
+- 限制：A2 为本机隔离测试，干净系统安装、其他桌面平台及 macOS 14 未验证；Developer ID 签名和公证未完成。音频采用用户听感确认，音频采样未执行。
+
+## T0.36 交付说明更新 2026-11-10
+- 按用户改用本机的决定更新 README、安装说明和交付索引；README 复现命令的直接检查通过。A1 保留其先前源码与文档状态，当前产品代码未因本机验收变更。
+- 更新后的最终源码 ZIP：`evidence/acceptance/T25-final-source-20261110/YingxiangVideo-0.1.0-build2-source.zip`，SHA256 `a0e9fa80ed85a9c86607fe418d5de4b55fa0d4f9203f119faed78ef4b0ee3e4d`；逐文件清单与解压复核见同目录。
+- 本机测试资料保留在 `evidence/acceptance/T25-local-lifecycle-20261110/`；用户原有应用和数据已恢复并与备份逐文件一致。
+
+## 播放体验与后台缓存改进 2026-11-11
+- 用户要求：统一对话框、减少选片至播放步骤、来源每4小时后台检查、修复播放弹层点击穿透、影片资料7天缓存并限量后台更新。
+- 修改：共用 tv-dialog 样式；单一候选自动展开，唯一目标集映射时只显示目标集；播放托盘/错误层/下一集卡/倍速菜单隔离指针事件。来源成功快照私有落盘，重启重建当前宿主引用；每4小时闲时逐个复核，用户操作及播放优先，未发布的失败源也记住重试时间。详情和内容排缓存7天，持久化不保存网关访问凭据；后台单请求、分批延迟刷新。
+- 已验证：两项来源重启/损坏回退真实Host测试通过，七天元数据过期真实请求测试通过；当前相关前端53项通过，播放器相关55项通过，类型检查和前端构建通过。Chrome实际点击选集面板空白处保持播放，移除事件隔离后同操作暂停；来源对话框计算样式为统一玻璃背景、20px圆角、1px边框，无页面脚本错误。
+- 限制：图片网关访问在新会话后台重新取得，缓存先展示文字资料；真实 macOS WKWebView本批交互尚未实测，本机已安装应用未替换。
+
+## 播放体验改进交付 2026-11-11
+- 当前相关前端53项及播放器相关55项通过；来源启动缓存2项、七天过期刷新1项真实Host测试通过；前端生产构建和Rust库clippy通过。曾有构建与前端产物并发导致读取旧文件失败，顺序重跑后通过。
+- 新包构建退出0且源码前后摘要相同，日志 `evidence/runs/20261111T012915578046-diag-experience-release-build/output.log`。安装包 `evidence/releases/T23-20261111T012916-b6916370/YingxiangVideo-0.1.0-build2-macos-arm64-personal.dmg`；SHA256 `e2eb46658ba9e5934cb638eac8653b37c88e4dc374b27a179bb681e792f4df9b`。
+- Browser插件不可用，使用已有Playwright/Chrome验证渲染；对话框截图 `/tmp/moc-dialog.png`，播放器截图 `/tmp/moc-tray-open.png`。本机安装与用户数据保持，未替换应用；本包仍为个人使用ad-hoc签名。
+
+## 墨客视频改名与源码上传 2026-11-11
+- 用户要求将产品名称统一为墨客视频，并将 application 源码上传 https://github.com/lves-han/moc-video。界面、窗口名、项目包、可执行文件、测试及文档已同步。旧应用标识、数据库及偏好键仅作兼容，保留用户数据。
+- 已执行前端构建、Rust检查、旧数据库兼容回归及偏好/主题/缓存相关10项测试，均通过。上传当前源码快照，历史Git仓库及本机证据保持，忽略依赖、构建输出与私有配置。
+
+## 移除旧版本兼容 2026-11-11
+- 用户要求删除旧版本兼容。已删除旧偏好键回退、旧数据库回退、设置v1和数据库v1迁移、旧来源偏好恢复、旧单字幕字段；应用使用 app.moc.video 独立标识。旧版数据文件保持原样，不被读取或迁移。
+- 当前格式初始化及旧格式拒绝7项原生检查通过，偏好/缓存/主题/播放器16项相关检查通过；前端类型检查通过。相关文档已标注旧升级验收为历史记录。
+
+## T0.38 设置页重组与通用TMDB（Stremio方式） 2026-11-11T03:25:35Z
+- 结果：DONE
+- 开工前实测：elfhosted `en-US`、`zh-CN`、`ja-JP` 三个语言路径的 manifest 均返回 200，`id` 为 `tmdb-addon`。
+- 实现：设置新增可选 `tmdb {enabled, instance_url, language}`；Host 由它生成固定 config_id `5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40` 的内置 Stremio 来源（排在用户来源之后），自建实例按内置标记做语言改写；元数据语言为 TMDB 选择或跟随应用。默认来源删除 TMDB Stremio 条目，删除 `metadata_preset_applied`。来源管理并入设置：语言与元数据含 TMDB 与其他 Stremio 扩展，播放设置含当前选择、统一播放源列表（未添加预设带「添加」）和可折叠诊断。删除 `#/sources` 入口、来源管理页和预览来源页，移动端底栏改为设置。按 ADR-065 不做旧版本迁移。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T032619113938-A1/output.log`；断言：真实 Host 跟随中文得到中文标题、选定英文/中文不随应用语言变化、语言切换前后来源 id/revision/ref/metadata_ref 不变、停用为 disabled、占用内置 id 与非 http 地址被拒；前端 3 项；契约检查与类型检查通过；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.38-settings-ui.json`，在 vite 开发页面以页内模拟 Host 实际操作添加预设、禁用、编辑、删除、添加 Stremio 扩展、切换 TMDB 语言和访问 `#/sources`，页面无错误。打包 WKWebView 窗口未实测。
+- 相关回归：Rust lib 205 通过、2 失败（`tv5_migration_*`，来自工作树中 ADR-064 删除数据库 v1 迁移的未提交改动，与本卡无关，已记 BACKLOG）；前端 230 项通过；vite 生产构建通过。
+- 未提交 Git：工作树含其他会话的未提交改动（改名、移除兼容），本卡改动与其交织。
+
+## T0.39 左侧菜单：本地视频与直播 2026-11-11T03:31:00Z
+- 结果：DONE
+- 实现：侧栏在「资料库」前加入「本地视频」`#/local`（一直显示）与「直播」`#/live`（存在已启用直播配置时显示），移动端底栏同步；新增占位页 LocalView/LiveView 及 folder、broadcast 图标。为菜单显示条件提前交付设置字段 `live_configs`（schema、Host 校验 http(s) 地址与 id 唯一、契约允许项），列表下载与解析仍归 T0.40。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T033032447495-A1/output.log`；断言：类型检查、前端直播条件测试 1 项、Host 设置校验测试、契约检查通过；记录的浏览器检查中菜单显隐、移动底栏和焦点顺序符合要求；4 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.39-navigation-ui.json`，通过真实 appController.updateSettings 加入、停用、删除直播配置，菜单即时显隐；方向键焦点依次到达本地视频与直播；375 宽度底栏 8 项可容纳；页面无错误。打包 WKWebView 未实测。
+- 相关回归：前端 231 项通过；vite 生产构建通过。
+
+## T0.40 直播（IPTV与直播源合并） 2026-11-11T04:35:00Z
+- 结果：DONE
+- 实现：新增 Rust `live.rs`，按内容识别 M3U/M3U8（`#EXTINF`、`group-title`、`tvg-logo`、`#EXTGRP`）与 TXT（`频道名,地址`、`#genre#`、`#` 分隔的备用地址取第一个），最多 10000 个频道。新增命令 `get_live_channels`（在提交锁外经现有公网 HTTP 客户端下载，列表修订为内容摘要）与 `open_live`（按修订和序号打开频道，非 http(s) 返回 MEDIA_UNSUPPORTED，修订变化返回 REVISION_MISMATCH），并登记契约、示例用例、命令表、权限。网关新增直播会话：不进媒体缓存、清单每次请求上游、登记超过 2048 项时只保留播放列表后由本次刷新重新登记分片。直播列表被编辑或删除时丢弃频道并停止其会话。前端设置新增「直播」分组（添加/编辑/启用/删除，EPG 地址只保存）；直播页为分组、频道、播放器三栏，切换或离开时关闭上一会话，自定义播放/静音/全屏控件，无进度条，不写观看记录。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T043411244380-A1/output.log`；断言：解析测试 3 项与真实 Host 直播测试 1 项通过（M3U/TXT 识别、清单两次请求均到上游、分片两次请求均到上游且缓存占用 0、观看记录为空、关闭与编辑后停止服务、各类错误码）；契约、类型检查和权限通过；记录的浏览器检查符合要求；7 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.40-live-ui.json`。打包 WKWebView 中的实际 HLS 解码未实测；局域网组播及内网 IPTV 地址受现有公网地址限制，不可访问。
+- 相关回归：Rust lib 209 通过、2 失败（同 T0.38 记录的 `tv5_migration_*`，与本卡无关）；前端 231 项通过；vite 生产构建通过。
+
+## T0.41 通用TMDB：官方API方式 2026-11-11T04:46:00Z
+- 结果：DONE
+- 决定：Q1 用户在 2026-11-11 聊天中选择「Settings file」，API Key 随设置文件保存。
+- 实现：设置 `tmdb` 新增可选 `mode`（stremio/api）、`api_key`、`api_url`、`image_url`。API 方式下内置 TMDB 来源注册虚拟扩展地址 `https://tmdb-api.invalid/<语言>/manifest.json`（只含非敏感指纹，Key 不进入任何来源地址），Stremio 模块唯一的网络入口拦截该主机，由新增 `tmdb_api.rs` 调用 TMDB v3 接口并返回与 TMDB Stremio 扩展相同结构的 manifest（12 个目录）、目录与详情；多语言、筛选、详情、搜索和播放源匹配全部复用现有 Stremio 逻辑。内容标识与扩展一致：`tmdb:<id>`，剧集分集为 `<IMDb>:<季>:<集>`，两种方式是同一个元数据来源。v3 Key 走查询参数，v4 令牌走 Authorization 头；401 返回 UNAUTHORIZED「TMDB API key was rejected」，错误信息不含请求地址。设置页「接入方式」可选 Stremio 扩展或 TMDB 官方 API，API 方式显示 Key（密码输入框）、API 地址、图片地址，保存时校验；切回 Stremio 保留已存 Key。顺带修正 T0.40 `live.rs` 一处 clippy 提示（合并 if，行为不变）。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T044512776647-A1/output.log`；断言：真实 Host 对 TMDB API 夹具完成同步、首页（含经网关加载海报）、电影详情（导演、演员角色）、剧集详情（`tt0903747:1:1`）、搜索、中文跟随、v4 令牌、错误 Key；两种方式来源 id 相同；三种 Key 均未出现在任何响应中；T0.38 Stremio 方式回归通过；契约与类型检查通过；记录的设置页检查符合要求；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.41-tmdb-api-ui.json`。真实 api.themoviedb.org 未实测（没有可用 Key）。
+- 相关回归：Rust lib 210 通过、2 失败（`tv5_migration_*`，同前，与本卡无关）；clippy 无警告；前端 231 项通过；vite 生产构建通过。
+
+## T0.42 本地视频（mp4/mov/m4v） 2026-11-11T05:03:00Z
+- 结果：DONE
+- 实现：新增依赖 `tauri-plugin-dialog =2.8.4`（随之引入 tauri-plugin-fs、rfd）并在应用启动时注册，权限只加 `dialog:allow-open`；tokio 开启 `fs` 特性。设置新增 `local_paths`（绝对路径，最多 256 个）。新增 Rust `local.rs`：扫描文件与文件夹（不跟随符号链接、跳过隐藏文件、深度 8、最多 20000 项），mp4/m4v/mov 可播放，mkv/webm/avi 等列出并标为不支持；打开前规范化路径并确认仍在某个库目录内。新增命令 `list_local_videos`（在提交锁外扫描）与 `open_local`（返回播放会话、匹配号和观看记录模板，会话绑定本地观看身份 namespace=local）。网关新增 file 资源，直接读磁盘，支持整段、区间、后缀区间、416 与 HEAD，不进媒体缓存。库目录变化时清空扫描结果并停止本地会话。前端本地视频页：添加文件/文件夹（原生选择框）、按目录分组、移除目录、播放器可拖动进度、按观看记录续播并每 10 秒及暂停/结束/离开时保存进度；资料库中本地条目的「继续观看」跳到本地视频页续播。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T050045354651-A1/output.log`；断言：扫描单元测试与真实 Host 本地测试通过（三个文件、mkv 不支持、库外文件与符号链接越界被拒、相对路径被拒、整段 200 与区间 206 内容逐字节一致、越界 416、缓存占用 0、进度写入并在 Host 重启后保留、文件移走报 SOURCE_NOT_FOUND、移除目录后停止服务）；契约、类型检查、权限与依赖版本通过；记录的浏览器检查符合要求；6 个用例全部通过，退出码 0。
+- 浏览器检查：`evidence/manual/T0.42-local-ui.json`。真实 macOS 文件选择框与打包 WKWebView 播放未实测。
+- 相关回归：Rust lib 212 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；应用二进制构建通过；前端 231 项通过；vite 生产构建通过。
+- 未完成：新增 Rust 依赖未写入 `licenses/dependencies.json` 与 `THIRD_PARTY_NOTICES.txt`，已记 BACKLOG。
+
+## T0.43 MKV可行性实验（ffmpeg-next） 2026-11-11T05:25:00Z
+- 结果：DONE
+- 授权：用户在 2026-11-11 聊天中选择「Allow, build both」，允许从 GitHub 克隆 FFmpeg 并从源码编译两种版本。期间按用户要求先清理磁盘（删除 application/target、src-tauri/target、旧 T20/T25 运行目录各保留最新一份、Mozilla sccache），可用空间由 7.5 GB 增至 49 GB。
+- 实现：`experiments/mkv-remux` 实验 crate（不改产品代码）：精简 FFmpeg 构建脚本、MKV→fMP4 HLS 转封装程序（视频复制、HEVC 标 hvc1、非 WebKit 音频转 AAC、SRT 提取）、真实 WKWebView 播放检查工具；报告 `experiments/mkv-remux/REPORT.md`；ADR-066。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T052614773635-A1/output.log`；断言：精简版静态链接、无 FFmpeg/homebrew 动态库；体积精简 5.49 MB、全量 17.51 MB、空程序 0.47 MB；两样本转封装后在真实 WKWebView 播放超过 3 秒无错误；两条路线 FFmpeg 许可证均为 LGPL 2.1+；6 个用例全部通过，退出码 0。
+- 稳定性：首次重跑 A1 时两项 WKWebView 播放间歇失败（加载完成但不前进），原因是检查程序窗口未激活被 WebKit 节流；检查程序改为激活应用后连续两次 A1 通过。
+- 未覆盖：边播边生成分片与 Cues 拖动、大于 4 GB 文件、发行打包与许可证声明，均归 T0.44。
+
+## T0.44 MKV支持 阶段门 2026-11-11T05:30:00Z
+- 结果：AUTHORIZED
+- 授权：T0.43 的 ADR-066 结论为可行；用户在 2026-11-11 聊天中对 Q2 回答「dylib in .app」，对 Q3 选择「Local files only (Recommended)」（见 ADR-067）。
+
+## T0.44 MKV支持 2026-11-11T06:56:00Z
+- 结果：DONE
+- 实现：`src-tauri/ffmpeg/build_ffmpeg.py` 从 GitHub release/9.0 编译精简 LGPL FFmpeg 动态库（install name 为 @rpath，固定前缀 /opt/moc-ffmpeg 避免库内出现本机路径）；根目录 `.cargo/config.toml` 以 FFMPEG_DIR 指向该构建，`build.rs` 加入 `@executable_path/../Frameworks` rpath（仅调试构建另加构建目录）；`tauri.conf.json` 把四个 dylib 打包进 Contents/Frameworks（ADR-067）。新增 `remux.rs`：打开 MKV 时读取 Cues 关键帧，按约 4 秒切成 VOD fMP4 HLS；每个分片请求从自身关键帧 seek 后只封装该段（frag_discont 保证 tfdt），视频直接复制、HEVC 标 hvc1、非 WebKit 音频转 AAC；内嵌 SRT/ASS 按需转 WebVTT（只读取该轨）；不支持的视频编码报 MEDIA_UNSUPPORTED。网关新增 remux 会话（播放列表、初始化段、分片、字幕），FFmpeg 工作在阻塞线程中执行，临时输出随即删除。Host 的 `open_local` 改为在提交锁外读取 MKV 索引。本地视频页原生播放 HLS（不设 crossorigin），字幕经 fetch 后以 blob: 轨道加载。`packaging/release.py` 允许 Frameworks 中与构建产物一致且不含本机路径的 FFmpeg 库，并把 FFmpeg（LGPL 文本、源码地址与 commit、configure 参数）写入许可证清单；补齐 tauri-plugin、ffmpeg-sys-next 的许可证补充材料，重新生成清单（444 项）并通过 `--verify-licenses`。T0.42 的 x5 测试把「不支持格式」示例由 mkv 改为 avi。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T065308353085-A1/output.log`；断言：remux 单元测试、本地 MKV Host 测试、>4 GiB 测试、T0.42 本地测试共 4 项通过；4.5 GB MKV 打开 12 ms，超过 4 GiB 偏移的分片 281 ms 生成且起点 892.345 秒正确，真实 WKWebView 跳到 95% 后继续播放；12 秒样本中间分片起点 4.000 秒，H.264+AAC 与 HEVC+DTS(→AAC) 在真实 WKWebView 跳转后播放且有音轨；SRT/ASS 转 WebVTT；关闭后不再提供内容、无 MKV 句柄与临时文件；MPEG-4 Part 2 报 MEDIA_UNSUPPORTED；许可证清单与 @rpath 动态库检查通过；7 个用例全部通过，退出码 0。
+- 手工检查：`evidence/manual/T0.44-bundle-ui.json`（实际构建 .app：Frameworks 中四个 dylib 与构建产物一致，release rpath 仅 Frameworks，ad-hoc 签名后 `codesign --verify --deep --strict` 通过且未改动 dylib，启动时从 Frameworks 加载；本地视频页字幕以 blob: 轨道加载 4 条）。完整 `release.py --build` 流程未在本卡运行。
+- 相关回归：Rust lib 215 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 231 项通过；vite 生产构建与契约检查通过。
+
+## T0.38–T0.44 复查 2026-11-11T07:15:00Z
+- 范围：用户要求复查 T0.38–T0.44 实现，确保功能可用。
+- 真实服务冒烟（临时测试，复查后已删除）：内置 TMDB（elfhosted）同步、中英文首页、中文搜索与详情均正常；iptv-org 中国列表 156 个频道解析正确，前 3 个频道经网关取到播放列表与首个分片均为 200；4.5 GB 带字幕 MKV 打开 9 ms、字幕读取 359 ms。
+- 发现并修复：
+  1. 直播列表上限 10000 过低：iptv-org 完整列表有 11452 个频道会被拒绝。上限提高到 50000（契约 LiveChannel/LiveChannelList/Args_open_live 与 `live.rs`）。
+  2. 精简 FFmpeg 缺少 PCM/MP2 解码器，含这类音轨的 MKV 整体无法播放。加入 mp2、pcm_s16le/s16be/s24le/s32le/f32le 解码器并重编动态库；PCM 的「未指定顺序」声道布局被 AAC 拒绝，改为按声道数使用标准布局，重采样器按首个解码帧创建。新增 `x7_h264_pcm.mkv` 夹具与单元断言；转出的音轨经 ffmpeg 解码有声音。许可证清单随 FFmpeg 配置重新生成，`--verify-licenses` 通过。
+- 复核：网关只接受 tauri://localhost 作为跨源 Origin，应用内字幕 fetch 可用；dialog 插件参数与返回格式与前端一致。
+- 复验：T0.38–T0.42、T0.44 六个验收脚本重跑全部通过（报告写在会话临时目录，未覆盖原卡证据）；Rust lib 215 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 231 项、类型检查、生产构建通过。
+- 未验证：打包应用中的界面实际操作（文件选择框、真实 MKV/直播播放）、TMDB 官方 API 真实 Key。
+
+## T0.45 近似搜索 2026-11-11T07:25:00Z
+- 结果：DONE
+- 来源：用户 2026-11-11 聊天「小功能改进 搜索是否能近似搜索」，随后对推荐方案回复「Implement it」。
+- 实现：新增 `fuzzy.rs`（全角转半角、去空格标点、ASCII 词间保留单空格；去「第 X 季/部/集」、Season/Part/S 编号、罗马数字与末尾续集数字；中文片名取前半段；按完全相同、前缀、包含、共同字符排序）。Host 的 MacCMS 搜索先按输入原样查询，无结果才依次放宽；仍无结果时用内置 TMDB 来源搜到的片名（最多 3 个，各试 3 种形式）再查，TMDB 不可用时保持空结果。结果按与输入接近程度排序。搜索页在没有结果包含输入文字时提示「没有完全匹配的片名，已显示相近结果」。桥接契约未改。顺带去掉 `build.rs` 中与 tauri-build 重复的 Frameworks rpath（消除链接警告）。
+- 验收 A1：PASS；日志：`evidence/runs/20261111T072205486037-A1/output.log`；断言：fuzzy 单元测试与真实 Host 测试通过（原样可找到时不放宽、「复仇者联盟 4」「庆余年 第二季」放宽后找到、「流浪地球」最接近者在前、TMDB 就绪前后「Inception」分别为空与「盗梦空间」、不存在的片名为空）；前端提示测试与类型检查通过；记录的搜索页检查符合要求；5 个用例全部通过，退出码 0。
+- 真实来源核对：优质（1080zyku）对「复仇者联盟 4」「庆余年 第二季」返回 0 条、去空格后各找到；量子（lziapi）服务端本身宽松匹配，放宽不触发，排序把最接近片名排前。
+- 相关回归：Rust lib 217 通过、2 失败（`tv5_migration_*`，同前）；clippy 无警告；前端 232 项通过；vite 生产构建通过。
+
+## 体验安装包 2026-11-11T07:35:00Z
+- 用户要求构建 macOS 安装包体验。`packaging/release.py --build` 经 run.py（diag-experience-release-build）完成生产前端、`cargo tauri build`、ad-hoc 签名、发货文件检查与 dmg 生成，`hdiutil verify` 通过；脚本最后一步「Real build 1 predecessor required」（旧升级生命周期对比）失败，发生在 dmg 生成与校验之后，属 ADR-064 移除旧版兼容后的遗留检查，未改动。
+- 安装包：`evidence/releases/T23-20261111T072826-91036f4c/MocVideo-0.1.0-build2-macos-arm64-personal.dmg`（SHA256 ae8b0f375b117ba818948b79357973cba52c77c6cfa848d2ee1f3ae549ac3129，14.9 MB），副本 `/Users/eason/jp/deliverables/moc-video/`。挂载核对：Frameworks 含四个 FFmpeg dylib，`codesign --verify --deep --strict` 通过，rpath 仅 `@executable_path/../Frameworks`，可执行文件无本机路径。个人使用 ad-hoc 签名，未公证。
+
+## T0.46 元数据解耦与多源自动选线 阶段门 2026-11-11T09:00:00Z
+- 结果：AUTHORIZED
+- 授权：用户在 2026-11-11 聊天中对 ADR-069 的 D7 答复「按建议处理」（侧栏综艺改用 TMDB 真人秀/脱口秀类型，短剧、体育入口移除），并在前一条指示中要求「一起做优化」（见 ADR-069 及其补充）。
+- 备注：同日用户指示「只更新文档，不做代码实现」。T0.46 未开始开发；试做的按语言查询、第二级筛选与电影自动确认代码已撤回，实现要点记入方案文档 8.1、8.4 节。此前完成的第一级片名过滤（`fuzzy::related`）保留，未提交。
+
+## T0.46 取代记录 2026-11-11
+- 用户对 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` Q1–Q8 答复「按建议批准」（ADR-070）。T0.46 未开发，按 Q6 从 TASKS 删除，由 T0.47–T0.49 取代；上方 T0.46 阶段门授权记录作为历史保留。T0.47–T0.49 已规划，尚未开始开发。
+
+## 播放服务方案修订与复审 2026-11-11T15:33:23Z
+
+- 来源：用户要求按九项审查意见修订方案、任务卡和 ADR，再复审；并明确「先不开始开发」，按娱乐应用放宽验收。
+- 文档：更新 `FOLLOWUP-PLAYBACK-SERVICE.md` 第 2 版、T0.47–T0.49 及需求覆盖、架构补充，追加 ADR-071 和第四期 BACKLOG；补齐配置端点访问、逻辑身份/当前记录、自动确认、测速等待、候选/线路有效期、自定义 Stremio 元数据、ID 转换、首次快照、持久令牌与日志脱敏。
+- 验收收敛：以相关自动检查和一次本机关键操作为主；长播、压力、多平台和完整故障矩阵按需安排，参数作为可调初值。保留当前数据、基本安全及关键播放流程检查，既有完成证据保持。
+- 文档检查：原 `task.py check` 通过（54 张卡）；方案 8 个 JSON/NDJSON 示例对象解析成功；`git diff --check` 通过。三张服务卡均未完成，T0.47 `authorized=False`，阶段门等待用户新的开发指令。
+- 独立只读复审：`docs/reviews/doc-review/round-57.md`，`DOC-REVIEW-VERDICT: CLEAR`；受审 `protected` 为 `a405a44974ee2af44cf49322defe304c1d85e635deb475597894083f745085b0`，ADR-071 摘要为 `68a4b8391923141b78ab222abaff596835c33d0e8317aba422f4dd103f01dd19`。复审发现的后两卡依赖文件范围缺口已补齐并复核。
+- 实现状态：业务开发、构建和播放验收 NOT RUN。本次没有启动开发驱动或服务。
+
+## 播放服务文档与远端 main 合并复核 2026-11-11
+
+- 授权：用户随后要求「review完成之后拉取最新代码并合并，然后再推送到main里」。本次仍仅文档同步，服务开发阶段门保持关闭。
+- 基线：取远端 main `bca68af7f5a36f24f4cbee64c641cc38da22c305` 的最新源码和文档，在临时克隆内集成；原工作区未提交应用改动与原暂存状态保留。原开发工作区与远端各自具有独立 Git 历史，本次采用远端 main 为父提交追加文档，保留远端已有提交。
+- 编号：远端 ADR-068–ADR-074 完整保留；本地播放服务原 ADR-068/069/070/071 依次顺延为 ADR-075/076/077/078。上方合并前记录及 round-57 的旧编号、摘要仍指其当时基线，最终引用以本条和 round-58 为准。
+- 网络：按远端已批准 ADR-068 接受内网、回环与 Fake-IP，保留固定 DNS、TLS、协议与凭据处理；App 的服务令牌限定到配置端点，局域网服务域名可用系统 DNS。方案、任务卡、架构和新 ADR 已同步。
+- 独立复审：`docs/reviews/doc-review/round-58.md`，`DOC-REVIEW-VERDICT: CLEAR`。受审 protected 为 `f0cb326abf5b9501c976263fcb8983cdae8429a23dbc75d2d96e847982d54d07`，ADR-078 摘要为 `ac35750afc3ba7a4b28ba185458d8ee5dd360ed9e4af3dc1941cdfafc6920f8d`。
+- 检查：路线结构 54 卡、ADR 编号唯一、远端决定前缀完整、文档差异检查通过；提交范围限定为本次方案、相关规划与复审记录。业务实现和播放验收仍为 NOT RUN。

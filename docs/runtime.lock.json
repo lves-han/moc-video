@@ -965,5 +965,128 @@
     },
     "handoff": "packaging/T23.md",
     "historical_sections": "Earlier candidate/Android observations above are retained as historical evidence (ADR-048)"
+  },
+  "final_delivery": {
+    "card": "T0.36",
+    "version": "0.1.0",
+    "macos_bundle_version": "2",
+    "target": "macos-arm64",
+    "minimum_macos": "14.0",
+    "scope": "personal use only; not public distribution",
+    "historical_fields": "Other top-level fields preserve the T00 initialization plan/observations verbatim.",
+    "tools_observed_utc": "2026-11-10T10:15:23+00:00",
+    "tools": {
+      "python": "3.12.14",
+      "rustc": "1.98.1",
+      "cargo": "1.98.1",
+      "tauri_cli": "2.9.6",
+      "node": "26.11.1",
+      "npm": "11.20.0",
+      "macos": "27.0.1",
+      "arch": "arm64"
+    },
+    "locks": {
+      "package.json": "807f2e5560e7cb5a42b111cadb788ccce3148fae01ba075cd8f7785cf3f5de1d",
+      "package-lock.json": "c213eb7d0e57ed9362dce1ee0aae8a2211b277e883a15be193172f749065880c",
+      "src-tauri/Cargo.toml": "d4fe9294ae59d4ff978b72af2f17b0cbcde0a3eb58c22c249475ae716b949fbe",
+      "src-tauri/Cargo.lock": "a7defbeb9f42639f8160490b81d81c876207701cb30d500bcca6c730b15ca70e",
+      "src-tauri/tauri.conf.json": "f178dda2c42e93b1151b2894d5437f9f3a48f497163dd14ba2f5aab06c1fd2f0",
+      "scripts/requirements.txt": "4f8a38c0fd2292e63d5eaf9678ea2a8865b7025de038ce0b02329925f84c5ff4",
+      "licenses/dependencies.json": "0a8904ac66e2a4074b931b07ca51f4f6a936ea1d49797afaef1c75f12db96ec3",
+      "licenses/THIRD_PARTY_NOTICES.txt": "2a5736fdeadc962e0b9524545df775c87cc71e0182217c7ac81c1c0f502dc4a7"
+    },
+    "npm_versions": {
+      "@videojs/core": "10.3.0",
+      "@videojs/hlsjs-video": "10.3.0",
+      "@videojs/html": "10.3.0",
+      "naive-ui": "2.45.3",
+      "vue": "3.5.44"
+    },
+    "rust_versions": {
+      "tauri": "2.12.5",
+      "tauri-build": "2.7.4",
+      "rusqlite": "0.32.1",
+      "sqlite": "3.46.0"
+    },
+    "release_pointer": "evidence/releases/T23-current.json",
+    "reports": {
+      "A1": "evidence/acceptance/T25-all.json",
+      "A2": "evidence/acceptance/T25-lifecycle.json"
+    },
+    "historical_evidence": [
+      {
+        "card": "T0.35",
+        "path": "evidence/acceptance/T24-all.json",
+        "sha256": "d89d5e54c0faef4b2b2d4dccdf34ea2c038ebaef4a8898a0c04fd54b3f523848",
+        "source": "aad5387ef76a3b5843edd180aa6ff246ffdbf1e824d7c57e5fdb9a94c12e8d4a",
+        "scope": "Fixed pre-line-preference build; audio sampling skipped by user"
+      },
+      {
+        "card": "T0.37",
+        "path": "evidence/acceptance/LINE-PREFERENCE.json",
+        "sha256": "b42a28da2734b70191e59547daad86802f63d8fbaf8c75359c7295a0e7adcc50",
+        "source": "56eb1b06226c871681e270cc9763910fc4a289e83a81f14dcbb7c367f3f565bd",
+        "scope": "Line preference and related matching/playback/episode/history regressions"
+      }
+    ],
+    "deferred": [
+      {
+        "target": "macos-x86_64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "windows-x86_64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "linux-x11",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "linux-wayland",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      },
+      {
+        "target": "macos14-arm64",
+        "status": "NOT RUN",
+        "reason": "ADR-005/006; target machine not exercised"
+      }
+    ],
+    "mobile": [
+      {
+        "card": "T1.1",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.2",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.3",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.4",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.5",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      },
+      {
+        "card": "T1.6",
+        "status": "NOT RUN",
+        "authorization": "Await user authorization at T1.1 phase gate"
+      }
+    ]
   }
 }

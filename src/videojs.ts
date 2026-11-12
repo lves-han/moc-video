@@ -91,7 +91,7 @@ const desktopFullscreen: typeof fullscreenFeature = definePlayerFeature({
         if (!signal.aborted && request === version) set({ isFullscreen: active });
       } catch (error) {
         if (signal.aborted) return;
-        window.dispatchEvent(new CustomEvent('yingxiang-player-action-error', { detail: String(error) }));
+        window.dispatchEvent(new CustomEvent('moc-player-action-error', { detail: String(error) }));
         throw error;
       }
     }
@@ -106,7 +106,7 @@ const desktopFullscreen: typeof fullscreenFeature = definePlayerFeature({
         const active = await nativeInvoke<boolean>('player_fullscreen', { query: true });
         if (!signal.aborted && request === version && get().isFullscreen === previous) set({ isFullscreen: active });
       } catch (error) {
-        if (!signal.aborted) window.dispatchEvent(new CustomEvent('yingxiang-player-action-error', { detail: String(error) }));
+        if (!signal.aborted) window.dispatchEvent(new CustomEvent('moc-player-action-error', { detail: String(error) }));
       }
     };
     window.addEventListener('resize', () => { void refresh(); }, { signal });

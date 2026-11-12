@@ -84,7 +84,7 @@ export function setPalette(value: PaletteId): boolean {
   palette.value = value;
   document.documentElement.dataset.palette = value;
   try {
-    localStorage.setItem("yingxiang-video.palette", value);
+    localStorage.setItem("moc-video.palette", value);
     return true;
   } catch {
     return false;

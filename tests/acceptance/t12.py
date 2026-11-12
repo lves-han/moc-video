@@ -443,7 +443,7 @@ def webview(run, *, check_security=False, after_start=None, build=True, before_i
     if build:
         t01.build(run)
     receipt = t01.check_build(run.source)
-    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
     session, bridge = None, None
     with tempfile.TemporaryDirectory(prefix="t12-live-", dir=run.folder) as temporary:
         folder = Path(temporary)

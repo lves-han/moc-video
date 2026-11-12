@@ -36,6 +36,26 @@ if (location.hash !== "#/prototype") {
   }
   try { await appController.refreshRuntime(); void appController.loadSources(); }
   catch (cause) { appController.diagnostics.push({ code: "ENGINE_NOT_READY", message: String(cause), retryable: true }); }
+  if (window.__TAURI__) {
+    let lastInteraction = Date.now();
+    const active = () => { lastInteraction = Date.now(); appController.cancelBackgroundUpdates(); };
+    const idle = () => document.visibilityState === 'visible' && Date.now() - lastInteraction >= 10_000;
+    const check = async () => {
+      if (!idle()) return;
+      await appController.refreshOneSourceIfDue(idle);
+      if (idle()) await appController.refreshOneMetadataIfDue(idle);
+    };
+    document.addEventListener('pointerdown', active, true);
+    document.addEventListener('keydown', active, true);
+    const initial = window.setTimeout(check, 15_000);
+    const timer = window.setInterval(check, 60_000);
+    window.addEventListener('pagehide', () => {
+      clearTimeout(initial); clearInterval(timer);
+      document.removeEventListener('pointerdown', active, true);
+      document.removeEventListener('keydown', active, true);
+      appController.cancelBackgroundUpdates();
+    }, { once: true });
+  }
 }
 
 const View = location.hash === "#/prototype"

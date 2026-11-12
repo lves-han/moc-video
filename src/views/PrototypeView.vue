@@ -13,7 +13,7 @@ const subtitles = ref(true);
 const playing = ref(false);
 const supported = ref("");
 let player: Player;
-let source: PlaybackSource = { url: "/demo.mp4", kind: "mp4", subtitle: "/demo.vtt" };
+let source: PlaybackSource = { url: "/demo.mp4", kind: "mp4", subtitles: [{ id: "demo", label: "字幕", language: "zh-CN", url: "/demo.vtt" }] };
 
 function event(value: PlayerEvent) {
   state.value = value.state;
@@ -45,7 +45,7 @@ onBeforeUnmount(() => player?.stop());
 
 <template>
   <main class="prototype">
-    <header><strong>映象视频</strong><span>视频技术样机 · T01</span></header>
+    <header><strong>墨客视频</strong><span>视频技术样机 · T01</span></header>
     <h1>内嵌视频播放</h1>
     <p class="prototype-intro">本地自有测试片段 · MP4 / HLS</p>
     <section class="prototype-player" aria-label="视频播放器">

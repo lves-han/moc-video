@@ -166,8 +166,114 @@
           "maximum": 9007199254740991,
           "default": 268435456
         },
-        "metadata_preset_applied": {
-          "type": "boolean"
+        "tmdb": {
+          "type": "object",
+          "description": "内置通用TMDB元数据源；固定config_id，Stremio扩展方式。缺省等同启用elfhosted实例并跟随应用语言。",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "instance_url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "description": "TMDB Stremio扩展实例地址，不含语言段和manifest.json"
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "follow",
+                "en",
+                "zh-CN"
+              ],
+              "description": "follow跟随ui_locale"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "stremio",
+                "api"
+              ],
+              "description": "缺省 stremio；api 使用 TMDB 官方 API"
+            },
+            "api_key": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "TMDB v3 API Key 或 v4 读访问令牌；按用户决定随设置文件保存，不进入来源地址、日志或诊断"
+            },
+            "api_url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "image_url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "enabled",
+            "instance_url",
+            "language"
+          ],
+          "additionalProperties": false
+        },
+        "live_configs": {
+          "type": "array",
+          "maxItems": 32,
+          "description": "直播列表配置（IPTV M3U 或直播源 TXT，按内容识别）；存在已启用项时显示直播菜单。",
+          "items": {
+            "type": "object",
+            "properties": {
+              "config_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "epg_url": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "config_id",
+              "name",
+              "url",
+              "enabled"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "local_paths": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "description": "本地视频库：用户选择的文件或文件夹绝对路径。"
         }
       },
       "required": [
@@ -5715,6 +5821,523 @@
           "additionalProperties": false
         }
       ]
+    },
+    "LiveChannel": {
+      "type": "object",
+      "description": "直播频道；index 为当前列表修订内的位置。",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 49999
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "logo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "index",
+        "name",
+        "group",
+        "logo",
+        "url",
+        "supported"
+      ],
+      "additionalProperties": false
+    },
+    "LiveChannelList": {
+      "type": "object",
+      "properties": {
+        "config_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "m3u",
+            "txt"
+          ]
+        },
+        "channels": {
+          "type": "array",
+          "maxItems": 50000,
+          "items": {
+            "$ref": "#/$defs/LiveChannel"
+          }
+        }
+      },
+      "required": [
+        "config_id",
+        "revision",
+        "format",
+        "channels"
+      ],
+      "additionalProperties": false
+    },
+    "Args_get_live_channels": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "config_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "config_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_get_live_channels": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/LiveChannelList"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_open_live": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "config_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 49999
+            }
+          },
+          "required": [
+            "config_id",
+            "revision",
+            "index"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_open_live": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/PlaybackViewSession"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LocalVideo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "root",
+        "size",
+        "supported"
+      ],
+      "additionalProperties": false
+    },
+    "LocalVideoList": {
+      "type": "object",
+      "properties": {
+        "roots": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "available": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path",
+              "available"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 20000,
+          "items": {
+            "$ref": "#/$defs/LocalVideo"
+          }
+        }
+      },
+      "required": [
+        "roots",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "LocalPlayback": {
+      "type": "object",
+      "description": "本地文件播放会话与观看记录模板（save_history 绑定此会话）。",
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/PlaybackViewSession"
+        },
+        "match_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "record": {
+          "$ref": "#/$defs/WatchHistoryRecord"
+        }
+      },
+      "required": [
+        "session",
+        "match_id",
+        "record"
+      ],
+      "additionalProperties": false
+    },
+    "Args_list_local_videos": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_list_local_videos": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/LocalVideoList"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Args_open_local": {
+      "type": "object",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "request_id",
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "Result_open_local": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "data": {
+              "$ref": "#/$defs/LocalPlayback"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "engine_epoch": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "bridge.openapi.json#/components/schemas/ApiError"
+            }
+          },
+          "required": [
+            "request_id",
+            "engine_epoch",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "x-command-contracts": {
@@ -5932,6 +6555,38 @@
       },
       "result": {
         "$ref": "#/$defs/Result_search_catalog"
+      }
+    },
+    "get_live_channels": {
+      "args": {
+        "$ref": "#/$defs/Args_get_live_channels"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_get_live_channels"
+      }
+    },
+    "open_live": {
+      "args": {
+        "$ref": "#/$defs/Args_open_live"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_open_live"
+      }
+    },
+    "list_local_videos": {
+      "args": {
+        "$ref": "#/$defs/Args_list_local_videos"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_list_local_videos"
+      }
+    },
+    "open_local": {
+      "args": {
+        "$ref": "#/$defs/Args_open_local"
+      },
+      "result": {
+        "$ref": "#/$defs/Result_open_local"
       }
     }
   },

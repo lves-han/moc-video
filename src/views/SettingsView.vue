@@ -5,6 +5,8 @@ import { api, ApiFailure, describeError, settingsQueue } from "../api";
 import { appController, appState } from "../state";
 import type { MediaCacheStatus } from "../models";
 import Icon from "../components/Icon.vue";
+import SourceSettings from "./SourceSettings.vue";
+import LiveSettings from "./LiveSettings.vue";
 import { locale, getStremioLanguage, t } from "../i18n";
 import {
   palette,
@@ -14,7 +16,7 @@ import {
 const speed = defineModel<number>("speed", { required: true });
 const props = defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
-const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string] }>();
+const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string]; select: [id: string, role: "metadata" | "playback"] }>();
 const osTheme = useOsTheme();
 const metadataLanguage = computed(() => getStremioLanguage(locale.value));
 const languageOptions = [
@@ -136,6 +138,8 @@ onMounted(() => { void refreshCache(); });
       <div class="settings-language library-tabs" role="radiogroup" :aria-label="t('App language')" data-focus-row><button v-for="item in languageOptions" :key="item.value" role="radio" :aria-checked="locale === item.value" @click="changeLanguage(item.value)">{{ item.label }}</button></div>
       <select class="setting-select compact-select narrow-language" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
     </div>
+    <SourceSettings v-if="!preview" section="metadata" @select="(id, role) => emit('select', id, role)" />
+    <template v-else>
     <div class="setting-row">
       <div>
         <h3>{{ t("Metadata provider") }}</h3>
@@ -160,6 +164,7 @@ onMounted(() => { void refreshCache(); });
         t(metadataLanguage === "zh-CN" ? "Simplified Chinese" : "English")
       }}</output>
     </div>
+    </template>
       </div>
   </section>
   <section class="settings-group">
@@ -194,7 +199,12 @@ onMounted(() => { void refreshCache(); });
         </option>
       </select>
     </div>
+    <SourceSettings v-if="!preview" section="playback" @select="(id, role) => emit('select', id, role)" />
       </div>
+  </section>
+  <section v-if="!preview" class="settings-group live-settings-group">
+    <h2>{{ t("Live") }}</h2>
+    <div class="settings-panel"><LiveSettings /></div>
   </section>
   <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
     <h2>{{ t('Media cache') }}</h2>
@@ -211,12 +221,12 @@ onMounted(() => { void refreshCache(); });
       </div>
   </section>
   <section class="settings-group">
-    <h2>{{ t("About Yingxiang Video") }}</h2>
+    <h2>{{ t("About Moc Video") }}</h2>
     <div class="settings-panel">
     <div class="about-brand">
       <img src="/mark.svg" width="48" height="48" alt="" />
       <div>
-        <h3>{{ t("Yingxiang Video") }}</h3>
+        <h3>{{ t("Moc Video") }}</h3>
         <p>{{ t("A place for good stories.") }}</p>
       </div>
       <NTag :bordered="false">{{ preview ? t("Interface preview 0.1.0") : '0.1.0' }}</NTag>

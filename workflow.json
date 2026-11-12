@@ -1,5 +1,5 @@
 {
-  "project": "映象视频",
+  "project": "墨客视频",
   "agent_command": [
     "codex",
     "exec",
@@ -100,5 +100,7 @@
       "kind": "command",
       "timeout_seconds": 3600
     }
-  ]
+  ],
+  "lean_workflow": true,
+  "lean_from": "T0.34"
 }

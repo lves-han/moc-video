@@ -1,4 +1,4 @@
-# 映象视频交接：从 Android 兼容层改为 Rust 重写播放源
+# 墨客视频交接：从 Android 兼容层改为 Rust 重写播放源
 
 写于 2026-11-05。接手方：Codex。配套提示词见 [HANDOFF-RUST-REWRITE-PROMPT.md](HANDOFF-RUST-REWRITE-PROMPT.md)。
 

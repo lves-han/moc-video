@@ -427,6 +427,59 @@ fn sync(host: &Host) -> Value {
     result["sources"]["providers"][0].clone()
 }
 
+#[test]
+fn source_bootstrap_cache_restores_without_rechecking_and_refreshes_on_request() {
+    let fixture = Fixture::new(standard);
+    let (temp, host) = setup(fixture.url("/api?token=private"));
+    let first = sync(&host);
+    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
+    drop(host);
+
+    let restarted = Host::open(temp.path().join("settings.json")).unwrap();
+    let restored = sync(&restarted);
+    assert_eq!(restored["source_revision"], first["source_revision"]);
+    assert_eq!(
+        fixture.requests.lock().unwrap().len(),
+        1,
+        "restart must use the saved source snapshot"
+    );
+    let cache = std::fs::read_dir(temp.path().join("source-cache"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let bytes = std::fs::read_to_string(&cache).unwrap();
+    assert!(
+        !bytes.contains("private") && !bytes.contains("vod_play_url") && !bytes.contains("sig=")
+    );
+
+    sync(&restarted);
+    assert_eq!(
+        fixture.requests.lock().unwrap().len(),
+        2,
+        "an explicit refresh must contact the provider"
+    );
+    drop(restarted);
+    std::fs::write(&cache, b"damaged cache").unwrap();
+    let recovered = Host::open(temp.path().join("settings.json")).unwrap();
+    sync(&recovered);
+    assert_eq!(
+        fixture.requests.lock().unwrap().len(),
+        3,
+        "damaged snapshots fall back to a real request"
+    );
+    let mut changed = ok(&recovered, "get_settings", json!({}));
+    changed["source_configs"][0]["name"] = json!("Changed source");
+    ok(&recovered, "save_settings", changed);
+    sync(&recovered);
+    assert_eq!(
+        fixture.requests.lock().unwrap().len(),
+        4,
+        "edited configuration must not reuse the old snapshot"
+    );
+}
+
 fn job(host: &Host, operation: &str) -> Job {
     host.requests
         .begin(&id(), operation, host.clock.clone())

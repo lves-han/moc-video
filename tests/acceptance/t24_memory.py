@@ -28,7 +28,7 @@ def profile(run, mode):
         t01.check_media()
         t01.build(run)
         receipt = t01.check_build(run.source)
-        executable = t12.ROOT / receipt['automation']['path'] / 'Contents/MacOS/yingxiang-video'
+        executable = t12.ROOT / receipt['automation']['path'] / 'Contents/MacOS/moc-video'
         with tempfile.TemporaryDirectory(prefix='profile-', dir=folder) as temporary:
             live = Path(temporary)
             media = live / 'media'

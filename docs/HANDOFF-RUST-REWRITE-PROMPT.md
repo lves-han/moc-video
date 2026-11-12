@@ -6,7 +6,7 @@
 
 ---
 
-你接手项目“映象视频”，一个 Tauri 2 + Rust + Vue 3 的桌面影视客户端。工作目录是 `/Users/eason/jp/application`。
+你接手项目“墨客视频”，一个 Tauri 2 + Rust + Vue 3 的桌面影视客户端。工作目录是 `/Users/eason/jp/application`。
 
 **用户刚决定放弃 Android 兼容层，改用 Rust 重写播放源。规格和任务卡尚未修订，重写尚未开始。**
 

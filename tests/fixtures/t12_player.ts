@@ -5,6 +5,10 @@ import ts from "typescript";
 import * as vue from "vue";
 import * as apiModule from "../../src/api.ts";
 import * as lineModule from "../../src/line-preference.ts";
+import * as healthModule from '../../src/source-health.ts';
+import * as metadataModule from '../../src/metadata-cache.ts';
+import * as catalogModule from '../../src/catalog-cache.ts';
+import * as backgroundModule from '../../src/background-refresh.ts';
 import type { PlaybackContext, Bridge_ApiError } from "../../src/models.ts";
 
 const compile = (path: string) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), {
@@ -78,7 +82,9 @@ export function fixture(options: { mse?: boolean; native?: string; kind?: string
   runInNewContext(playerSource, { ...globals, exports: playerModule, require: () => ({ Hls, HlsJsAdapter: videoJsAdapter(Hls, Target) }) });
   const stateModule: Record<string, any> = {};
   runInNewContext(stateSource, { ...globals, exports: stateModule, require: (path: string) =>
-    path === "vue" ? vue : path.includes("api") ? apiModule : path.includes('line-preference') ? lineModule : playerModule });
+    path === "vue" ? vue : path.includes("api") ? apiModule : path.includes('line-preference') ? lineModule
+      : path.includes('source-health') ? healthModule : path.includes('metadata-cache') ? metadataModule
+      : path.includes('catalog-cache') ? catalogModule : path.includes('background-refresh') ? backgroundModule : playerModule });
   const root = stateModule.createAppState();
   root.runtime.phase = "ready"; root.runtime.engine_epoch = HOST;
   const calls: { command: string; input: any; request_id: string }[] = [];

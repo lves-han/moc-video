@@ -158,7 +158,7 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     await until(() => Array.from(media().textTracks).some(track => track.mode === 'showing' && track.activeCues?.length), 'Native subtitle cue missing');
     const selectors = ['.playback-view','video','.playback-shade','.playback-header','.playback-back','.playback-header h2','.playback-header p','.playback-bar','.playback-track','media-slider-buffer','media-slider-fill','media-slider-thumb','.playback-preview','media-time','.playback-button','media-play-button media-icon','.playback-volume-slider','.playback-tray','.playback-tray-header > button','.playback-now','.playback-buffering','.playback-buffering .playback-spinner'];
     const styles = Object.fromEntries(selectors.map(selector => [selector, style(selector)]));
-    await until(()=>document.querySelector('.playback-captions')?.textContent?.includes('映象'),'Official active cue did not reach the skin');
+    await until(()=>document.querySelector('.playback-captions')?.textContent?.includes('墨客'),'Official active cue did not reach the skin');
     const cue = style('.playback-captions'), textTrack = cue;
     return { width: innerWidth, height: innerHeight, styles, cue, textTrack, bufferDelay:(one('.playback-buffering') as HTMLElement&{delay:number}).delay, videoCount: document.querySelectorAll('video').length, controlsCount: document.querySelectorAll('media-controls').length, legacy: Boolean(document.querySelector('video-compat-skin,.app-shell,.playback-preferences:not(.playback-tray *)')), native: await nativeInvoke('t01_control',{ action:'identity' }), errors: [...errors] };
   }

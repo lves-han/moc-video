@@ -305,7 +305,7 @@ def windows(run, baseline=False, reference=False, conditions=False):
         if not reference:
             t01.build(run)
         receipt = t01.check_build(json.loads(BASELINE.read_text())["source"] if reference else run.source)
-        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
         with tempfile.TemporaryDirectory(prefix="tv1-live-", dir=run.folder) as temporary:
             folder = Path(temporary)
             media = folder / "media"

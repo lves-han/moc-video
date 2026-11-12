@@ -204,7 +204,7 @@ def webview(run):
         t01.build(run)
         receipt = t01.check_build(run.source)
         run.observed["packaged_exclusion"] = packaged_exclusion(receipt)
-        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
         with tempfile.TemporaryDirectory(prefix="t02-live-", dir=run.folder) as temporary:
             folder = Path(temporary)
             bridge, session = None, None

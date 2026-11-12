@@ -21,7 +21,7 @@ static void record(NSString *stage, NSEvent *event) {
 }
 
 __attribute__((constructor)) static void observe(void) {
-    if (![NSProcessInfo.processInfo.processName isEqual:@"yingxiang-video"]) return;
+    if (![NSProcessInfo.processInfo.processName isEqual:@"moc-video"]) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         for (NSString *name in @[NSWindowWillEnterFullScreenNotification, NSWindowDidEnterFullScreenNotification,
                 NSWindowWillExitFullScreenNotification, NSWindowDidExitFullScreenNotification,

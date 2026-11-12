@@ -72,12 +72,12 @@ class Acceptance(t14.Acceptance):
         self.REQUIREMENTS, self.DEPLOYMENT = config["requirements"], config["deployment"]
         super().__init__(report.resolve(), junit.resolve())
 
-    def command(self, argv, timeout=300, accepted=(0,)):
-        # These commands only inspect local artifacts/system metadata. No live
-        # source requests, Apple credentials or capability URLs enter them.
+    def command(self, argv, timeout=300, accepted=(0,), cwd=None, env=None):
+        # Local inspection and T25's documented build commands inherit the
+        # original runner's process tree; argv/logs contain no media credentials.
         argv = workflow.runtime.resolve_argv([str(arg) for arg in argv])
         path = self.folder / f"command-{len(self.commands) + 1}.log"
-        row = dict(argv=argv, log=path.relative_to(ROOT).as_posix(), exit=None)
+        row = dict(argv=argv, cwd=str(cwd or ROOT), log=path.relative_to(ROOT).as_posix(), exit=None)
         self.commands.append(row)
         process, identity = None, None
         started = time.monotonic()
@@ -85,7 +85,8 @@ class Acceptance(t14.Acceptance):
             stream.write(json.dumps(argv, ensure_ascii=False) + "\n")
             stream.flush()
             try:
-                process = subprocess.Popen(argv, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT)
+                process = subprocess.Popen(argv, cwd=cwd or ROOT, env=dict(os.environ, **(env or {})),
+                                           stdout=stream, stderr=subprocess.STDOUT)
                 identity = workflow.runtime.identity(process.pid)
                 row["exit"] = process.wait(timeout=timeout)
             finally:
@@ -140,7 +141,7 @@ def artifact(run):
     path = inside(pointer["manifest"], ROOT / "evidence/releases")
     require(file_hash(path) == pointer["sha256"], "Current manifest hash differs")
     manifest = read_json(path)
-    require(manifest["schema_version"] == 2 and manifest["card"] == "T0.27"
+    require(manifest["schema_version"] == 2 and manifest["card"] == run.CARD
             and manifest["source"] == run.source and manifest["protected"] == workflow.protected_hash(), "Installer source/baseline is stale")
     require(manifest["target"] == "macos-arm64" and manifest["scope"] == "personal use only; not public distribution", "Release scope differs")
     owner = read_json(ROOT / run.observed["resources"]["receipt"])
@@ -154,7 +155,7 @@ def artifact(run):
         require(receipt["status"] == "finished" and receipt["exit"] == receipt["raw_exit"] == 0
                 and receipt["source"] == receipt["after_source"] == run.source
                 and receipt["protected"] == owner["protected"] and receipt["generation"] == owner["generation"]
-                and receipt["card"] == "T0.27" and file_hash(log) == receipt["log_hash"], "Original successful build receipt missing/changed")
+                and receipt["card"] == run.CARD and file_hash(log) == receipt["log_hash"], "Original successful build receipt missing/changed")
         require(receipt["argv"] == ["{python}", "-B", "packaging/release.py", "--build"], "Unexpected release build argv")
         env = receipt["environment"]
         require((env["memory_mib"], env["jobs"], env["test_threads"], env["memory_enforcement"]) == (4096, 2, 1, "rss-sampled"), "Build resource backend differs")
@@ -191,9 +192,9 @@ def signing(run, manifest, path):
     staple_exit = run.commands[-1]["exit"]
     checked = release.check_signing(detail, 0, gatekeeper_exit, staple_exit)
     require(all(manifest["signing"].get(key) == value for key, value in checked.items()), "Manifest overstates actual signature/notarization")
-    architecture = run.command(["/usr/bin/lipo", "-archs", app / "Contents/MacOS/yingxiang-video"]).strip()
+    architecture = run.command(["/usr/bin/lipo", "-archs", app / "Contents/MacOS/moc-video"]).strip()
     require(architecture == "arm64", "Thin arm64 executable required")
-    linkage = run.command(["/usr/bin/otool", "-L", app / "Contents/MacOS/yingxiang-video"])
+    linkage = run.command(["/usr/bin/otool", "-L", app / "Contents/MacOS/moc-video"])
     dependencies = [line.strip().split(" (", 1)[0] for line in linkage.splitlines()[1:] if line.strip()]
     require(dependencies and all(name.startswith(("/System/Library/", "/usr/lib/")) for name in dependencies), "Executable depends on developer/non-system libraries")
     run.observed["signing"] = dict(checked, gatekeeper_exit=gatekeeper_exit, gatekeeper_output=gatekeeper,
@@ -252,10 +253,10 @@ def archives(run, manifest, path):
                     start, end = output.index("<?xml"), output.index("</plist>") + len("</plist>")
                     mounted = plistlib.loads(output[start:end].encode("utf-8"))
                     require(any(Path(row.get("mount-point", "")) == mount for row in mounted["system-entities"]), "Owned DMG mount missing")
-                    require(release.tree(mount / "映象视频.app") == manifest["files"], "DMG roundtrip tree differs")
+                    require(release.tree(mount / "墨客视频.app") == manifest["files"], "DMG roundtrip tree differs")
                     require((mount / "Applications").is_symlink() and os.readlink(mount / "Applications") == "/Applications", "DMG install shortcut differs")
-                    require({entry.name for entry in mount.iterdir()} <= {"映象视频.app", "Applications", ".DS_Store", ".fseventsd", ".Trashes"}, "Unexpected DMG payload")
-                    run.command(["/usr/bin/codesign", "--verify", "--deep", "--strict", mount / "映象视频.app"])
+                    require({entry.name for entry in mount.iterdir()} <= {"墨客视频.app", "Applications", ".DS_Store", ".fseventsd", ".Trashes"}, "Unexpected DMG payload")
+                    run.command(["/usr/bin/codesign", "--verify", "--deep", "--strict", mount / "墨客视频.app"])
                 finally:
                     try:
                         if os.path.ismount(mount):
@@ -297,10 +298,11 @@ def check_lifecycle(value, manifest, manifest_hash):
     base, installed, init, play, before, after, uninstalled, deleted = (phases[key] for key in
         ("baseline", "installed", "initialized", "first_play", "upgrade_before", "upgrade_after", "uninstalled", "data_deleted"))
     require(base["app_exists"] is False and base["data_exists"] is False, "Pre-install application/data already existed")
-    require(installed["destination"] == "/Applications/映象视频.app" and installed["app_files"] == manifest["files"], "Installed current bundle differs")
+    require(installed["destination"] == "/Applications/墨客视频.app" and installed["app_files"] == manifest["files"], "Installed current bundle differs")
     require(init["window_visible"] is True and init["ready"] is True and init["settings"]["schema_version"] == 2, "First initialization did not produce a ready application/settings")
     samples = play.get("samples", [])
-    require(all(number(row["elapsed_seconds"]) and number(row["position_seconds"]) for row in samples), "Nonfinite playback observation")
+    require(samples and all(number(row["elapsed_seconds"]) and number(row["position_seconds"]) for row in samples)
+            and any(row["position_seconds"] > 0 for row in samples), "Actual finite first-play progress observation required")
     require(play["moving_picture"] is True and play["audio_audible"] is True
             and play["errors"] == [], "First-play picture/audio observation failed")
     require(before["app_files"] == manifest["upgrade_from"]["files"] and after["app_files"] == manifest["files"], "Upgrade was not actual build 1 to build 2")
@@ -312,8 +314,13 @@ def check_lifecycle(value, manifest, manifest_hash):
             "Actual predecessor launch and upgraded ready application required")
     require(before["settings"]["schema_version"] == after["settings"]["schema_version"] == 2
             and before["settings"].get("source_configs"), "Nonempty persisted source settings required before upgrade")
-    require({key: row for key, row in before["settings"].items() if key != "window_bounds"}
-            == {key: row for key, row in after["settings"].items() if key != "window_bounds"}, "Upgrade lost persisted settings")
+    require(any(row.get("kind") == "stremio" for row in before["settings"]["source_configs"]),
+            "Upgrade baseline must already contain Stremio (ADR-058)")
+    ignored = {"window_bounds", "metadata_preset_applied"}
+    require({key: row for key, row in before["settings"].items() if key not in ignored}
+            == {key: row for key, row in after["settings"].items() if key not in ignored}, "Upgrade lost persisted settings")
+    require(before["database_version"] == 1 and after["database_version"] == uninstalled["database_version"] == 2,
+            "Upgrade must migrate history database from version 1 to 2")
     require(before["history"] and before["history"] == after["history"], "Upgrade lost nonempty watch history")
     require(uninstalled["app_exists"] is False and uninstalled["data_exists"] is True
             and uninstalled["settings"] == after["settings"] and uninstalled["history"] == after["history"], "App removal did not preserve user data")
@@ -352,18 +359,19 @@ def lifecycle(run, manifest, path):
             database = inside(artifacts[phase["history_db"]]["path"], folder)
             with closing(sqlite3.connect("file:" + quote(str(database)) + "?mode=ro&immutable=1", uri=True)) as connection:
                 connection.row_factory = sqlite3.Row
+                phase["database_version"] = connection.execute("PRAGMA user_version").fetchone()[0]
                 require(connection.execute("PRAGMA integrity_check").fetchall()[0][0] == "ok"
-                        and connection.execute("PRAGMA user_version").fetchone()[0] == 1, "Target history database is invalid")
+                        and phase["database_version"] == (1 if name == "upgrade_before" else 2), "Target history database is invalid")
                 phase["history"] = [dict(row) for row in connection.execute("SELECT * FROM watch_history ORDER BY content_id")]
     checked = check_lifecycle(value, manifest, file_hash(path))
+    play = value["phases"]["first_play"]
+    confirmation = play.get("audio_confirmation")
+    require(confirmation in play["evidence"] and confirmation in artifacts,
+            "User audio confirmation evidence missing")
+    text = inside(artifacts[confirmation]["path"], folder).read_text(encoding="utf-8")
+    require("能听到正常声音" in text, "Actual user audio confirmation missing")
     if not value.get("recording"):
-        play = value["phases"]["first_play"]
-        confirmation = play.get("audio_confirmation")
         frames = play.get("screen_samples", [])
-        require(confirmation in play["evidence"] and confirmation in artifacts,
-                "User audio confirmation evidence missing")
-        text = inside(artifacts[confirmation]["path"], folder).read_text(encoding="utf-8")
-        require("能听到正常声音" in text, "Actual user audio confirmation missing")
         require(len(frames) >= 1 and all(frame in play["evidence"] for frame in frames),
                 "First-play screen samples missing")
         images = [inside(artifacts[frame]["path"], folder).read_bytes() for frame in frames]
@@ -390,16 +398,21 @@ def lifecycle(run, manifest, path):
     rms = math.sqrt(sum(row * row for row in pcm) / len(pcm))
     require(rms > 0, "Playback recording has no decoded audio energy")
     run.observed["clean_lifecycle"] = dict(checked, report=str(report.relative_to(ROOT)), sha256=file_hash(report),
+        audio_confirmation=confirmation,
         recording_sha256=file_hash(recording), decoded_audio_samples=len(pcm), audio_rms=rms,
         decoded_audio=dict(path=str(audio.relative_to(ROOT)), sha256=file_hash(audio)),
         evidence="Human witnessed raw screen/speaker recording and phase/data captures rechecked in current A1")
     return run.observed["clean_lifecycle"]
 
 
-def oracles(run):
-    output = run.command(["{python}", "-B", "-m", "unittest", "discover", "-s", "tests/acceptance", "-p", "test_t23.py", "-v"])
+def oracles(run, names=()):
+    argv = ["{python}", "-B", "-m", "unittest", "discover", "-s", "tests/acceptance", "-p", "test_t23.py"]
+    for name in names:
+        argv.extend(["-k", name])
+    output = run.command([*argv, "-v"])
     match = re.search(r"Ran (\d+) tests?", output)
     require(match and int(match[1]) > 0 and re.search(r"(?m)^OK\s*$", output), "Required nonzero evidence counterexamples failed")
+    require(not names or int(match[1]) == len(names), "Selected evidence counterexamples missing")
     return dict(tests=int(match[1]))
 
 
@@ -416,7 +429,12 @@ def main():
     missing_owner = lambda: require(False, "NOT RUN: original resource owner missing")
     ready = run.case("resource-ownership", run.REQUIREMENTS, "Original run.py receipt and approved macOS resource backend", lambda: t10.resources(run, card=run.CARD))
     run.case("reference-platform", ids("U04", "R30", "REQ-T23"), "Actual macOS14+ arm64/WebKit/tool versions", lambda: environment(run) if ready else missing_owner())
-    run.case("independent-oracle-negatives", run.REQUIREMENTS, "Corrupt/stale/empty/missing/unsealed evidence fails", lambda: oracles(run) if ready else missing_owner())
+    lifecycle_oracles = ("test_lifecycle_preserves_real_upgrade_data",
+                         "test_upgrade_accepts_only_the_documented_migration_differences",
+                         "test_same_build_upgrade_or_empty_lost_data_fails",
+                         "test_removal_losing_user_data_or_leaving_processes_fails",
+                         "test_lifecycle_reopens_raw_settings_and_sqlite_instead_of_report_values")
+    run.case("independent-oracle-negatives", run.REQUIREMENTS, "Related installer or upgrade/data-preservation evidence counterexamples fail", lambda: oracles(run, lifecycle_oracles if args.suite == "lifecycle" else ()) if ready else missing_owner())
     bound = []
     def bind():
         bound.extend(artifact(run))

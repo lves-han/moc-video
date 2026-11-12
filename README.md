@@ -1,115 +1,84 @@
-## 当前个人使用桌面候选包（T0.27）
+# 墨客视频
 
-本卡发行配置为 0.1.0（macOS 构建 2），目标 macOS 14+ arm64。新配置的正式构建与验收待外层执行，先前 0.1.1 初步包保留在证据目录。仅供个人使用，公开发行另行授权。
+Vue 3 / TypeScript / Tauri 2 的个人使用视频应用。Rust 直接处理 MacCMS JSON 播放来源、Stremio 元数据、来源匹配和本地媒体网关；Video.js 10.3.0 提供播放内核，SQLite 保存观看历史和待播清单。桌面界面支持中英文、目录筛选、搜索、来源管理、媒体缓存与已播放线路记忆。
 
-候选 ZIP/DMG、本地依赖许可及真实签名状态见 [安装包交接](packaging/T23.md)。应用使用独立 Rust JSON 来源和 Video.js 10.3.0，运行资源本地分发；不携带原插件、Android 引擎 APK 或 SDK 镜像。系统 WebKit 和媒体解码能力由 macOS 提供。
+当前发行配置为 **0.1.0（macOS build 2）**，目标 **macOS 14+ arm64**。最终包与干净目录复现以 T25-all 报告为准，本机隔离安装生命周期以 T25-lifecycle 报告为准；材料尚缺时对应状态为 NOT RUN。完整状态、路径与限制见 [T25 交付索引](docs/release-evidence/T25.md)、[进度](docs/PROGRESS.md) 和 [安装操作](packaging/T23.md)。当前仅个人使用；公开发行等待单独授权、Developer ID 签名、公证与第三方权利确认。
 
-打包入口会对完整应用做本地 ad-hoc 密封，逐项记录 Developer ID、公证、Gatekeeper 和装订的实际状态。当前已保留的初步包只有链接器 ad-hoc 签名；本卡干净系统安装、首播、真实构建升级和卸载仍为 NOT RUN。安装时保留默认安全设置及 quarantine；系统拦截时保留真实失败记录。后续公开分发需要签名/公证和相关第三方权利确认。第三方来源的内容版权和站点授权由其权利人决定。
+## 从干净源码目录开始
 
-下方带日期的原前端及初始化内容保留为历史记录，当前实际状态以 docs/PROGRESS.md、docs/TASKS.md 和安装包交接为准。
+解压交付索引中“最终源码 ZIP”指向的源码包，或使用当前仓库工作树的完整源码。源码归档保留实际文件权限和逐文件摘要；依赖缓存、构建产物及历史 evidence 分别保存。安装包、上代升级测试包、报告和历史原始材料从交付索引取得。
 
-# 映象视频界面
+准备 Python 3.12、Node 26.11.1 / npm 11.20.0、Rust 1.98.1、Tauri CLI 2.9.6、Xcode/macOS SDK。这些版本来自实际开发机观察；应用运行只需目标 macOS 提供的 WebKit 和系统媒体解码。Rust crate、npm 包的精确版本与许可来自 [版本锁](docs/runtime.lock.json)、`package-lock.json`、`src-tauri/Cargo.lock` 和 [第三方许可](licenses/THIRD_PARTY_NOTICES.txt)。
 
-基于 Vue 3、TypeScript、Vite、Naive UI 2.45.3 的可操作前端预览，采用 al-design 技能制作。视觉沿用 replica-spec 的深色影院方向，以青柠色标记主操作，使用原创电影画面、轻量侧栏和清晰的海报网格。窄屏切换到底部导航。
+所有以下命令均为 **argv 数组**，在源码根目录执行，保持 `shell=false`。`{python}` 替换为该目录 `.venv/bin/python` 的绝对路径；原开发工作区是 `/Users/eason/jp/application`。首次用已安装的 Python 3.12 解释器执行 `[python绝对路径, "-m", "venv", ".venv"]`，随后执行：
 
-## 运行
-
-```sh
-cd /Users/eason/jp/application
-npm ci
-npm run dev
+```json
+["{python}", "-m", "pip", "install", "-r", "scripts/requirements.txt"]
+["cargo", "install", "tauri-cli", "--version", "2.9.6", "--locked"]
+["npm", "ci", "--no-audit", "--no-fund"]
+["cargo", "fetch", "--locked", "--target", "aarch64-apple-darwin", "--manifest-path", "src-tauri/Cargo.toml"]
+["{python}", "-I", "src-tauri/ffmpeg/build_ffmpeg.py"]
 ```
 
-打开 http://127.0.0.1:5173/ 。`npm run build` 执行 Vue/TypeScript 检查并输出 `dist/`；`npm run preview` 预览构建结果。
+首次准备依赖需要可访问相应包仓库和 FFmpeg 源码仓库。FFmpeg 脚本检出固定版本并生成构建所需的动态库；已有源码检出须处于脚本指定的提交。具备本地 npm/Cargo 缓存及已构建的 FFmpeg 时，以下 T25 复现命令直接离线安装并构建。先核对 `xcode-select -p` 与 `xcrun --show-sdk-version`；SDK 查询失败时保留错误并修复开发环境后继续。
 
-## 已实现的界面
+T25 会原样读取并顺序执行下面的 `t25-reproduce` JSON。复现进程继承原资源执行器，工作目录为新解压源码；环境为 `CARGO_BUILD_JOBS=2`、`RUST_TEST_THREADS=1`、`ROLLDOWN_WORKER_THREADS=2`、`RAYON_NUM_THREADS=2`、`CARGO_TARGET_DIR={source}/target`，`RUSTFLAGS=--remap-path-prefix={home}=/build-user`。`{source}`、`{home}` 都以实际绝对路径替换。全新机器先完成上面的联网依赖准备。
 
-- 发现页：精选切换、影片题材筛选、分类导航、展开列表、空态及切源加载态。
-- 详情页：海报、简介、演职员、选集、相关影片。
-- 播放页：真实 HTML video、本地 H.264/AAC 30 秒片段、播放/暂停、进度拖动、音量/静音及百分比（桌面与窄屏均在播放器内调整）、倍速、WebVTT 字幕、全屏、选集和自动下一集。
-- 观看历史：侧栏与移动底栏入口，按影片合并最近集数、来源和进度；按今天/昨天/更早分组，支持继续观看、看完重播、单条删除与清空确认。当前预览记录保存在页面会话内，刷新重置；SQLite 为后续宿主的持久化约定。
-- 来源管理：三类演示来源、选择与停用、添加配置表单及输入错误提示。新增配置仅在当前页面会话内保留。
-- 外观：明暗模式实时跟随系统；设置页提供青柠、海蓝、鸢紫、玫瑰、琥珀五种色系，默认青柠。每种色系均包含明暗配色，偏好保存在本机。顶部调色板图标进入设置，色系变更保留页面、筛选与播放状态。
-- 中英文：英文为基础和首次启动默认语言，顶部与设置页可切换 English / 简体中文；语言偏好保存在本机，刷新后保留。
-- 播放设置：本次页面会话内的倍速、自动下一集；音量统一在播放页调整。
-- 键盘：Space 播放/暂停，左右方向键快进/后退五秒，M 静音，F 全屏；输入控件和弹层优先处理键盘。
+<!-- t25-reproduce -->
+```json
+[
+  {"id":"npm-init","argv":["npm","ci","--offline","--no-audit","--no-fund"],"timeout":900},
+  {"id":"cargo-init","argv":["cargo","fetch","--locked","--offline","--target","aarch64-apple-darwin","--manifest-path","src-tauri/Cargo.toml"],"timeout":300},
+  {"id":"frontend-build","argv":["npm","run","build"],"timeout":600},
+  {"id":"native-build","argv":["cargo","tauri","build","--ci","--config","{\"build\":{\"devUrl\":null}}","--bundles","app","--no-sign","--","--locked","--offline"],"timeout":3600},
+  {"id":"native-smoke","argv":["cargo","test","--locked","--offline","--manifest-path","src-tauri/Cargo.toml","--test","t25_delivery","--","--test-threads=1"],"timeout":900}
+]
+```
 
-主要地址为 `#/home`、`#/kind/movie`、`#/kind/series`、`#/kind/anime`、`#/film/midnight`、`#/watch/midnight/4`、`#/history`、`#/sources` 和 `#/settings`，浏览器返回可用。
+`native-smoke` 在专用临时数据目录执行真实 Rust Host 初始化、网关 ready、设置保存/重启和失效资源诊断。实际运行结果写入本卡报告。GUI 安装、初始化、画面和用户声音观察由 T25-lifecycle 单独记录。
 
-## 数据与素材
+## 运行和初始化
 
-影片名称、演职员、简介均为虚构示意内容，集中在 `src/data/demo.ts`。五幅画面由内置 imagegen 原创生成；最终图片放在 `public/artwork/`，生成提示与来源记录见 [artwork.json](docs/artwork.json)。图标与标识为本项目 SVG，字体使用系统字体。
+构建后用 Finder 打开 `target/release/bundle/macos/墨客视频.app`，或执行 `["/usr/bin/open", "target/release/bundle/macos/墨客视频.app"]`。开发时先执行 `["npm", "run", "dev"]`，再在另一终端执行 `["cargo", "tauri", "dev"]`；前端地址为 `http://127.0.0.1:5173/`。浏览器预览用于前端开发，桌面业务通过 Tauri IPC 调用 Rust。
 
-`public/demo.mp4` 由旷野画面缓慢平移生成，包含本地合成的低音量环境音；中英字幕为 `public/demo.vtt` 与 `public/demo.en.vtt`。所有影片与线路在预览中使用这一相同片段，界面明确标识其演示性质。运行时无 CDN、在线字体或远程媒体依赖。
+首次启动由原生宿主准备网关并加载内置来源设置。设置 → 来源中检查配置和同步状态：Stremio 提供元数据，MacCMS 提供播放；元数据来源与播放来源分别选择。首次跨源匹配按界面确认内容和线路，播放成功推进后记忆可靠对应。后续每集重新解析；歧义时显示确认。历史与待播清单保存在应用数据目录，刷新和重启后恢复。
 
-## 后续接入
+应用数据位置：`~/Library/Application Support/app.moc.video/`，包含 `settings.json`、`moc-video.db` 和 `media-cache/`。WebKit 的网站存储另保留线路偏好；系统按应用标识管理。卸载 app 保留用户数据；显式清理按 [生命周期操作](packaging/T23.md) 仅删除本次可识别测试数据，原用户数据保留。
 
-本次交付为界面工程。Rust/Tauri 宿主、真实 MacCMS/Stremio 网络请求和 Cloudstream Android 引擎尚待开发。当前演示视图模型用于验证交互；接入时按 replica-spec 的机器契约生成 DTO，通过 Tauri 命令替换数据入口，并保留已有组件和视觉样式。
+## 诊断和测试
 
-后续接入真实来源时同步完成配置持久化、请求取消、宿主/客体世代、解析与会话释放、HLS 管线和跨平台 WebView 验收。当前未声明任何 Tauri 构建、真实片库或三平台发布验证通过。
+来源页的 **Diagnostics / 诊断 → Copy redacted diagnostics / 复制脱敏诊断** 提供平台、宿主阶段、契约、来源登记状态、错误码与请求关联 ID。播放错误显示阶段与重试/换线入口。提交诊断时保留错误码和时间，敏感 URL、令牌及账户信息先脱敏。公共 DNS 使用 `1.1.1.1:53` 和 `8.8.8.8:53`；两者失败时显示 DNS 错误。站点访问控制、证书错误和媒体下架保留实际失败原因。
 
-## 语言与 Stremio 元数据
+开发工作区的构建、测试及服务通过原 `scripts/run.py` 执行，使用同一项目解释器和实际全局重锁，保持 4096MiB RSS 采样、并行 2、测试线程 1。macOS 实际后端为 `process-watchdog`，允许瞬时超限。可按修改范围选择直接相关检查：
 
-英文文案直接作为 `src/i18n.ts` 的消息键，中文词典覆盖对应键。路由、影片 ID、题材值与接口字段保持英文键；虚构影片的中英文展示数据在 `src/data/demo.ts`。切换语言保留当前路由、筛选、集数、播放进度与播放偏好。
+```json
+["{python}","-B","scripts/run.py","diag-t25-oracles","--","{python}","-B","-m","unittest","discover","-s","tests/acceptance","-p","test_t23.py","-k","test_upgrade_accepts_only_the_documented_migration_differences","-k","test_removal_losing_user_data_or_leaving_processes_fails","-v"]
+["{python}","-B","scripts/run.py","diag-t25-delivery-oracles","--","{python}","-B","-m","unittest","discover","-s","tests/acceptance","-p","test_t25.py","-v"]
+["{python}","-B","scripts/run.py","diag-t23-release-build","--","{python}","-B","packaging/release.py","--build"]
+["{python}","-B","scripts/run.py","A1","--","{python}","-B","tests/acceptance/t25.py","--suite","all","--report","evidence/acceptance/T25-all.json","--junit","evidence/acceptance/T25-all.xml"]
+["{python}","-B","scripts/run.py","A2","--","{python}","-B","tests/acceptance/t25_local.py","--report","evidence/acceptance/T25-lifecycle.json","--junit","evidence/acceptance/T25-lifecycle.xml"]
+```
 
-Stremio 继续作为元数据接入方向。`getStremioLanguage()` 从页面语言计算元数据语言：`zh` 及中文区域变体 → `zh-CN`；其余 → `en`。当前选项为英文、简体中文，默认英文；原始电影音轨语言与页面语言分别处理。演示字幕跟随页面语言，正式字幕选择保留用户控制。
+A2 使用用户授权的本机隔离测试：核对当前安装包、独立测试数据的升级与卸载、用户声音确认以及原有应用和数据的恢复结果。复现、测试和构建期间保持源码稳定。失败保留原报告及收据，先记录原因再恢复。当前流程按卡选择必要检查（ADR-062）。
 
-当前设置页显示该映射，影片仍为本地双语 fixture。真实 Stremio catalog/meta 请求接入时按 replica-spec 第18.3.1节完成已验证扩展的语言配置、英文回退、分语言缓存与旧响应丢弃。Stremio 扩展采用各自的语言配置方式，具体请求路径由该扩展验证结果确定。现阶段无真实元数据网络调用。
+## 发布状态与限制
 
-执行 `npm test` 验证语言映射、英文默认值、翻译占位符、偏好保存失败行为、色系启动恢复和五种色系在两种模式下的文字对比度；`npm run build` 执行类型检查与构建。
+- ZIP/DMG 的准确路径、大小和 SHA256 来自 `evidence/releases/T23-current.json` 指向的不可变 manifest。当前最终包必须归属 T0.36；历史 T0.27 包保留原身份。安装包以完整 ad-hoc 资源签名密封，Developer ID、公证和 Gatekeeper 接受均为待办；默认系统安全设置与 quarantine 保留，拦截则记录实际结果。
+- T0.35 的长播与固定构建证据属于提交 `e6c9b946636adb29afe1bc849f536d2244b1dc38`，音频采样按用户决定跳过。T0.37 的 [线路记忆报告](evidence/acceptance/LINE-PREFERENCE.json) 覆盖后续源码的线路、播放、切集和历史相关回归。T25 报告分别列出历史证据与本次实跑范围。
+- Rust 来源支持清单见 [兼容性记录](docs/compatibility-report.json) 和 [T25 证据索引](docs/release-evidence/T25.md)。兼容的 JSON 协议与当次媒体可用性分别记录；公开来源可能改变响应、下架或拒绝访问。XML、原 Android/DEX 插件及需特殊播放器的来源继续暂缓；发布载荷只包含本地前端、原生程序及许可。
+- macos-x86_64、windows-x86_64、linux-x11、linux-wayland：**NOT RUN**。真实 macOS 14 最低版本机器：**NOT RUN**；本机隔离测试在 macOS 27.0.1 arm64 完成；干净系统生命周期未验证。
+- Vite 仍可能报告主 JS 包体积提示；T24 独立报告中两项搜索海报问题保留。当前交付状态以本卡实际报告为准。
 
-色系偏好由根元素的 `data-palette` 恢复，统一配置位于 `src/ui/theme.ts`。Naive UI 的 `useOsTheme` 读取系统明暗，`NConfigProvider` 在内置 `lightTheme` / `darkTheme` 上应用同一份品牌色覆盖；页面与库组件从该配置派生颜色。启动前恢复已保存色系，旧的手动明暗偏好保持忽略。视频和海报维持画面上的高对比度，播放器高亮使用所选色系的明亮配色。后续Tauri宿主将色系纳入Settings.color_palette，沿用已有设置写队列；ui_theme作为旧文件兼容字段保留。
+## 后续移动阶段
 
-## UI 库选型与代码组织
+桌面 T0.36 完成后停止桌面监管，T1.1 等待用户授权（ADR-007/062）：T1.1/M00 Android/iOS 真机可行性与版本基线；T1.2/M01 Android 本地 Rust 来源；T1.3/M02 移动页面与播放器；T1.4/M03 Android 安装发行；T1.5/M04 iOS 本地来源与网关；T1.6/M05 iOS 真机闭环及移动交付。移动适配、签名和真机测试均为 **NOT RUN**。
 
-核对日期：2026-10-26。当前项目采用 **Naive UI 2.45.3**，版本与间接依赖由 package-lock.json 固定。候选按现有 Vue 3/TypeScript、系统明暗、多色系、桌面/移动响应式、授权与维护工作量比较。
+[需求规格](docs/SPEC.md) · [契约](docs/ARCHITECTURE.md) · [任务/覆盖表](docs/TASKS.md) · [决定](docs/DECISIONS.md) · [原前端历史](docs/FRONTEND_BASELINE.md)。历史资料保存其当时状态，当前实现与发布范围沿已采纳 ADR 和上述真实证据追溯。
 
-| 候选 | 核实能力及代价 | 本项目选择 |
-|---|---|---|
-| [Naive UI](https://github.com/tusen-ai/naive-ui) | Vue 3、TypeScript、内置明暗主题、类型化 themeOverrides、按组件构建、MIT；无需额外的 CSS 框架 | 采用，与现有栈直接衔接，基础控件和主题统一消费 |
-| [PrimeVue](https://primevue.dev/theming/styled/) | 控件及主题体系完整；当前最新版5.0.4及themes3.1.0发布包使用PrimeUI授权，社区许可含资格、密钥与年度续期；4及更早版本仍为MIT，见[官方条款](https://primeui.dev/licenses/community) | 当前项目优先MIT依赖的持续维护路径 |
-| [Reka UI](https://reka-ui.com/docs/overview/introduction) | Vue无样式无障碍基础组件，适合自建完整视觉系统；主题和控件外观需自行组合 | 本次以减少手写基础控件及主题样式为目标，采用已有成套组件 |
+## 当前数据格式
 
-组件直接从 `naive-ui` 导入。基础组件采用 `NConfigProvider`、`NGlobalStyle`、`NMessageProvider`、`NButton`、`NModal`、`NForm`、`NFormItem`、`NInput`、`NSwitch`、`NRadioGroup`、`NRadioButton`、`NTag`、`NAlert`。表单规则交给库校验，错误摘要与字段提示共同呈现，弹层使用库的焦点圈定与返回能力。短列表（页面语言、倍速、来源类型及顶部来源选择）沿用原生select，直接使用系统选择菜单和原生键盘语义；媒体进度及音量继续使用原生range。此分工保留移动端原生交互，并缩减额外的下拉框状态与样式。
+墨客视频使用独立标识 `app.moc.video`、`moc-video.db` 和 `moc-video.*` 偏好键。设置与历史数据库仅接受当前版本格式；首次使用直接创建当前格式，旧版本数据不迁移、不回退读取，磁盘上的旧文件保持原样。
 
-| 文件 | 责任 |
-|---|---|
-| src/ui/UiProvider.vue | 单一库配置、系统主题、组件语言、全局消息及页面CSS变量桥接 |
-| src/ui/theme.ts | 五种品牌色覆盖、持久化色系、Naive内置主题与页面语义变量的同源派生 |
-| src/views/SettingsView.vue | 外观、语言与播放偏好UI，通过v-model更新共享播放偏好 |
-| src/views/SourcesView.vue | 来源列表、添加表单、字段校验与弹层；通过事件交给App修改共享来源 |
-| src/views/HistoryView.vue | 历史分组、进度、续播、删除/清空确认及加载/错误状态 |
-| src/data/history.ts | 会话内历史预览数据入口，后续对接宿主 SQLite |
-| src/data/history-model.ts | 预览历史字段、进度校验与时间格式 |
-| src/App.vue | 页面导航、共享来源与播放状态、首页/详情及现有播放器交互 |
-| src/style.css | 影院布局、海报/播放器、响应式和原生短列表轻量样式 |
+## 源码仓库
 
-主题色值集中在theme.ts，常规组件外观优先修改themeOverrides。后续业务页直接复用库组件及现有主题，保持单一UiProvider；按出现的实际复用再拆组件。当前首页、详情与播放器继续共用既有状态，接入Rust时按原规格中的生命周期边界组织。
-
-本次相较引入UI库前，App.vue减少约470行，CSS减少约620行；Naive的通用控件带来约100kB的gzip JS增量，CSS gzip减少约2.5kB，具体数值见实际构建输出。库与素材随安装包本地分发，运行时沿用离线资源。浏览器预览与三平台Tauri/移动WebView实机验证分别记录。
-
-## 观看历史与 SQLite 约定（2026-10-26）
-
-用户确认 SQLite 为技术约定，本轮先写入方案。当前工程保持 Vue 前端预览，历史数据使用会话内 Map；刷新后从空列表开始。播放进度大约每5秒更新，暂停、seek、切集、切源与离页时记录当前进度。历史中的影片身份与播放来源分开保存；语言切换沿用同一影片记录。看完标记针对当前集，重新播放从该集起点开始。
-
-正式宿主按 [开发规格11.4](replica-spec/DEVELOPMENT_SPEC.md#114-观看历史与-sqlite) 使用 SQLite，保存位置为应用数据目录；由 Rust 负责迁移和参数化读写。接入时替换 `src/data/history.ts`，继续使用已有历史视图与播放事件入口。当前 `demo:<kind>:<id>` 身份服务于虚构预览；真实数据使用 Stremio 的稳定内容/video身份，重新匹配当前 Cloudstream/MacCMS 播放引用后续播。
-
-`npm test` 验证按影片更新、来源独立、排序、删除/清空、无效进度与临时会话字段校验；`npm run build` 执行类型检查和打包。SQLite 跨重启持久化、迁移、写入失败与三平台运行在宿主接入阶段验收。
-
-本轮前端验证（2026-10-26）：构建和8项测试通过；浏览器验证桌面/390px无横向溢出、空态、按影片更新集数、原来源恢复、进度续播、当前集看完与从头重播、删除/清空确认取消。实际SQLite读写与三平台宿主验证留待T18/T20。构建主JS约519kB（gzip约158kB），Vite报告单包体积提示。
-
-文档方案已更新至1.5.0：Stremio元数据→match_playback→Cloudstream主播放，MacCMS可选；元数据与播放源分别选择。当前界面仍使用本地fixture与会话内历史，真实匹配、双来源状态和SQLite宿主接入按replica-spec实施。
-
-
-## 项目初始化与开发路线（2026-10-26）
-
-项目根目录：`/Users/eason/jp/application`。当前交付为文档规划基线，原有前端已原样纳入 Git。
-
-- [产品规格](docs/SPEC.md)、[架构契约](docs/ARCHITECTURE.md)、[任务与需求覆盖](docs/TASKS.md)。
-- [工作流用法](docs/WORKFLOW.md)、[当前进度](docs/PROGRESS.md)、[初始化决定](docs/DECISIONS.md)。
-- [原前端说明](docs/FRONTEND_BASELINE.md)、[完整原始规格包](replica-spec/README.md)。原说明中的相对路径以初始化前布局为来源记录，当前机器契约统一从项目内 replica-spec/ 读取。
-
-控制解释器为项目 `.venv/bin/python`（Windows恢复时使用`.venv/Scripts/python.exe`）。首次恢复依赖：`.venv/bin/python -m pip install -r scripts/requirements.txt`；业务源码依赖沿用`npm ci`。
-检查文档结构：`.venv/bin/python -B scripts/task.py check`；基础业务检查：`.venv/bin/python -B scripts/verify.py all`。每卡验收按TASKS的准确argv执行。
-
-后续实际开发采用原单卡驱动及独立只读巡检。开发/巡检CLI、模型和权限保留待定；当前无开发会话和定时监管。跨平台、原包执行、真实来源、SQLite及发行验收均待开发阶段执行。
+源码仓库：https://github.com/lves-han/moc-video 。仓库包含应用、测试、文档与第三方许可；本机运行证据、安装包、依赖目录和私有配置按 `.gitignore` 保留在本机。

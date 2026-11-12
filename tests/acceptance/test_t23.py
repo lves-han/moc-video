@@ -17,19 +17,22 @@ import t23
 def lifecycle_fixture():
     manifest = dict(source="source", protected="baseline", utc="2026-11-07T00:00:00+00:00",
         files={"current-executable": {"sha256": "current"}}, upgrade_from=dict(files={"old-executable": {"sha256": "old"}}))
-    settings = dict(schema_version=2, source_configs=[dict(kind="maccms", config_id="controlled-source")],
+    settings = dict(schema_version=2, source_configs=[dict(kind="maccms", config_id="controlled-source"),
+                    dict(kind="stremio", config_id="controlled-metadata")],
                     volume=.5, ui_locale="zh-CN", window_bounds=None)
     history = [dict(content_id="controlled-content", position_ms=7000, title="Owned media")]
     phases = dict(baseline=dict(app_exists=False, data_exists=False),
-        installed=dict(destination="/Applications/映象视频.app", app_files=manifest["files"]),
+        installed=dict(destination="/Applications/墨客视频.app", app_files=manifest["files"]),
         initialized=dict(window_visible=True, ready=True, settings=settings),
         first_play=dict(samples=[dict(elapsed_seconds=0, position_seconds=1), dict(elapsed_seconds=6, position_seconds=7)],
                         moving_picture=True, audio_audible=True, errors=[]),
-        upgrade_before=dict(app_files=manifest["upgrade_from"]["files"], settings=settings, history=history, ready=True),
-        upgrade_after=dict(app_files=manifest["files"], settings=settings, history=history, ready=True, window_visible=True),
-        uninstalled=dict(app_exists=False, data_exists=True, settings=settings, history=history),
+        upgrade_before=dict(app_files=manifest["upgrade_from"]["files"], settings=settings, history=history, ready=True, database_version=1),
+        upgrade_after=dict(app_files=manifest["files"], settings=settings, history=history, ready=True, window_visible=True, database_version=2),
+        uninstalled=dict(app_exists=False, data_exists=True, settings=settings, history=history, database_version=2),
         data_deleted=dict(app_exists=False, data_exists=False, explicit_test_data_deletion=True, remaining_owned_processes=[]))
     for index, row in enumerate(phases.values()):
+        if "settings" in row:
+            row["settings"] = copy.deepcopy(row["settings"])
         row.update(utc=(dt.datetime(2026, 11, 7, tzinfo=dt.timezone.utc) + dt.timedelta(seconds=10 * (index + 1))).isoformat(), evidence=["phase-capture"])
     value = dict(manifest_sha256="manifest", source="source", protected="baseline", target="macos-arm64", macos="14.0",
         clean_system_method="fresh-macos-install", human_observer="test fixture observer", security_settings_changed=False,
@@ -40,6 +43,44 @@ def lifecycle_fixture():
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_final_installer_and_original_build_receipt_belong_to_t036(self):
+        with tempfile.TemporaryDirectory(prefix="t25-build-binding-", dir=t23.ROOT / "evidence") as temporary:
+            root = Path(temporary)
+            manifest_path = root / "evidence/releases/final/manifest.json"
+            manifest_path.parent.mkdir(parents=True)
+            pointer = root / "evidence/releases/T23-current.json"
+            receipt_path = root / "evidence/runs/final-diag-t23-release-build/receipt.json"
+            receipt_path.parent.mkdir(parents=True)
+            owner_path = root / "evidence/runs/owner/receipt.json"
+            owner_path.parent.mkdir(parents=True)
+            owner_path.write_text(json.dumps(dict(protected="baseline", generation=0)))
+            log = receipt_path.with_name("output.log")
+            manifest = dict(schema_version=2, card="T0.36", source="source", protected="baseline", target="macos-arm64",
+                scope="personal use only; not public distribution", commands=[], logical_bytes=1, allocated_bytes=512, archives=[])
+            def write_manifest():
+                manifest_path.write_text(json.dumps(manifest))
+                digest = t23.file_hash(manifest_path)
+                pointer.write_text(json.dumps(dict(manifest=manifest_path.relative_to(root).as_posix(), sha256=digest)))
+                log.write_text("T23_MANIFEST_SHA256:" + digest)
+            write_manifest()
+            receipt = dict(status="finished", exit=0, raw_exit=0, source="source", after_source="source", protected="baseline",
+                generation=0, card="T0.36", log=log.relative_to(root).as_posix(), log_hash=t23.file_hash(log),
+                argv=["{python}", "-B", "packaging/release.py", "--build"],
+                environment=dict(memory_mib=4096, jobs=2, test_threads=1, memory_enforcement="rss-sampled"))
+            receipt_path.write_text(json.dumps(receipt))
+            run = mock.Mock(CARD="T0.36", source="source", observed=dict(resources=dict(receipt=owner_path.relative_to(root).as_posix())))
+            with mock.patch.object(t23, "ROOT", root), mock.patch.object(t23.release, "CURRENT", pointer), \
+                    mock.patch.object(t23.workflow, "protected_hash", return_value="baseline"):
+                self.assertEqual(t23.artifact(run)[0]["card"], "T0.36")
+                receipt["card"] = "T0.27"
+                receipt_path.write_text(json.dumps(receipt))
+                with self.assertRaisesRegex(ValueError, "Original successful build receipt"):
+                    t23.artifact(run)
+                manifest["card"] = "T0.27"
+                write_manifest()
+                with self.assertRaisesRegex(ValueError, "source/baseline is stale"):
+                    t23.artifact(run)
+
     def test_actual_ad_hoc_seal_keeps_apple_distribution_pending(self):
         detail = "Signature=adhoc\nTeamIdentifier=not set\nSealed Resources version=2 rules=13 files=2\n"
         result = t23.release.check_signing(detail, 0, 1, 65)
@@ -73,6 +114,22 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(key=key, wrong=wrong), self.assertRaises(ValueError):
                 t23.check_lifecycle(value, manifest, "manifest")
 
+    def test_upgrade_accepts_only_the_documented_migration_differences(self):
+        manifest, value = lifecycle_fixture()
+        value["phases"]["upgrade_after"]["settings"]["metadata_preset_applied"] = True
+        value["phases"]["uninstalled"]["settings"]["metadata_preset_applied"] = True
+        value["phases"]["upgrade_after"]["settings"]["window_bounds"] = [0, 0, 1200, 800]
+        value["phases"]["uninstalled"]["settings"]["window_bounds"] = [0, 0, 1200, 800]
+        self.assertEqual(t23.check_lifecycle(value, manifest, "manifest")["history_rows"], 1)
+        for phase, version in [("upgrade_before", 2), ("upgrade_after", 1), ("uninstalled", 1)]:
+            wrong = copy.deepcopy(value)
+            wrong["phases"][phase]["database_version"] = version
+            with self.subTest(phase=phase), self.assertRaisesRegex(ValueError, "version 1 to 2"):
+                t23.check_lifecycle(wrong, manifest, "manifest")
+        value["phases"]["upgrade_before"]["settings"]["source_configs"] = [dict(kind="maccms")]
+        with self.assertRaisesRegex(ValueError, "already contain Stremio"):
+            t23.check_lifecycle(value, manifest, "manifest")
+
     def test_default_security_or_quarantine_bypass_fails(self):
         manifest, good = lifecycle_fixture()
         for key, wrong in [("security_settings_changed", True), ("quarantine_removed", True),
@@ -98,7 +155,8 @@ class EvidenceTests(unittest.TestCase):
 
     def test_stalled_silent_short_or_nonfinite_first_play_fails(self):
         manifest, good = lifecycle_fixture()
-        changes = [dict(samples=[dict(elapsed_seconds=float("nan"), position_seconds=7)]),
+        changes = [dict(samples=[]), dict(samples=[dict(elapsed_seconds=0, position_seconds=0)]),
+                   dict(samples=[dict(elapsed_seconds=float("nan"), position_seconds=7)]),
                    dict(audio_audible=False), dict(moving_picture=False), dict(errors=["playback failed"])]
         for change in changes:
             value = copy.deepcopy(good)
@@ -168,6 +226,9 @@ class EvidenceTests(unittest.TestCase):
             material("phase-capture", b"synthetic observation fixture")
             value["recording"] = material("recording.mp4", b"synthetic movie; probes mocked")
             value["phases"]["first_play"]["evidence"].append(value["recording"])
+            confirmation = material("user-audio.txt", "synthetic user confirmation: 能听到正常声音".encode())
+            value["phases"]["first_play"]["audio_confirmation"] = confirmation
+            value["phases"]["first_play"]["evidence"].append(confirmation)
             for index, command in enumerate(value["security_commands"]):
                 command["evidence"] = material(f"security-{index}.txt", command.pop("output").encode())
             for name in ("installed", "upgrade_before", "upgrade_after"):
@@ -183,7 +244,7 @@ class EvidenceTests(unittest.TestCase):
                     database = folder / (name + ".db")
                     connection = sqlite3.connect(database)
                     try:
-                        connection.execute("PRAGMA user_version=1")
+                        connection.execute("PRAGMA user_version=" + str(1 if name == "upgrade_before" else 2))
                         connection.execute("CREATE TABLE watch_history(content_id TEXT, position_ms INTEGER, title TEXT)")
                         connection.execute("INSERT INTO watch_history VALUES (?, ?, ?)", ("controlled-content", 7000, "Owned media"))
                         connection.commit()
@@ -291,7 +352,7 @@ class EvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="t23-payload-", dir=t23.ROOT / "evidence") as temporary:
             root = Path(temporary)
             app, frontend, licenses = root / "Product.app", root / "frontend", root / "licenses"
-            executable = app / "Contents/MacOS/yingxiang-video"
+            executable = app / "Contents/MacOS/moc-video"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"real product executable")
             executable.chmod(0o755)
@@ -308,13 +369,13 @@ class EvidenceTests(unittest.TestCase):
             seal = app / "Contents/_CodeSignature/CodeResources"
             seal.parent.mkdir()
             seal.write_text("seal")
-            config = dict(identifier="app.yingxiang.video", version="0.1.0", bundle=dict(macOS=dict(bundleVersion="2")))
+            config = dict(identifier="app.moc.video", version="0.1.0", bundle=dict(macOS=dict(bundleVersion="2")))
             (root / "src-tauri/icons").mkdir(parents=True)
             (root / "src-tauri/tauri.conf.json").write_text(json.dumps(config))
             (root / "src-tauri/icons/icon.icns").write_bytes(b"project icon")
             (app / "Contents/Resources/icon.icns").write_bytes(b"project icon")
-            info = dict(CFBundleIdentifier="app.yingxiang.video", CFBundleShortVersionString="0.1.0", CFBundleVersion="2",
-                CFBundleExecutable="yingxiang-video", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True,
+            info = dict(CFBundleIdentifier="app.moc.video", CFBundleShortVersionString="0.1.0", CFBundleVersion="2",
+                CFBundleExecutable="moc-video", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True,
                 NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True), CFBundleIconFile="icon.icns")
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
             with mock.patch.object(t23.release, "ROOT", root), mock.patch.object(t23.release, "INVENTORY", licenses / "dependencies.json"), mock.patch.object(t23.release, "NOTICES", licenses / "THIRD_PARTY_NOTICES.txt"):

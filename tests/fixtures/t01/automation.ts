@@ -282,7 +282,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
       case "open": {
         const activated = await foreground();
         const kind = command.kind ?? "mp4";
-        const opened = open({ url: url(`media/${kind === "mp4" ? "clip.mp4" : "index.m3u8"}`), kind, subtitle: url("media/subtitles.vtt") });
+        const opened = open({ url: url(`media/${kind === "mp4" ? "clip.mp4" : "index.m3u8"}`), kind, subtitles: [{ id: "fixture", label: "字幕", language: "zh-CN", url: url("media/subtitles.vtt") }] });
         await until(() => video.readyState >= 2 || Boolean(video.error), "Media did not become ready");
         assertCondition(!video.error, `MediaError ${video.error?.code}`);
         await click("play");
@@ -364,7 +364,7 @@ export async function automate(video: HTMLVideoElement, player: Player, open: (s
         player.selectSubtitle(0);
         await until(() => Boolean(video.textTracks[0]?.activeCues?.length), "Subtitle cue was not rendered");
         const cue = (video.textTracks[0].activeCues![0] as VTTCue).text;
-        assertCondition(cue.includes("映象"), "Unexpected subtitle cue");
+        assertCondition(cue.includes("墨客"), "Unexpected subtitle cue");
         player.selectSubtitle(null);
         assertCondition(video.textTracks[0].mode === "disabled", "Subtitle disable failed");
         player.selectSubtitle(0);

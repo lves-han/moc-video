@@ -3,16 +3,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { NAlert, NButton, NModal, NRadioGroup, NRadioButton, useMessage } from "naive-ui";
 import SettingsView from "./views/SettingsView.vue";
 import HistoryView from "./views/HistoryView.vue";
-import SourcesView from "./views/SourcesView.vue";
+import LocalView from "./views/LocalView.vue";
+import LiveView from "./views/LiveView.vue";
 import PlaybackView from "./views/PlaybackView.vue";
-import NativeSourcesView from "./views/NativeSourcesView.vue";
 import HomeView from "./views/HomeView.vue";
 import BrowseView from "./views/BrowseView.vue";
 import DetailsView from "./views/DetailsView.vue";
 import SearchView from "./views/SearchView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
-import { appState, appController, metadataVideoId } from "./state.ts";
+import { appState, appController, metadataVideoId, liveAvailable } from "./state.ts";
 import { finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
 import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
@@ -40,8 +40,9 @@ const desktopNavigation = computed(() => [
   ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
+  { page: "local", href: "#/local", icon: "folder", label: t("Local video") },
+  ...(liveAvailable(appState.settings) ? [{ page: "live", href: "#/live", icon: "broadcast", label: t("Live") }] : []),
   { page: "history", href: "#/history", icon: "library", label: locale.value === 'zh-CN' ? '资料库' : 'Library' },
-  { page: "sources", href: "#/sources", icon: "layers", label: t("Source manager") },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
 ]);
 const metadataProviders = computed(() => (appState.sources.data?.providers ?? []).filter(item => item.kind === "stremio" && item.runtime_status === "ready" && item.capabilities.home && item.capabilities.details));
@@ -88,10 +89,12 @@ function readHash() {
   const [name = "home", id = "", episode = "1"] = path.split("/");
   return { name, id, episode: Math.max(1, Math.floor(Number(episode) || 1)), resume: new URLSearchParams(query).get("resume") === "1" };
 }
-type Page = "home" | "browse" | "search" | "film" | "watch" | "sources" | "setup" | "settings" | "history";
+type Page = "home" | "browse" | "search" | "local" | "live" | "film" | "watch" | "settings" | "history";
 const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
   const stored = appState.route, view = readHash();
-  const page: Page = stored.name === 'home' && ['browse','search'].includes(view.name) ? view.name as 'browse' | 'search' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch" : stored.name;
+  // The source manager now lives in Settings; the contract still lists its old route names.
+  const page: Page = stored.name === 'home' && ['browse','search','local','live'].includes(view.name) ? view.name as 'browse' | 'search' | 'local' | 'live' : stored.name === "details" ? "film" : stored.name === "playback" ? "watch"
+    : stored.name === "sources" || stored.name === "setup" ? "settings" : stored.name;
   return { page,
     id: view.id, kind: view.name === "kind" && ["movie", "series", "anime"].includes(view.id) ? view.id as FilmKind : "" };
 });
@@ -127,7 +130,7 @@ function rememberHome() { if (route.value.page === "home") homeSnapshots.set(hom
 const heroFilms = computed(() => route.value.kind ? films.value.filter(film => film.kind === route.value.kind) : [films.value[0]!, films.value[2]!, films.value[3]!]);
 const hero = computed(() => heroFilms.value[heroIndex.value % heroFilms.value.length]!);
 const title = computed(() => route.value.kind ? t(kindLabels[route.value.kind as FilmKind]) : t(({
-  home: "Discover", browse: 'Browse by genre', search:'Search', film: "Film details", watch: "Now playing", sources: "Source manager", setup: "Source manager", settings: "Settings", history: "Watch history",
+  home: "Discover", browse: 'Browse by genre', search:'Search', local: "Local video", live: "Live", film: "Film details", watch: "Now playing", settings: "Settings", history: "Watch history",
 } as const)[route.value.page]));
 const filteredFilms = computed(() => films.value.filter(film => (!route.value.kind || film.kind === route.value.kind) && (activeGenre.value === "All" || film.genres.includes(activeGenre.value))));
 const visibleFilms = computed(() => expanded.value ? filteredFilms.value : filteredFilms.value.slice(0, 6));
@@ -152,15 +155,15 @@ watch(() => appState.settings, settings => {
 }, { immediate: true, flush: "sync" });
 watch([locale, title, () => appState.details.data?.details.title], () => {
   document.documentElement.lang = locale.value;
-  document.title = `${formalPlayback.value ? t("Now playing") : route.value.page === "film" ? native ? appState.details.data?.details.title ?? title.value : selectedFilm.value.title : title.value} · ${t("Yingxiang Video")}`;
+  document.title = `${formalPlayback.value ? t("Now playing") : route.value.page === "film" ? native ? appState.details.data?.details.title ?? title.value : selectedFilm.value.title : title.value} · ${t("Moc Video")}`;
 }, { immediate: true });
 async function savePreference(change: (value: Settings) => Settings) {
   preferenceError.value = "";
   try {
     const confirmed = await appController.updateSettings(change);
     // Legacy keys are first-paint mirrors. The full Settings queue owns commits.
-    localStorage.setItem("yingxiang-video.locale", confirmed.ui_locale ?? "en");
-    localStorage.setItem("yingxiang-video.palette", confirmed.color_palette ?? "lime");
+    localStorage.setItem("moc-video.locale", confirmed.ui_locale ?? "en");
+    localStorage.setItem("moc-video.palette", confirmed.color_palette ?? "lime");
   } catch (error) { preferenceError.value = error instanceof Error ? error.message : String(error); }
 }
 function changeLanguage(value: string) { if (value === "en" || value === "zh-CN") return savePreference(settings => ({ ...settings, ui_locale: value })); }
@@ -188,8 +191,6 @@ async function changeSource(id: string) {
   try { await selectNativeSource(native ? id : previewSourceKey(id).source_id, "playback"); }
   catch (cause) { preferenceError.value = String(cause); }
 }
-function addSource(value: Source) { previewSources.value.push(value); notify(t("Source added to this preview. Live connections will follow.")); }
-function toggleSource(item: Source) { if (item.id === sourceId.value) notify(t("Switch to another source before disabling the current one.")); else item.enabled = !item.enabled; }
 function openDetails(ref: Bridge_MediaRef) {
   const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
   if (target === location.hash) return;
@@ -295,10 +296,9 @@ async function updateRoute() {
         if (result?.context) pendingResume.value = { context: result.context, position_ms: saved && !saved.completed ? saved.position_ms : 0, was_playing: true };
       }
     } else {
-      // The first-run setup entry and the source manager are one native page.
-      const name = next.name === "setup" ? "sources" : ["settings", "history", "sources"].includes(next.name) ? next.name as "settings" | "history" | "sources" : "home";
+      const name = ["settings", "history"].includes(next.name) ? next.name as "settings" | "history" : "home";
       appController.navigate({ name });
-      if (name === "home" && next.name !== 'search' && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
+      if (name === "home" && !['search', 'local', 'live'].includes(next.name) && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
         && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
     }
     if (current !== sequence) return;
@@ -402,6 +402,8 @@ watch(() => appState.route, route => {
   }
 }, { flush: "sync" });
 function continueHistory(entry: HistoryEntry) {
+  // Local files resume on the Local video page, which owns their playback session.
+  if (native && entry.record?.metadata_identity.namespace === "local") { location.hash = `#/local?play=${entry.record.video_id}`; return; }
   if (native && entry.record) { void continueNativeHistory(entry.record); return; }
   const film = baseFilms.find(film => historyContentId(film.kind, film.id) === entry.content_id);
   if (film) location.hash = `#/watch/${film.id}/${entry.episode}?resume=1`;
@@ -472,7 +474,7 @@ onMounted(() => {
   if (readHash().name !== "playback") void onHashChange();
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("pagehide", onPageHide);
-  window.addEventListener("yingxiang-closing", onClosing);
+  window.addEventListener("moc-closing", onClosing);
   if (native) window.addEventListener("resize", onResize);
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
@@ -484,7 +486,7 @@ onBeforeUnmount(() => {
   void flushHistory(); ++sequence;
   window.removeEventListener("hashchange", onHashChange);
   window.removeEventListener("pagehide", onPageHide);
-  window.removeEventListener("yingxiang-closing", onClosing);
+  window.removeEventListener("moc-closing", onClosing);
   window.removeEventListener("resize", onResize);
   clearTimeout(boundsTimer);
   document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -523,11 +525,11 @@ onBeforeUnmount(() => {
       </div>
     </aside>
     <aside class="sidebar legacy-sidebar" :aria-label="t('Main navigation')">
-      <a class="brand" href="#/home" :aria-label="t('Yingxiang Video home')"
+      <a class="brand" href="#/home" :aria-label="t('Moc Video home')"
         ><img src="/mark.svg" alt="" width="38" height="38" /><span
-          >{{ locale === "en" ? "Yingxiang" : t("Yingxiang Video")
+          >{{ locale === "en" ? "Moc" : t("Moc Video")
           }}<small>{{
-            locale === "en" ? "VIDEO" : "YINGXIANG VIDEO"
+            locale === "en" ? "VIDEO" : "MOC VIDEO"
           }}</small></span
         ></a
       >
@@ -553,13 +555,6 @@ onBeforeUnmount(() => {
       <nav class="utility-nav">
         <a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined" :title="t('Watch history')"><Icon name="history" /><span>{{ t('Watch history') }}</span></a>
         <a
-          href="#/sources"
-          :class="{ active: route.page === 'sources' }"
-          :aria-current="route.page === 'sources' ? 'page' : undefined"
-          :title="t('Source manager')"
-          ><Icon name="layers" /><span>{{ t("Source manager") }}</span></a
-        >
-        <a
           href="#/settings"
           :class="{ active: route.page === 'settings' }"
           :aria-current="route.page === 'settings' ? 'page' : undefined"
@@ -577,10 +572,10 @@ onBeforeUnmount(() => {
           class="preview-button"
           @click="aboutOpen = true"
         >
-          <span class="status-dot" /><span>{{ t(native ? "About Yingxiang Video" : "Interface preview") }}</span
+          <span class="status-dot" /><span>{{ t(native ? "About Moc Video" : "Interface preview") }}</span
           ><Icon name="info" :size="14" />
         </button>
-        <p class="sidebar-version">{{ t("Yingxiang Video · 0.1.0") }}</p>
+        <p class="sidebar-version">{{ t("Moc Video · 0.1.0") }}</p>
       </div>
     </aside>
 
@@ -592,7 +587,7 @@ onBeforeUnmount(() => {
             src="/mark.svg"
             width="30"
             height="30"
-            :alt="t('Yingxiang Video')"
+            :alt="t('Moc Video')"
           /><a
             v-if="route.page === 'film' || route.page === 'watch'"
             :href="
@@ -655,15 +650,16 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': ['sources','settings'].includes(route.page), 'tv-library-main':route.page === 'history', 'tv-search-main':route.page === 'search' }">
+      <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': route.page === 'settings', 'tv-library-main':['history','local','live'].includes(route.page), 'tv-search-main':route.page === 'search' }">
         <SearchView v-if="route.page === 'search'" ref="searchView" @open="openDetails" />
+        <LocalView v-else-if="route.page === 'local'" />
+        <LiveView v-else-if="route.page === 'live'" />
         <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
           <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
           <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
         </div>
-        <NativeSourcesView v-else-if="native && route.page === 'sources'" @select="selectNativeSource" />
         <template v-else-if="route.page === 'home'">
           <div class="page-heading">
             <div>
@@ -971,14 +967,6 @@ onBeforeUnmount(() => {
         </template>
 
         <HistoryView v-else-if="route.page === 'history'" :save-error="historySaveError" @open="openDetails" @resume="continueHistory" @retry-save="retryHistorySave" @removed="discardPendingHistory" />
-        <SourcesView
-          v-else-if="route.page === 'sources'"
-          :sources="sources"
-          :selected-source-id="sourceId"
-          @select="changeSource"
-          @toggle="toggleSource"
-          @add="addSource"
-        />
         <SettingsView
           v-else-if="route.page === 'settings'"
           v-model:speed="speed"
@@ -987,10 +975,11 @@ onBeforeUnmount(() => {
           @notice="notify"
           @language="changeLanguage"
           @palette="changePalette"
+          @select="selectNativeSource"
         />
         <footer class="page-footer">
           <span
-            >{{ t("Yingxiang Video") }}<span class="footer-cross">✳</span
+            >{{ t("Moc Video") }}<span class="footer-cross">✳</span
             >{{ t("Let stories happen") }}</span
           ><span>{{
             t(native ? "A place for good stories." : "Interface preview · Original fictional content")
@@ -1008,16 +997,19 @@ onBeforeUnmount(() => {
           route.page === 'home' && route.kind === item.kind ? 'page' : undefined
         "
         ><Icon :name="item.icon" :size="20" /><span>{{ item.label }}</span></a
-      ><a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined"><Icon name="history" :size="20" /><span>{{ t('History') }}</span></a><a href="#/sources" :class="{ active: route.page === 'sources' }"
-        ><Icon name="layers" :size="20" /><span>{{ t("Sources") }}</span></a
+      ><a href="#/local" :class="{ active: route.page === 'local' }" :aria-current="route.page === 'local' ? 'page' : undefined"><Icon name="folder" :size="20" /><span>{{ t('Local video') }}</span></a
+      ><a v-if="liveAvailable(appState.settings)" href="#/live" :class="{ active: route.page === 'live' }" :aria-current="route.page === 'live' ? 'page' : undefined"><Icon name="broadcast" :size="20" /><span>{{ t('Live') }}</span></a
+      ><a href="#/history" :class="{ active: route.page === 'history' }" :aria-current="route.page === 'history' ? 'page' : undefined"><Icon name="history" :size="20" /><span>{{ t('History') }}</span></a><a href="#/settings" :class="{ active: route.page === 'settings' }" :aria-current="route.page === 'settings' ? 'page' : undefined"
+        ><Icon name="settings" :size="20" /><span>{{ t("Settings") }}</span></a
       >
     </nav>
     <NModal
       v-model:show="aboutOpen"
+      class="tv-dialog"
       preset="card"
       role="dialog"
-      :aria-label="t('Welcome to Yingxiang Video')"
-      :title="t('Welcome to Yingxiang Video')"
+      :aria-label="t('Welcome to Moc Video')"
+      :title="t('Welcome to Moc Video')"
       transform-origin="center"
       :style="{ width: 'min(480px, calc(100vw - 32px))' }"
       @after-leave="aboutTrigger?.focus()"
@@ -1037,7 +1029,7 @@ onBeforeUnmount(() => {
   </template>
   <NAlert v-if="preferenceError" type="error" class="history-alert preference-alert" :title="t('Preference could not be saved')">{{ preferenceError }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton><NButton v-if="closeFailed" class="quit-without-saving" @click="quitWithoutSaving">{{ locale === 'zh-CN' ? '不保存并退出' : 'Quit without saving' }}</NButton></NAlert>
   <NAlert v-for="(error, index) in appController.diagnostics" :key="index" type="error" class="history-alert" :title="t('Action failed')">{{ error.message }}<NButton @click="retryPreferences">{{ t('Retry') }}</NButton></NAlert>
-  <NModal v-model:show="appearanceOpen" preset="card" role="dialog" :aria-label="t('Appearance')" :title="t('Appearance')" :style="{ width: 'min(480px, calc(100vw - 32px))' }" @after-leave="paletteTrigger?.focus()">
+  <NModal v-model:show="appearanceOpen" class="tv-dialog" preset="card" role="dialog" :aria-label="t('Appearance')" :title="t('Appearance')" :style="{ width: 'min(480px, calc(100vw - 32px))' }" @after-leave="paletteTrigger?.focus()">
     <p>{{ t('Choose your colors. Each palette adapts to light and dark mode.') }}</p>
     <NRadioGroup :value="palette" name="quick-color-palette" :aria-label="t('Color palette')" class="quick-palette" @update:value="value => changePalette(String(value))"><NRadioButton v-for="item in paletteOptions" :key="item.value" :value="item.value">{{ t(item.label) }}</NRadioButton></NRadioGroup>
     <NButton class="appearance-close" @click="appearanceOpen = false">{{ t('Close') }}</NButton>

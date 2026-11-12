@@ -45,7 +45,7 @@ log.write_text(json.dumps(old), encoding="utf-8", newline="\n")
 mode = os.environ.get('FIXTURE_AGENT_MODE', 'claim')
 if mode == 'sleep':
     time.sleep(20)
-if mode == 'complete':
+if mode in ('complete', 'lean_complete'):
     spec = importlib.util.spec_from_file_location('fixture_workflow', root / 'scripts/workflow.py')
     w = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(w)
@@ -56,7 +56,7 @@ if mode == 'complete':
         if result['exit']:
             sys.exit(result['exit'])
         logs.append(result['log'])
-    if w.verify(['all']):
+    if mode == 'complete' and w.verify(['all']):
         sys.exit(1)
     path = root / 'docs/TASKS.md'
     body = item['body'].replace('- [ ] 完成', '- [x] 完成')
@@ -66,8 +66,9 @@ if mode == 'complete':
         for check, log_path in zip(item['checks'], logs):
             stream.write('- 验收 ' + check['id'] + '：PASS；日志：`' + log_path + '`；断言：真实1个测试通过\n')
     w.done(cid)
-    subprocess.run(['git', 'add', '.'], check=True)
-    subprocess.run(['git', 'commit', '-m', cid + ': fixture'], check=True, capture_output=True)
+    if mode == 'complete':
+        subprocess.run(['git', 'add', '.'], check=True)
+        subprocess.run(['git', 'commit', '-m', cid + ': fixture'], check=True, capture_output=True)
 print('fixture claims DONE for ' + cid)
 '''
 
@@ -143,7 +144,7 @@ class WorkflowTests(unittest.TestCase):
         spec.loader.exec_module(self.w)
         cfg_path = self.repo / "workflow.json"
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-        cfg.update(project="Fixture", poll_seconds=1, idle_seconds=30, heavy_lock=str(base / "heavy.lock"),
+        cfg.update(project="Fixture", poll_seconds=1, idle_seconds=30, heavy_lock=str(base / "heavy.lock"), lean_workflow=False,
                    agent_command=[sys.executable, str(tool_dir / "agent.py"), "--prompt-file", "{prompt_file}"],
                    review_command=None,
                    verify=[dict(id="verify-project", argv=ARGV, kind="test", report="unittest")])
@@ -198,6 +199,158 @@ class WorkflowTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.w.done("T0.1")
         return result
+
+    def enable_lean(self):
+        path = self.repo / "workflow.json"
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        cfg["lean_workflow"] = True
+        cfg["lean_from"] = "T0.1"
+        path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    def test_lean_completion_needs_only_card_acceptance_and_no_commit(self):
+        self.enable_lean()
+        tasks = self.repo / "docs/TASKS.md"
+        tasks.write_text(card_text() + card_text("T0.2", "T0.1"), encoding="utf-8")
+        self.w.start("T0.1")
+        (self.repo / "src/extra.txt").write_text("changed by first card", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = self.w.run_command("A1", ARGV)
+        self.assertEqual(result["exit"], 0)
+        self.record(result)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.w.done("T0.1")
+        self.assertTrue(self.w.completed(self.w.get_card("T0.1")))
+        self.assertFalse(list((self.repo / "evidence/verify").glob("*.json")))
+        self.assertTrue(self.git("status", "--porcelain"))
+        self.assertEqual(self.w.next_card()["id"], "T0.2")
+        self.w.start("T0.2")
+        self.assertEqual(self.w.scope_problems("T0.2"), [])
+        (self.repo / "unrelated.txt").write_text("outside scope", encoding="utf-8")
+        self.assertEqual(self.w.scope_problems("T0.2"), ["unrelated.txt"])
+
+    def test_lean_document_change_needs_no_manual_rebaseline_or_repeat(self):
+        self.enable_lean()
+        result = self.accept()
+        architecture = self.repo / "docs/ARCHITECTURE.md"
+        architecture.write_text(architecture.read_text(encoding="utf-8") + "\nAuthorized documentation update.\n", encoding="utf-8")
+        self.record(result)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.w.done("T0.1")
+        self.assertTrue(self.w.completed(self.w.get_card("T0.1")))
+        self.assertEqual(self.w.state("T0.1")["protected"], self.w.protected_hash())
+
+    def test_lean_change_to_other_check_keeps_unaffected_acceptance(self):
+        self.enable_lean()
+        tasks = self.repo / "docs/TASKS.md"
+        text = card_text()
+        start, end = text.index("```json\n") + len("```json\n"), text.index("\n```", text.index("```json\n"))
+        checks = json.loads(text[start:end])
+        checks.append(dict(id="A2", description="另一项检查", argv=["{python}", "-B", "tests/old_delivery.py"], kind="command"))
+        tasks.write_text(text[:start] + json.dumps(checks, ensure_ascii=False) + text[end:], encoding="utf-8")
+        (self.repo / "tests/old_delivery.py").write_text("print('old')\n", encoding="utf-8")
+        self.commit("plan two separate checks")
+        first = self.accept()
+        checks[1]["argv"][-1] = "tests/new_delivery.py"
+        (self.repo / "tests/new_delivery.py").write_text("print('new')\n", encoding="utf-8")
+        text = tasks.read_text(encoding="utf-8")
+        start, end = text.index("```json\n") + len("```json\n"), text.index("\n```", text.index("```json\n"))
+        tasks.write_text(text[:start] + json.dumps(checks, ensure_ascii=False) + text[end:], encoding="utf-8")
+        controller = self.repo / "scripts/workflow.py"
+        controller.write_text(controller.read_text(encoding="utf-8") + "\n# Unrelated workflow update.\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            second = self.w.run_command("A2", checks[1]["argv"])
+        self.assertEqual(second["exit"], 0)
+        self.record(first)
+        with (self.repo / "docs/PROGRESS.md").open("a", encoding="utf-8") as stream:
+            stream.write(f"- 验收 A2：PASS；日志：`{second['log']}`；断言：第二项通过\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.w.done("T0.1")
+        self.assertTrue(self.w.completed(self.w.get_card("T0.1")))
+
+    def test_lean_rejects_acceptance_for_changed_product_code(self):
+        self.enable_lean()
+        result = self.accept()
+        (self.repo / "src/extra.txt").write_text("changed after acceptance", encoding="utf-8")
+        self.record(result)
+        with self.assertRaisesRegex(self.w.CompletionEvidenceError, "不是当前源码"):
+            self.w.done("T0.1")
+
+    def test_lean_rejects_acceptance_for_changed_workflow_code(self):
+        self.enable_lean()
+        path = self.repo / "docs/TASKS.md"
+        path.write_text(path.read_text(encoding="utf-8").replace("`src/`、`tests/`", "`src/`、`tests/`、`scripts/`"), encoding="utf-8")
+        result = self.accept()
+        path = self.repo / "scripts/workflow.py"
+        path.write_text(path.read_text(encoding="utf-8") + "\n# Changed after acceptance.\n", encoding="utf-8")
+        self.record(result)
+        with self.assertRaisesRegex(self.w.CompletionEvidenceError, "不是当前源码"):
+            self.w.done("T0.1")
+
+    def test_lean_keeps_legacy_completion_evidence(self):
+        self.finish()
+        self.commit("T0.1: fixture")
+        self.assertTrue(self.w.completed(self.w.get_card("T0.1")))
+        self.enable_lean()
+        old_protected = self.w.state("T0.1")["protected"]
+        architecture = self.repo / "docs/ARCHITECTURE.md"
+        architecture.write_text(architecture.read_text(encoding="utf-8") + "\nLater documentation.\n", encoding="utf-8")
+        self.w.check_frozen("T0.1")
+        self.assertEqual(self.w.state("T0.1")["protected"], old_protected)
+        self.assertTrue(self.w.completed(self.w.get_card("T0.1")))
+
+    def test_lean_policy_requires_boolean(self):
+        path = self.repo / "workflow.json"
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        cfg["lean_workflow"] = "yes"
+        path.write_text(json.dumps(cfg), encoding="utf-8")
+        with self.assertRaisesRegex(self.w.WorkflowError, "须为布尔值"):
+            self.w.config()
+
+    def test_lean_policy_starts_at_requested_card(self):
+        self.enable_lean()
+        path = self.repo / "workflow.json"
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        cfg["lean_from"] = "T0.34"
+        path.write_text(json.dumps(cfg), encoding="utf-8")
+        self.assertFalse(self.w.lean_enabled("T0.33"))
+        self.assertTrue(self.w.lean_enabled("T0.34"))
+        self.assertTrue(self.w.lean_enabled("T0.37"))
+        self.assertTrue(self.w.lean_enabled("T1.1"))
+
+    def test_lean_policy_does_not_relax_earlier_card(self):
+        self.enable_lean()
+        path = self.repo / "workflow.json"
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        cfg["lean_from"] = "T0.34"
+        path.write_text(json.dumps(cfg), encoding="utf-8")
+        self.commit("configure later lean policy")
+        result = self.accept()
+        self.record(result)
+        with self.assertRaisesRegex(self.w.CompletionEvidenceError, "verify.py all"):
+            self.w.done("T0.1")
+
+    def test_lean_driver_does_not_require_review_verify_or_commit(self):
+        self.enable_review("blocking")
+        self.enable_lean()
+        os.environ["FIXTURE_AGENT_MODE"] = "lean_complete"
+        result = self.command("drive", "--once", timeout=40)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("T0.1 DONE", result.stdout)
+        self.assertEqual(self.review_calls(), [])
+        self.assertFalse(list((self.repo / "evidence/verify").glob("*.json")))
+        self.assertTrue(self.git("status", "--porcelain"))
+        self.assertEqual(self.w.next_card()["id"], "T0.2")
+
+    def test_lean_review_is_optional_and_can_review_uncommitted_result(self):
+        self.enable_review("clear")
+        self.enable_lean()
+        os.environ["FIXTURE_AGENT_MODE"] = "lean_complete"
+        result = self.command("drive", "--once", timeout=40)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        review = self.command("drive", "--review-only", timeout=40)
+        self.assertEqual(review.returncode, 0, review.stderr + review.stdout)
+        self.assertEqual(len(self.review_calls()), 1)
+        self.assertIn("当前工作树源码摘要", self.review_calls()[0])
 
     def test_draft_refuses_development(self):
         (self.repo / "docs/TASKS.md").write_text("# DRAFT\n", encoding="utf-8", newline="\n")

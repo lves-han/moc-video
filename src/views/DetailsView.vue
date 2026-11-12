@@ -6,7 +6,8 @@ import { api } from "../api";
 import Icon from '../components/Icon.vue';
 import MediaRow from '../components/MediaRow.vue';
 import { locale, t } from "../i18n";
-import type { Bridge_Episode, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
+import { correspondingEpisode } from '../line-preference';
+import type { Bridge_Episode, Bridge_EpisodeGroup, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
 
 const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string, explicitLine?: boolean]; resume: [record: WatchHistoryRecord]; back: [] }>();
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
@@ -80,6 +81,11 @@ function imageFailed(id: string) { broken.add(`${state.details.request_epoch}:${
 const logo = computed(() => image((details.value as typeof details.value & { logo?: Bridge_ImageRef })?.logo));
 const backdrop = computed(() => image(details.value?.backdrop) ?? image(details.value?.poster));
 const candidate = computed(() => app.matching.details?.details ?? null);
+function candidateEpisodes(group: Bridge_EpisodeGroup) {
+  const target = episodes.value.find(episode => videoId(episode.ref) === app.matching.result?.video_id);
+  const match = details.value && target ? correspondingEpisode(details.value, target, group) : null;
+  return match ? [match] : group.episodes;
+}
 async function confirm(selection: PlaybackMatchSelection) {
   const result = app.matching.result;
   if (!result) return;
@@ -131,12 +137,13 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
     <section class="details-information details-content"><h2>{{ word('关于', 'About') }}</h2><dl>
       <div><dt>{{ word('类型', 'Genre') }}</dt><dd>{{ details.tags.join(' / ') || kindLabel || '—' }}</dd></div><div><dt>{{ word('年份', 'Year') }}</dt><dd>{{ details.year ?? '—' }}</dd></div><div><dt>{{ word('地区', 'Region') }}</dt><dd>{{ details.regions?.join(' / ') || '—' }}</dd></div><div><dt>{{ word('语言', 'Language') }}</dt><dd>{{ details.languages?.join(' / ') || '—' }}</dd></div><div><dt>{{ word('导演', 'Director') }}</dt><dd>{{ details.directors?.map(person => person.name).join(' / ') || '—' }}</dd></div><div><dt>{{ word('时长', 'Duration') }}</dt><dd>{{ details.duration_ms ? `${minutes(details.duration_ms)} ${word('分钟', 'min')}` : '—' }}</dd></div>
     </dl></section>
-    <NModal v-model:show="expanded" preset="card" role="dialog" class="details-plot-modal" :title="details.title" :style="{ width: 'min(640px, calc(100vw - 32px))' }"><p>{{ details.plot }}</p></NModal>
+    <NModal v-model:show="expanded" preset="card" role="dialog" class="tv-dialog details-plot-modal" :title="details.title" :style="{ width: 'min(640px, calc(100vw - 32px))' }"><p>{{ details.plot }}</p></NModal>
   </template>
-  <NModal :show="app.matching.result?.status === 'needs_confirmation'" preset="card" role="dialog" class="details-confirm" :title="t('Confirm episode')" :aria-label="t('Confirm episode')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateMatchingModal">
-    <div class="details-candidates"><NButton v-for="item in app.matching.result?.candidates ?? []" :key="item.content_ref.data" class="details-candidate" :class="{ selected: candidate?.ref.data === item.content_ref.data }" :loading="app.matching.loading" @click="app.loadCandidate(item.content_ref)">{{ item.title }}<template v-if="item.year"> ({{ item.year }})</template></NButton></div>
+  <NModal :show="app.matching.result?.status === 'needs_confirmation'" preset="card" role="dialog" class="tv-dialog details-confirm" :title="word('选择播放线路', 'Choose a playback line')" :aria-label="word('选择播放线路', 'Choose a playback line')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateMatchingModal">
+    <p v-if="app.matching.loading" role="status">{{ word('正在加载可用线路…', 'Loading available lines…') }}</p>
+    <div v-if="(app.matching.result?.candidates.length ?? 0) > 1 || (!candidate && !app.matching.loading)" class="details-candidates"><NButton v-for="item in app.matching.result?.candidates ?? []" :key="item.content_ref.data" class="details-candidate" :class="{ selected: candidate?.ref.data === item.content_ref.data }" :loading="app.matching.loading" @click="app.loadCandidate(item.content_ref)">{{ item.title }}<template v-if="item.year"> ({{ item.year }})</template></NButton></div>
     <NAlert v-if="app.matching.error" type="error">{{ app.matching.error.message }}</NAlert>
-    <section v-for="item in candidate?.groups ?? []" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in item.episodes" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
+    <section v-for="item in candidate?.groups ?? []" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in candidateEpisodes(item)" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
     <NButton class="details-confirm-cancel" @click="app.invalidatePlayback()">{{ t('Cancel') }}</NButton>
   </NModal>
   </div>

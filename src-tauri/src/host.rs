@@ -16,13 +16,21 @@ use std::{
 };
 use uuid::Uuid;
 
+#[path = "live.rs"]
+pub mod live;
+#[path = "local.rs"]
+pub mod local;
 #[path = "maccms.rs"]
 pub mod maccms;
 #[cfg(test)]
 #[path = "../../tests/fixtures/observation_redaction.rs"]
 mod observation_redaction;
+#[path = "source_cache.rs"]
+mod source_cache;
 #[path = "stremio.rs"]
 pub mod stremio;
+#[path = "tmdb_api.rs"]
+pub mod tmdb_api;
 
 struct Committed {
     settings: Value,
@@ -39,6 +47,10 @@ struct Committed {
     history: History,
     resolution_contexts: std::collections::HashMap<String, Value>,
     session_bindings: std::collections::HashMap<String, SessionBinding>,
+    // Last fetched channels per live config: (list revision, channels).
+    live: std::collections::HashMap<String, (String, Vec<live::Channel>)>,
+    // Latest local library scan: file id → path.
+    local: std::collections::HashMap<String, PathBuf>,
 }
 
 /// The identity a playback Session confirmed when it opened; it outlives match and candidate GC.
@@ -53,6 +65,7 @@ pub struct Host {
     pub clock: Arc<dyn Clock>,
     store: SettingsFile,
     media_cache: Arc<MediaCache>,
+    source_cache: source_cache::SourceCache,
     committed: Mutex<Committed>,
 }
 
@@ -80,35 +93,20 @@ impl Host {
     }
 
     pub fn with_clock(path: PathBuf, clock: Arc<dyn Clock>) -> Result<Arc<Self>, ApiError> {
-        let history_path = path.with_file_name("yingxiang-video.db");
+        let history_path = path.with_file_name("moc-video.db");
         let cache_path = path.with_file_name("media-cache");
-        let (store, mut settings) = SettingsFile::load(path)?;
+        let source_cache_path = path.with_file_name("source-cache");
+        let (store, settings) = SettingsFile::load(path)?;
+        tmdb_api::configure(&settings);
         let mut sources = SourceDispatch::default();
-        sources.replace_configs(
-            settings["source_configs"]
-                .as_array()
-                .expect("Validated source configs"),
-        );
-        let original = settings.clone();
-        if let Some(key) = original["last_source_key"].as_str()
-            && let Ok(source) = sources.source(key, None)
-        {
-            if source["kind"] == "stremio" && settings["last_metadata_config_id"].is_null() {
-                settings["last_metadata_config_id"] = source["origin"]["config_id"].clone();
-            } else if source["kind"] != "stremio" && settings["last_playback_source_key"].is_null()
-            {
-                settings["last_playback_source_key"] = json!(key);
-            }
-        }
-        if settings != original {
-            store.save(&settings)?;
-        }
+        sources.replace_configs(&crate::settings::source_configs(&settings));
         Ok(Arc::new(Self {
             host_epoch: Uuid::new_v4().to_string(),
             requests: Arc::default(),
             clock,
             store,
             media_cache: MediaCache::new(cache_path, crate::media_cache::limit(&settings)),
+            source_cache: source_cache::SourceCache::new(source_cache_path),
             committed: Mutex::new(Committed {
                 settings,
                 sources,
@@ -123,6 +121,8 @@ impl Host {
                 history: History::new(history_path),
                 resolution_contexts: Default::default(),
                 session_bindings: Default::default(),
+                live: Default::default(),
+                local: Default::default(),
                 resolve_sequence: 0,
             }),
         }))
@@ -368,6 +368,20 @@ impl Host {
                     error_details,
                 );
             }
+            "get_live_channels" => return self.live_channels(input, job),
+            "open_local" => return self.open_local(input, job),
+            "list_local_videos" => {
+                let settings = self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"))?.settings.clone();
+                // Scan outside the commit lock; a library edited meanwhile publishes nothing.
+                let (view, table) = local::scan(&settings);
+                job.check()?;
+                let mut committed = self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+                if committed.settings["local_paths"] != settings["local_paths"] {
+                    return Err(ApiError::cancelled());
+                }
+                committed.local = table.into_iter().collect();
+                return Ok(view);
+            }
             "get_media_cache" => return self.media_cache.status_checked(|| job.check()),
             "clear_media_cache" => {
                 job.check()?;
@@ -410,18 +424,37 @@ impl Host {
                 {
                     committed.matches.invalidate();
                 }
-                let affected = committed.sources.replace_configs(
-                    input["source_configs"]
-                        .as_array()
-                        .expect("Validated configs"),
-                );
-                if stremio::locale(input["ui_locale"].as_str().unwrap_or("en"))
-                    != stremio::locale(committed.settings["ui_locale"].as_str().unwrap_or("en"))
+                let affected = committed
+                    .sources
+                    .replace_configs(&crate::settings::source_configs(input));
+                if crate::settings::metadata_language(input)
+                    != crate::settings::metadata_language(&committed.settings)
                 {
                     committed.metadata_epoch += 1;
                     for (request_id, _) in committed.metadata_requests.drain() {
                         self.requests
                             .cancel(&Uuid::new_v4().to_string(), &request_id)?;
+                    }
+                }
+                // Edited or removed live lists drop their channels and stop their streams.
+                let stale: Vec<String> = committed
+                    .live
+                    .keys()
+                    .filter(|id| live_config(input, id).ok() != live_config(&committed.settings, id).ok())
+                    .cloned()
+                    .collect();
+                for id in &stale {
+                    committed.live.remove(id);
+                }
+                if let Some(gateway) = &committed.gateway {
+                    gateway.revoke(&stale.iter().map(|id| format!("live:{id}")).collect::<Vec<_>>());
+                }
+                tmdb_api::configure(input);
+                // A changed library forgets its scan and stops files it may no longer cover.
+                if input["local_paths"] != committed.settings["local_paths"] {
+                    committed.local.clear();
+                    if let Some(gateway) = &committed.gateway {
+                        gateway.revoke(&["local".to_owned()]);
                     }
                 }
                 committed.settings = input.clone();
@@ -502,6 +535,36 @@ impl Host {
                 }
                 Ok(view)
             }
+            "open_live" => {
+                let config_id = input["config_id"].as_str().expect("Config UUID");
+                live_config(&committed.settings, config_id)?;
+                let (revision, channels) = committed
+                    .live
+                    .get(config_id)
+                    .ok_or_else(|| ApiError::bad("Load the live channel list first"))?;
+                if input["revision"] != revision.as_str() {
+                    return Err(ApiError::new("REVISION_MISMATCH", "Live channel list changed; reload it"));
+                }
+                let index = input["index"].as_u64().expect("Channel index") as usize;
+                let channel = channels.get(index).ok_or_else(|| ApiError::bad("Unknown live channel"))?;
+                if !channel.supported() {
+                    return Err(ApiError::new("MEDIA_UNSUPPORTED", "Only http(s) live channels can be played"));
+                }
+                let record = live_record(config_id, revision, index, channel);
+                if committed.gateway.is_none() {
+                    committed.gateway = Some(Gateway::with_media_cache(
+                        self.clock.clone(),
+                        self.media_cache.clone(),
+                    )?);
+                }
+                let gateway = committed.gateway.as_ref().expect("Gateway ready");
+                let view = gateway.open_live(Arc::new(record))?;
+                if let Err(error) = job.check() {
+                    gateway.close(view["session_id"].as_str().expect("Session ID"));
+                    return Err(error);
+                }
+                Ok(view)
+            }
             "close_playback" => {
                 if let Some(gateway) = &committed.gateway {
                     gateway.close(input["session_id"].as_str().expect("Session ID"));
@@ -550,6 +613,94 @@ impl Host {
         result
     }
 
+    fn open_local(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let id = input["id"].as_str().expect("File ID");
+        let lock = || self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"));
+        let (listed, path, file) = {
+            let committed = lock()?;
+            let listed = committed.local.get(id).cloned()
+                .ok_or_else(|| ApiError::new("SOURCE_NOT_FOUND", "Refresh the local library first"))?;
+            let (path, file) = local::checked_file(&committed.settings, &listed)?;
+            (listed, path, file)
+        };
+        if !local::supported(&path) {
+            return Err(ApiError::new("MEDIA_UNSUPPORTED", "This video format is not supported yet"));
+        }
+        // MKV index reading happens outside the commit lock (ADR-066/067).
+        let (plan, file) = if local::remuxed(&path) {
+            (Some(Arc::new(crate::remux::Plan::open_file(&path, file)?)), None)
+        } else { (None, Some(file)) };
+        job.check()?;
+        let mut committed = lock()?;
+        if committed.local.get(id) != Some(&listed) {
+            return Err(ApiError::cancelled());
+        }
+        let title: String = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default().chars().take(512).collect();
+        let record = Arc::new(local_record(id, &path, &title));
+        if committed.gateway.is_none() {
+            committed.gateway = Some(Gateway::with_media_cache(self.clock.clone(), self.media_cache.clone())?);
+        }
+        let gateway = committed.gateway.as_ref().expect("Gateway ready");
+        let view = match plan {
+            Some(plan) => gateway.open_remux(record, plan)?,
+            None => gateway.open_file(record, file.expect("Local file handle"))?,
+        };
+        if let Err(error) = job.check() {
+            gateway.close(view["session_id"].as_str().expect("Session ID"));
+            return Err(error);
+        }
+        let match_id = format!("local-{}", Uuid::new_v4());
+        let identity_value = local::history_identity(id);
+        committed.session_bindings.insert(view["session_id"].as_str().expect("Session ID").to_owned(), SessionBinding {
+            context: json!({"match_id": match_id, "metadata_ref": {"identity": identity_value}, "metadata_video_id": id,
+                "episode_ref": {"source_id": "local"}}),
+            playback_epoch: None,
+        });
+        let updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(1).max(1);
+        Ok(json!({"session": view, "match_id": match_id, "record": {
+            "content_id": identity("metadata", &["local", "file", id]), "metadata_identity": identity_value, "video_id": id,
+            "season_number": null, "episode_number": null, "title": if title.is_empty() { id.to_owned() } else { title },
+            "kind": "other", "poster_cache_key": null, "source_id": "local", "source_name": "Local video",
+            "position_ms": 0, "duration_ms": null, "completed": false, "updated_at": updated}}))
+    }
+
+    fn live_channels(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let config_id = input["config_id"].as_str().expect("Config UUID");
+        let config = {
+            let committed = self
+                .committed
+                .lock()
+                .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+            live_config(&committed.settings, config_id)?
+        };
+        // Download outside the commit lock; publish only if the configuration is unchanged.
+        let url = maccms::http_url(config["url"].as_str().expect("Validated URL"), true)?;
+        let response = maccms::Http::default().get(
+            url,
+            reqwest::header::HeaderMap::new(),
+            job,
+            live::LIST_LIMIT,
+            false,
+            true,
+        )?;
+        let text = std::str::from_utf8(&response.body)
+            .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Live list is not UTF-8 text"))?;
+        let (format, channels) = live::parse(text)?;
+        let digest = format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(&response.body));
+        let revision = identity("live_list", &[config_id, &digest]);
+        let mut committed = self
+            .committed
+            .lock()
+            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+        job.check()?;
+        if live_config(&committed.settings, config_id).ok() != Some(config) {
+            return Err(ApiError::cancelled());
+        }
+        let view: Vec<Value> = channels.iter().enumerate().map(|(i, c)| c.view(i)).collect();
+        committed.live.insert(config_id.into(), (revision.clone(), channels));
+        Ok(json!({"config_id": config_id, "revision": revision, "format": format, "channels": view}))
+    }
+
     fn runtime(&self, committed: &Committed) -> Result<Value, ApiError> {
         let health = committed
             .gateway
@@ -576,7 +727,7 @@ impl Host {
                 "Cloudstream is no longer supported; add a JSON source instead",
             ));
         }
-        let captured = {
+        let (captured, published) = {
             let mut committed = self
                 .committed
                 .lock()
@@ -590,10 +741,31 @@ impl Host {
                 return Err(ApiError::bad("Source kind does not match configuration"));
             }
             job.bind_source(&captured.source_id);
-            captured
+            let published = committed.stremio.contains_key(&captured.source_id)
+                || committed.maccms.contains_key(&captured.source_id);
+            (captured, published)
         };
         if kind == SourceKind::Stremio {
-            let result = stremio::Catalog::sync(captured.clone(), &maccms::Http::default(), job);
+            let cached = (!published)
+                .then(|| self.source_cache.load(&captured.config))
+                .flatten()
+                .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok());
+            let mut used_cache = cached.is_some();
+            let mut result = stremio::Catalog::sync_cached(
+                captured.clone(),
+                &maccms::Http::default(),
+                job,
+                cached.as_deref(),
+            );
+            if used_cache && result.is_err() && job.check().is_ok() {
+                used_cache = false;
+                result = stremio::Catalog::sync_cached(
+                    captured.clone(),
+                    &maccms::Http::default(),
+                    job,
+                    None,
+                );
+            }
             let mut committed = self
                 .committed
                 .lock()
@@ -613,7 +785,7 @@ impl Host {
             committed
                 .sources
                 .check_snapshot(&captured, &self.host_epoch, None, true)?;
-            let catalog = match result {
+            let (catalog, bodies) = match result {
                 Ok(catalog) => catalog,
                 Err(failure) => {
                     let details = json!({"reason": "manifest_sync_failed", "failed_addon_indices": failure.indices});
@@ -661,11 +833,32 @@ impl Host {
                 }
                 committed.stremio.insert(captured.source_id, catalog);
             }
+            let sources = committed.sources.sources();
+            drop(committed);
+            if !used_cache
+                && let Err(error) = self.source_cache.save(&captured.config, json!(bodies))
+            {
+                eprintln!("Source bootstrap cache write failed: {error}");
+            }
             return Ok(
-                json!({"kind": kind, "config_id": captured.config["config_id"], "changed": changed, "sources": committed.sources.sources(), "cloudstream_result": null}),
+                json!({"kind": kind, "config_id": captured.config["config_id"], "changed": changed, "sources": sources, "cloudstream_result": null}),
             );
         }
-        let result = maccms::Catalog::sync(captured.clone(), &maccms::Http::default(), job);
+        let cached = (!published)
+            .then(|| self.source_cache.load(&captured.config))
+            .flatten();
+        let mut used_cache = cached.is_some();
+        let mut result = maccms::Catalog::sync_cached(
+            captured.clone(),
+            &maccms::Http::default(),
+            job,
+            cached.as_ref(),
+        );
+        if used_cache && result.is_err() && job.check().is_ok() {
+            used_cache = false;
+            result =
+                maccms::Catalog::sync_cached(captured.clone(), &maccms::Http::default(), job, None);
+        }
         let mut committed = self
             .committed
             .lock()
@@ -674,7 +867,7 @@ impl Host {
         committed
             .sources
             .check_snapshot(&captured, &self.host_epoch, None, true)?;
-        let mut catalog = result?;
+        let (mut catalog, bootstrap) = result?;
         let previous = committed.maccms.get(&captured.source_id);
         let changed = previous.is_none_or(|previous| {
             previous.source != catalog.source || previous.sections != catalog.sections
@@ -686,9 +879,14 @@ impl Host {
             .sources
             .publish_sync(&captured, &self.host_epoch, catalog.source.clone())?;
         committed.maccms.insert(captured.source_id, catalog);
+        let sources = committed.sources.sources();
+        drop(committed);
+        if !used_cache && let Err(error) = self.source_cache.save(&captured.config, bootstrap) {
+            eprintln!("Source bootstrap cache write failed: {error}");
+        }
         Ok(
             json!({"kind": kind, "config_id": captured.config["config_id"],
-            "changed": changed, "sources": committed.sources.sources(), "cloudstream_result": null}),
+            "changed": changed, "sources": sources, "cloudstream_result": null}),
         )
     }
 
@@ -747,8 +945,7 @@ impl Host {
                     return Err(ApiError::cancelled());
                 }
                 let epoch = committed.metadata_epoch;
-                let language =
-                    stremio::locale(committed.settings["ui_locale"].as_str().unwrap_or("en"));
+                let language = crate::settings::metadata_language(&committed.settings);
                 let captured = committed.sources.snapshot(
                     source["origin"]["config_id"].as_str().expect("Config UUID"),
                     &self.host_epoch,
@@ -819,6 +1016,11 @@ impl Host {
                 if capability == "resolve" {
                     return Err(ApiError::bad("Playback match is not registered"));
                 }
+                // The built-in TMDB source can translate an alias or English title for MacCMS search.
+                let aliases = (capability == "search")
+                    .then(|| identity("http_source", &["stremio", crate::settings::TMDB_CONFIG_ID]))
+                    .and_then(|id| committed.stremio.get(&id).cloned())
+                    .map(|tmdb| (tmdb, crate::settings::metadata_language(&committed.settings)));
                 drop(committed);
                 let http = maccms::Http::default();
                 let _search = if capability == "search" {
@@ -834,8 +1036,7 @@ impl Host {
                         )
                     })
                 } else if capability == "search" {
-                    catalog
-                        .search(&http, key["query"].as_str().expect("Query"), 1, job)
+                    approximate_search(&catalog, &http, key["query"].as_str().expect("Query"), aliases.as_ref(), job)
                         .map(|mut mapped| {
                             mapped.value = json!({"items":mapped.value});
                             (mapped, None)
@@ -1044,6 +1245,9 @@ impl Host {
                         .as_array()
                         .expect("Mapped search cards")
                         .iter()
+                        .filter(|details| {
+                            crate::fuzzy::related(title, details["title"].as_str().unwrap_or(""))
+                        })
                         .take(10)
                         .map(|details| matching::Candidate {
                             details: details.clone(),
@@ -1463,4 +1667,128 @@ fn platform() -> &'static str {
     } else {
         "linux"
     }
+}
+
+/// An enabled live list configuration, by id.
+fn live_config(settings: &Value, config_id: &str) -> Result<Value, ApiError> {
+    settings["live_configs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|config| config["config_id"] == config_id && config["enabled"] == true)
+        .cloned()
+        .ok_or_else(|| ApiError::new("SOURCE_NOT_FOUND", "Live list is not configured or disabled"))
+}
+
+/// A live channel becomes a one-stream record; HLS unless the address names a file type.
+fn live_record(config_id: &str, revision: &str, index: usize, channel: &live::Channel) -> resolution::LinkRecord {
+    let path = channel.url.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    let progressive = [".mp4", ".m4v", ".mov", ".webm", ".flv", ".ts", ".mp3", ".aac"].iter().any(|e| path.ends_with(e));
+    let provider = format!("live:{config_id}");
+    resolution::LinkRecord {
+        stream_id: "live".into(),
+        resolution_id: format!("live-{}", Uuid::new_v4()),
+        link: resolution::Link {
+            original: Value::Null,
+            provider: provider.clone(),
+            url: channel.url.clone(),
+            headers: Default::default(),
+            referer: String::new(),
+            extractor_data: None,
+            interceptor: None,
+            cookies: None,
+            label: channel.name.clone(),
+            quality: None,
+            quality_label: None,
+            kind: if progressive { "progressive" } else { "hls" }.into(),
+            mime_type: None,
+            playable: true,
+            reason: None,
+        },
+        subtitles: Arc::new(Vec::new()),
+        episode_ref: json!({"source_id": provider, "source_revision": revision, "data": index.to_string()}),
+        source_revision: revision.into(),
+    }
+}
+
+/// A checked local file becomes a one-stream record the gateway serves from disk.
+fn local_record(id: &str, path: &std::path::Path, title: &str) -> resolution::LinkRecord {
+    resolution::LinkRecord {
+        stream_id: "file".into(),
+        resolution_id: format!("local-{}", Uuid::new_v4()),
+        link: resolution::Link {
+            original: Value::Null,
+            provider: "local".into(),
+            url: path.to_string_lossy().into_owned(),
+            headers: Default::default(),
+            referer: String::new(),
+            extractor_data: None,
+            interceptor: None,
+            cookies: None,
+            label: title.into(),
+            quality: None,
+            quality_label: None,
+            kind: "progressive".into(),
+            mime_type: Some(local::mime(path).into()),
+            playable: true,
+            reason: None,
+        },
+        subtitles: Arc::new(Vec::new()),
+        episode_ref: json!({"source_id": "local", "source_revision": "local", "data": id}),
+        source_revision: "local".into(),
+    }
+}
+
+/// MacCMS `wd` only matches substrings: try the typed query, then relaxed forms, then titles
+/// the built-in TMDB source finds for it; results are ranked by closeness to the typed text.
+fn approximate_search(
+    catalog: &maccms::Catalog,
+    http: &maccms::Http,
+    typed: &str,
+    aliases: Option<&(stremio::Catalog, &'static str)>,
+    job: &Job,
+) -> Result<maccms::Mapped, ApiError> {
+    let finish = |mut mapped: maccms::Mapped| {
+        if let Some(items) = mapped.value.as_array_mut() {
+            crate::fuzzy::rank(typed, items);
+        }
+        mapped
+    };
+    let mut last = None;
+    for query in crate::fuzzy::relaxed(typed) {
+        let mapped = catalog.search(http, &query, 1, job)?;
+        if mapped.value.as_array().is_some_and(|items| !items.is_empty()) {
+            return Ok(finish(mapped));
+        }
+        last = Some(mapped);
+    }
+    // Best effort: an unreachable TMDB leaves the (empty) MacCMS answer as it is.
+    if let Some((tmdb, _)) = aliases {
+        let mut titles: Vec<String> = Vec::new();
+        if let Ok(child) = job.limited_child(&Uuid::new_v4().to_string(), "default_metadata", 5_000) {
+            for language in ["zh-CN", "en"] {
+                if let Ok(found) = tmdb.search(http, typed, language, &child) {
+                    for item in found.value["items"].as_array().into_iter().flatten().take(3) {
+                        let title = item["title"].as_str().unwrap_or("").to_owned();
+                        if !title.is_empty() && !titles.contains(&title) && crate::fuzzy::normalize(&title) != crate::fuzzy::normalize(typed) {
+                            titles.push(title);
+                        }
+                    }
+                }
+            }
+        }
+        for title in titles {
+            for query in crate::fuzzy::relaxed(&title).into_iter().take(3) {
+                let mapped = catalog.search(http, &query, 1, job)?;
+                if mapped.value.as_array().is_some_and(|items| !items.is_empty()) {
+                    let mut mapped = mapped;
+                    if let Some(items) = mapped.value.as_array_mut() {
+                        crate::fuzzy::rank(&title, items);
+                    }
+                    return Ok(mapped);
+                }
+            }
+        }
+    }
+    Ok(last.unwrap_or(maccms::Mapped { value: json!([]), images: Vec::new() }))
 }

@@ -736,6 +736,15 @@ impl Catalog {
     }
 
     pub fn sync(captured: SourceSnapshot, http: &Http, job: &Job) -> Result<Self, ApiError> {
+        Self::sync_cached(captured, http, job, None).map(|(catalog, _)| catalog)
+    }
+
+    pub(crate) fn sync_cached(
+        captured: SourceSnapshot,
+        http: &Http,
+        job: &Job,
+        cached: Option<&Value>,
+    ) -> Result<(Self, Value), ApiError> {
         let source = json!({"id": captured.source_id, "source_revision": captured.source_revision,
             "name": captured.config["name"], "kind": "maccms", "language": "", "content_types": ["other"],
             "capabilities": {"home": true, "search": true, "details": true, "resolve": true, "sequential_home": false},
@@ -748,14 +757,21 @@ impl Catalog {
             images: HashMap::new(),
             search_gate: Arc::default(),
         };
-        let response = catalog.request(http, &[("ac", "list"), ("pg", "1")], job, true)?;
+        let response = match cached {
+            Some(value) => value.clone(),
+            None => catalog.request(http, &[("ac", "list"), ("pg", "1")], job, true)?,
+        };
+        job.check()?;
+        wire_size(&response, RESPONSE_LIMIT)?;
         catalog.sections = catalog.categories(&response)?;
         let mut categories: Vec<_> = catalog.sections.iter().map(|s| s.category).collect();
         categories.sort_unstable();
         categories.dedup();
         catalog.source["content_types"] = json!(categories);
         Contracts::get().validate("AppSource", &catalog.source)?;
-        Ok(catalog)
+        // The bootstrap only needs category names and IDs, never media URLs.
+        let bootstrap = json!({"class": response.get("class").cloned().unwrap_or(Value::Null)});
+        Ok((catalog, bootstrap))
     }
 
     fn categories(&self, response: &Value) -> Result<Vec<Section>, ApiError> {
@@ -1082,7 +1098,9 @@ impl Catalog {
             job,
             false,
         )?;
-        self.cards_limit(&response, 1, 10)
+        // The whole first page: matching drops unrelated full-text hits before
+        // keeping ten, so a related title ranked below them is not lost.
+        self.cards(&response, 1)
     }
 
     fn cards(&self, response: &Value, page: u64) -> Result<Mapped, ApiError> {

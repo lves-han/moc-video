@@ -5,6 +5,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 pub mod commands;
 pub mod contracts;
 pub mod details;
+pub mod fuzzy;
 pub mod gateway;
 pub mod history;
 pub mod home;
@@ -12,6 +13,7 @@ pub mod host;
 pub mod matching;
 pub mod media_cache;
 pub mod requests;
+pub mod remux;
 pub mod resolution;
 pub mod settings;
 pub mod source_dispatch;
@@ -137,7 +139,7 @@ mod automation;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
     #[cfg(all(not(mobile), feature = "t01-automation"))]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
         player_fullscreen,
@@ -207,7 +209,7 @@ pub fn run() {
                 api.prevent_close();
                 if signal && let Some(view) = window.app_handle().get_webview_window(window.label())
                 {
-                    let _ = view.eval("window.dispatchEvent(new Event('yingxiang-closing'))");
+                    let _ = view.eval("window.dispatchEvent(new Event('moc-closing'))");
                     std::thread::spawn(move || {
                         std::thread::sleep(std::time::Duration::from_secs(5));
                         if closing::unanswered(&closing::STATE) {
@@ -248,7 +250,7 @@ pub fn run() {
             #[cfg(any(mobile, not(feature = "t01-automation")))]
             let entry = "index.html#/home";
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(entry.into()))
-                .title("Yingxiang Video")
+                .title("Moc Video")
                 .on_navigation(|url| {
                     (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
                         || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
@@ -302,5 +304,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::tauri_build_context!())
-        .expect("映象视频 Tauri host failed");
+        .expect("墨客视频 Tauri host failed");
 }

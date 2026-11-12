@@ -168,7 +168,7 @@ def diagnose(*, full_range=False, tagged=False, readback=False):
                     probe=json.loads(run.command(['ffprobe','-v','error','-show_entries','stream=codec_type,pix_fmt,color_range,color_space,color_transfer,color_primaries','-of','json',str(media/'b.mp4')])))
             bridge=t12.Bridge(run,folder,media);bridge.minimum_opens=1;ready=bridge.wait(folder/'ready.json',timeout=180)
             with t01.Fixture(t01.MEDIA,invoke=bridge.invoke) as fixture:
-                executable=ROOT/t01.check_build(run.source)['automation']['path']/'Contents/MacOS/yingxiang-video'
+                executable=ROOT/t01.check_build(run.source)['automation']['path']/'Contents/MacOS/moc-video'
                 session=t01.NativeSession(run,fixture,executable,1)
                 session.wait(0,30);session.observe();tv1.native(run,'click',session.process.pid,600,200);session.command('identity')
                 session.command('t12',action='start',payload=ready,timeout=60)
@@ -221,7 +221,7 @@ def diagnose_color_comparison():
                 row=dict(label=label,build_source=build['source'],samples=[])
                 run.observed['comparison'].append(row)
                 with t01.Fixture(t01.MEDIA,invoke=bridge.invoke) as fixture:
-                    executable=ROOT/build['automation']['path']/'Contents/MacOS/yingxiang-video'
+                    executable=ROOT/build['automation']['path']/'Contents/MacOS/moc-video'
                     session=t01.NativeSession(run,fixture,executable,len(run.observed['comparison']))
                     session.wait(0,30);session.observe();tv1.native(run,'click',session.process.pid,600,200);session.command('identity')
                     session.command('t12',action='start',payload=ready,timeout=60)
@@ -252,7 +252,7 @@ def interactive(run, *, escape_only=False, input_diagnostic=False):
     previous_observer=os.environ.get('DYLD_INSERT_LIBRARIES')
     try:
         receipt=t01.check_build(run.source)
-        executable=ROOT/receipt['automation']['path']/'Contents/MacOS/yingxiang-video'
+        executable=ROOT/receipt['automation']['path']/'Contents/MacOS/moc-video'
         run.command(['clang','-fobjc-arc','-framework','Cocoa','-framework','ApplicationServices','tests/fixtures/tv1_native.m','-o',str(run.folder/'tv1-native')])
         if input_diagnostic:
             require(previous_observer is None,'Input diagnostic requires an unmodified native loader environment')
@@ -390,7 +390,7 @@ def diagnose_memory(variants=('no-glass','local-fade')):
     try:
         resources(run,card='T0.33')
         t01.DATA=run.folder/'packaged';t01.DATA.mkdir();t01.BUILD=t01.DATA/'build.json';t01.build(run)
-        executable=ROOT/t01.check_build(run.source)['automation']['path']/'Contents/MacOS/yingxiang-video'
+        executable=ROOT/t01.check_build(run.source)['automation']['path']/'Contents/MacOS/moc-video'
         os.environ['T12_MIN_OPENS']='1';run.observed['memory_variants']=[]
         with tempfile.TemporaryDirectory(prefix='tv6-memory-',dir=run.folder) as temporary:
             folder=Path(temporary);media=folder/'media';media.mkdir();t12.owned_media(run,media)

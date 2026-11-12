@@ -217,7 +217,7 @@ onMounted(async () => {
     state.position_ms = Math.max(0, Math.round(media.currentTime * 1000));
     emit('seek');
   }, { signal: interaction.signal });
-  window.addEventListener('yingxiang-player-action-error', event => { ui.diagnostic = String((event as CustomEvent).detail); }, { signal: interaction.signal });
+  window.addEventListener('moc-player-action-error', event => { ui.diagnostic = String((event as CustomEvent).detail); }, { signal: interaction.signal });
   try { appState.settings = await settingsQueue.initialize(); }
   catch (cause) { ui.diagnostic = String(cause); }
   await nextTick();
@@ -290,7 +290,7 @@ defineExpose({ playback });
                     <component :is="'media-volume-slider'" class="playback-volume-slider"><component :is="'media-slider-track'" class="playback-track"><component :is="'media-slider-fill'" /></component><component :is="'media-slider-thumb'" /></component>
                   </div>
                   <component :is="'media-playback-rate-button'" commandfor="playback-rate-menu" class="playback-button playback-rate" :title="word('倍速', 'Speed')" />
-                  <component :is="'media-menu'" id="playback-rate-menu" class="playback-rate-menu playback-glass" side="top" align="end"><component :is="'media-menu-content'"><component :is="'media-playback-rate-radio-group'" /></component></component>
+                  <component :is="'media-menu'" id="playback-rate-menu" class="playback-rate-menu playback-glass" side="top" align="end" @pointerdown.stop @pointerup.stop @click.stop><component :is="'media-menu-content'"><component :is="'media-playback-rate-radio-group'" /></component></component>
                   <button data-player-tray class="playback-button" :aria-label="word('选集托盘', 'Episode tray')" :title="word('选集托盘', 'Episode tray')" :aria-expanded="Boolean(tray)" @click="tray ? closeTray() : openTray('episodes', $event.currentTarget)"><Icon name="film" :size="24" /></button>
                   <component :is="'media-fullscreen-button'" id="playback-fullscreen" class="playback-button" :title="word('全屏', 'Fullscreen')"><component :is="'media-icon'" family="compat" name="fullscreen-enter" class="when-windowed" /><component :is="'media-icon'" family="compat" name="fullscreen-exit" class="when-fullscreen" /></component>
                 </div>
@@ -301,7 +301,7 @@ defineExpose({ playback });
             <component :is="'media-tooltip'" trigger="playback-fullscreen" class="playback-tooltip playback-glass"><component :is="'media-tooltip-label'" /></component>
           </component>
         </component>
-        <section class="playback-tray playback-glass" :class="{ open: tray }" :inert="!tray ? true : undefined" :aria-hidden="!tray" :aria-label="word('播放选项', 'Playback options')">
+        <section class="playback-tray playback-glass" :class="{ open: tray }" :inert="!tray ? true : undefined" :aria-hidden="!tray" :aria-label="word('播放选项', 'Playback options')" @pointerdown.stop @pointerup.stop @click.stop>
           <div class="playback-tray-header" role="tablist" :aria-label="word('播放选项', 'Playback options')">
             <button data-action="episodes" data-tray-tab="episodes" role="tab" :aria-label="word('选集', 'Episodes')" :title="word('选集', 'Episodes')" :aria-selected="tray === 'episodes'" @click="openTray('episodes')"><Icon name="film" :size="16" />{{ word('选集', 'Episodes') }}</button>
             <button data-tray-tab="streams" role="tab" :aria-selected="tray === 'streams'" @click="openTray('streams')">{{ word('线路', 'Streams') }}</button>
@@ -337,11 +337,11 @@ defineExpose({ playback });
             <button v-if="ui.action === 'reconnect'" data-action="reconnect" @click="playback.reconnect()">{{ word('重新连接', 'Reconnect') }}</button>
           </div>
         </section>
-        <aside v-if="nextVisible && !tray" class="playback-next playback-glass" :aria-label="word('下一集', 'Next episode')">
+        <aside v-if="nextVisible && !tray" class="playback-next playback-glass" :aria-label="word('下一集', 'Next episode')" @pointerdown.stop @pointerup.stop @click.stop>
           <img v-if="episodeImage(nextEpisode)" :src="episodeImage(nextEpisode)" alt="" /><div v-else class="playback-next-image" />
           <div class="playback-next-copy"><span class="playback-next-kicker">{{ word('下一集', 'Next episode') }}</span><h3>{{ nextEpisode?.label }}</h3><div class="playback-next-actions"><button class="playback-primary" :disabled="busy" @click="playNext">{{ word('立即播放', 'Play now') }}</button><button @click="cancelNext">{{ word('取消', 'Cancel') }}</button><span v-if="countdown !== null" class="playback-countdown" role="timer" :style="{ '--countdown': countdown }">{{ countdown }}</span></div></div>
         </aside>
-        <div v-if="state.error && !ui.autoplayBlocked || ui.diagnostic" class="playback-error-backdrop">
+        <div v-if="state.error && !ui.autoplayBlocked || ui.diagnostic" class="playback-error-backdrop" @pointerdown.stop @pointerup.stop @click.stop>
           <section class="playback-error playback-glass" role="alert"><h2>{{ word('播放遇到问题', 'Playback failed') }}</h2><p>{{ state.error ? `${state.error.code} · ${state.error.message}` : ui.diagnostic }}</p><div><button class="playback-primary" @click="ui.action === 'reconnect' ? playback.reconnect() : playback.retry()">{{ word('重试', 'Retry') }}</button><button @click="openTray('streams', $event.currentTarget)">{{ word('换线路', 'Change stream') }}</button></div></section>
         </div>
         <p v-if="appController.lineMemory.error" class="playback-line-error" role="status">{{ appController.lineMemory.error }}</p>

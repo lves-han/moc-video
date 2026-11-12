@@ -50,7 +50,7 @@ MacCMS/Stremio由Rust原生HTTP实现；Android兼容引擎在使用Cloudstream�
 ```text
 请先完整阅读本目录 README.md、DEVELOPMENT_SPEC.md、DATA_STRUCTURES.md、AI_TASKS.md、bridge.openapi.json、app.schema.json 和 references/SOURCES.md。
 
-按照本包1.5.0实现映象视频：Stremio只提供推荐/详情元数据；Cloudstream是主播放源，MacCMS为可选播放源。先按18.6确认MetadataIdentity、跨源match_playback、独立元数据/播放选择状态和PlaybackContext，再实施页面及持久化。目标同期支持macOS、Windows、Linux，加载全部7个未经修改的原始.cs3及其注册实例。
+按照本包1.5.0实现墨客视频：Stremio只提供推荐/详情元数据；Cloudstream是主播放源，MacCMS为可选播放源。先按18.6确认MetadataIdentity、跨源match_playback、独立元数据/播放选择状态和PlaybackContext，再实施页面及持久化。目标同期支持macOS、Windows、Linux，加载全部7个未经修改的原始.cs3及其注册实例。
 
 按T00/T01/T05→N00/N01→T06至T17验证Stremio元数据与受控MacCMS匹配；T02/T03/T04/N02接Cloudstream主播放。基础provider取数/解析DTO复用原接口；产品匹配使用app.schema.json中的17个命令及上下文约束。原始Android桥接沿bridge.openapi.json，HTTP元数据浏览独立于Android准备。SQLite本轮确定技术方案，T18实现后由T20验证历史跨重启恢复；先完成机器契约同步再写宿主代码。
 

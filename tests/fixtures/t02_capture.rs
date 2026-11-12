@@ -493,7 +493,7 @@ fn candidate(source: &Value) -> Value {
             &[("ac", "detail"), ("wd", title), ("pg", "1")],
             &mut records,
         )?;
-        let zero_keyword = format!("yingxiang-t02-zero-{}", Uuid::new_v4());
+        let zero_keyword = format!("moc-t02-zero-{}", Uuid::new_v4());
         capture(
             &http,
             &host,

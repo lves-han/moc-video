@@ -184,7 +184,7 @@ def prepare(run):
         versions = {tool: run.command([tool, "-version"]) for tool in ("ffmpeg", "ffprobe")}
         for command in media_recipe():
             run.command([arg.replace("{media}", str(path)) for arg in command], timeout=300)
-        (path / "subtitles.vtt").write_text("WEBVTT\n\n00:00:00.000 --> 00:00:29.950\n映象视频 · 自有 1080p30 测试片段\n", encoding="utf-8")
+        (path / "subtitles.vtt").write_text("WEBVTT\n\n00:00:00.000 --> 00:00:29.950\n墨客视频 · 自有 1080p30 测试片段\n", encoding="utf-8")
         probe = json.loads(run.command(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path / "clip.mp4")]))
         manifest = dict(recipe=media_recipe(), license="CC0-1.0; project-generated test pattern and sine tone",
             generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(), tools=versions, ffprobe=probe,
@@ -238,12 +238,12 @@ def bundle(run, name, binary):
     app = DATA / (name + ".app")
     if app.exists():
         shutil.rmtree(app)  # This exact fixture-owned output is reconstructed by this build only.
-    executable = app / "Contents/MacOS/yingxiang-video"
+    executable = app / "Contents/MacOS/moc-video"
     executable.parent.mkdir(parents=True)
     shutil.copy2(binary, executable)
     info = plistlib.loads((ROOT / "src-tauri/Info.plist").read_bytes())
-    info.update(CFBundleExecutable="yingxiang-video", CFBundleIdentifier="app.yingxiang.video",
-        CFBundleName=name, CFBundleDisplayName="映象视频", CFBundlePackageType="APPL",
+    info.update(CFBundleExecutable="moc-video", CFBundleIdentifier="app.moc.video",
+        CFBundleName=name, CFBundleDisplayName="墨客视频", CFBundlePackageType="APPL",
         CFBundleShortVersionString="0.1.0", CFBundleVersion="1", LSMinimumSystemVersion="14.0", NSHighResolutionCapable=True)
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
     run.command(["codesign", "--force", "--sign", "-", "--timestamp=none", str(app)])
@@ -259,20 +259,20 @@ def build(run):
     run.command(["cargo", "fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"])
     run.command(["npm", "run", "build"], timeout=300)
     run.command(["cargo", "build", "--locked", "--release", "--manifest-path", "src-tauri/Cargo.toml"], timeout=3000)
-    production = bundle(run, "YingxiangVideo", ROOT / "target/release/yingxiang-video")
+    production = bundle(run, "MocVideo", ROOT / "target/release/moc-video")
     production_frontend = DATA / "production-frontend"
     if production_frontend.exists():
         shutil.rmtree(production_frontend)
     shutil.copytree(ROOT / "dist", production_frontend)
-    production_gate = validate_production(production_frontend, production / "Contents/MacOS/yingxiang-video")
+    production_gate = validate_production(production_frontend, production / "Contents/MacOS/moc-video")
     run.command(["npm", "exec", "--", "vite", "build", "--mode", "t01", "--outDir", "target/t01/frontend-automation"], timeout=300)
     test_config = {"build": {"frontendDist": "../target/t01/frontend-automation"},
         "app": {"security": {"capabilities": ["main", {"identifier": "t01-only", "windows": ["main"], "permissions": ["allow-t01-control"]}]}}}
     with environment({"TAURI_CONFIG": json.dumps(test_config)}):
         run.command(["cargo", "build", "--locked", "--release", "--manifest-path", "src-tauri/Cargo.toml",
             "--features", "t01-automation"], timeout=3000)
-    automation = bundle(run, "YingxiangVideoT01", ROOT / "target/release/yingxiang-video")
-    validate_automation(ROOT / "target/t01/frontend-automation", automation / "Contents/MacOS/yingxiang-video")
+    automation = bundle(run, "MocVideoT01", ROOT / "target/release/moc-video")
+    validate_automation(ROOT / "target/t01/frontend-automation", automation / "Contents/MacOS/moc-video")
     receipt = dict(source=run.source, protected=workflow.protected_hash(), cargo_lock=file_hash(ROOT / "src-tauri/Cargo.lock"),
         production=dict(path=str(production.relative_to(ROOT)), files=tree_hashes(production)),
         automation=dict(path=str(automation.relative_to(ROOT)), files=tree_hashes(automation)),
@@ -290,7 +290,7 @@ def check_build(source):
         require(tree_hashes(ROOT / receipt[key]["path"]) == receipt[key]["files"], f"{key} app bytes changed since build")
     frontend = DATA / "production-frontend"
     require(tree_hashes(frontend) == receipt["production_frontend"], "production frontend changed since build")
-    validate_production(frontend, ROOT / receipt["production"]["path"] / "Contents/MacOS/yingxiang-video")
+    validate_production(frontend, ROOT / receipt["production"]["path"] / "Contents/MacOS/moc-video")
     info = plistlib.loads((ROOT / receipt["production"]["path"] / "Contents/Info.plist").read_bytes())
     require(info["NSAppTransportSecurity"] == {"NSAllowsLocalNetworking": True}, "ATS must retain a local-network-only exception")
     require(info["NSHighResolutionCapable"] and info["LSMinimumSystemVersion"] == "14.0", "DPI/minimum macOS metadata missing")
@@ -601,7 +601,7 @@ def native_all(run, fixture, receipt, *, endurance=True):
     run.observed["gui_session"] = native_gui_session()
     require(run.observed["gui_session"]["screen_locked"] is not True,
             "macOS GUI session is locked; unlock the desktop before native acceptance")
-    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
     session = NativeSession(run, fixture, executable, 0)
     failed = False
     try:
@@ -714,7 +714,7 @@ def platform_matrix(run):
                 "--release", "--manifest-path", "src-tauri/Cargo.toml", "--target", targets[target]]
         run.cases.append(dict(id="R30/platform-" + target, requirements=["R30", "REQ-T01"], required=False,
             expected="deferred per ADR-005/006", actual="NOT RUN; native build and interactive sample command only; full native acceptance adapter pending authorization for this target",
-            input={"build_argv": argv, "launch_argv": [f"target/{targets[target]}/release/yingxiang-video" + (".exe" if target.startswith("windows") else "")],
+            input={"build_argv": argv, "launch_argv": [f"target/{targets[target]}/release/moc-video" + (".exe" if target.startswith("windows") else "")],
                    "platform": target, "prerequisite": "target machine, system WebView/codecs, installed Rust target; authorized C1 root/venv/global-lock binding; npm ci and npm run build via run.py",
                    "display_environment": {"GDK_BACKEND": "x11" if target == "linux-x11" else "wayland"} if target.startswith("linux") else {},
                    "full_scope_pending": "MP4/HLS 30min each, 20 windows, Origin/CSP/CORS/codec/audio/subtitles/DPI/cleanup"}, result="SKIP", evidence=[]))

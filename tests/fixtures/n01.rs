@@ -6,6 +6,8 @@ mod t06;
 mod t07;
 #[path = "tv2.rs"]
 mod tv2;
+#[path = "x1.rs"]
+mod x1;
 use super::*;
 use crate::{host::Host, requests::Clock, settings};
 use std::{
@@ -276,6 +278,70 @@ fn sync(host: &Host) -> Value {
         json!({"kind":"stremio", "config_id":CONFIG}),
     )["sources"]["providers"][0]
         .clone()
+}
+
+#[test]
+fn source_bootstrap_cache_restores_manifest_without_network_and_refreshes() {
+    let fixture = Fixture::new(standard);
+    let (temp, host) = setup(vec![fixture.url("/manifest.json")]);
+    let first = sync(&host);
+    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
+    drop(host);
+    let restarted = Host::open(temp.path().join("settings.json")).unwrap();
+    let restored = sync(&restarted);
+    assert_eq!(restored["source_revision"], first["source_revision"]);
+    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
+    sync(&restarted);
+    assert_eq!(fixture.requests.lock().unwrap().len(), 2);
+    drop(restarted);
+    let cache = std::fs::read_dir(temp.path().join("source-cache"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    std::fs::write(cache, b"damaged cache").unwrap();
+    let recovered = Host::open(temp.path().join("settings.json")).unwrap();
+    sync(&recovered);
+    assert_eq!(fixture.requests.lock().unwrap().len(), 3);
+}
+
+#[test]
+fn metadata_cache_refreshes_after_seven_days() {
+    let fixture = Fixture::new(standard);
+    let (_temp, host) = setup(vec![fixture.url("/manifest.json")]);
+    let source = sync(&host);
+    let card = first_card(&host, &source);
+    let cat = catalog(&host);
+    let first = cat
+        .details(
+            &Http::default(),
+            &card["ref"],
+            "en",
+            &job(&host, "default_metadata"),
+        )
+        .unwrap();
+    cat.commit(&first).unwrap();
+    let count = fixture.requests.lock().unwrap().len();
+    cat.details(
+        &Http::default(),
+        &card["ref"],
+        "en",
+        &job(&host, "default_metadata"),
+    )
+    .unwrap();
+    assert_eq!(fixture.requests.lock().unwrap().len(), count);
+    for saved in cat.state.lock().unwrap().cache_time.values_mut() {
+        *saved = std::time::Instant::now() - METADATA_TTL;
+    }
+    cat.details(
+        &Http::default(),
+        &card["ref"],
+        "en",
+        &job(&host, "default_metadata"),
+    )
+    .unwrap();
+    assert!(fixture.requests.lock().unwrap().len() > count);
 }
 fn source(host: &Host) -> Value {
     ok(host, "get_sources", json!({}))["providers"][0].clone()
@@ -1080,7 +1146,8 @@ fn n01_language_field_fallback_identity_cache_and_locale_mapping() {
     assert_eq!(
         language_url(
             &fixture.url("/tmdb/zh-CN/manifest.json").parse().unwrap(),
-            "ja"
+            "ja",
+            true
         )
         .unwrap()
         .as_str(),
@@ -1534,11 +1601,11 @@ fn t20_tmdb_opaque_configuration_is_preserved() {
         "https://tmdb.elfhosted.com/N4IgNghgdg5grhGBTEAuEAvAFgWgMIByIAvkA/manifest.json",
     )
     .unwrap();
-    assert_eq!(language_url(&url, "en").unwrap(), url);
-    assert_eq!(language_url(&url, "zh-CN").unwrap(), url);
+    assert_eq!(language_url(&url, "en", true).unwrap(), url);
+    assert_eq!(language_url(&url, "zh-CN", true).unwrap(), url);
     let legacy = Url::parse("https://tmdb.elfhosted.com/en-US/manifest.json").unwrap();
     assert!(
-        language_url(&legacy, "zh-CN")
+        language_url(&legacy, "zh-CN", true)
             .unwrap()
             .path()
             .ends_with("/zh-CN/manifest.json")

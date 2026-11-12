@@ -259,7 +259,7 @@ def startup_ui(run):
         t01.check_media()
         receipt = t01.build(run)
         run.observed["build"] = receipt
-        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
         run.command(["cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "--no-run"], timeout=600)
         rows = run.observed.setdefault("startups", [])
         with tempfile.TemporaryDirectory(prefix="t22-ready-", dir=run.folder) as temporary:

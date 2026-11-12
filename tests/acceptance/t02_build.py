@@ -21,7 +21,7 @@ APP_ID = "com.lagradost.cloudstream3.engine"
 
 def opened(url, timeout):
     # Adoptium rejects urllib's default agent.
-    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "yingxiang-video-engine-build"}), timeout=timeout)
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "moc-video-engine-build"}), timeout=timeout)
 
 
 def sha256(path):

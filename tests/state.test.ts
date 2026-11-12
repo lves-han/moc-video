@@ -318,6 +318,18 @@ test("R01/R31/REQ-T13: candidates and confirmed episodes must belong to the curr
   f.app.navigate({ name: "home" }); await assert.rejects(f.app.loadCandidate(candidate));
 });
 
+test('a single matching title opens automatically while the episode still requires confirmation', async () => {
+  const f = await fixture(); await f.show();
+  f.intercept((call, response) => call.command === 'match_playback' && !call.input.selection
+    ? { ...response, data: { ...response.data, status: 'needs_confirmation', context: null } } : response);
+  const result = await f.app.match('show:1');
+  await flush();
+  assert.equal(result?.status, 'needs_confirmation');
+  assert.equal(f.app.matching.details?.details.ref.source_id, PLAY.source_id);
+  assert.equal(f.root.playback.context, null);
+  assert.equal(f.calls.filter(call => call.command === 'match_playback' && call.input.selection).length, 0);
+});
+
 test("R01/R31/REQ-T13: match statuses, candidate count, metadata and chosen video reject illegal envelopes", async () => {
   const mutations: ((value: PlaybackMatchResult) => void)[] = [
     value => { value.video_id = "show:2"; }, value => { value.metadata_ref.identity.addon_key = "other"; },
@@ -371,4 +383,78 @@ test("configured sources synchronize on load and ready sources are reused", asyn
   assert.deepEqual(calls, ["get_sources", "sync_catalog", "get_sources"]);
   await app.loadSources();
   assert.equal(calls.filter(command => command === "sync_catalog").length, 1);
+});
+
+test('background source checks wait four hours, run one at a time and avoid playback', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>();
+  const store = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: store });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); });
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  values.set('moc-video.source-checks.v1', JSON.stringify({ [CONFIG]: now, [NEXT]: now }));
+  const root = createAppState(); root.runtime.engine_epoch = HOST;
+  root.sources.data = { providers: providers(), plugins: [] };
+  const calls: string[] = [];
+  const client = new Api(async (command, args) => {
+    if (command !== 'sync_catalog') throw new Error(`Unexpected ${command}`);
+    calls.push(args.input.config_id);
+    return { request_id: args.request_id, engine_epoch: HOST, data: { kind: args.input.kind, config_id: args.input.config_id, changed: false, sources: root.sources.data, cloudstream_result: null } };
+  });
+  const app = new AppController(client, new SettingsQueue(client), root);
+  await app.refreshOneSourceIfDue();
+  assert.deepEqual(calls, []);
+  now += 4 * 60 * 60 * 1000;
+  await app.refreshOneSourceIfDue(() => false);
+  assert.deepEqual(calls, []);
+  await app.refreshOneSourceIfDue();
+  assert.deepEqual(calls, [CONFIG]);
+  await app.refreshOneSourceIfDue();
+  assert.deepEqual(calls, [CONFIG, NEXT]);
+  root.route = { name: 'playback', context: context() };
+  now += 4 * 60 * 60 * 1000;
+  await app.refreshOneSourceIfDue();
+  assert.deepEqual(calls, [CONFIG, NEXT]);
+  assert.equal(JSON.stringify(values.get('moc-video.source-checks.v1')).includes('https://'), false);
+});
+
+test('cached film details appear immediately after restart without stale gateway URLs', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>();
+  const store = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: store });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); });
+  const f = await fixture(); await f.show();
+  assert.ok(values.has('moc-video.metadata.v1'));
+  const count = f.calls.filter(call => call.command === 'get_details').length;
+  f.root.details.data = null; f.root.details.phase = 'idle';
+  const reopened = new AppController(f.client, f.queue, f.root);
+  await reopened.loadDetails(ref('show'));
+  assert.equal(f.root.details.phase, 'ready');
+  assert.equal(f.root.details.data?.details.title, 'show');
+  assert.deepEqual(f.root.details.data?.images, {});
+  assert.equal(f.calls.filter(call => call.command === 'get_details').length, count);
+  reopened.navigate({ name: 'home' });
+});
+
+test('an unavailable source is not tested again on every launch', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); },
+  } });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); });
+  let checks = 0;
+  const client = new Api(async (command, args) => {
+    if (command === 'sync_catalog') { checks++; throw new ApiFailure(error); }
+    if (command !== 'get_sources') throw new Error(`Unexpected ${command}`);
+    const rows = providers(); rows[0]!.runtime_status = 'configured';
+    return { request_id: args.request_id, engine_epoch: HOST, data: { providers: rows, plugins: [] } };
+  });
+  for (let i = 0; i < 2; i++) {
+    const root = createAppState(); root.runtime.engine_epoch = HOST;
+    await new AppController(client, new SettingsQueue(client), root).loadSources();
+  }
+  assert.equal(checks, 1);
 });

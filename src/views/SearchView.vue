@@ -6,6 +6,7 @@ import { locale, t } from '../i18n';
 import MediaRow from '../components/MediaRow.vue';
 import Icon from '../components/Icon.vue';
 import type { Bridge_MediaRef } from '../models';
+import { approximateResults } from '../data/search-match';
 
 const emit = defineEmits<{ open:[ref:Bridge_MediaRef] }>();
 const word = (zh:string, en:string) => locale.value === 'zh-CN' ? zh : en;
@@ -24,6 +25,7 @@ const genres = computed(() => [
   { kind:'anime', title:t('Animation'), icon:'sparkles' }, { kind:'documentary', title:t('Documentary'), icon:'documentary' },
   { kind:'variety', title:t('Variety'), icon:'variety' }, { kind:'short', title:t('Short dramas'), icon:'short' },
 ]);
+const approximate = computed(() => app.search.phase === 'ready' && approximateResults(app.search.query, app.search.items.map(item => item.title)));
 let timer: ReturnType<typeof setTimeout> | undefined, observer:IntersectionObserver | undefined;
 let posterQueue = Promise.resolve();
 function search() {
@@ -67,8 +69,13 @@ onBeforeUnmount(() => { clearTimeout(timer); observer?.disconnect(); app.cancelS
     <p v-if="app.search.error" class="search-error" role="alert">{{ describeError(app.search.error) }} <button class="glass-pill" @click="search">{{ t('Retry') }}</button></p>
     <div v-if="query.trim()" class="search-results" :class="{ pending:app.search.phase === 'loading' }" :aria-busy="app.search.phase === 'loading'">
       <p v-if="app.search.phase === 'loading'" class="search-loading" role="status">{{ t('Loading…') }}</p>
+      <p v-if="approximate" class="search-approximate" role="status">{{ word('没有完全匹配的片名，已显示相近结果。', 'No exact title match; showing close results.') }}</p>
       <MediaRow v-for="group in groups" :key="group.key" :data-kind="group.key" :title="group.title" :items="group.items" :images="app.search.images" @open="open" @image-error="app.searchImageError" />
       <div v-if="app.search.phase === 'empty'" class="catalog-status search-empty" role="status"><Icon name="search" :size="48" /><h2>{{ word('未找到结果','No results found') }}</h2><p>{{ word('试试其他片名或搜索来源。','Try another title or search source.') }}</p></div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.search-approximate { margin: 0 0 12px; color: var(--muted); }
+</style>

@@ -56,7 +56,7 @@ export type Bridge_ResourceStatusEnvelope = { "request_id": string; "engine_epoc
 export type EmptyInput = {  };
 export type SourceKey = { "source_id": string; "source_revision": string };
 export type WindowBounds = { "x": number; "y": number; "width": number; "height": number; "maximized": boolean };
-export type Settings = { "schema_version": 2; "last_source_key": (string | null); "volume": number; "muted": boolean; "auto_next": boolean; "window_bounds": (WindowBounds | null); "source_configs": Array<HttpSourceConfig>; "ui_locale"?: "en" | "zh-CN"; "ui_theme"?: "dark" | "light"; "color_palette"?: "lime" | "ocean" | "violet" | "rose" | "amber"; "last_metadata_config_id"?: (string | null); "last_playback_source_key"?: (string | null); "media_cache_max_bytes"?: number; "metadata_preset_applied"?: boolean };
+export type Settings = { "schema_version": 2; "last_source_key": (string | null); "volume": number; "muted": boolean; "auto_next": boolean; "window_bounds": (WindowBounds | null); "source_configs": Array<HttpSourceConfig>; "ui_locale"?: "en" | "zh-CN"; "ui_theme"?: "dark" | "light"; "color_palette"?: "lime" | "ocean" | "violet" | "rose" | "amber"; "last_metadata_config_id"?: (string | null); "last_playback_source_key"?: (string | null); "media_cache_max_bytes"?: number; "tmdb"?: { "enabled": boolean; "instance_url": string; "language": "follow" | "en" | "zh-CN"; "mode"?: "stremio" | "api"; "api_key"?: string; "api_url"?: string; "image_url"?: string }; "live_configs"?: Array<{ "config_id": string; "name": string; "url": string; "epg_url"?: (string | null); "enabled": boolean }>; "local_paths"?: Array<string> };
 export type RuntimeStatus = { "platform": "macos" | "windows" | "linux" | "android" | "ios"; "phase": "unavailable" | "checking" | "preparing" | "starting" | "ready" | "stopping" | "failed"; "engine_epoch": (string | null); "health": (HostHealth | null); "error": (Bridge_ApiError | null); "cloudstream": CloudstreamRuntime };
 export type ResourceUrl = string;
 export type ImageAccess = { "resource_id": string; "url": ResourceUrl; "expires_at": string };
@@ -169,6 +169,19 @@ export type Args_remove_watchlist = { "request_id": string; "input": { "content_
 export type Result_remove_watchlist = ({ "request_id": string; "engine_epoch": string; "data": Bridge_Ack } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type Args_search_catalog = { "request_id": string; "input": Bridge_SearchRequest };
 export type Result_search_catalog = ({ "request_id": string; "engine_epoch": string; "data": Bridge_SearchResult } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type LiveChannel = { "index": number; "name": string; "group": string; "logo": (string | null); "url": string; "supported": boolean };
+export type LiveChannelList = { "config_id": string; "revision": string; "format": "m3u" | "txt"; "channels": Array<LiveChannel> };
+export type Args_get_live_channels = { "request_id": string; "input": { "config_id": string } };
+export type Result_get_live_channels = ({ "request_id": string; "engine_epoch": string; "data": LiveChannelList } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_open_live = { "request_id": string; "input": { "config_id": string; "revision": string; "index": number } };
+export type Result_open_live = ({ "request_id": string; "engine_epoch": string; "data": PlaybackViewSession } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type LocalVideo = { "id": string; "name": string; "path": string; "root": string; "size": number; "supported": boolean };
+export type LocalVideoList = { "roots": Array<{ "path": string; "available": boolean }>; "items": Array<LocalVideo> };
+export type LocalPlayback = { "session": PlaybackViewSession; "match_id": string; "record": WatchHistoryRecord };
+export type Args_list_local_videos = { "request_id": string; "input": {  } };
+export type Result_list_local_videos = ({ "request_id": string; "engine_epoch": string; "data": LocalVideoList } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
+export type Args_open_local = { "request_id": string; "input": { "id": string } };
+export type Result_open_local = ({ "request_id": string; "engine_epoch": string; "data": LocalPlayback } | { "request_id": string; "engine_epoch": (string | null); "error": Bridge_ApiError });
 export type CommandArgs = {
   "runtime_status": Args_runtime_status;
   "runtime_prepare": Args_runtime_prepare;
@@ -197,6 +210,10 @@ export type CommandArgs = {
   "add_watchlist": Args_add_watchlist;
   "remove_watchlist": Args_remove_watchlist;
   "search_catalog": Args_search_catalog;
+  "get_live_channels": Args_get_live_channels;
+  "open_live": Args_open_live;
+  "list_local_videos": Args_list_local_videos;
+  "open_local": Args_open_local;
 };
 export type CommandResults = {
   "runtime_status": Result_runtime_status;
@@ -226,6 +243,10 @@ export type CommandResults = {
   "add_watchlist": Result_add_watchlist;
   "remove_watchlist": Result_remove_watchlist;
   "search_catalog": Result_search_catalog;
+  "get_live_channels": Result_get_live_channels;
+  "open_live": Result_open_live;
+  "list_local_videos": Result_list_local_videos;
+  "open_local": Result_open_local;
 };
 export type Command = keyof CommandArgs;
 export type CommandInput<C extends Command> = CommandArgs[C]['input'];

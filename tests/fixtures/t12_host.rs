@@ -58,7 +58,7 @@ fn t12_host_formal_webview_bridge() {
                 }
             } else {
                 Reply::raw(
-                    "WEBVTT\n\n00:00:00.000 --> 00:00:01.900\n映象 T12\n",
+                    "WEBVTT\n\n00:00:00.000 --> 00:00:01.900\n墨客 T12\n",
                     "text/vtt",
                 )
             };

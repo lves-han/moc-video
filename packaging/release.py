@@ -126,6 +126,17 @@ def collect():
                 source_crate=f"libsqlite3-sys@{package['version']}", source_file_sha256=digest(data),
                 scope="runtime-bundled-c", texts=[dict(path="sqlite3/sqlite3.c copyright header",
                     sha256=digest(notice.encode()), text=notice)]))
+    # The trimmed FFmpeg dylibs ship in Contents/Frameworks (ADR-066/067): LGPL text, exact source and configuration.
+    build = read(ROOT / "src-tauri/ffmpeg/dist/ffmpeg-build.json")
+    source = ROOT / "src-tauri/ffmpeg/src"
+    offer = (f"FFmpeg {build['branch']} commit {build['commit']} from {build['source']}, built as shared libraries by "
+             f"src-tauri/ffmpeg/build_ffmpeg.py with: {' '.join(build['configure'])}\n"
+             f"Configured license: {build['license']}. The dylibs in Contents/Frameworks may be replaced by a compatible build.\n")
+    packages.append(dict(ecosystem="bundled-binary", name="FFmpeg", version=f"{build['branch']}@{build['commit'][:12]}",
+        source=build["source"], license="LGPL-2.1-or-later", scope="runtime-bundled-dylib",
+        texts=[*(dict(path=name, sha256=digest((source / name).read_bytes()), text=(source / name).read_bytes().decode("utf-8"))
+                 for name in ("LICENSE.md", "COPYING.LGPLv2.1")),
+               dict(path="build configuration and source", sha256=digest(offer.encode()), text=offer)]))
     locks = {name: digest((ROOT / name).read_bytes()) for name in ("package-lock.json", "src-tauri/Cargo.lock")}
     return dict(schema_version=1, target=TARGET, locks=locks, cargo_metadata_argv=command,
         scope="Installed locked npm runtime/build packages and target Cargo non-dev closure including build dependencies; optional foreign-target npm binaries excluded. Alternatives are preserved. Packages omitting notices use hash-bound, individually attributed supplements. vdirs publishes an MIT declaration without a notice file; its declaration and standard MIT reference are distinctly labelled, not represented as an upstream copyright notice.",
@@ -133,7 +144,7 @@ def collect():
 
 
 def notices(inventory):
-    parts = ["映象视频 — third-party license and copyright notices\n",
+    parts = ["墨客视频 — third-party license and copyright notices\n",
              inventory["scope"] + "\n"]
     for package in inventory["packages"]:
         parts.append(f"\n{'=' * 72}\n{package['ecosystem']}: {package['name']} {package['version']}\nLicense: {package['license']}\nSource: {package['source']}\n")
@@ -188,15 +199,20 @@ def check_payload(app, frontend):
     """Check actual shipping bytes, not names of source dependencies."""
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     config = read(ROOT / "src-tauri/tauri.conf.json")
-    require(info["CFBundleIdentifier"] == config["identifier"] == "app.yingxiang.video", "Application identity differs")
+    require(info["CFBundleIdentifier"] == config["identifier"] == "app.moc.video", "Application identity differs")
     require(info["CFBundleShortVersionString"] == config["version"] == "0.1.0"
             and info["CFBundleVersion"] == config["bundle"]["macOS"]["bundleVersion"] == "2", "Display/build version differs")
     require(info["LSMinimumSystemVersion"] == "14.0" and info["NSHighResolutionCapable"], "macOS/DPI metadata differs")
     require(info["NSAppTransportSecurity"] == {"NSAllowsLocalNetworking": True}, "ATS exceptions changed")
     executable = app / "Contents/MacOS" / info["CFBundleExecutable"]
-    require(executable.name == "yingxiang-video" and os.access(executable, os.X_OK), "Shipping executable missing")
-    allowed = {"Contents/Info.plist", "Contents/MacOS/yingxiang-video", "Contents/_CodeSignature/CodeResources",
+    require(executable.name == "moc-video" and os.access(executable, os.X_OK), "Shipping executable missing")
+    allowed = {"Contents/Info.plist", "Contents/MacOS/moc-video", "Contents/_CodeSignature/CodeResources",
                "Contents/Resources/icon.icns", "Contents/Resources/licenses/dependencies.json", "Contents/Resources/licenses/THIRD_PARTY_NOTICES.txt"}
+    frameworks = [ROOT / "src-tauri" / path for path in config["bundle"]["macOS"].get("frameworks", [])]
+    allowed |= {f"Contents/Frameworks/{path.name}" for path in frameworks}
+    for path in frameworks:
+        data = (app / "Contents/Frameworks" / path.name).read_bytes()
+        require(data == path.read_bytes() and str(Path.home()).encode() not in data, f"Bundled FFmpeg library differs or holds a local path: {path.name}")
     files = tree(app)
     require(set(files) == allowed, "Unexpected or missing shipping files: " + str(sorted(set(files) ^ allowed)))
     require(info["CFBundleIconFile"] == "icon.icns"
@@ -248,6 +264,9 @@ def build():
             "Production build requires unmodified configuration")
     sys.path.insert(0, str(ROOT / "scripts"))
     import workflow
+    # Historical T23/T24 callers keep their manifest format; final delivery
+    # binds the installer to the card which owns its new build and observation.
+    card = "T0.36" if workflow.current() == "T0.36" else "T0.27"
     source, protected = workflow.snapshot(), workflow.protected_hash()
     folder = ROOT / "evidence/releases" / ("T23-" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8])
     folder.mkdir(parents=True)
@@ -276,8 +295,8 @@ def build():
     command(["cargo", "tauri", "build", "--ci", "--config", '{"build":{"devUrl":null}}', "--bundles", "app", "--no-sign", "--", "--locked", "--offline"], timeout=6000)
     image = folder / "image-root"
     image.mkdir()
-    app = image / "映象视频.app"
-    shutil.copytree(ROOT / "target/release/bundle/macos/映象视频.app", app, symlinks=True)
+    app = image / "墨客视频.app"
+    shutil.copytree(ROOT / "target/release/bundle/macos/墨客视频.app", app, symlinks=True)
     frontend = folder / "frontend"
     shutil.copytree(ROOT / "dist", frontend, symlinks=True)
     command(["/usr/bin/codesign", "--force", "--sign", "-", "--timestamp=none", app])
@@ -294,11 +313,11 @@ def build():
     payload = check_payload(app, frontend)
     # Store an isolated copy; later Cargo/T01 builds can replace target freely.
     (image / "Applications").symlink_to("/Applications", target_is_directory=True)
-    stem = "YingxiangVideo-0.1.0-build2-macos-arm64-personal"
+    stem = "MocVideo-0.1.0-build2-macos-arm64-personal"
     archive = folder / (stem + ".zip")
     dmg = folder / (stem + ".dmg")
     command(["/usr/bin/ditto", "-c", "-k", "--norsrc", "--keepParent", app, archive])
-    command(["/usr/bin/hdiutil", "create", "-volname", "YingxiangVideo", "-srcfolder", image, "-format", "UDZO", dmg])
+    command(["/usr/bin/hdiutil", "create", "-volname", "MocVideo", "-srcfolder", image, "-format", "UDZO", dmg])
     command(["/usr/bin/hdiutil", "verify", dmg])
     # Preserve the actually tested predecessor, not a second copy of build 2.
     prior_report = read(ROOT / "evidence/acceptance/T22-startup-ui.json")
@@ -315,7 +334,7 @@ def build():
     command(["/usr/bin/ditto", "-c", "-k", "--norsrc", "--keepParent", previous_app, previous_zip])
     require(workflow.snapshot() == source and workflow.protected_hash() == protected, "Source/baseline changed during build")
     files = tree(app)
-    manifest = dict(schema_version=2, card="T0.27", utc=dt.datetime.now(dt.timezone.utc).isoformat(),
+    manifest = dict(schema_version=2, card=card, utc=dt.datetime.now(dt.timezone.utc).isoformat(),
         target="macos-arm64", scope="personal use only; not public distribution", source=source, protected=protected,
         app=app.relative_to(ROOT).as_posix(), frontend=frontend.relative_to(ROOT).as_posix(),
         files=files, frontend_files=tree(frontend), logical_bytes=sum(row["bytes"] for row in files.values()),

@@ -62,8 +62,9 @@ impl History {
             connection
                 .busy_timeout(Duration::from_millis(200))
                 .map_err(failure)?;
-            migrate(&mut connection).map_err(|mut error| {
-                error.message = format!("History database migration failed: {}", error.message);
+            initialize_schema(&mut connection).map_err(|mut error| {
+                error.message =
+                    format!("History database initialization failed: {}", error.message);
                 error
             })?;
             self.connection = Some(connection);
@@ -273,8 +274,8 @@ fn validate_watchlist(entry: &Value) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// One transaction per version: a failed migration leaves the previous file contents.
-fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
+/// Initialize the current schema atomically; existing older schemas are rejected.
+fn initialize_schema(connection: &mut Connection) -> Result<(), ApiError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(failure)?;
@@ -286,11 +287,15 @@ fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
     if version == VERSION {
         return Ok(());
     }
+    if version != 0 {
+        let mut error = ApiError::internal("Unsupported history database version");
+        error.retryable = false;
+        return Err(error.with_details(json!({"reason":"unsupported_version"})));
+    }
     let transaction = connection.transaction().map_err(failure)?;
-    if version == 0 {
-        transaction
-            .execute_batch(
-                "CREATE TABLE watch_history (
+    transaction
+        .execute_batch(
+            "CREATE TABLE watch_history (
                 content_id TEXT PRIMARY KEY NOT NULL,
                 metadata_config_id TEXT NOT NULL,
                 metadata_addon_key TEXT NOT NULL,
@@ -312,10 +317,9 @@ fn migrate(connection: &mut Connection) -> Result<(), ApiError> {
                 updated_at INTEGER NOT NULL
             );
             CREATE INDEX watch_history_recent ON watch_history (updated_at DESC, content_id);
-            PRAGMA user_version = 1;",
-            )
-            .map_err(failure)?;
-    }
+            ",
+        )
+        .map_err(failure)?;
     transaction
         .execute_batch(
             "CREATE TABLE watchlist (

@@ -255,7 +255,7 @@ def public_library(run):
     lib = (ROOT / "src-tauri/src/lib.rs").read_text()
     main = (ROOT / "src-tauri/src/main.rs").read_text()
     require("#[cfg_attr(mobile, tauri::mobile_entry_point)]" in lib and "pub fn run()" in lib
-            and "yingxiang_video::run()" in main, "shared desktop/mobile library entry is missing")
+            and "moc_video::run()" in main, "shared desktop/mobile library entry is missing")
     require(re.search(r"#\[cfg\(all\(not\(mobile\), feature = \"t01-automation\"\)\)\]\s*mod automation", lib), "desktop automation lacks mobile cfg isolation")
     require(re.search(r"#\[cfg\(not\(mobile\)\)\]\s*let window = window\s*\.inner_size", lib), "desktop window size lacks cfg isolation")
     require("#[cfg(mobile)]" in lib and "|_| false" in lib, "mobile handler must exclude desktop commands")
@@ -320,9 +320,9 @@ def native_session(run, executable, url, name, seed=None, probe=None):
         path = folder / "seed.js"
         path.write_text("window.__T13_SEED_EXPECT__=" + json.dumps(seed) + ";\n"
             + "window.__T13_SEED_EXPECT__.ui_theme=matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark';\n"
-            + "localStorage.setItem('yingxiang-video.settings',JSON.stringify(window.__T13_SEED_EXPECT__));\n"
-            + "localStorage.setItem('yingxiang-video.palette','rose');localStorage.setItem('yingxiang-video.locale','zh-CN');\n"
-            + "localStorage.setItem('yingxiang-video.theme','dark');\n", encoding="utf-8")
+            + "localStorage.setItem('moc-video.settings',JSON.stringify(window.__T13_SEED_EXPECT__));\n"
+            + "localStorage.setItem('moc-video.palette','rose');localStorage.setItem('moc-video.locale','zh-CN');\n"
+            + "localStorage.setItem('moc-video.theme','dark');\n", encoding="utf-8")
         argv.append(str(path))
     owned, samples = {}, []
     started = time.monotonic()

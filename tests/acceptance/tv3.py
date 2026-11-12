@@ -244,7 +244,7 @@ def windows(run, *, hero_only=False, browse_only=False, builtin_only=False, revi
         require(t01.native_gui_session()["screen_locked"] is not True, "Unlock the macOS desktop")
         t01.check_media(); t01.build(run)
         receipt = t01.check_build(run.source)
-        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
         run.command(["clang", "-fobjc-arc", "-framework", "Cocoa", "-framework", "ApplicationServices", "tests/fixtures/tv1_native.m", "-o", str(run.folder / "tv1-native")])
         with tempfile.TemporaryDirectory(prefix="tv3-live-", dir=run.folder) as temporary:
             folder = Path(temporary); media = folder / "media"; media.mkdir()

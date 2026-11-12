@@ -150,7 +150,7 @@ void (async () => {
       const first = window.__T13_FIRST_FRAME__;
       assert(first && first.lang === "en" && first.palette === "lime", "Default first frame must use English/lime");
       assert(first.scheme === (first.dark ? "dark" : "light") && first.accent, "First-frame system theme is missing");
-      assert(document.title.includes("Yingxiang Video"), "English document title missing");
+      assert(document.title.includes("Moc Video"), "English document title missing");
       assert(document.querySelector(".language-picker").getAttribute("aria-label") === "App language", "English accessibility name missing");
       assert(!document.querySelector("vite-error-overlay"), "Vite error overlay");
       assert(document.body.innerText.includes("Interface preview"), "Preview provenance missing");
@@ -167,7 +167,7 @@ void (async () => {
       const link = document.querySelector(".film-card .poster-link"); assert(link, "Filtered catalog empty"); const href = link.getAttribute("href");
       link.click(); await wait(() => app.state.route.name === "details" && app.state.details.phase === "ready", "film details");
       const stable = JSON.stringify(app.state.details.data.metadata_ref);
-      await language("zh-CN"); assert(document.title.includes("映象视频"), "Chinese document title missing");
+      await language("zh-CN"); assert(document.title.includes("墨客视频"), "Chinese document title missing");
       assert(JSON.stringify(app.state.details.data.metadata_ref) === stable, "Language changed metadata identity");
       click('.topbar a[aria-label="返回"]'); await wait(() => app.state.route.name === "home", "return home"); await frame();
       assert(Array.from(document.querySelector(".genre-bar").children).indexOf(document.querySelector('.genre-bar [aria-pressed="true"]')) === index, "Back lost genre filter");
@@ -194,7 +194,7 @@ void (async () => {
         await settledColors();
         const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
         assert(accent === (dark ? palette.night : palette.day), "System and Naive palette disagree");
-        const stored = JSON.parse(localStorage.getItem("yingxiang-video.settings"));
+        const stored = JSON.parse(localStorage.getItem("moc-video.settings"));
         assert(stored.ui_locale === lang && stored.color_palette === palette.value, "Queued Settings lost a preference");
         assert(document.querySelector(".setting-select").value === lang, "Topbar and settings language disagree");
         const measured = textContrast(".setting-row h3, .setting-row p, .system-mode, .palette-name, .language-picker, .setting-select, .page-heading h1");

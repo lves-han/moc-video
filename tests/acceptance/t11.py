@@ -352,7 +352,7 @@ def webview(run):
     # The existing build function validates production/automation separation and
     # binds both bundles and dependency locks to the current source digest.
     receipt = t01.check_build(run.source)
-    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+    executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
     argv = workflow.runtime.resolve_argv(["cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", LIVE_TEST, "--", "--exact", "--test-threads=1", "--nocapture"])
     log_path = run.folder / "live-host.log"
     record = dict(argv=argv, exit=None, log=str(log_path.relative_to(ROOT)))

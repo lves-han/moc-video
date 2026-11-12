@@ -632,7 +632,7 @@ config_generation是Rust内存中的单调计数，删除后保留该config_id�
 
 历史按稳定影片身份合并，每部影片展示最近观看的一集；按updated_at倒序，分为今天/昨天/更早。页面提供海报、名称、当前集、播放来源、进度、最近观看时间、继续观看和看完重播；空态、加载、失败及重试均有明确展示。单条删除与清空都先确认，写入成功后更新列表，失败保留原数据并显示原因。已看完表示当前集结束；重播该集时从0开始。
 
-**正式持久化结构与所有权。** Rust在应用数据目录管理`yingxiang-video.db`，使用版本化SQLite迁移和参数绑定读写，迁移事务失败保留已有数据。新增`watch_history`表，以`content_id`为主键；`PRAGMA user_version`管理数据库版本，与Settings.schema_version分别演进。字段约定如下：
+**正式持久化结构与所有权。** Rust在应用数据目录管理`moc-video.db`，使用版本化SQLite迁移和参数绑定读写，迁移事务失败保留已有数据。新增`watch_history`表，以`content_id`为主键；`PRAGMA user_version`管理数据库版本，与Settings.schema_version分别演进。字段约定如下：
 
 | 字段 | SQLite类型及语义 |
 |---|---|

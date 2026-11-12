@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
 export type AppLocale = "en" | "zh-CN";
-export const localeStorageKey = "yingxiang-video.locale";
+export const localeStorageKey = "moc-video.locale";
 
 // English is the base language. Regional Chinese tags share Simplified Chinese.
 export function getStremioLanguage(language: string): AppLocale {
@@ -71,6 +71,8 @@ export const chinese = {
   "Remove": "删除",
   "Remove {title} and its saved progress from this device?": "删除此设备中《{title}》的观看记录和播放进度？",
   "Watch history": "观看历史",
+  "Local video": "本地视频",
+  "Live": "直播",
   "History": "历史",
   "Today": "今天",
   "Yesterday": "昨天",
@@ -119,8 +121,8 @@ export const chinese = {
   "Dark mode": "深色模式",
   "Skip to content": "跳到主要内容",
   "Main navigation": "主导航",
-  "Yingxiang Video home": "映象视频首页",
-  "Yingxiang Video": "映象视频",
+  "Moc Video home": "墨客视频首页",
+  "Moc Video": "墨客视频",
   "DISCOVER GOOD STORIES": "去发现好故事",
   "YOUR SCREENING ROOM": "你的放映室",
   "Source manager": "来源管理",
@@ -128,7 +130,7 @@ export const chinese = {
   "Make good stories": "让好故事",
   "part of every day.": "成为日常的一部分。",
   "Interface preview": "界面预览",
-  "Yingxiang Video · 0.1.0": "映象视频 · 0.1.0",
+  "Moc Video · 0.1.0": "墨客视频 · 0.1.0",
   Back: "返回",
   "Make time for a good story.": "把时间，留给好故事。",
   Demo: "演示",
@@ -206,7 +208,7 @@ export const chinese = {
     "剧集播放结束后，继续下一集。",
   "Default playback speed": "默认播放速度",
   "Use this speed for all local demo clips.": "所有本地演示片段使用此速度。",
-  "About Yingxiang Video": "关于映象视频",
+  "About Moc Video": "关于墨客视频",
   "A place for good stories.": "一处留给好故事的空间。",
   "Interface preview 0.1.0": "界面预览 0.1.0",
   "Explore discovery, film details, episodes, embedded playback and source management. Artwork is original, playback uses a local 30-second demo, and playback preferences last for this page session.":
@@ -228,7 +230,7 @@ export const chinese = {
     "Stremio 请填写以 manifest.json 结尾的完整地址。",
   Cancel: "取消",
   Close: "关闭",
-  "Welcome to Yingxiang Video": "欢迎来到映象视频",
+  "Welcome to Moc Video": "欢迎来到墨客视频",
   "Close preview information": "关闭预览说明",
   "This is an interactive interface preview. Films, credits and synopses are fictional, artwork is AI-generated, and the player uses a local 30-second test clip. Explore details, episodes, subtitles, playback preferences and source management.":
     "这是一份可以操作的界面预览。影片、演职员和简介均为虚构，画面由 AI 原创生成；播放器使用本地 30 秒测试片段。你可以浏览详情、切换集数与字幕、调整播放设置，或体验来源管理。",

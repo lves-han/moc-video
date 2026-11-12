@@ -19,7 +19,7 @@ test("Startup restores every supported palette and ignores old manual light/dark
       document: { documentElement: { dataset } },
       localStorage: {
         getItem(key: string) {
-          return key === "yingxiang-video.palette" ? saved : "dark";
+          return key === "moc-video.palette" ? saved : "dark";
         },
       },
     });

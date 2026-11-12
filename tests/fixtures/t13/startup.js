@@ -4,7 +4,7 @@ void (async () => {
     const end = performance.now() + 15000;
     while (!window.__T13_FIRST_FRAME__ && performance.now() < end) await new Promise(resolve => setTimeout(resolve, 30));
     const reloaded = !window.__T13_SEED_EXPECT__;
-    const expected = window.__T13_SEED_EXPECT__ || JSON.parse(localStorage.getItem("yingxiang-video.settings")), first = window.__T13_FIRST_FRAME__;
+    const expected = window.__T13_SEED_EXPECT__ || JSON.parse(localStorage.getItem("moc-video.settings")), first = window.__T13_FIRST_FRAME__;
     if (!first || first.palette !== expected.color_palette || first.lang !== expected.ui_locale || first.scheme !== (first.dark ? "dark" : "light") || !first.accent) throw new Error(`First-frame mismatch: ${JSON.stringify({ expected, first })}`);
     const { paletteOptions } = await import("/src/ui/theme.ts");
     const brand = paletteOptions.find(item => item.value === expected.color_palette);

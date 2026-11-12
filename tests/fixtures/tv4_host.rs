@@ -92,13 +92,18 @@ fn fixture4(media: Option<std::path::PathBuf>, failure: Arc<AtomicBool>) -> Fixt
         } else {
             (0..2)
                 .map(|n| {
-                    media4(
+                    let mut item = media4(
                         port,
                         &format!(
                             "{}:{page}:{n}",
                             request.query.get("t").map(String::as_str).unwrap_or("1")
                         ),
-                    )
+                    );
+                    // Search results name the queried title, as a real source does.
+                    if let Some(query) = request.query.get("wd") {
+                        item["vod_name"] = json!(format!("{query} {n}"));
+                    }
+                    item
                 })
                 .collect()
         };

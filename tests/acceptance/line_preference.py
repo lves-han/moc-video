@@ -102,7 +102,7 @@ def windows(run):
         t01.check_media()
         t01.build(run)
         receipt = t01.check_build(run.source)
-        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/yingxiang-video"
+        executable = ROOT / receipt["automation"]["path"] / "Contents/MacOS/moc-video"
         run.observed["prior_fixed_build"] = dict(commit="e6c9b946636adb29afe1bc849f536d2244b1dc38", status="PRE_CHANGE_T0.35_ONLY", validates_current_source=False)
         with tempfile.TemporaryDirectory(prefix="t37-owned-", dir=run.folder) as folder:
             folder = Path(folder)

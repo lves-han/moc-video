@@ -41,6 +41,7 @@ pub const STREAM_BUFFER: usize = 64 * 1024;
 pub const IMAGE_BYTES: usize = 8 * 1024 * 1024;
 pub const IMAGE_PIXELS: u64 = 16_777_216;
 const IMAGE_COUNT: usize = 4096;
+const LIVE_RESOURCE_WINDOW: usize = 2048;
 const CONNECTIONS: usize = 64;
 const RESOURCE_REQUESTS: usize = 16;
 
@@ -76,6 +77,11 @@ struct Resource {
 }
 struct Session {
     selected: Arc<LinkRecord>,
+    // Live channels bypass the media cache and drop old segment registrations.
+    live: bool,
+    // Local MKV sessions generate playlist, init and segments from this plan on request.
+    remux: Option<Arc<crate::remux::Plan>>,
+    local_file: Option<Arc<std::fs::File>>,
     cap: String,
     resources: HashMap<String, Resource>,
     cancelled: Arc<AtomicBool>,
@@ -218,6 +224,15 @@ impl Gateway {
         Ok(health)
     }
     pub fn open(&self, selected: Arc<LinkRecord>) -> Result<Value, ApiError> {
+        self.open_session(selected, false, None)
+    }
+    pub fn open_live(&self, selected: Arc<LinkRecord>) -> Result<Value, ApiError> {
+        self.open_session(selected, true, None)
+    }
+    pub fn open_file(&self, selected: Arc<LinkRecord>, file: std::fs::File) -> Result<Value, ApiError> {
+        self.open_session(selected, false, Some(Arc::new(file)))
+    }
+    fn open_session(&self, selected: Arc<LinkRecord>, live: bool, local_file: Option<Arc<std::fs::File>>) -> Result<Value, ApiError> {
         if !selected.link.playable {
             return Err(ApiError::new(
                 "MEDIA_UNSUPPORTED",
@@ -253,7 +268,9 @@ impl Gateway {
             Resource {
                 url: selected.link.url.clone(),
                 headers: selected.link.headers.clone(),
-                kind: if selected.link.kind == "hls" {
+                kind: if selected.link.provider == "local" {
+                    "file"
+                } else if selected.link.kind == "hls" {
                     "manifest"
                 } else {
                     "media"
@@ -277,12 +294,48 @@ impl Gateway {
             Session {
                 resources,
                 selected,
+                live,
+                remux: None,
+                local_file,
                 cap,
                 cancelled: Arc::new(AtomicBool::new(false)),
                 active: 0,
                 last_activity: now,
             },
         );
+        Ok(value)
+    }
+    /// A local MKV session: its HLS playlist, init and media segments, and text tracks.
+    pub fn open_remux(&self, selected: Arc<LinkRecord>, plan: Arc<crate::remux::Plan>) -> Result<Value, ApiError> {
+        let mut records = self.shared.records.lock().map_err(|_| ApiError::internal("Resource registry poisoned"))?;
+        let now = self.shared.clock.now_ms();
+        records.sweep(now);
+        if records.sessions.len() >= 256 {
+            return Err(ApiError::new("RESOURCE_LIMIT", "Playback session table is full"));
+        }
+        let id = Uuid::new_v4().to_string();
+        let cap = capability()?;
+        let resource = |kind: &'static str| Resource {
+            url: selected.link.url.clone(),
+            headers: HeaderMap::new(),
+            kind,
+            diagnostic: Diagnostic::default(),
+        };
+        let mut resources = HashMap::from([("index".to_owned(), resource("remux-playlist")), ("init".to_owned(), resource("remux-init"))]);
+        for n in 0..plan.segments.len() {
+            resources.insert(format!("s{n}"), resource("remux-segment"));
+        }
+        let subtitles: Vec<Value> = plan.subtitles.iter().map(|t| {
+            resources.insert(format!("t{}", t.index), resource("remux-subtitle"));
+            json!({"id": format!("t{}", t.index), "label": t.label, "language": t.language, "format": "vtt",
+                "source_format": if t.ass { "ass" } else { "srt" }, "url": self.url(&format!("/media/{id}/t{}", t.index), &cap)})
+        }).collect();
+        let value = json!({"session_id": id, "resolution_id": selected.resolution_id, "stream_id": selected.stream_id,
+            "source_id": selected.link.provider, "source_revision": selected.source_revision, "episode_ref": selected.episode_ref,
+            "stream_kind": "hls", "mime_type": "application/vnd.apple.mpegurl", "media_url": self.url(&format!("/media/{id}/index"), &cap),
+            "subtitles": subtitles, "expires_at": expires_after(SESSION_IDLE_MS)?});
+        records.sessions.insert(id, Session { resources, selected, live: false, remux: Some(plan), local_file: None, cap,
+            cancelled: Arc::new(AtomicBool::new(false)), active: 0, last_activity: now });
         Ok(value)
     }
     pub fn close(&self, id: &str) {
@@ -556,6 +609,9 @@ struct RequestLease {
     kind: &'static str,
     finished: bool,
     cache_generation: u64,
+    live: bool,
+    remux: Option<Arc<crate::remux::Plan>>,
+    local_file: Option<Arc<std::fs::File>>,
 }
 impl Shared {
     fn acquire(self: &Arc<Self>, req: &Request) -> Result<RequestLease, ApiError> {
@@ -596,6 +652,9 @@ impl Shared {
                 kind: r.kind,
                 finished: false,
                 cache_generation: self.media_cache.generation(),
+                live: s.live,
+                remux: s.remux.clone(),
+                local_file: s.local_file.clone(),
             })
         } else if let ["", "images", id] = parts.as_slice() {
             let i = records.images.get_mut(*id).ok_or_else(expired)?;
@@ -619,6 +678,9 @@ impl Shared {
                 kind: "image",
                 finished: false,
                 cache_generation: self.media_cache.generation(),
+                live: false,
+                remux: None,
+                local_file: None,
             })
         } else {
             Err(expired())
@@ -821,6 +883,12 @@ async fn transfer(
     write: &mut OwnedWriteHalf,
     sent: &mut bool,
 ) -> Result<(), ApiError> {
+    if lease.kind == "file" {
+        return transfer_file(req, lease, read, write, sent).await;
+    }
+    if lease.kind.starts_with("remux-") {
+        return transfer_remux(req, lease, write, sent).await;
+    }
     let url = http_url(&lease.url, false)?;
     let mut headers = lease.headers.clone();
     if let Some(selected) = &lease.selected {
@@ -915,6 +983,7 @@ async fn transfer(
     };
     let cache_key = if req.method == Method::GET
         && lease.kind == "media"
+        && !lease.live
         && !transformed
         && !media_cache::request_bypasses(&req.headers)
         && !media_cache::request_bypasses(&headers)
@@ -1512,6 +1581,11 @@ fn rewrite_manifest(
         .get_mut(&lease.target)
         .filter(|s| !s.cancelled.load(Ordering::SeqCst))
         .ok_or_else(ApiError::cancelled)?;
+    // A live playlist keeps adding segments. Past the window, keep playlists only;
+    // this refresh re-registers the segments it still lists.
+    if session.live && session.resources.len() > LIVE_RESOURCE_WINDOW {
+        session.resources.retain(|_, r| r.kind == "manifest");
+    }
     let mut pending = HashMap::new();
     let mut output = String::with_capacity(text.len());
     let mut previous = 0;
@@ -1722,6 +1796,106 @@ fn response_headers(headers: &HeaderMap) -> HeaderMap {
         })
         .map(|(n, v)| (n.clone(), v.clone()))
         .collect()
+}
+/// Generates one piece of a local MKV session on demand; FFmpeg work runs off the async workers.
+async fn transfer_remux(req: &Request, lease: &RequestLease, write: &mut OwnedWriteHalf, sent: &mut bool) -> Result<(), ApiError> {
+    let plan = lease.remux.clone().ok_or_else(|| ApiError::internal("Remux plan missing"))?;
+    let cap = {
+        let records = lease.shared.records.lock().map_err(|_| ApiError::internal("Resource registry poisoned"))?;
+        records.sessions.get(&lease.target).map(|s| s.cap.clone()).ok_or_else(expired)?
+    };
+    let (kind, resource, address, target) = (lease.kind, lease.resource.clone(), lease.shared.address, lease.target.clone());
+    let cancelled = lease.cancelled.clone();
+    let (mime, body) = tokio::task::spawn_blocking(move || -> Result<(&'static str, Vec<u8>), ApiError> {
+        if cancelled.load(Ordering::SeqCst) { return Err(ApiError::cancelled()); }
+        match kind {
+            "remux-playlist" => Ok(("application/vnd.apple.mpegurl",
+                plan.playlist(|name| format!("http://{address}/media/{target}/{name}?cap={cap}")).into_bytes())),
+            "remux-init" => Ok(("video/mp4", plan.init().to_vec())),
+            "remux-segment" => {
+                let n = resource.strip_prefix('s').and_then(|n| n.parse().ok()).ok_or_else(|| ApiError::bad("Invalid segment"))?;
+                Ok(("video/mp4", plan.segment_cancellable(n, &cancelled)?))
+            }
+            _ => {
+                let index = resource.strip_prefix('t').and_then(|n| n.parse().ok()).ok_or_else(|| ApiError::bad("Invalid subtitle"))?;
+                Ok(("text/vtt; charset=utf-8", plan.subtitle_cancellable(index, &cancelled)?.into_bytes()))
+            }
+        }
+    })
+    .await
+    .map_err(|_| ApiError::internal("Remux worker failed"))??;
+    if lease.cancelled.load(Ordering::SeqCst) { return Err(ApiError::cancelled()); }
+    let mut headers = HeaderMap::new();
+    headers.insert("content-type", mime.parse().expect("Static MIME"));
+    headers.insert("cache-control", "no-store".parse().expect("Static header"));
+    *sent = true;
+    respond(write, 200, &headers, &body, req.origin.as_deref(), req.method == Method::HEAD).await
+}
+/// Serves a library file registered by the Host: full body or one byte range.
+async fn transfer_file(
+    req: &Request,
+    lease: &RequestLease,
+    read: &mut OwnedReadHalf,
+    write: &mut OwnedWriteHalf,
+    sent: &mut bool,
+) -> Result<(), ApiError> {
+    let missing = || ApiError::new("SOURCE_NOT_FOUND", "Local file was moved or deleted");
+    let file = lease.local_file.clone().ok_or_else(|| ApiError::internal("Local file handle missing"))?;
+    let length = file.metadata().map_err(|_| missing())?.len();
+    let mut headers = HeaderMap::new();
+    let mime = lease.selected.as_ref().and_then(|s| s.link.mime_type.clone()).unwrap_or_else(|| "video/mp4".into());
+    headers.insert("content-type", mime.parse().map_err(|_| ApiError::internal("Local MIME"))?);
+    headers.insert("accept-ranges", "bytes".parse().expect("Static header"));
+    headers.insert("cache-control", "no-store".parse().expect("Static header"));
+    let range = req.headers.get("range").and_then(|v| v.to_str().ok());
+    let (status, start, end) = match range {
+        None => (200, 0, length.saturating_sub(1)),
+        Some(value) if valid_range(value) => {
+            let (from, to) = value.strip_prefix("bytes=").and_then(|v| v.split_once('-')).expect("Validated range");
+            let (start, end) = if from.is_empty() {
+                let suffix: u64 = to.parse().expect("Validated suffix");
+                (length.saturating_sub(suffix), length.saturating_sub(1))
+            } else {
+                let start: u64 = from.parse().expect("Validated start");
+                (start, to.parse::<u64>().map(|e| e.min(length.saturating_sub(1))).unwrap_or(length.saturating_sub(1)))
+            };
+            if length == 0 || start >= length {
+                headers.insert("content-range", format!("bytes */{length}").parse().expect("Range header"));
+                *sent = true;
+                return respond(write, 416, &headers, &[], req.origin.as_deref(), req.method == Method::HEAD).await;
+            }
+            headers.insert("content-range", format!("bytes {start}-{end}/{length}").parse().expect("Range header"));
+            (206, start, end)
+        }
+        Some(_) => return Err(ApiError::bad("Invalid single byte Range")),
+    };
+    let body = if length == 0 { 0 } else { end - start + 1 };
+    write_head(write, status, &headers, Some(body), req.origin.as_deref(), false).await?;
+    *sent = true;
+    if req.method == Method::HEAD || body == 0 {
+        return Ok(());
+    }
+    let mut remaining = body;
+    let mut offset = start;
+    while remaining > 0 {
+        let want = remaining.min(STREAM_BUFFER as u64) as usize;
+        let file = file.clone();
+        let (buffer, count) = tokio::task::spawn_blocking(move || {
+            let mut buffer = vec![0; want];
+            #[cfg(unix)]
+            let result = { use std::os::unix::fs::FileExt; file.read_at(&mut buffer, offset) };
+            #[cfg(windows)]
+            let result = { use std::os::windows::fs::FileExt; file.seek_read(&mut buffer, offset) };
+            result.map(|count| (buffer, count))
+        }).await.map_err(|_| missing())?.map_err(|_| missing())?;
+        if count == 0 {
+            return Err(missing());
+        }
+        write_chunk(lease, read, write, &buffer[..count], false).await?;
+        remaining -= count as u64;
+        offset += count as u64;
+    }
+    Ok(())
 }
 async fn write_chunk(
     lease: &RequestLease,

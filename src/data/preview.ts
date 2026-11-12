@@ -45,12 +45,12 @@ export const previewInvoke: Invoke = async (command, args) => {
   const input = args.input as Record<string, any>;
   try { switch (command) {
     case "get_settings": {
-      const saved = localStorage.getItem("yingxiang-video.settings");
+      const saved = localStorage.getItem("moc-video.settings");
       const settings = saved ? JSON.parse(saved) as Settings : defaultSettings();
       if (settings.schema_version !== 2 || !Array.isArray(settings.source_configs)) throw new Error("Invalid preview Settings");
       data = settings; break;
     }
-    case "save_settings": localStorage.setItem("yingxiang-video.settings", JSON.stringify(input)); data = input; break;
+    case "save_settings": localStorage.setItem("moc-video.settings", JSON.stringify(input)); data = input; break;
     case "runtime_prepare": case "runtime_status": data = previewRuntime(); break;
     case "get_sources": data = { providers: previewSources, plugins: [] }; break;
     case "get_home": data = { page: { ...metadataSource, sections: [{ id: "preview", title: "Discover", section_ref: "preview:home", index: 0,

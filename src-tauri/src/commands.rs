@@ -52,7 +52,11 @@ business_commands!(
     list_watchlist,
     add_watchlist,
     remove_watchlist,
-    search_catalog
+    search_catalog,
+    get_live_channels,
+    open_live,
+    list_local_videos,
+    open_local
 );
 
 // Cancellation stays on the immediate IPC control path even when ordinary
@@ -102,5 +106,9 @@ pub fn handler<R: Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + 
         add_watchlist,
         remove_watchlist,
         search_catalog,
+        get_live_channels,
+        open_live,
+        list_local_videos,
+        open_local,
     ]
 }

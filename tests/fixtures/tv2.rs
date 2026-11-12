@@ -422,10 +422,8 @@ fn tv2_live_builtin_tmdb_request_samples() {
                 .join(format!("TV2-live-{}", Uuid::new_v4()))
         });
     std::fs::create_dir_all(&folder).unwrap();
-    let bundled: Value =
-        serde_json::from_str(include_str!("../../src/data/defaultSources.json")).unwrap();
-    let configured = Url::parse(bundled[0]["manifest_urls"][0].as_str().unwrap()).unwrap();
-    let manifest = language_url(&configured, "en").unwrap();
+    let configured = Url::parse("https://tmdb.elfhosted.com/en-US/manifest.json").unwrap();
+    let manifest = language_url(&configured, "en", true).unwrap();
     let (_temp, host) = setup(vec![manifest.to_string()]);
     let http = Http::default();
     let mut records = Vec::new();
@@ -443,7 +441,7 @@ fn tv2_live_builtin_tmdb_request_samples() {
     .into_iter()
     .enumerate()
     {
-        let base = language_url(&configured, language).unwrap();
+        let base = language_url(&configured, language, true).unwrap();
         let mut url = resource_url(&base, "catalog", kind, id, None).unwrap();
         let path = url.path().trim_end_matches(".json");
         let extra = encode_extra(&[
@@ -498,42 +496,19 @@ fn tv2_live_builtin_tmdb_request_samples() {
 }
 
 #[test]
-fn tv2_upgrade_adds_once_and_respects_removal() {
+fn tv2_existing_settings_are_loaded_without_preset_migration() {
     let folder = TempDir::new().unwrap();
     let path = folder.path().join("settings.json");
     let store = settings::SettingsFile { path: path.clone() };
-    let mut old = settings::defaults();
-    old.as_object_mut()
+    let mut current = settings::defaults();
+    current
+        .as_object_mut()
         .unwrap()
         .remove("metadata_preset_applied");
-    old["source_configs"] = json!([{"kind":"maccms", "config_id":CONFIG,
-        "name":"Existing playback", "enabled":false, "api_url":"https://example.com/api"}]);
-    store.save(&old).unwrap();
-    let (_, upgraded) = settings::SettingsFile::load(path.clone()).unwrap();
-    assert_eq!(upgraded["metadata_preset_applied"], true);
-    assert_eq!(upgraded["source_configs"].as_array().unwrap().len(), 2);
-    assert_eq!(upgraded["source_configs"][0], old["source_configs"][0]);
-    assert_eq!(upgraded["source_configs"][1]["kind"], "stremio");
-    assert_eq!(
-        settings::SettingsFile::load(path.clone()).unwrap().1,
-        upgraded
-    );
-    let host = Host::open(path.clone()).unwrap();
-    let mut removed = ok(&host, "get_settings", json!({}));
-    assert_eq!(removed, upgraded);
-    removed["source_configs"]
-        .as_array_mut()
-        .unwrap()
-        .truncate(1);
-    assert_eq!(ok(&host, "save_settings", removed.clone()), removed);
-    drop(host);
-    assert_eq!(
-        settings::SettingsFile::load(path.clone()).unwrap().1,
-        removed
-    );
-    removed["source_configs"] = json!([]);
-    store.save(&removed).unwrap();
-    assert_eq!(settings::SettingsFile::load(path).unwrap().1, removed);
+    current["source_configs"] = json!([{"kind":"maccms", "config_id":CONFIG,
+        "name":"Playback", "enabled":false, "api_url":"https://example.com/api"}]);
+    store.save(&current).unwrap();
+    assert_eq!(settings::SettingsFile::load(path).unwrap().1, current);
 }
 
 #[test]

@@ -555,7 +555,7 @@ class AutomationArtifactTests(unittest.TestCase):
     def test_real_built_automation_artifacts_are_accepted(self):
         # The build suite precedes these regressions in the native acceptance gate.
         t01.validate_automation(t01.ROOT / "target/t01/frontend-automation",
-            t01.DATA / "YingxiangVideoT01.app/Contents/MacOS/yingxiang-video")
+            t01.DATA / "MocVideoT01.app/Contents/MacOS/moc-video")
 
     def test_missing_frontend_transport_or_native_bridge_fails(self):
         asset = self.frontend / "automation.js"

@@ -154,7 +154,7 @@ def collect_window(run,build,media,index,kind,long):
             bridge=t12.Bridge(run,live,media);bridge.minimum_opens=1
         ready=bridge.wait(live/'ready.json',timeout=180)
         with t01.Fixture(t01.MEDIA,invoke=bridge.invoke) as fixture:
-            session=t01.NativeSession(run,fixture,ROOT/build['automation']['path']/'Contents/MacOS/yingxiang-video',index)
+            session=t01.NativeSession(run,fixture,ROOT/build['automation']['path']/'Contents/MacOS/moc-video',index)
             session.wait(0,30);row['identity']=session.command('identity')
             run.command([str(base/'tv1-native'),'click',str(session.process.pid),'600','200'])
             session.command('t12',action='start',payload=ready,timeout=60)
@@ -198,7 +198,7 @@ def fresh_public(run,build):
         if ready['status']!='READY':
             bridge.finish();require(False,'No real public source/media chain available; raw source states retained')
         with t01.Fixture(t01.MEDIA) as fixture:
-            session=t01.NativeSession(run,fixture,ROOT/build['automation']['path']/'Contents/MacOS/yingxiang-video',6)
+            session=t01.NativeSession(run,fixture,ROOT/build['automation']['path']/'Contents/MacOS/moc-video',6)
             session.wait(0,30);session.command('identity')
             value=session.command('t02-public',timeout=120,view=ready['view'],kind=ready['kind'])
             session.record['commands'][-1]['args']=dict(view='Rust gateway view; capability redacted',kind=ready['kind'])

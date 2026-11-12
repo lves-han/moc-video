@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use url::Url;
@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 const LIMIT: usize = 8 * 1024 * 1024;
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
+const METADATA_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 fn upstream(message: &str) -> ApiError {
     ApiError::new("UPSTREAM_FAILED", message)
@@ -37,6 +38,9 @@ fn plain(value: &str) -> String {
 }
 
 fn fetch(http: &Http, url: Url, job: &Job, config: bool) -> Result<Response, ApiError> {
+    if url.host_str() == Some(super::tmdb_api::HOST) {
+        return super::tmdb_api::respond(http, &url, job);
+    }
     if job.budget.max_concurrency == 1 {
         return http.get(url, HeaderMap::new(), job, LIMIT, false, config);
     }
@@ -97,12 +101,12 @@ fn tmdb_host(url: &Url) -> bool {
         && url.path().starts_with("/tmdb/")
 }
 
-fn language_url(url: &Url, language: &str) -> Result<Url, ApiError> {
+fn language_url(url: &Url, language: &str, tmdb: bool) -> Result<Url, ApiError> {
     let segments: Vec<_> = url
         .path_segments()
         .ok_or_else(|| ApiError::bad("Invalid manifest path"))?
         .collect();
-    if !tmdb_host(url) {
+    if !tmdb {
         return Ok(url.clone());
     }
     let language = if locale(language) == "en" {
@@ -113,11 +117,12 @@ fn language_url(url: &Url, language: &str) -> Result<Url, ApiError> {
     let mut segments: Vec<String> = segments.into_iter().map(str::to_owned).collect();
     // The test-only /tmdb/ prefix uses exactly the upstream's language segment.
     let prefix = usize::from(cfg!(test) && segments.first().is_some_and(|s| s == "tmdb"));
-    if segments.len() == prefix + 1 {
+    let count = segments.len();
+    if count == prefix + 1 {
         segments.insert(prefix, language.into());
-    } else if segments.len() == prefix + 2 && matches!(segments[prefix].as_str(), "en-US" | "zh-CN")
-    {
-        segments[prefix] = language.into();
+    } else if count >= 2 && matches!(segments[count - 2].as_str(), "en-US" | "zh-CN") {
+        // A self-hosted instance may live under a base path before the language segment.
+        segments[count - 2] = language.into();
     } else {
         // Opaque addon configuration belongs to the user; preserve it verbatim.
         // Only the language-segment convention above supports automatic localization.
@@ -242,6 +247,8 @@ struct Addon {
     key: String,
     manifest: Value,
     localized: bool,
+    // The built-in TMDB source or a known public TMDB addon host.
+    tmdb: bool,
 }
 
 impl Addon {
@@ -317,6 +324,7 @@ struct Resource<'a> {
 #[derive(Clone, Default)]
 struct State {
     cache: HashMap<String, Value>,
+    cache_time: HashMap<String, Instant>,
     cache_order: VecDeque<String>,
     cache_bytes: usize,
     pages: HashMap<(String, String, String, u64), Cursor>,
@@ -350,6 +358,15 @@ pub struct Output {
 }
 
 impl Catalog {
+    fn cached(&self, key: &str) -> Option<Value> {
+        let state = self.state.lock().expect("Stremio cache");
+        state
+            .cache_time
+            .get(key)
+            .filter(|time| time.elapsed() < METADATA_TTL)
+            .and_then(|_| state.cache.get(key))
+            .cloned()
+    }
     pub(crate) fn image_record(&self, id: &str) -> Option<Image> {
         self.state
             .lock()
@@ -385,25 +402,39 @@ impl Catalog {
                 "",
             ],
         );
-        let state = self.state.lock().expect("Stremio state");
-        state
-            .cache
-            .get(&key)
-            .and_then(|value| value["payload"]["meta"]["name"].as_str())
-            .map(|title| vec![title.to_owned()])
+        self.cached(&key)
+            .and_then(|value| value["payload"]["meta"]["name"].as_str().map(str::to_owned))
+            .map(|title| vec![title])
             .unwrap_or_default()
     }
 
-    pub fn sync(mut captured: SourceSnapshot, http: &Http, job: &Job) -> Result<Self, SyncFailure> {
+    pub fn sync(captured: SourceSnapshot, http: &Http, job: &Job) -> Result<Self, SyncFailure> {
+        Self::sync_cached(captured, http, job, None).map(|(catalog, _)| catalog)
+    }
+
+    pub(crate) fn sync_cached(
+        mut captured: SourceSnapshot,
+        http: &Http,
+        job: &Job,
+        cached: Option<&[String]>,
+    ) -> Result<(Self, Vec<String>), SyncFailure> {
         let urls = captured.config["manifest_urls"]
             .as_array()
             .expect("Validated manifest URLs");
         let mut addons = Vec::new();
         let mut hashes = Vec::new();
+        let mut bodies = Vec::new();
         let mut failures = Vec::new();
-        for chunk in urls.chunks(4) {
+        let builtin_tmdb = captured.config["tmdb"] == true;
+        if cached.is_some_and(|rows| rows.len() != urls.len()) {
+            return Err(SyncFailure {
+                error: upstream("Cached manifests are incomplete"),
+                indices: (0..urls.len()).collect(),
+            });
+        }
+        for (chunk_index, chunk) in urls.chunks(4).enumerate() {
             let results = std::thread::scope(|scope| {
-                chunk.iter().map(|value| scope.spawn(move || {
+                chunk.iter().enumerate().map(|(offset, value)| scope.spawn(move || {
                     let configured = http_url(value.as_str().expect("Manifest URL"), true)?;
                     if !configured.path().ends_with("/manifest.json") || configured.fragment().is_some() {
                         return Err(ApiError::bad("Stremio requires a complete manifest.json URL"));
@@ -413,20 +444,28 @@ impl Catalog {
                     if configured.query().is_some() {
                         return Err(ApiError::bad("Query-configured Stremio manifests require a verified request convention"));
                     }
-                    let url = language_url(&configured, "en")?;
-                    let response = fetch(http, url.clone(), job, true)?;
-                    let manifest: Value = serde_json::from_slice(&response.body).map_err(|_| upstream("Stremio manifest is not JSON"))?;
+                    let tmdb = builtin_tmdb || tmdb_host(&configured);
+                    let url = language_url(&configured, "en", tmdb)?;
+                    let body = match cached {
+                        Some(rows) => URL_SAFE_NO_PAD.decode(&rows[chunk_index * 4 + offset]).map_err(|_| upstream("Cached manifest is damaged"))?,
+                        None => fetch(http, url.clone(), job, true)?.body,
+                    };
+                    job.check()?;
+                    if body.len() > LIMIT { return Err(limited("Stremio manifest exceeds its byte limit")); }
+                    let manifest: Value = serde_json::from_slice(&body).map_err(|_| upstream("Stremio manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest).map_err(|_| upstream("Stremio manifest fields are invalid"))?;
-                    let localized = tmdb_host(&url) && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
-                    Ok((Addon { key: identity("addon", &[url.as_str()]), url, manifest, localized }, format!("{:x}", Sha256::digest(&response.body))))
+                    let localized = tmdb && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
+                    let key = if builtin_tmdb { identity("addon", &[crate::settings::TMDB_CONFIG_ID]) } else { identity("addon", &[url.as_str()]) };
+                    Ok((Addon { key, url, manifest, localized, tmdb }, format!("{:x}", Sha256::digest(&body)), URL_SAFE_NO_PAD.encode(&body)))
                 })).collect::<Vec<_>>().into_iter().map(|worker| worker.join().unwrap_or_else(|_| Err(ApiError::internal("Stremio manifest worker failed")))).collect::<Vec<_>>()
             });
             for result in results {
                 let index = addons.len() + failures.len();
                 match result {
-                    Ok((addon, hash)) => {
+                    Ok((addon, hash, body)) => {
                         addons.push(addon);
                         hashes.push(hash);
+                        bodies.push(body);
                     }
                     Err(error) => failures.push((index, error)),
                 }
@@ -569,14 +608,17 @@ impl Catalog {
                 error,
                 indices: (0..addons.len()).collect(),
             })?;
-        Ok(Self {
-            captured,
-            source,
-            addons,
-            sections,
-            state: Arc::default(),
-            search_gate: Arc::default(),
-        })
+        Ok((
+            Self {
+                captured,
+                source,
+                addons,
+                sections,
+                state: Arc::default(),
+                search_gate: Arc::default(),
+            },
+            bodies,
+        ))
     }
 
     pub fn commit(&self, output: &Output) -> Result<(), ApiError> {
@@ -607,6 +649,7 @@ impl Catalog {
             if let Some(old) = next.cache.remove(key) {
                 next.cache_bytes -= old.to_string().len();
                 next.cache_order.retain(|k| k != key);
+                next.cache_time.remove(key);
             }
             while next.cache.len() >= 128 || next.cache_bytes + size > CACHE_BYTES {
                 let oldest = next
@@ -615,9 +658,11 @@ impl Catalog {
                     .expect("Nonempty bounded cache");
                 if let Some(old) = next.cache.remove(&oldest) {
                     next.cache_bytes -= old.to_string().len();
+                    next.cache_time.remove(&oldest);
                 }
             }
             next.cache.insert(key.clone(), value.clone());
+            next.cache_time.insert(key.clone(), Instant::now());
             next.cache_order.push_back(key.clone());
             next.cache_bytes += size;
         }
@@ -682,12 +727,12 @@ impl Catalog {
         if let Some((_, value)) = output.cache.iter().find(|(k, _)| *k == key) {
             return Ok(value.clone());
         }
-        if let Some(value) = self.state.lock().expect("Stremio cache").cache.get(&key) {
-            return Ok(value.clone());
+        if let Some(value) = self.cached(&key) {
+            return Ok(value);
         }
         let addon = &self.addons[addon_index];
         let url = if language == "zh-CN" {
-            language_url(&addon.url, language)?
+            language_url(&addon.url, language, addon.tmdb)?
         } else {
             addon.url.clone()
         };
@@ -778,13 +823,7 @@ impl Catalog {
                 extra.unwrap_or(""),
             ],
         );
-        let cached = self
-            .state
-            .lock()
-            .expect("Stremio cache")
-            .cache
-            .get(&key)
-            .cloned();
+        let cached = self.cached(&key);
         if let Some(cached) = cached {
             output.diagnostics.extend(
                 cached["diagnostics"]
@@ -1108,11 +1147,11 @@ impl Catalog {
                     return Ok(addon.manifest.clone());
                 }
                 let key = identity("stremio_facets", &[&addon.key, language]);
-                if let Some(value) = self.state.lock().expect("Stremio state").cache.get(&key) {
-                    return Ok(value.clone());
+                if let Some(value) = self.cached(&key) {
+                    return Ok(value);
                 }
                 let result = (|| {
-                    let response = fetch(http, language_url(&addon.url, language)?, job, true)?;
+                    let response = fetch(http, language_url(&addon.url, language, addon.tmdb)?, job, true)?;
                     let manifest: Value = serde_json::from_slice(&response.body)
                         .map_err(|_| upstream("Localized manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest)?;
@@ -1159,7 +1198,7 @@ impl Catalog {
 
     fn facets(&self, section: &Section, input: &Value, display: &Value, language: &str) -> Value {
         let addon = &self.addons[section.addon];
-        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
         let mut facets = crate::home::unavailable_filters();
         for dimension in ["genre", "year", "language"] {
             let id = if tmdb {
@@ -1278,7 +1317,7 @@ impl Catalog {
         let filter_key = Value::Object(filter.clone()).to_string();
         let selected = |key: &str| filter.get(key).and_then(Value::as_str);
         let addon = &self.addons[section.addon];
-        let tmdb = addon.manifest["id"] == "tmdb-addon" && tmdb_host(&addon.url);
+        let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
         let mut catalog_id = section.catalog_id.as_str();
         let mut server_genre = None;
         let mut server_dimension = "";
@@ -1634,6 +1673,10 @@ impl Catalog {
             .addons
             .iter()
             .position(|a| a.key == fields[1])
+            // Older built-in TMDB history recorded an addon key derived from its URL.
+            .or_else(|| (self.captured.config["tmdb"] == true
+                && fields[3].strip_prefix("tmdb:").is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())))
+                .then_some(0))
             .ok_or_else(|| ApiError::bad("Stremio addon is not registered"))?;
         let canonical_data = json!(["stremio", fields[1], fields[2], fields[3]]).to_string();
         if canonical_data.as_str() != reference["data"].as_str().expect("Reference data") {

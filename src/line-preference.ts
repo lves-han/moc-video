@@ -2,7 +2,7 @@ import type { Bridge_Episode, Bridge_EpisodeGroup, DetailsViewData, MetadataRef,
 
 // This shares the app's existing localStorage persistence. Only digests and
 // source identities cross this boundary; media references stay in live DTOs.
-export const LINE_PREFERENCE_KEY = 'yingxiang-video.lines.v1';
+export const LINE_PREFERENCE_KEY = 'moc-video.lines.v1';
 type Details = DetailsViewData['details'];
 export type LinePreference = { film: string; metadata: string; source: SourceKey; content: string; evidence: string; layout: string; line: string };
 type StoragePort = Pick<Storage, 'getItem' | 'setItem'>;

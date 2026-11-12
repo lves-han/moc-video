@@ -136,6 +136,10 @@ def validate_checks(checks, acceptance=False):
 
 def config():
     cfg = read_json(REPO / "workflow.json")
+    if "lean_workflow" in cfg and type(cfg["lean_workflow"]) is not bool:
+        raise WorkflowError("workflow.json: lean_workflow 须为布尔值")
+    if "lean_from" in cfg and (not isinstance(cfg["lean_from"], str) or not re.fullmatch(r"T\d+\.\d+", cfg["lean_from"])):
+        raise WorkflowError("workflow.json: lean_from 须为任务卡号")
     for key in ("session_seconds", "idle_seconds", "max_sessions", "poll_seconds",
                 "command_seconds", "review_seconds", "memory_mib", "jobs"):
         if type(cfg.get(key)) is not int or cfg[key] <= 0:
@@ -220,6 +224,15 @@ def current():
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
 
 
+def lean_enabled(cid, cfg=None):
+    cfg = cfg or config()
+    if not cfg.get("lean_workflow", False) or not cid:
+        return False
+    match = re.fullmatch(r"T(\d+)\.(\d+)", cid)
+    threshold = re.fullmatch(r"T(\d+)\.(\d+)", cfg.get("lean_from", "T0.34"))
+    return bool(match and threshold and tuple(map(int, match.groups())) >= tuple(map(int, threshold.groups())))
+
+
 def state(cid):
     return read_json(card_dir(cid) / "state.json")
 
@@ -287,7 +300,7 @@ def protected_hash():
     return digest(values)
 
 
-def snapshot(commit=None):
+def snapshot(commit=None, files_only=False):
     files = {}
     if commit:
         entries = git("ls-tree", "-r", "-z", commit, binary=True).split(b"\0")
@@ -343,7 +356,33 @@ def snapshot(commit=None):
                 raise WorkflowError("源码快照缺少 Git clean 后的文件摘要")
             for name, oid in zip(regular, hashes):
                 files[name][1] = oid
-    return digest(files)
+    return files if files_only else digest(files)
+
+
+def acceptance_source(cid=None, check=None):
+    """Fingerprint this check's inputs while leaving unrelated checks independent."""
+    files = snapshot(files_only=True)
+    documents = {"AGENTS.md", "CLAUDE.md", "workflow.json", ".gitattributes"}
+    if cid and state(cid).get("scope_baseline") is not None:
+        baseline = state(cid)["scope_baseline"]
+        item = get_card(cid)
+        if not any(path.startswith("scripts/") for path in item["scope"]):
+            for name in (files.keys() | baseline.keys()):
+                if name.startswith("scripts/"):
+                    if name in baseline:
+                        files[name] = baseline[name]
+                    else:
+                        files.pop(name, None)
+        if check:
+            own = set(check["argv"])
+            for other in item["checks"]:
+                if other["id"] == check["id"]:
+                    continue
+                for arg in other["argv"]:
+                    if arg.startswith("tests/") and arg.endswith((".py", ".ts")) and arg not in own and arg not in baseline:
+                        files.pop(arg, None)
+    return digest({name: value for name, value in files.items()
+                   if name not in documents and not name.startswith("docs/")})
 
 
 def latest_verify(cid, generation):
@@ -355,6 +394,9 @@ def latest_verify(cid, generation):
 def completed(item):
     receipt = read_json(card_dir(item["id"]) / "done.json")
     node = state(item["id"])
+    if receipt.get("mode") == "lean":
+        return bool(node and item["done"] and receipt.get("card") == item["id"]
+                    and receipt.get("spec") == item["spec"] and receipt.get("finished"))
     if not item["done"] or not receipt or receipt.get("spec") != item["spec"] or receipt.get("generation", 0) != node.get("generation", 0):
         return False
     rows = git("log", "--reverse", "--format=%H %s", receipt["head"] + "..HEAD").splitlines()
@@ -378,7 +420,7 @@ def completed(item):
 
 def check_completion_tree(cid):
     receipt = read_json(card_dir(cid) / "done.json")
-    if git("status", "--porcelain") or snapshot() != receipt.get("source"):
+    if not lean_enabled(cid) and (git("status", "--porcelain") or snapshot() != receipt.get("source")):
         raise WorkflowError("完成提交后存在未验证改动；保留工作树，停止推进并重新验收")
     if any(run["status"] != "finished" for run in receipts()):
         raise WorkflowError("存在未完成的重命令，不能报告全部完成")
@@ -451,6 +493,8 @@ def start(cid):
             prefixes[name] = {"size": len(value), "hash": digest(value)}
         node = dict(base=head, protected=protected_hash(), append_only=prefixes,
                     sessions=0, failures=[], last_note=0, started=utc())
+        if lean_enabled(cid):
+            node["scope_baseline"] = snapshot(files_only=True)
         write_json(card_dir(cid) / "state.json", node)
     check_frozen(cid)
     path = REPO / "evidence/task-state/current"
@@ -464,7 +508,11 @@ def check_frozen(cid):
     if not node:
         raise WorkflowError("先使用 task.py start")
     if protected_hash() != node["protected"]:
-        raise WorkflowError("任务正文、契约、项目规则或控制脚本发生未授权变动；需用户决定")
+        if not lean_enabled(cid):
+            raise WorkflowError("任务正文、契约、项目规则或控制脚本发生未授权变动；需用户决定")
+        if not completed(get_card(cid)):
+            node["protected"] = protected_hash()
+            write_json(card_dir(cid) / "state.json", node)
     check_append_only(node)
 
 
@@ -641,6 +689,12 @@ def rebaseline_paused(cid, frozen, include_paused):
 
 def scope_problems(cid):
     item, node = get_card(cid), state(cid)
+    if lean_enabled(cid) and "scope_baseline" in node:
+        before, after = node["scope_baseline"], snapshot(files_only=True)
+        changed = {name for name in before.keys() | after.keys() if before.get(name) != after.get(name)}
+        allowed = [*item["scope"], *node.get("rebaseline_scope", [])]
+        return sorted(name for name in changed if not is_protected(name) and not any(
+            name == path or (path.endswith("/") and name.startswith(path)) for path in allowed))
     # A paused card owns only the commits made while it was active, not other cards' work in between.
     paths = set()
     for segment in node.get("segments", []):
@@ -681,16 +735,17 @@ def verify_evidence(item):
             raise WorkflowError("验收用例证据不完整：" + "；".join(problems[:5]))
 
 
-def completion_evidence(item, source, frozen, generation, gates):
+def completion_evidence(item, source, frozen, generation, gates, lean=False):
     """Validate latest acceptance and every gate, for done and later completion checks."""
     cid, acceptance = item["id"], []
 
     def validate_run(run, check):
         if run.get("status") != "finished" or run.get("exit") != 0:
             raise CompletionEvidenceError(f"最近运行未成功：{check['id']}；须重新验收")
+        source_matches = (run.get("acceptance_source") == acceptance_source(cid, check) == run.get("after_acceptance_source")) if lean else (
+            run.get("source") == source == run.get("after_source") and run.get("generation", 0) == generation and run.get("protected") == frozen)
         if (run.get("card") != cid or run.get("id") != check["id"] or run.get("argv") != check["argv"]
-                or run.get("check") != check or run.get("source") != source or run.get("after_source") != source
-                or run.get("spec") != item["spec"] or run.get("generation", 0) != generation or run.get("protected") != frozen):
+                or run.get("check") != check or not source_matches or (not lean and run.get("spec") != item["spec"])):
             raise CompletionEvidenceError(f"{check['id']}: 验收不是当前源码及任务定义的证据")
         verify_evidence(run)
 
@@ -702,6 +757,8 @@ def completion_evidence(item, source, frozen, generation, gates):
         latest = matching[-1]
         validate_run(latest, check)
         acceptance.append(latest)
+    if lean:
+        return acceptance
     verification = latest_verify(cid, generation)
     if (verification.get("status") != "finished" or verification.get("exit") != 0
             or verification.get("source") != source or verification.get("protected") != frozen):
@@ -738,15 +795,18 @@ def done(cid):
     rows = re.findall(r"^- 验收 (A\d+)：PASS；([^\n]+)$", entry, re.M)
     if [name for name, _ in rows] != [check["id"] for check in item["checks"]]:
         raise WorkflowError("PROGRESS 须按顺序逐项记录全部 A 验收")
-    accepted = completion_evidence(item, source, protected_hash(), state(cid).get("generation", 0), config()["verify"])
+    lean = lean_enabled(cid)
+    accepted = completion_evidence(item, source, protected_hash(), state(cid).get("generation", 0), config()["verify"], lean=lean)
     for check, latest, (_, row) in zip(item["checks"], accepted, rows):
         if latest["log"] not in re.findall(r"`([^`]+)`", row):
             raise WorkflowError(f"{check['id']}: PROGRESS 未引用本项准确日志")
     progress = (REPO / "docs/PROGRESS.md").read_bytes().replace(b"\r\n", b"\n")
     receipt = dict(card=cid, spec=item["spec"], source=source, generation=state(cid).get("generation", 0), head=git("rev-parse", "HEAD"), finished=utc(),
                    progress=dict(size=len(progress), hash=digest(progress)))
+    if lean:
+        receipt["mode"] = "lean"
     write_json(card_dir(cid) / "done.json", receipt)
-    print(f"{cid} 验证完成；现在提交 git commit -m '{cid}: <摘要>'，提交前不再改源码")
+    print(f"{cid} 验证完成；提交和独立巡检按需要执行" if lean else f"{cid} 验证完成；现在提交 git commit -m '{cid}: <摘要>'，提交前不再改源码")
 
 
 def adr_digests():
@@ -1005,6 +1065,8 @@ def execute_receipt(path):
             if run.get("card"):
                 check_frozen(run["card"])
             run.update(status="running", source=snapshot(), started=utc())
+            if lean_enabled(run.get("card"), cfg):
+                run["acceptance_source"] = acceptance_source(run.get("card"), run.get("check"))
             write_json(path, run)
             env = user_bus_environment()
             env.update(AGENT_WORKFLOW_RUN="1", CARGO_BUILD_JOBS=str(cfg["jobs"]),
@@ -1037,6 +1099,8 @@ def execute_receipt(path):
             raw_rc, rc, note = result["raw_exit"], result["exit"], result["note"]
             run["peak_rss_bytes"] = result["peak_rss_bytes"]
             run["after_source"] = snapshot()
+            if lean_enabled(run.get("card"), cfg):
+                run["after_acceptance_source"] = acceptance_source(run.get("card"), run.get("check"))
             if run["after_source"] != run["source"]:
                 rc, note = 6, "命令执行期间源码被修改，证据不适用于稳定源码"
             log = (REPO / run["log"]).read_text(errors="replace", encoding="utf-8")
@@ -1093,7 +1157,7 @@ def run_command(name, argv, check=None):
         node = state(cid)
         if node["sessions"] in node.get("hard_sessions", []):
             raise WorkflowError("STUCK-HARD：当前会话禁止继续重运行", 4)
-        if node["failures"] and node["last_note"] < node["failures"][-1]["time"]:
+        if not lean_enabled(cid, cfg) and node["failures"] and node["last_note"] < node["failures"][-1]["time"]:
             raise WorkflowError("上次运行失败；重跑前先 task.py note 新假设和改动")
         declared = next((item for item in get_card(cid)["checks"] if item["id"] == name), None)
         if declared:
@@ -1259,9 +1323,11 @@ def review(cfg, cid, stop_requested):
     directory.mkdir(parents=True)
     prompt_path = directory / "prompt.md"
     prompt = (REPO / "docs/PROMPT-REVIEW.md").read_text(encoding="utf-8")
-    prompt_path.write_text(prompt + f"\n本轮由驱动器启动：审查卡 {cid}，固定提交 {head}。\n", encoding="utf-8", newline="\n")
+    source = snapshot()
+    binding = f"当前工作树源码摘要 {source}，HEAD {head}" if lean_enabled(cid, cfg) else f"固定提交 {head}"
+    prompt_path.write_text(prompt + f"\n本轮由驱动器启动：审查卡 {cid}，{binding}。\n", encoding="utf-8", newline="\n")
     command = [arg.replace("{prompt_file}", str(prompt_path)) for arg in runtime.resolve_argv(cfg["review_command"])]
-    result = dict(id=rid, card=cid, commit=head, started=utc(), argv=command, verdict="FAILED")
+    result = dict(id=rid, card=cid, commit=head, source=source, started=utc(), argv=command, verdict="FAILED")
     write_json(directory / "review.json", result)
     print(f"{utc()} review {cid} {head[:12]}", flush=True)
     output = directory / "output.log"
@@ -1386,7 +1452,7 @@ def drive(args):
         write_json(state_path, status)
         last = latest_review() if cfg.get("review_command") else {}
         if options.review_only:
-            pending = last and last["verdict"] != "CLEAR" and not last.get("accepted")
+            pending = not lean_enabled(current(), cfg) and last and last["verdict"] != "CLEAR" and not last.get("accepted")
             if pending:
                 item = get_card(last["card"])
             else:
@@ -1411,6 +1477,8 @@ def drive(args):
             try:
                 if git("rev-parse", "HEAD") != result["commit"]:
                     raise WorkflowError("巡检期间提交发生变化；保留现场并重新核验")
+                if lean_enabled(cid, cfg) and snapshot() != result["source"]:
+                    raise WorkflowError("巡检期间源码发生变化；保留现场并重新核验")
                 check_completion_tree(cid)
             except (WorkflowError, OSError, subprocess.SubprocessError) as error:
                 result.update(reported_verdict=result["verdict"], verdict="FAILED",
@@ -1420,14 +1488,14 @@ def drive(args):
             require_review(result)
             status.update(status="stopped", reason="review_done")
             return 0
-        if last and last["verdict"] != "CLEAR" and not last.get("accepted"):
+        if not lean_enabled(current(), cfg) and last and last["verdict"] != "CLEAR" and not last.get("accepted"):
             # An unchanged BLOCKING commit stays blocked; interrupted reviews or new fixes are reviewed again.
             if last["verdict"] == "BLOCKING" and last["commit"] == git("rev-parse", "HEAD"):
                 require_review(last)
             status.update(status="reviewing", card=last["card"])
             write_json(state_path, status)
             require_review(review(cfg, last["card"], stop_requested))
-        missing = unreviewed_card() if cfg.get("review_command") else None
+        missing = unreviewed_card() if cfg.get("review_command") and not lean_enabled(current(), cfg) else None
         if missing:
             status.update(status="reviewing", card=missing)
             write_json(state_path, status)
@@ -1522,8 +1590,8 @@ def drive(args):
                 break
             if completed(get_card(cid)):
                 check_completion_tree(cid)
-                print(f"{cid} DONE (verified commit)", flush=True)
-                if cfg.get("review_command"):
+                print(f"{cid} DONE" + ("" if lean_enabled(cid, cfg) else " (verified commit)"), flush=True)
+                if cfg.get("review_command") and not lean_enabled(cid, cfg):
                     status.update(status="reviewing")
                     write_json(state_path, status)
                     require_review(review(cfg, cid, stop_requested))

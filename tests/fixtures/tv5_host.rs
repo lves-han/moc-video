@@ -103,7 +103,7 @@ fn tv5_watchlist_crud_restart_and_closed_inputs() {
 #[test]
 fn tv5_migration_v1_keeps_all_history_fields() {
     let temp = TempDir::new().unwrap();
-    let database = temp.path().join("yingxiang-video.db");
+    let database = temp.path().join("moc-video.db");
     legacy5(&database);
     assert_eq!(version5(&database), 1);
     let host = Host::open(temp.path().join("settings.json")).unwrap();
@@ -138,7 +138,7 @@ fn tv5_migration_v1_keeps_all_history_fields() {
 #[test]
 fn tv5_migration_failure_rolls_back_and_old_database_remains_usable() {
     let temp = TempDir::new().unwrap();
-    let database = temp.path().join("yingxiang-video.db");
+    let database = temp.path().join("moc-video.db");
     legacy5(&database);
     Connection::open(&database)
         .unwrap()
@@ -153,7 +153,7 @@ fn tv5_migration_failure_rolls_back_and_old_database_remains_usable() {
         failed["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("migration failed")
+            .contains("initialization failed")
     );
     assert_eq!(version5(&database), 1);
     let old = Connection::open(&database).unwrap();

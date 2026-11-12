@@ -114,7 +114,7 @@ fn n02_host_sources_webview_bridge() {
             // A real write failure: another connection holds the database file.
             "lock_history" => {
                 let connection =
-                    rusqlite::Connection::open(path.with_file_name("yingxiang-video.db")).unwrap();
+                    rusqlite::Connection::open(path.with_file_name("moc-video.db")).unwrap();
                 connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
                 history_lock = Some(connection);
                 json!({"ok":true})

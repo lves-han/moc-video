@@ -11,11 +11,46 @@ use uuid::Uuid;
 
 pub const SETTINGS_LIMIT: u64 = 1024 * 1024;
 
+// The built-in TMDB source keeps one identity across language and instance
+// changes, so history and the saved metadata choice stay attached to it.
+pub const TMDB_CONFIG_ID: &str = "5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40";
+const TMDB_INSTANCE: &str = "https://tmdb.elfhosted.com";
+
 pub fn defaults() -> Value {
-    // Newly constructed settings belong to the current preset generation.
-    // Stored profiles without this marker take the one-time upgrade path.
     json!({"schema_version": 2, "last_source_key": null, "volume": 1.0, "muted": false,
-        "auto_next": true, "window_bounds": null, "source_configs": [], "ui_locale": "en", "color_palette": "lime", "metadata_preset_applied": true})
+        "auto_next": true, "window_bounds": null, "source_configs": [], "ui_locale": "en", "color_palette": "lime",
+        "tmdb": {"enabled": true, "instance_url": TMDB_INSTANCE, "language": "follow"}})
+}
+
+fn tmdb(settings: &Value) -> Value {
+    settings.get("tmdb").cloned().unwrap_or_else(|| defaults()["tmdb"].clone())
+}
+
+/// Language used for Stremio metadata: the TMDB choice, or the app language when it follows.
+pub fn metadata_language(settings: &Value) -> &'static str {
+    let tmdb = tmdb(settings);
+    let chosen = tmdb["language"].as_str().unwrap_or("follow");
+    crate::host::stremio::locale(if chosen == "follow" {
+        settings["ui_locale"].as_str().unwrap_or("en")
+    } else {
+        chosen
+    })
+}
+
+/// Source configurations the host registers: user sources, then the built-in TMDB source.
+pub fn source_configs(settings: &Value) -> Vec<Value> {
+    let tmdb = tmdb(settings);
+    let instance = tmdb["instance_url"].as_str().unwrap_or(TMDB_INSTANCE).trim_end_matches('/');
+    let mut configs = settings["source_configs"].as_array().expect("Validated configs").clone();
+    let mut config = json!({"kind": "stremio", "config_id": TMDB_CONFIG_ID, "name": "TMDB",
+        "enabled": tmdb["enabled"] == true, "manifest_urls": [format!("{instance}/en-US/manifest.json")], "tmdb": true});
+    // API mode answers through a virtual addon; the fingerprint re-syncs on key/endpoint changes.
+    if let Some(fingerprint) = crate::host::tmdb_api::fingerprint(settings) {
+        config["manifest_urls"] = json!([crate::host::tmdb_api::manifest_url()]);
+        config["api"] = json!(fingerprint);
+    }
+    configs.push(config);
+    configs
 }
 
 fn initial_defaults() -> Value {
@@ -28,7 +63,12 @@ fn initial_defaults() -> Value {
 
 pub fn validate(settings: &Value) -> Result<(), ApiError> {
     Contracts::get().validate("Settings", settings)?;
-    let mut ids = HashSet::new();
+    for field in ["instance_url", "api_url", "image_url"] {
+        if let Some(url) = settings["tmdb"][field].as_str() {
+            validate_url(url)?;
+        }
+    }
+    let mut ids = HashSet::from([Uuid::parse_str(TMDB_CONFIG_ID).expect("Static UUID")]);
     for config in settings["source_configs"]
         .as_array()
         .expect("Validated configs")
@@ -49,6 +89,23 @@ pub fn validate(settings: &Value) -> Result<(), ApiError> {
                 }
             }
             _ => return Err(ApiError::bad("Unsupported HTTP configuration kind")),
+        }
+    }
+    for path in settings["local_paths"].as_array().into_iter().flatten() {
+        if !Path::new(path.as_str().expect("Validated path")).is_absolute() {
+            return Err(ApiError::bad("Local library paths must be absolute"));
+        }
+    }
+    let mut live_ids = HashSet::new();
+    for config in settings["live_configs"].as_array().into_iter().flatten() {
+        let id = Uuid::parse_str(config["config_id"].as_str().expect("Validated UUID"))
+            .map_err(|_| ApiError::bad("Invalid live config_id"))?;
+        if !live_ids.insert(id) {
+            return Err(ApiError::bad("Duplicate live config_id"));
+        }
+        validate_url(config["url"].as_str().expect("Validated URL"))?;
+        if let Some(epg) = config["epg_url"].as_str() {
+            validate_url(epg)?;
         }
     }
     if serde_json::to_vec(settings)
@@ -115,51 +172,12 @@ impl SettingsFile {
                             "Stored settings exceed one MiB",
                         ));
                     }
-                    let mut settings: Value = serde_json::from_slice(&data)
+                    let settings: Value = serde_json::from_slice(&data)
                         .map_err(|_| ApiError::internal("Stored settings JSON is damaged"))?;
-                    let migrate = settings["schema_version"] == 1;
-                    if migrate {
-                        if settings.get("source_configs").is_some() {
-                            return Err(ApiError::bad("Settings v1 must omit source_configs"));
-                        }
-                        settings["schema_version"] = json!(2);
-                        settings["source_configs"] = json!([]);
-                    } else if settings["schema_version"] != 2 {
+                    if settings["schema_version"] != 2 {
                         return Err(ApiError::bad("Unsupported settings schema_version"));
                     }
                     validate(&settings)?;
-                    let apply_preset = settings["metadata_preset_applied"] != true;
-                    if apply_preset {
-                        let configs = settings["source_configs"]
-                            .as_array_mut()
-                            .expect("Validated configs");
-                        if configs.is_empty() {
-                            *configs = initial_defaults()["source_configs"]
-                                .as_array()
-                                .expect("Defaults")
-                                .clone();
-                        } else if !configs.iter().any(|c| c["kind"] == "stremio") {
-                            if configs.len() >= 32 {
-                                return Err(ApiError::new(
-                                    "RESOURCE_LIMIT",
-                                    "TMDB preset requires one free source configuration slot",
-                                ));
-                            }
-                            let mut metadata = initial_defaults()["source_configs"][0].clone();
-                            if configs
-                                .iter()
-                                .any(|c| c["config_id"] == metadata["config_id"])
-                            {
-                                metadata["config_id"] = json!(Uuid::new_v4().to_string());
-                            }
-                            configs.push(metadata);
-                        }
-                        settings["metadata_preset_applied"] = json!(true);
-                        validate(&settings)?;
-                    }
-                    if migrate || apply_preset {
-                        store.save(&settings)?;
-                    }
                     Ok(settings)
                 })();
                 match result {
@@ -234,36 +252,45 @@ mod preset_tests {
         let path = folder.path().join("settings.json");
         let (_, first) = SettingsFile::load(path.clone()).unwrap();
         validate(&first).unwrap();
-        assert_eq!(first["source_configs"].as_array().unwrap().len(), 9);
-        assert_eq!(first["source_configs"][0]["kind"], "stremio");
-        assert!(
-            first["source_configs"][0]["manifest_urls"][0]
-                .as_str()
-                .unwrap()
-                .contains("tmdb.elfhosted.com")
-        );
+        assert_eq!(first["source_configs"].as_array().unwrap().len(), 8);
+        assert!(first["source_configs"].as_array().unwrap().iter().all(|c| c["kind"] == "maccms"));
+        let configs = source_configs(&first);
+        assert_eq!(configs[8]["config_id"], TMDB_CONFIG_ID);
+        assert_eq!(configs[8]["manifest_urls"][0], "https://tmdb.elfhosted.com/en-US/manifest.json");
         assert_eq!(SettingsFile::load(path).unwrap().1, first);
     }
 
     #[test]
-    fn empty_profile_is_seeded_and_existing_disabled_choices_are_preserved() {
+    fn existing_empty_profile_is_not_migrated_or_reseeded() {
         let folder = tempfile::tempdir().unwrap();
         let store = SettingsFile {
             path: folder.path().join("settings.json"),
         };
-        let mut original = defaults();
-        original
-            .as_object_mut()
-            .unwrap()
-            .remove("metadata_preset_applied");
-        original["volume"] = json!(0.25);
-        store.save(&original).unwrap();
-        let (_, mut seeded) = SettingsFile::load(store.path.clone()).unwrap();
-        assert_eq!(seeded["volume"], 0.25);
-        assert_eq!(seeded["source_configs"].as_array().unwrap().len(), 9);
-        seeded["source_configs"][0]["enabled"] = json!(false);
-        seeded["source_configs"].as_array_mut().unwrap().truncate(1);
-        store.save(&seeded).unwrap();
-        assert_eq!(SettingsFile::load(store.path).unwrap().1, seeded);
+        let mut current = defaults();
+        current["volume"] = json!(0.25);
+        store.save(&current).unwrap();
+        assert_eq!(SettingsFile::load(store.path).unwrap().1, current);
+    }
+
+    #[test]
+    fn tmdb_language_follows_app_unless_chosen() {
+        let mut settings = defaults();
+        assert_eq!(metadata_language(&settings), "en");
+        settings["ui_locale"] = json!("zh-CN");
+        assert_eq!(metadata_language(&settings), "zh-CN");
+        settings["tmdb"]["language"] = json!("en");
+        assert_eq!(metadata_language(&settings), "en");
+        settings["tmdb"]["instance_url"] = json!("https://tmdb.example.test/base/");
+        assert_eq!(source_configs(&settings)[0]["manifest_urls"][0], "https://tmdb.example.test/base/en-US/manifest.json");
+        let live = json!({"config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "name": "Live", "url": "https://live.test/list.m3u", "enabled": true});
+        settings["live_configs"] = json!([live.clone()]);
+        validate(&settings).unwrap();
+        settings["live_configs"] = json!([live.clone(), live.clone()]);
+        assert!(validate(&settings).is_err(), "duplicate live id");
+        settings["live_configs"] = json!([{"config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "name": "Live", "url": "rtp://239.0.0.1:5000", "enabled": true}]);
+        assert!(validate(&settings).is_err(), "live list URL must be http(s)");
+        settings["live_configs"] = json!([]);
+        settings["source_configs"] = json!([{"kind": "maccms", "config_id": TMDB_CONFIG_ID, "name": "x", "enabled": true, "api_url": "https://a.test/api"}]);
+        assert!(validate(&settings).is_err());
     }
 }
