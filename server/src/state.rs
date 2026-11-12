@@ -32,6 +32,9 @@ pub struct Line {
     pub episode_label: String,
     pub url: String,
     pub headers: Value,
+    pub quality: Option<String>,
+    pub needs_sniffing: bool,
+    pub kind_hint: Option<String>,
     pub expires_at: i64,
     pub play_expires_at: i64,
 }

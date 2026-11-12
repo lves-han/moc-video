@@ -515,6 +515,8 @@ async fn emit_lines(
     template: &Template,
     tx: &mpsc::Sender<Value>,
 ) -> Result<(&'static str, usize), &'static str> {
+    let mut template = template.clone();
+    template.lines = crate::adapters::resolve(&template.source, &template.lines).await?;
     let _gate = state.metadata_gate.lock().await;
     let lines = {
         let mut registry = state
@@ -548,7 +550,7 @@ async fn emit_lines(
             &mut registry,
             &state.lookup_runtime,
             &target,
-            template,
+            &template,
             &state.reports,
         )?;
         registry.cache.insert(
@@ -634,7 +636,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
     }
     let detail = match tokio::select! {
         _=cancellation.changed()=>return expired("lookup_not_found"),
-        result=crate::adapters::maccms::detail(&candidate.source, &candidate.content_id)=>result,
+        result=crate::adapters::detail(&candidate.source, &candidate.content_id)=>result,
     } {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
@@ -646,6 +648,13 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
     if lines.is_empty() {
         return expired("target_missing");
     }
+    let lines = match tokio::select! {
+        _=cancellation.changed()=>return expired("lookup_not_found"),
+        result=crate::adapters::resolve(&candidate.source, &lines)=>result,
+    } {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+    };
     let _gate = state.metadata_gate.lock().await;
     let result = {
         let mut reg = state
@@ -769,7 +778,7 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
     if !metadata_current(&state, &line.target) {
         return retire(&state, &id, "metadata_changed");
     }
-    let detail = match crate::adapters::maccms::detail(&source, &line.content_id).await {
+    let detail = match crate::adapters::detail(&source, &line.content_id).await {
         Ok(value) => value,
         Err("MacCMS content identity is missing or ambiguous") => {
             return retire(&state, &id, "line_not_found");
@@ -787,10 +796,32 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
     if matches.is_empty() {
         return retire(&state, &id, "line_not_found");
     }
-    if matches.len() != 1 || matches[0]["locator"] != *locator {
+    let base_locator = json!({"flag":locator["flag"],"episode":locator["episode"]});
+    if matches.len() != 1 || matches[0]["locator"] != base_locator {
         return retire(&state, &id, "line_identity_ambiguous");
     }
-    let Some(url) = matches[0]["url"].as_str() else {
+    let requested = vec![json!({"flag":locator["flag"],"episode":matches[0]})];
+    let resolved = match crate::adapters::resolve(&source, &requested).await {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+    };
+    let matching: Vec<_> = resolved
+        .iter()
+        .filter(|item| item["episode"]["locator"] == *locator)
+        .collect();
+    if matching.len() != 1 {
+        return retire(
+            &state,
+            &id,
+            if matching.is_empty() {
+                "line_not_found"
+            } else {
+                "line_identity_ambiguous"
+            },
+        );
+    }
+    let episode = &matching[0]["episode"];
+    let Some(url) = episode["url"].as_str() else {
         return retire(&state, &id, "line_not_found");
     };
     let _gate = state.metadata_gate.lock().await;
@@ -814,6 +845,13 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
         return expired("line_identity_ambiguous");
     }
     current.url = url.to_owned();
+    current.headers = episode
+        .get("headers")
+        .cloned()
+        .unwrap_or_else(|| source["headers"].clone());
+    current.quality = episode["quality"].as_str().map(str::to_owned);
+    current.needs_sniffing = episode["requires_parse"] == true;
+    current.kind_hint = episode["kind_hint"].as_str().map(str::to_owned);
     current.play_expires_at = now + state.lookup_runtime.cache_ttl;
     Json(line_cache::output(&id, current, &state.reports)).into_response()
 }

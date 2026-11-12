@@ -520,7 +520,7 @@ class PlaybackSources(StremioMetadata):
         base=self.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3")
         body={"sites":[{"key":"json-site","name":"JSON","type":1,"api":base+"/maccms-json","headers":{"X-Fixture":"allowed"}},
                        {"key":"xml-site","name":"XML","type":0,"api":base+"/maccms-xml","headers":{"X-Fixture":"allowed"}},
-                       {"key":"later","name":"Later","type":4,"api":base+"/later"}]}
+                       {"key":"later","name":"Later","type":7,"api":base+"/later"}]}
         status,first=self.native("POST","/v1/sources/import",body); self.assertEqual(status,200)
         self.assertEqual([row["status"] for row in first["results"]],["ok","ok","skipped"])
         second=self.native("POST","/v1/sources/import",body)[1]
@@ -858,13 +858,100 @@ class AppSourceSelectionApp(unittest.TestCase):
         self.assertLessEqual(sample['combined_bytes'], sample['limit_bytes'])
 
 
+class T4QueryAdapters(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_query_parameters(self):
+        self.start('app-token', self.fixture_env)
+        self.fixture_request('/control?t4_mode=normal&reset_t4=1')
+        base = self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        result = []
+        for kind, path in (('t4_query','t4-query'), ('t4_drpyjs0','t4-js0')):
+            body={'name':kind,'kind':kind,'api':base+'/'+path+'?sig=a%2Fb+c','headers':{'X-Fixture':'allowed'},'ext':{'token':'fixture'},'enabled':True}
+            status, source = self.native('POST','/v1/sources',body)
+            self.assertEqual(status,201,source); self.assertEqual(source['ext'],{'token':'fixture'}); result.append(source)
+            status, checked = self.native('POST','/v1/sources/'+source['id']+'/check?query=Show')
+            self.assertEqual((status,checked['status'],checked['groups']),(200,'ready',1))
+        type(self).t4_sources = result
+        status, events = self.ndjson('/v1/lookups', self.input([item['id'] for item in result]))
+        self.assertEqual(status,200,events)
+        lines = [e['line'] for e in events if e['event']=='line']
+        self.assertEqual(len(lines),3,events)
+        type(self).t4_lines = lines
+        requests = self.fixture_request('/stats')['t4_requests']
+        query = [r for r in requests if r['path']=='/t4-query']
+        self.assertTrue(any(r['query'].get('wd')==['Show'] and r['query'].get('pg')==['1'] and 'ac' not in r['query'] for r in query))
+        self.assertTrue(any(r['query'].get('ids')==['201'] and r['query'].get('ac')==['detail'] for r in query))
+        self.assertTrue(any(r['query'].get('flag')==['fixture-flag'] and r['query'].get('play')==['play-2'] for r in query))
+        self.assertTrue(all(r['query'].get('extend')==['{"token":"fixture"}'] and r['query'].get('sig')==['a/b c'] and r['header']=='allowed' for r in query))
+        status, imported = self.native('POST','/v1/sources/import',{'sites':[{'type':4,'key':'t4-import','name':'TVBox query','api':base+'/t4-query','ext':'fixture'}]})
+        self.assertEqual(status,200,imported);self.assertEqual(imported['results'][0]['source']['kind'],'t4_query')
+
+    def test_2_js0_parameters(self):
+        requests=self.fixture_request('/stats')['t4_requests']
+        js=[r for r in requests if r['path']=='/t4-js0']; redirect=[r for r in requests if r['path']=='/web/302redirect']
+        self.assertTrue(any(r['query'].get('wd')==['Show'] and r['query'].get('ac')==['detail'] and r['query'].get('pg')==['1'] for r in js))
+        self.assertTrue(any(r['query'].get('ids')==['201'] and r['query'].get('ac')==['detail'] for r in js))
+        self.assertTrue(all('extend' not in r['query'] for r in js))
+        self.assertTrue(any(r['query'].get('url')==['play-2'] and r['header']=='allowed' for r in redirect))
+        line=next(v for v in self.t4_lines if v['source_id']==self.t4_sources[1]['id'])
+        self.assertEqual(line['play']['url'],'https://media.test/js0.mp4?sig=a%2Fb')
+        self.assertEqual(line['play']['headers']['referer'],'https://fixture.test/')
+        self.fixture_request('/control?t4_mode=js0hint')
+        _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[1]['id']],refresh=True))
+        hinted=[v['line'] for v in events if v['event']=='line'];self.assertEqual(len(hinted),1,events);self.assertEqual(hinted[0]['kind'],'hls')
+
+    def test_3_play_shapes(self):
+        lines=[v for v in self.t4_lines if v['source_id']==self.t4_sources[0]['id']]
+        self.assertEqual({v['quality'] for v in lines},{'HD','SD'})
+        self.assertTrue(all(v['play']['headers']['referer']=='https://fixture.test/' for v in lines))
+        self.fixture_request('/control?t4_mode=emptyheader')
+        _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+        fallback=[v['line'] for v in events if v['event']=='line'];self.assertEqual(len(fallback),2,events);self.assertTrue(all(v['play']['headers']['referer']=='https://fixture.test/' for v in fallback))
+        self.fixture_request('/control?t4_mode=hint')
+        _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+        hinted=[v['line'] for v in events if v['event']=='line']
+        self.assertEqual(len(hinted),2,events);self.assertTrue(all(v['kind']=='hls' for v in hinted))
+        self.fixture_request('/control?t4_mode=dash')
+        _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+        unsupported=[v['line'] for v in events if v['event']=='line']
+        self.assertEqual(len(unsupported),2,events);self.assertTrue(all(v['kind']=='unsupported' and v['reason']=='unsupported_media_format' for v in unsupported))
+        for mode in ('parse','jx'):
+            self.fixture_request('/control?t4_mode='+mode)
+            _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+            pending=[v['line'] for v in events if v['event']=='line']
+            self.assertEqual(len(pending),2,events)
+            self.assertTrue(all(v['kind']=='unsupported' and v['reason']=='needs_sniffing' and 'play' not in v for v in pending))
+        for mode in ('missing','html'):
+            self.fixture_request('/control?t4_mode='+mode)
+            _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+            self.assertTrue(any(v.get('status')=='failed' for v in events),events)
+
+    def test_4_refresh_identity(self):
+        self.fixture_request('/control?t4_mode=reverse')
+        hd=next(v for v in self.t4_lines if v['source_id']==self.t4_sources[0]['id'] and v['quality']=='HD')
+        status,refreshed=self.native('POST','/v1/lines/'+hd['line_id']+'/refresh',{})
+        self.assertEqual(status,200,refreshed);self.assertEqual(refreshed['line_id'],hd['line_id']);self.assertEqual(refreshed['quality'],'HD')
+        self.assertEqual(refreshed['play']['url'],'https://media.test/hd.m3u8?generation=2')
+        self.fixture_request('/control?t4_mode=duplicate')
+        self.assertEqual(self.native('POST','/v1/lines/'+hd['line_id']+'/refresh',{})[0],410)
+        _,events=self.ndjson('/v1/lookups',self.input([self.t4_sources[0]['id']],refresh=True))
+        duplicate=[v['line'] for v in events if v['event']=='line'];self.assertEqual(len(duplicate),2,events)
+        self.assertEqual(self.native('POST','/v1/lines/'+duplicate[0]['line_id']+'/refresh',{})[0],410)
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
@@ -874,6 +961,7 @@ def main():
                 "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
                 "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"],
                 "source-matching":["REQ-SERVICE-PLAY/matching-queries-filter", "REQ-SERVICE-PLAY/matching-auto-confirm-negatives", "REQ-SERVICE-PLAY/mapping-reuse-identity", "REQ-SERVICE-PLAY/mapping-user-revoke"],
+                "t4-query-adapters":["REQ-SERVICE-PROVIDERS/t4-query-parameters", "REQ-SERVICE-PROVIDERS/t4-drpyjs0-parameters", "REQ-SERVICE-PROVIDERS/t4-play-shapes-headers", "REQ-SERVICE-PROVIDERS/t4-query-refresh-identity"],
                 "app-source-selection-app":["REQ-SERVICE-PLAY/app-playback-selection-switch", "REQ-SERVICE-PLAY/app-resume-service-errors", "REQ-SERVICE-PLAY/app-new-history-restart", "REQ-SERVICE-PLAY/app-offline-local-live"],
                 "app-source-selection":["REQ-SERVICE-PLAY/ui-line-round-actions", "REQ-SERVICE-PLAY/ui-config-migration-records", "REQ-SERVICE-PLAY/ui-decoupled-metadata", "REQ-SERVICE-PLAY/ui-playing-failed-reporting"],
                 "native-line-round":["REQ-SERVICE-PLAY/native-round-waits-probes", "REQ-SERVICE-PLAY/native-round-cancel-stale", "REQ-SERVICE-PLAY/native-round-probe-and-open", "REQ-SERVICE-PLAY/native-session-history-binding", "REQ-SERVICE-PLAY/native-playback-result-reporting"],
@@ -888,6 +976,7 @@ def main():
                "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
                "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent"),
                "source-matching":("test_1_queries_filter", "test_2_auto_confirm_negatives", "test_3_mapping_reuse_identity", "test_4_user_revoke"),
+               "t4-query-adapters":("test_1_query_parameters", "test_2_js0_parameters", "test_3_play_shapes", "test_4_refresh_identity"),
                "app-source-selection-app":("test_1_selection_switch", "test_2_failure_recovery", "test_3_history_restart", "test_4_offline"),
                "app-source-selection":("test_1_actions", "test_2_migration", "test_3_metadata", "test_4_reports"),
                "native-line-round":("test_1_waits_probes", "test_2_cancel_stale", "test_3_probe_open", "test_4_history_binding", "test_5_report_dedup"),

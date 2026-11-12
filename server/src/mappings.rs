@@ -179,7 +179,7 @@ impl Store {
             .find(|row| row["source_id"] == source_id && row["revoked"] == false);
         let Some(row) = row else { return Ok(None) };
         let content = row["content_id"].as_str().ok_or("invalid stored mapping")?;
-        let detail = match crate::adapters::maccms::detail(source, content).await {
+        let detail = match crate::adapters::detail(source, content).await {
             Ok(value) => value,
             Err("MacCMS content identity is missing or ambiguous") => return Ok(None),
             Err(error) => return Err(error),

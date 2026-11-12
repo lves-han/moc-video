@@ -130,7 +130,7 @@ pub async fn propose(
     let mut seen = HashSet::new();
     let mut search_results = Vec::new();
     for query in &names {
-        let items = crate::adapters::maccms::search(source, query).await?;
+        let items = crate::adapters::search(source, query).await?;
         for item in items
             .into_iter()
             .filter(|item| {
@@ -168,7 +168,7 @@ pub async fn propose(
             continue;
         }
         let id = item["vod_id"].as_str().expect("validated adapter ID");
-        let detail = crate::adapters::maccms::detail(source, id).await?;
+        let detail = crate::adapters::detail(source, id).await?;
         if detail.to_string().len() > 256 * 1024 {
             return Err("candidate exceeds memory limit");
         }
@@ -296,7 +296,7 @@ mod tests {
         crate::db::initialize(temp.path()).unwrap();
         let store = crate::mappings::Store::new(temp.path());
         let detail = rt
-            .block_on(crate::adapters::maccms::detail(&source, "101"))
+            .block_on(crate::adapters::detail(&source, "101"))
             .unwrap();
         let saved = store
             .save(&meta, &source, "101", &evidence(&meta, &detail), "user")
@@ -337,7 +337,7 @@ mod tests {
         assert_eq!(p["selected"], "201");
         assert_eq!(p["candidates"].as_array().unwrap().len(), 1);
         let series_detail = rt
-            .block_on(crate::adapters::maccms::detail(&source, "201"))
+            .block_on(crate::adapters::detail(&source, "201"))
             .unwrap();
         store
             .save(

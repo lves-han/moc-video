@@ -37,7 +37,7 @@ struct XmlLine {
     value: String,
 }
 
-fn headers(source: &Value) -> Result<HeaderMap, &'static str> {
+pub(crate) fn headers(source: &Value) -> Result<HeaderMap, &'static str> {
     let mut headers = HeaderMap::new();
     for (name, value) in source["headers"]
         .as_object()
@@ -125,7 +125,7 @@ fn identity(item: &Value) -> Result<String, &'static str> {
     Err("MacCMS content ID is missing")
 }
 
-fn card(item: &Value) -> Result<Value, &'static str> {
+pub(crate) fn card(item: &Value) -> Result<Value, &'static str> {
     let id = identity(item)?;
     let title = item["vod_name"]
         .as_str()
@@ -152,6 +152,10 @@ pub async fn detail(source: &Value, id: &str) -> Result<Value, &'static str> {
         return Err("content ID is empty");
     }
     let items = query(source, &[("ac", "detail"), ("ids", id)]).await?;
+    normalize_detail(&items, id)
+}
+
+pub(crate) fn normalize_detail(items: &[Value], id: &str) -> Result<Value, &'static str> {
     let matches: Vec<_> = items
         .iter()
         .filter(|item| identity(item).ok().as_deref() == Some(id))

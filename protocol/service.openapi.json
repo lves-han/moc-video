@@ -1135,7 +1135,9 @@
             "type": "string",
             "enum": [
               "maccms_json",
-              "maccms_xml"
+              "maccms_xml",
+              "t4_query",
+              "t4_drpyjs0"
             ]
           },
           "api": {

@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": []}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,7 +20,9 @@ class Handler(BaseHTTPRequestHandler):
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
             if "detail_delay" in query: STATE["detail_delay"] = float(query["detail_delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
+            if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
             if "reset" in query: STATE["counts"].clear()
+            if "reset_t4" in query: STATE["t4_requests"].clear()
             return self.send_json(STATE)
         if url.path == "/stats":
             return self.send_json(STATE)
@@ -36,6 +38,30 @@ class Handler(BaseHTTPRequestHandler):
             return
         if url.path.startswith(("/addon-a/", "/addon-b/", "/addon-same/")):
             return self.addon(url)
+        if url.path in ("/t4-query", "/t4-js0", "/web/302redirect"):
+            STATE["t4_requests"].append({"path":url.path,"query":query,"header":self.headers.get("X-Fixture")})
+            if self.headers.get("X-Fixture") != "allowed":
+                self.send_response(403); self.end_headers(); return
+            if STATE["t4_mode"] == "html":
+                self.send_response(200); self.end_headers(); self.wfile.write(b'<html>error</html>'); return
+            if url.path == "/web/302redirect":
+                if STATE["t4_mode"] == "js0hint": return self.send_json({"url":"https://media.test/watch?id=js0","type":"hls"})
+                return self.send_json({"url":"https://media.test/js0.mp4?sig=a%2Fb", "headers":{"Referer":"https://fixture.test/"}})
+            if "play" in query:
+                mode = STATE["t4_mode"]
+                values = ["HD","https://media.test/hd.m3u8?generation=2","SD","https://media.test/sd.mp4?generation=2"]
+                if mode == "normal": values = ["HD","https://media.test/hd.m3u8?generation=1","SD","https://media.test/sd.mp4?generation=1"]
+                if mode == "reverse": values = values[2:] + values[:2]
+                if mode == "duplicate": values[2] = "HD"
+                if mode == "missing": return self.send_json({"parse":0})
+                if mode == "hint": values = ["HD","https://media.test/watch?id=hd","SD","https://media.test/watch?id=sd"]
+                if mode == "dash": values = ["HD","https://media.test/video.mpd","SD","https://media.test/video.mkv"]
+                if mode == "emptyheader": return self.send_json({"url":values,"parse":0,"header":"","headers":{"Referer":"https://fixture.test/"}})
+                return self.send_json({"url":values,"type":"hls" if mode == "hint" else "", "parse":int(mode == "parse"),"jx":int(mode == "jx"),"header":{"Referer":"https://fixture.test/"}})
+            video={"vod_id":"201","vod_name":"Show","type_name":"电视剧","vod_year":"2020","vod_play_from":"fixture-flag","vod_play_url":"S01E02$play-2#S01E03$play-3"}
+            if "ids" in query and query["ids"] != ["201"]: return self.send_json({"list":[]})
+            if "wd" in query and query["wd"] != ["Show"]: return self.send_json({"list":[]})
+            return self.send_json({"list":[video]})
         if url.path == "/maccms":
             movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
             return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})

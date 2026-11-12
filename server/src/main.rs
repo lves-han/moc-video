@@ -408,9 +408,9 @@ async fn playback_check(
     let start = std::time::Instant::now();
     let result = async {
         let keyword = query.get("query").map(String::as_str).unwrap_or("电影");
-        let items = adapters::maccms::search(&source, keyword).await?;
+        let items = adapters::search(&source, keyword).await?;
         let sample = items.first().ok_or("source search returned no sample")?;
-        let detail = adapters::maccms::detail(
+        let detail = adapters::detail(
             &source,
             sample["vod_id"]
                 .as_str()
@@ -462,6 +462,8 @@ async fn playback_import(
             (Some("maccms" | "maccms_json" | "t1_json" | "T1_JSON" | "t1Json"), _)
             | (_, Some(1)) => "maccms_json",
             (Some("maccms_xml" | "t0_xml" | "T0_XML" | "t0Xml"), _) | (_, Some(0)) => "maccms_xml",
+            (Some("t4_query" | "t4_drpys" | "T4_DRPYS"), _) | (_, Some(4 | 6)) => "t4_query",
+            (Some("t4_drpyjs0" | "T4_DRPYJS0" | "drpyjs0"), _) | (_, Some(2)) => "t4_drpyjs0",
             _ => {
                 results.push(json!({"status":"skipped","reason":"unsupported source type"}));
                 continue;

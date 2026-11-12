@@ -3046,14 +3046,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.11 T4 查询式与 DRPYJS0 接口适配
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 T4 查询式、5.6、6.6、7.2）→ A1
 - 上下文：方案 §1 T4 查询式、5.6、6.6、7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.6 来源模型与 T1.8 解析管线；zyfun t4Drpys/t4DrpyJs0 的参数资料和代表性响应。
 - 不变量：按来源版本保留 ext/extend、头与逻辑线路定位信息；列表顺序仅展示，待解析状态明确，刷新唯一定位规则沿方案 5.9。
 - 未决项：TVBox type 4 的具体服务方参数存在差异；本卡先以维护方样例或实际响应核对，报告支持范围，不承诺任意同名接口。
-- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
+- 范围：`src/App.vue`, `src/state.ts`, `src/components/HomeCatalog.vue`, `src/views/BrowseView.vue`, `src/views/PlaybackView.vue`, `src/views/SearchView.vue`, `Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/matching.rs`, `server/src/mappings.rs`, `server/src/state.rs`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/t4_query.rs`, `server/src/adapters/t4_drpyjs0.rs`, `server/src/sources.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；共用来源分发或 URL 解析被修改时复用 T1.6/T1.8 相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

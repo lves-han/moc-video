@@ -3238,3 +3238,12 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261112T082850257764-A1/output.log`；4 项通过，包含失败自动换线、已测线路去重、提前选择后等待测速和失败事件触发恢复。
 - 验收 A2：PASS；日志：`evidence/runs/20261112T082900129281-A2/output.log`；4 项窗口观察记录通过。补充构建的真实窗口展示了服务综艺目录；受控故障触发自动切换，原进度约 11 秒得以保留，服务记录该线路失败。窗口观察后补加的在途测速等待由自动测试验证，版本差异已写入 `evidence/manual/T1.10-service-window.json`。
 - 相关回归：目录、接口及播放器 61 项通过 `evidence/runs/20261112T082829294303-T110-followup-regression/output.log`，类型检查通过 `evidence/runs/20261112T082837763654-T110-followup-types2/output.log`。受控测试容器和隔离应用资料已清理。
+
+## T1.11 T4 查询式与 DRPYJS0 接口适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `t4_query` 和 `t4_drpyjs0` 来源，接入搜索、详情、播放、来源检查与查找/刷新。保留配置扩展和请求头，按清晰度名称形成可验证的子线路身份；重排保持身份，重复或消失返回 410。解析标记保留为待嗅探状态，接口声明 HLS 时支持无后缀地址，DASH 和网络 MKV 显示不支持。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T084750379936-A1/output.log`；4 项通过，覆盖两类参数、TVBox type 4 导入、扩展参数、字符串和数组播放地址、头部、空头回退、HLS 提示、解析标记、异常响应及线路重排/歧义。
+- 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T084723945336-T111-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T084616551471-T111-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T084824983962-T111-openapi/output.log`。
+- 兼容范围：按 [zyfun 查询式适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Drpys.ts)、[DRPYJS0 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4DrpyJs0.ts)和 [drpy-node T4 文档](https://github.com/zourjke/drpy-node/blob/main/docs/t4api.md) 的 GET 查询及 JSON 响应实现；同名服务的其他私有参数仍需对应样本。外部来源实网 NOT RUN。
+- 范围：补入匹配、对应关系和短期线路状态模块以接入统一分发；任务开始后为补齐 T1.10 恢复/综艺而先完成的六个界面文件列入范围，仅用于覆盖已提交的基线变化。

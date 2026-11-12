@@ -49,9 +49,16 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
     let url = Url::parse(&line.url)
         .ok()
         .filter(crate::metadata::http::valid);
-    let kind = if url
-        .as_ref()
-        .is_some_and(|u| u.path().to_ascii_lowercase().ends_with(".m3u8"))
+    let unsupported_format = url.as_ref().is_some_and(|value| {
+        let path = value.path().to_ascii_lowercase();
+        path.ends_with(".mpd") || path.ends_with(".mkv")
+    });
+    let kind = if line.needs_sniffing || unsupported_format {
+        "unsupported"
+    } else if url.is_some() && line.kind_hint.as_deref() == Some("hls")
+        || url
+            .as_ref()
+            .is_some_and(|u| u.path().to_ascii_lowercase().ends_with(".m3u8"))
     {
         "hls"
     } else if url.is_some() {
@@ -61,14 +68,21 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
     };
     let play = url
         .as_ref()
+        .filter(|_| kind != "unsupported")
         .map(|_| json!({"url":line.url,"headers":line.headers}));
     let mut value = json!({"line_id":line_id,"source_id":line.source_id,"source_revision":line.source_revision,
-        "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":null,"target":line.target,
+        "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":line.quality,"target":line.target,
         "expires_at":line.play_expires_at,"history":reports.get(&line.logical_key).unwrap_or_else(|_|json!({"ok":0,"failed":0,"last_ok_at":null}))});
     if let Some(play) = play {
         value["play"] = play;
     } else {
-        value["reason"] = json!("unsupported_protocol_or_script");
+        value["reason"] = json!(if line.needs_sniffing {
+            "needs_sniffing"
+        } else if unsupported_format {
+            "unsupported_media_format"
+        } else {
+            "unsupported_protocol_or_script"
+        });
     }
     value
 }
@@ -121,7 +135,13 @@ pub fn issue(
             flag: item["flag"].as_str().unwrap_or("").to_owned(),
             episode_label: item["episode"]["label"].as_str().unwrap_or("").to_owned(),
             url: url.to_owned(),
-            headers: template.source["headers"].clone(),
+            headers: item["episode"]
+                .get("headers")
+                .cloned()
+                .unwrap_or_else(|| template.source["headers"].clone()),
+            quality: item["episode"]["quality"].as_str().map(str::to_owned),
+            needs_sniffing: item["episode"]["requires_parse"] == true,
+            kind_hint: item["episode"]["kind_hint"].as_str().map(str::to_owned),
             expires_at: now + runtime.handle_ttl,
             play_expires_at: now + runtime.cache_ttl,
         };
