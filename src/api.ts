@@ -45,6 +45,7 @@ const nativeInvoke: Invoke = async (command, args) => {
     // The browser interface preview is explicit; native failures never fall back.
     return (await import("./data/preview.ts")).previewInvoke(command, args);
   }
+  if (command === 'match_playback' || command === 'resolve_episode') throw new Error('Legacy playback is available only in the browser preview');
   return tauri.core.invoke(command, args);
 };
 

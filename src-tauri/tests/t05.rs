@@ -867,10 +867,15 @@ fn t05_permissions_and_actual_tauri_handler() {
             headers: Default::default(),
             invoke_key: tauri::test::INVOKE_KEY.into(),
         };
-        let response: Value = tauri::test::get_ipc_response(&main, invoke())
-            .unwrap()
-            .deserialize()
-            .unwrap();
+        let response = tauri::test::get_ipc_response(&main, invoke());
+        if matches!(*command, "match_playback" | "resolve_episode") {
+            assert!(
+                response.is_err(),
+                "legacy playback permission must be absent"
+            );
+            continue;
+        }
+        let response: Value = response.unwrap().deserialize().unwrap();
         Contracts::get()
             .validate(&format!("Result_{command}"), &response)
             .unwrap();

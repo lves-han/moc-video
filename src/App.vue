@@ -37,7 +37,7 @@ const desktopNavigation = computed(() => [
   { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
   { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
   { page: 'browse', href: '#/browse/documentary', icon: 'library', label: t('Documentary') },
-  ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
+  ...(['variety', 'short', 'sports'] as const).filter(category => !native && appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
   { page: "local", href: "#/local", icon: "folder", label: t("Local video") },
@@ -100,7 +100,7 @@ const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
 });
 // A rematch that needs the user keeps hash #/playback; its confirmation/result UI lives in CatalogView.
 const matchNeedsUser = computed(() => ["needs_confirmation", "not_found"].includes(appController.matching.result?.status ?? ""));
-const formalPlayback = computed(() => appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value));
+const formalPlayback = computed(() => appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value && !appController.serviceRound.open));
 const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
 const playbackView = ref<InstanceType<typeof PlaybackView>>();
 defineExpose({ playbackController: () => playbackView.value?.playback });
@@ -244,6 +244,12 @@ async function onHashChange() {
 async function playEpisode(videoId: string, explicitLine = false) {
   try {
     await flushHistory();
+    if (native && appState.settings.playback_service?.enabled) {
+      if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
+      await appController.startServiceRound(videoId, false, !explicitLine);
+      return;
+    }
+    if (native) throw new Error('请先连接播放服务。 / Connect the playback service first.');
     const result = await appController.match(videoId, null, !explicitLine);
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
@@ -320,11 +326,15 @@ let lastWrite = 0;
 let lastHistory: HistoryEntry | null = null;
 function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   const state = appState.playback, context = state.context, data = appState.details.data;
-  if (!context || !data || state.position_ms <= 0 || state.phase === "failed") return null;
+  if (!context || !data || state.position_ms <= 0) return null;
   const episodes = data.details.groups.flatMap(group => group.episodes);
   const index = episodes.findIndex(episode => metadataVideoId(episode.ref) === context.metadata_video_id);
   const provider = appState.sources.data?.providers.find(item => item.id === context.episode_ref.source_id);
-  if (index < 0 || !provider) return null;
+  let serviceLine = '';
+  try { const ref = JSON.parse(context.episode_ref.data); if (ref[0] === 'service_line') serviceLine = ref[2]; } catch { /* legacy reference */ }
+  if (index < 0 || (!provider && !serviceLine)) return null;
+  const sourceId = context.episode_ref.source_id;
+  const sourceName = provider?.name ?? appController.serviceRound.snapshot?.lines.find(line => line.line_id === serviceLine)?.source_name ?? 'Playback service';
   const session = state.session;
   if (!session) return null;
   const kind = data.details.kind === "other" ? "series" : data.details.kind;
@@ -333,10 +343,10 @@ function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   const duration_ms = state.duration_ms ? Math.max(1, Math.round(state.duration_ms)) : null;
   const completed = finished || state.phase === "ended", updated_at = Date.now();
   return { content_id: data.details.id, title: data.details.title, poster: poster ?? "/mark.svg", kind,
-    episode: index + 1, episode_total: episodes.length, source_id: provider.id, source_name: provider.name,
+    episode: index + 1, episode_total: episodes.length, source_id: sourceId, source_name: sourceName,
     position_ms, duration_ms, completed, updated_at,
     record: { content_id: data.details.id, metadata_identity: context.metadata_ref.identity, video_id: context.metadata_video_id, season_number: episode.season ?? null,
-      episode_number: episode.number ?? index + 1, title: data.details.title, kind: data.details.kind, poster_cache_key: null, source_id: provider.id, source_name: provider.name,
+      episode_number: episode.number ?? index + 1, title: data.details.title, kind: data.details.kind, poster_cache_key: null, source_id: sourceId, source_name: sourceName,
       position_ms, duration_ms, completed, updated_at },
     capture: { session_id: session.session_id, match_id: context.match_id, playback_epoch: state.playback_epoch } };
 }
@@ -381,12 +391,13 @@ async function continueNativeHistory(record: WatchHistoryRecord) {
   const direct = identity.namespace === 'maccms';
   const metadata = providers.find(source => source.kind === (direct ? 'maccms' : 'stremio') && ready(source) && source.origin.config_id === identity.config_id);
   if (!metadata) { messages.error(t("This title is unavailable in the current catalog.")); return; }
+  const service = appState.settings.playback_service?.enabled === true;
   const playback = providers.find(source => source.id === record.source_id && ready(source));
-  if (!playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
+  if (!service && !playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
   try {
     if (!direct) await appController.selectSource(metadata.id, "metadata");
-    await appController.selectSource(playback.id, "playback");
-    if (direct && metadata.id !== playback.id) throw new Error(t('This title is unavailable in the current catalog.'));
+    if (!service && playback) await appController.selectSource(playback.id, "playback");
+    if (direct && metadata.id !== playback?.id) throw new Error(t('This title is unavailable in the current catalog.'));
     const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) };
     wantedResume = record.video_id ? { video_id: record.video_id, position_ms: record.completed ? 0 : record.position_ms } : null;
     const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
@@ -499,7 +510,7 @@ onBeforeUnmount(() => {
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
     <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
-    <select class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
+    <select v-if="!native" class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
   </div></template>
   </PlaybackView>
   <template v-else>
@@ -516,11 +527,11 @@ onBeforeUnmount(() => {
       <div ref="sidebarSources" class="tv-sidebar-sources" data-focus-row>
         <template v-if="sidebarCollapsed">
           <button :aria-label="t('Choose a metadata source')" :title="t('Choose a metadata source')" @click="expandSource('metadata')"><Icon name="library" /></button>
-          <button :aria-label="t('Choose a video source')" :title="t('Choose a video source')" @click="expandSource('playback')"><Icon name="layers" /></button>
+          <button v-if="!native" :aria-label="t('Choose a video source')" :title="t('Choose a video source')" @click="expandSource('playback')"><Icon name="layers" /></button>
         </template>
         <template v-else>
           <label :title="t('Metadata provider')"><Icon name="library" :size="16" /><select data-role="metadata" :aria-label="t('Choose a metadata source')" :value="appState.selected_metadata_source?.source_id ?? ''" @change="selectNativeSource(($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="item in metadataProviders" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-          <label :title="t('Playback source')"><Icon name="layers" :size="16" /><select data-role="playback" :aria-label="t('Choose a video source')" :value="sourceId" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select></label>
+          <label v-if="!native" :title="t('Playback source')"><Icon name="layers" :size="16" /><select data-role="playback" :aria-label="t('Choose a video source')" :value="sourceId" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select></label>
         </template>
       </div>
     </aside>
@@ -625,7 +636,7 @@ onBeforeUnmount(() => {
               {{ item.label }}
             </option>
           </select>
-          <label class="source-select"
+          <label v-if="!native" class="source-select"
             ><span class="status-dot" /><select
               class="compact-select"
               :value="sourceId"

@@ -12,7 +12,8 @@ const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; pla
 const playback = createPlaybackController(appState, undefined, onEnded, runtime => {
   if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
   else appController.applyRuntime(runtime);
-}, (context, epoch, session) => appController.rememberLine(context, epoch, session));
+}, (context, epoch, session) => appController.rememberLine(context, epoch, session),
+context => emit('play', context.metadata_video_id, true));
 const unbind = appController.bindPlayback(playback);
 const state = playback.state;
 const ui = playback.ui;
@@ -166,7 +167,7 @@ watch(() => [state.duration_ms, state.session?.session_id], () => {
 }, { flush: 'post' });
 watch(() => props.context, context => {
   if (!mounted) return;
-  if (context) void playback.load(context, { resume: props.resume });
+  if (context) void playback.load(context, { resume: props.resume, resolution: appController.takeServiceResolution(context) });
   // Already stopped by the controller: another stop would bump the epoch and discard its pending rematch.
   else if (state.context || state.session || state.resolution || state.phase !== "idle") void playback.stop();
 });
@@ -225,7 +226,7 @@ onMounted(async () => {
   state.volume = appState.settings.volume;
   state.muted = appState.settings.muted;
   playback.setVolume(state.volume); playback.setMuted(state.muted); audioInitialized = true;
-  if (props.context) void playback.load(props.context, { resume: props.resume });
+  if (props.context) void playback.load(props.context, { resume: props.resume, resolution: appController.takeServiceResolution(props.context) });
   const container = officialPlayer.value?.querySelector<HTMLElement>('media-container');
   (container ?? panel.value)?.focus({ preventScroll: true });
 });
@@ -320,7 +321,7 @@ defineExpose({ playback });
               </div>
             </div>
             <div v-show="tray === 'streams'" role="tabpanel" class="playback-streams">
-              <button v-if="props.context && props.context.metadata_ref.identity.namespace !== 'maccms'" data-action="change-line" class="playback-stream" :disabled="busy" @click="appController.match(props.context.metadata_video_id, null, false)">{{ word('选择其他线路', 'Choose another line') }}</button>
+              <button v-if="props.context && props.context.metadata_ref.identity.namespace !== 'maccms'" data-action="change-line" class="playback-stream" :disabled="busy" @click="appState.settings.playback_service?.enabled ? emit('play', props.context.metadata_video_id, true) : appController.match(props.context.metadata_video_id, null, false)">{{ word('选择其他线路', 'Choose another line') }}</button>
               <button v-for="stream in state.resolution?.streams ?? []" :key="stream.id" class="playback-stream" :data-stream-id="stream.id" :aria-current="stream.id === state.session?.stream_id ? 'true' : undefined" :disabled="!stream.playable || busy" @click="playback.selectStream(stream.id)"><span>{{ stream.label }}</span><span>{{ stream.quality_label ?? (stream.quality ? `${stream.quality}p` : word('清晰度未知', 'Unknown quality')) }}<small v-if="!stream.playable"> · {{ stream.reason ?? word('暂不可用', 'Unavailable') }}</small></span><Icon v-if="stream.id === state.session?.stream_id" name="check" /></button>
               <p v-if="!state.resolution?.streams.length">{{ word('暂无可用线路', 'No streams available') }}</p>
               <slot name="preferences" />

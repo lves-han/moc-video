@@ -15,7 +15,6 @@
     "allow-sync-catalog",
     "allow-get-home",
     "allow-get-details",
-    "allow-resolve-episode",
     "allow-start-line-round",
     "allow-get-line-round",
     "allow-confirm-line-candidate",
@@ -32,7 +31,6 @@
     "allow-save-settings",
     "allow-get-resource-status",
     "allow-release-resolution",
-    "allow-match-playback",
     "allow-list-history",
     "allow-save-history",
     "allow-remove-history",
@@ -56,6 +54,7 @@
     "allow-app-reset-recovery",
     "allow-app-font-url",
     "allow-app-service-import",
-    "allow-app-service-delete"
+    "allow-app-service-delete",
+    "allow-app-playback-sources"
   ]
 }

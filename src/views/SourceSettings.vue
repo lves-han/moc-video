@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { NAlert, NButton, NModal, NSwitch } from "naive-ui";
-import { appState as state, appController as controller, validateSourceDraft, TMDB_CONFIG_ID, TMDB_DEFAULT_INSTANCE, TMDB_API_URL, TMDB_IMAGE_URL, type SourceDraft } from "../state";
+import { appState as state, appController as controller, validateSourceDraft, TMDB_CONFIG_ID, TMDB_DEFAULT_INSTANCE, TMDB_API_URL, TMDB_IMAGE_URL, type SourceDraft, type ServiceSource } from "../state";
 import { locale, t } from "../i18n";
 import { describeError } from "../api";
 import { unaddedPresets } from "../data/sourcePresets";
@@ -11,6 +11,7 @@ import type { HttpSourceConfig, Settings } from "../models";
 const props = defineProps<{ section: "metadata" | "playback" }>();
 const emit = defineEmits<{ select: [id: string, role: "metadata" | "playback"] }>();
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
+const native = Boolean(window.__TAURI__);
 const kind = computed(() => props.section === "metadata" ? "stremio" : "maccms");
 const providers = computed(() => state.sources.data?.providers ?? []);
 const metadataSources = computed(() => providers.value.filter(source => source.kind === "stremio" && source.runtime_status === "ready" && source.capabilities.home && source.capabilities.details));
@@ -34,6 +35,26 @@ const busy = ref(false);
 const failure = ref("");
 const serviceDraft = reactive({ url: state.settings.playback_service?.url ?? "http://127.0.0.1:8787", token: state.settings.playback_service?.token ?? "" });
 const serviceEnabled = computed(() => state.settings.playback_service?.enabled === true);
+const remoteEditing = ref(false);
+const remoteDraft = reactive({ id: '', name: '', api: '', kind: 'maccms_json', headers: '{}' });
+watch(() => [props.section, serviceEnabled.value], () => {
+  if (props.section === 'playback' && serviceEnabled.value) void controller.refreshServiceSources().catch(() => {});
+}, { immediate: true });
+function editRemote(source?: ServiceSource) {
+  Object.assign(remoteDraft, source ? { id: source.id, name: source.name, api: source.api, kind: source.kind, headers: JSON.stringify(source.headers) } : { id: '', name: '', api: '', kind: 'maccms_json', headers: '{}' });
+  remoteEditing.value = true;
+}
+async function saveRemote() {
+  let headers: Record<string, string>;
+  try { headers = JSON.parse(remoteDraft.headers); if (!headers || Array.isArray(headers) || typeof headers !== 'object' || Object.values(headers).some(value => typeof value !== 'string')) throw new Error(); }
+  catch { failure.value = word('请求头需要使用 JSON 对象。', 'Headers must be a JSON object.'); return; }
+  const old = controller.serviceSources.items.find(source => source.id === remoteDraft.id);
+  const body = { ...old, name: remoteDraft.name.trim(), api: remoteDraft.api.trim(), kind: remoteDraft.kind, headers, enabled: old?.enabled ?? true };
+  if (await run(() => controller.changeServiceSource(old ? 'update' : 'create', body, old?.id ?? null))) remoteEditing.value = false;
+}
+const retryMigration = () => run(() => controller.migratePlaybackSources());
+const toggleRemote = (source: ServiceSource) => run(() => controller.changeServiceSource('update', { ...source, enabled: !source.enabled }, source.id));
+const deleteRemote = (source: ServiceSource) => run(() => controller.changeServiceSource('delete', {}, source.id));
 const pendingGroup = (id: string) => {
   const service = state.settings.playback_service;
   const config = state.settings.source_configs.find(row => row.config_id === id);
@@ -185,6 +206,25 @@ async function copyDiagnostics() {
       <div class="sources-heading"><h3>{{ word('其他 Stremio 扩展', 'Other Stremio add-ons') }}</h3><NButton class="sources-add" :disabled="busy" @click="openDraft()">{{ word('添加扩展', 'Add add-on') }}</NButton></div>
     </template>
 
+    <template v-else-if="serviceEnabled">
+      <div class="sources-heading"><h3>{{ word('播放源', 'Playback sources') }}</h3><NButton class="sources-add" :disabled="busy" @click="editRemote()">{{ word('添加来源', 'Add source') }}</NButton></div>
+      <NButton v-if="configs.some(config => config.kind === 'maccms')" :disabled="busy" @click="retryMigration">{{ word('迁入本地来源', 'Import local sources') }}</NButton>
+      <NAlert v-if="controller.serviceSources.error" type="error">{{ controller.serviceSources.error }} <NButton size="small" @click="retryMigration">{{ t('Retry') }}</NButton></NAlert>
+      <article v-for="source in controller.serviceSources.items" :key="source.id" class="sources-row">
+        <span class="source-status" :class="source.enabled ? 'ready' : 'disabled'" /><div class="sources-row-text"><h3>{{ source.name }}</h3><p>{{ source.kind }} · {{ source.status }}</p></div>
+        <div class="sources-row-actions"><NButton :disabled="busy" @click="editRemote(source)">{{ word('编辑', 'Edit') }}</NButton><NButton :disabled="busy" @click="toggleRemote(source)">{{ source.enabled ? word('禁用', 'Disable') : word('启用', 'Enable') }}</NButton><NButton :disabled="busy" @click="deleteRemote(source)">{{ word('删除', 'Delete') }}</NButton></div>
+      </article>
+      <NModal v-model:show="remoteEditing" preset="card" class="tv-dialog" :title="word('播放源', 'Playback source')" :style="{ width: 'min(640px, calc(100vw - 32px))' }">
+        <label>{{ word('名称', 'Name') }}<input v-model="remoteDraft.name" class="setting-select" /></label>
+        <label>{{ word('接口地址', 'API address') }}<input v-model="remoteDraft.api" class="setting-select" /></label>
+        <label>{{ word('格式', 'Format') }}<select v-model="remoteDraft.kind" class="setting-select"><option value="maccms_json">MacCMS JSON</option><option value="maccms_xml">MacCMS XML</option></select></label>
+        <label>{{ word('请求头（JSON）', 'Headers (JSON)') }}<textarea v-model="remoteDraft.headers" /></label>
+        <NButton type="primary" :disabled="busy || !remoteDraft.name.trim() || !remoteDraft.api.trim()" @click="saveRemote">{{ t('Save') }}</NButton>
+      </NModal>
+    </template>
+    <template v-else-if="native">
+      <p role="status">{{ word('请先在元数据设置中连接播放服务。', 'Connect the playback service in metadata settings first.') }}</p>
+    </template>
     <template v-else>
       <NAlert v-if="state.runtime.error" class="sources-runtime-error" type="error">{{ state.runtime.error.message }}</NAlert>
       <div class="sources-pickers">
@@ -198,7 +238,7 @@ async function copyDiagnostics() {
     </template>
 
     <p v-if="section === 'metadata' && !sectionConfigs.length" class="sources-empty">{{ word('尚未添加其他扩展', 'No other add-ons') }}</p>
-    <article v-for="config in sectionConfigs" :key="config.config_id" class="sources-row" :data-config-id="config.config_id">
+    <article v-for="config in section === 'playback' && native ? [] : sectionConfigs" :key="config.config_id" class="sources-row" :data-config-id="config.config_id">
       <span class="source-status" :class="statusOf(config)" :aria-label="statusText(config)" /><div class="sources-row-text">
         <h3>{{ config.name }}</h3>
         <p>{{ hostOf(config) }} · <span class="sources-state">{{ statusText(config) }}</span></p>
@@ -211,7 +251,7 @@ async function copyDiagnostics() {
         <NButton class="sources-delete" :disabled="busy" @click="pendingDelete = config">{{ word('删除', 'Delete') }}</NButton>
       </div>
     </article>
-    <article v-for="preset in presets" :key="preset.api_url" class="sources-row sources-preset" :data-preset="preset.name">
+    <article v-for="preset in native ? [] : presets" :key="preset.api_url" class="sources-row sources-preset" :data-preset="preset.name">
       <span class="source-status disabled" aria-hidden="true" /><div class="sources-row-text"><h3>{{ preset.name }}</h3><p>{{ word('未添加', 'Not added') }}</p></div>
       <div class="sources-row-actions"><NButton class="sources-preset-add" :disabled="busy" @click="addPreset(preset)">{{ word('添加', 'Add') }}</NButton></div>
     </article>

@@ -7151,6 +7151,7 @@
         ]
       }
   },
+  "x-preview-only-commands": ["match_playback", "resolve_episode"],
   "x-command-contracts": {
       "start_line_round": {
         "args": {

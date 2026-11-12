@@ -121,6 +121,20 @@ async fn app_service_delete(
 }
 
 #[cfg(not(mobile))]
+#[tauri::command(rename_all = "snake_case")]
+async fn app_playback_sources(
+    window: WebviewWindow,
+    action: String,
+    id: Option<String>,
+    payload: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    require_main(&window)?;
+    service::playback_sources(&action, id.as_deref(), payload)
+        .await
+        .map_err(|error| error.message)
+}
+
+#[cfg(not(mobile))]
 #[tauri::command]
 async fn player_fullscreen(
     window: WebviewWindow,
@@ -244,6 +258,7 @@ pub fn run() {
         app_font_url,
         app_service_import,
         app_service_delete,
+        app_playback_sources,
         automation::t01_control
     ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
@@ -257,7 +272,8 @@ pub fn run() {
         app_reset_recovery,
         app_font_url,
         app_service_import,
-        app_service_delete
+        app_service_delete,
+        app_playback_sources
     ];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;

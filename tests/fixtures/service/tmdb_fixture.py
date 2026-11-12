@@ -2,6 +2,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 import time
+from pathlib import Path
 
 STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}}
 
@@ -50,8 +51,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"code":1,"page":1,"pagecount":1,"list":[{"vod_id":101,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"hls$$$direct","vod_play_url":"Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2$$$https://media.test/direct"}]})
             data=b'<rss><list><video><id>101</id><name>Film</name><type>movie</type><year>2020</year><dl><dd flag="hls"><![CDATA[Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2]]></dd><dd flag="direct"><![CDATA[https://media.test/direct]]></dd></dl></video></list></rss>'
             self.send_response(200); self.send_header("Content-Type","application/xml"); self.send_header("Content-Length",str(len(data))); self.end_headers(); self.wfile.write(data); return
+        if url.path == "/broken.mp4":
+            if STATE["counts"].get(url.path, 0) > 1:
+                self.send_response(503); self.end_headers(); return
+            return self.media()
         if url.path == "/video.mp4":
             return self.media()
+        if url.path == "/live.m3u":
+            payload = ("#EXTM3U\n#EXTINF:-1,Fixture live\n" + STATE["media_url"].rstrip('/') + "/video.mp4\n").encode()
+            self.send_response(200); self.send_header("Content-Length", str(len(payload))); self.end_headers(); self.wfile.write(payload); return
+        if url.path.startswith('/play-hls/'):
+            filename = url.path.removeprefix('/play-hls/')
+            if '/' in filename or filename not in ('index.m3u8', 'segment0.ts', 'segment1.ts', 'segment2.ts', 'segment3.ts', 'segment4.ts', 'segment5.ts', 'segment6.ts'):
+                self.send_response(404); self.end_headers(); return
+            path = Path('/hls') / filename
+            if not path.is_file():
+                self.send_response(404); self.end_headers(); return
+            data = path.read_bytes()
+            raw = self.headers.get('Range', '')
+            if raw.startswith('bytes='):
+                start, _, end = raw[6:].partition('-')
+                data = data[int(start or 0):int(end) + 1 if end else None]
+            self.send_response(206 if raw else 200)
+            self.send_header('Content-Type', 'application/vnd.apple.mpegurl' if filename.endswith('.m3u8') else 'video/mp2t')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers(); self.wfile.write(data); return
         if url.path in ("/probe-fast.mp4", "/probe-slow.mp4", "/hls/segment.ts"):
             time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
             payload = b"controlled-media-bytes"
@@ -80,6 +104,10 @@ class Handler(BaseHTTPRequestHandler):
             movie = "/movie" in url.path
             suffix = " P2" if query.get("page") == ["2"] and query.get("query") == ["film"] else ""
             data = {"results":[{"id":42, "title":("电影" if lang == "zh-CN" else "Film") + suffix, "name":"剧集" if lang == "zh-CN" else "Series", "release_date":"2020-01-01", "first_air_date":"2021-01-01", "genre_ids":[18], "overview":"fixture", "vote_average":8.0}], "page": int(query.get("page",[1])[0]), "fixture_movie":movie}
+            if "/search/tv" in url.path and query.get("query") == ["Show"]:
+                data["results"] = [{"id":44,"name":"Show","first_air_date":"2020-01-01","genre_ids":[18],"overview":"fixture","vote_average":8.0}]
+            if "/search/movie" in url.path and query.get("query") == ["Same"]:
+                data["results"] = [{"id":45,"title":"Same","release_date":"2020-01-01","genre_ids":[18],"overview":"fixture","vote_average":8.0}]
         elif url.path in ("/3/movie/42", "/3/movie/45", "/3/movie/99", "/3/tv/42", "/3/tv/43", "/3/tv/44"):
             movie = url.path.startswith("/3/movie")
             data = {"id":43 if url.path == "/3/tv/43" else 42,"title":"电影" if lang == "zh-CN" else "Film","name":"剧集" if lang == "zh-CN" else "Series", "original_title":"Original Film", "original_name":"Original Series", "release_date":"2020-01-01", "first_air_date":"2021-01-01", "status":"Returning Series", "external_ids":{"imdb_id":None if url.path == "/3/tv/43" else "tt1234567"}, "seasons":[] if movie else [{"season_number":1}], "alternative_titles":{"titles":[{"iso_3166_1":"CN", "title":"别名"},{"iso_3166_1":"US", "title":"Alias"}]}, "credits":{"cast":[],"crew":[]}, "genres":[], "production_countries":[], "runtime":90}
@@ -107,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
             "203":video("203","Show",kind="电视剧",episodes="S01E03$https://media.test/3")}
         if STATE["media_url"]:
             flavor = self.headers.get("X-Probe", "fast")
-            path = {"fast": "/probe-fast.mp4", "slow": "/probe-slow.mp4", "hls": "/hls/master.m3u8"}.get(flavor, "/probe-fast.mp4")
+            path = {"fast": "/probe-fast.mp4", "slow": "/probe-slow.mp4", "hls": "/hls/master.m3u8", "playable": "/video.mp4", "hls-playable": "/play-hls/index.m3u8", "broken": "/broken.mp4"}.get(flavor, "/probe-fast.mp4")
             records["201"]["vod_play_url"] = "S01E02$" + STATE["media_url"].rstrip("/") + path
             for item in ("107", "108"):
                 records[item]["vod_play_url"] = "Full$" + STATE["media_url"].rstrip("/") + path

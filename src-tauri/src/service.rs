@@ -264,6 +264,49 @@ pub fn current() -> Result<Config, ApiError> {
         .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Playback service is not configured"))
 }
 
+pub async fn playback_sources(
+    action: &str,
+    id: Option<&str>,
+    payload: Option<Value>,
+) -> Result<Value, ApiError> {
+    if payload
+        .as_ref()
+        .is_some_and(|value| value.to_string().len() > 1024 * 1024)
+    {
+        return Err(ApiError::bad("Source configuration is too large"));
+    }
+    let config = current()?;
+    match action {
+        "list" => config.json(Method::GET, &["v1", "sources"], None).await,
+        "import" => {
+            config
+                .json(Method::POST, &["v1", "sources", "import"], payload)
+                .await
+        }
+        "create" => config.json(Method::POST, &["v1", "sources"], payload).await,
+        "update" | "delete" => {
+            let id = id.ok_or_else(|| ApiError::bad("Source ID missing"))?;
+            uuid::Uuid::parse_str(id).map_err(|_| ApiError::bad("Invalid source ID"))?;
+            if action == "update" {
+                config
+                    .json(Method::PUT, &["v1", "sources", id], payload)
+                    .await
+            } else {
+                config
+                    .request(
+                        Method::DELETE,
+                        config.endpoint(&["v1", "sources", id])?,
+                        None,
+                        true,
+                    )
+                    .await?;
+                Ok(json!({"ok":true}))
+            }
+        }
+        _ => Err(ApiError::bad("Unknown source action")),
+    }
+}
+
 pub fn blocking_json(
     config: &Config,
     method: Method,

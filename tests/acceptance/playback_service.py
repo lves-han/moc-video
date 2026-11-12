@@ -795,13 +795,74 @@ class NativeLineRound(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+class AppSourceSelection(unittest.TestCase):
+    host_peak = host_peak_build = host_peak_runtime = other_owned_caps = 0
+
+    def run_frontend(self, pattern, names):
+        result = subprocess.run(['node', '--experimental-strip-types', '--test', '--test-concurrency=1', '--test-name-pattern', pattern, 'tests/fixtures/service/t110.test.ts'], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout[-4000:])
+        for name in names: self.assertIn('✔ ' + name, result.stdout)
+
+    def test_1_actions(self):
+        self.run_frontend('automatic selection|manual selection|candidates use|explicit line selection|expired line|late lookup', ['automatic selection waits for completed probes and carries the native resolution', 'manual selection wins over a late automatic result', 'candidates use their owning source and can be confirmed', 'explicit line selection keeps the completed list open', 'expired line restarts lookup for the same episode', 'late lookup after cancellation is retired'])
+
+    def test_2_migration(self):
+        self.run_frontend('migration removes', ['migration removes successful sources and retains failed sources for retry'])
+
+    def test_3_metadata(self):
+        self.run_frontend('metadata add-on identity', ['metadata add-on identity selects its registered service source without a global playback source'])
+
+    def test_4_reports(self):
+        self.run_frontend('playback reports', ['playback reports only naturally advancing frames and current failures'])
+
+
+class AppSourceSelectionApp(unittest.TestCase):
+    host_peak = host_peak_build = host_peak_runtime = other_owned_caps = 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.observation = json.loads((ROOT / 'evidence/manual/T1.10-service-window.json').read_text())
+        paths = ['src', 'src-tauri/src', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/capabilities', 'protocol/app.schema.json', 'crates/moc-core/src', 'server/src', 'server/Cargo.toml', 'server/Dockerfile', 'Cargo.lock', 'tests/fixtures/service/tmdb_fixture.py']
+        rows = []
+        for name in paths:
+            path = ROOT / name
+            for file in ([path] if path.is_file() else path.rglob('*')):
+                if file.is_file(): rows.append((str(file.relative_to(ROOT)), hashlib.sha256(file.read_bytes()).hexdigest()))
+        digest = hashlib.sha256(json.dumps(sorted(rows), separators=(',', ':')).encode()).hexdigest()
+        if digest != cls.observation['product_hash']: raise AssertionError('Window observation was made on different product inputs')
+        cls.host_peak = cls.observation['resource_sample']['host_including_all_visible_webkit_bytes']
+
+    def test_1_selection_switch(self):
+        observed = self.observation['observed']
+        self.assertGreater(observed['hls_playing_seconds'][1], observed['hls_playing_seconds'][0])
+        self.assertTrue(observed['candidate_confirmation'] and observed['candidate_sources_visible'])
+        self.assertGreater(observed['file_switch_seconds'][1], observed['file_switch_seconds'][0])
+
+    def test_2_failure_recovery(self):
+        observed = self.observation['observed']
+        self.assertTrue(observed['failure_message_visible'] and observed['service_success_reports'] and observed['service_failure_reports'])
+        self.assertGreater(observed['failure_recovery_position_seconds'], 0)
+
+    def test_3_history_restart(self):
+        observed = self.observation['observed']
+        self.assertEqual(observed['history_video_id'], 'tmdb:45')
+        self.assertGreater(observed['saved_position_ms'], 0)
+        self.assertGreaterEqual(observed['resumed_position_seconds'] * 1000, observed['saved_position_ms'])
+
+    def test_4_offline(self):
+        observed = self.observation['observed']; sample = self.observation['resource_sample']
+        self.assertTrue(observed['service_stopped_during_offline'] and observed['live_offline_moving_frames'])
+        self.assertGreater(observed['local_offline_seconds'][-1], observed['local_offline_seconds'][0])
+        self.assertLessEqual(sample['combined_bytes'], sample['limit_bytes'])
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
@@ -811,6 +872,8 @@ def main():
                 "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
                 "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"],
                 "source-matching":["REQ-SERVICE-PLAY/matching-queries-filter", "REQ-SERVICE-PLAY/matching-auto-confirm-negatives", "REQ-SERVICE-PLAY/mapping-reuse-identity", "REQ-SERVICE-PLAY/mapping-user-revoke"],
+                "app-source-selection-app":["REQ-SERVICE-PLAY/app-playback-selection-switch", "REQ-SERVICE-PLAY/app-resume-service-errors", "REQ-SERVICE-PLAY/app-new-history-restart", "REQ-SERVICE-PLAY/app-offline-local-live"],
+                "app-source-selection":["REQ-SERVICE-PLAY/ui-line-round-actions", "REQ-SERVICE-PLAY/ui-config-migration-records", "REQ-SERVICE-PLAY/ui-decoupled-metadata", "REQ-SERVICE-PLAY/ui-playing-failed-reporting"],
                 "native-line-round":["REQ-SERVICE-PLAY/native-round-waits-probes", "REQ-SERVICE-PLAY/native-round-cancel-stale", "REQ-SERVICE-PLAY/native-round-probe-and-open", "REQ-SERVICE-PLAY/native-session-history-binding", "REQ-SERVICE-PLAY/native-playback-result-reporting"],
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
@@ -823,6 +886,8 @@ def main():
                "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
                "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent"),
                "source-matching":("test_1_queries_filter", "test_2_auto_confirm_negatives", "test_3_mapping_reuse_identity", "test_4_user_revoke"),
+               "app-source-selection-app":("test_1_selection_switch", "test_2_failure_recovery", "test_3_history_restart", "test_4_offline"),
+               "app-source-selection":("test_1_actions", "test_2_migration", "test_3_metadata", "test_4_reports"),
                "native-line-round":("test_1_waits_probes", "test_2_cancel_stale", "test_3_probe_open", "test_4_history_binding", "test_5_report_dedup"),
                "lookup-lifecycle":("test_1_stream_partial_failure", "test_2_confirm_cancel", "test_3_refresh_identity", "test_4_cache_versions_restart_expiry", "test_5_disconnect_stops_work")}[args.suite]
     for method, case_id in zip(methods, case_ids):
@@ -834,7 +899,7 @@ def main():
     args.junit.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(suite).write(args.junit, encoding="utf-8", xml_declaration=True)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    resources = (test_class.observation["resource_sample"] if args.suite == "app-metadata-app" else
+    resources = (test_class.observation["resource_sample"] if args.suite in ("app-metadata-app", "app-source-selection-app") else
                  {"host_peak_bytes": test_class.host_peak, "host_peak_build_bytes": test_class.host_peak_build,
                   "host_peak_runtime_bytes": test_class.host_peak_runtime, "build_memory_cap": BUILD_LIMIT,
                   "service_memory_cap": SERVICE_LIMIT, "other_owned_container_caps": test_class.other_owned_caps})
