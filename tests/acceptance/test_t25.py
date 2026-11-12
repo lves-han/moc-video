@@ -1,6 +1,7 @@
 """Delivery evidence counterexamples; these fixtures never attest a real build."""
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -88,7 +89,10 @@ class DeliveryTests(unittest.TestCase):
                 source, record = t25.source_archive(output, root)
                 self.assertEqual(record["files"], 4)
                 self.assertEqual((source / "README.md").read_text(), "README.md")
-                self.assertEqual((source / "README.md").stat().st_mode & 0o777, 0o755)
+                if os.name != "nt":
+                    self.assertEqual((source / "README.md").stat().st_mode & 0o777, 0o755)
+                else:
+                    self.assertEqual((source / "README.md").stat().st_mode & 0o777, (root / "README.md").stat().st_mode & 0o777)
                 self.assertFalse((source / "target").exists())
                 with self.assertRaisesRegex(ValueError, "already exists"):
                     t25.source_archive(output, root)

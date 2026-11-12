@@ -27,10 +27,10 @@ IDS = ["R05", "R12", "R19", "R26", "R27", "R28", "R29", "R34", "R37",
 IPC = ["t05_contract_commands_and_envelopes", "t05_permissions_and_actual_tauri_handler",
        "t05_configuration_limits_and_utf8_budgets", "t05_uuid_duplicates_self_cancel_and_cascade",
        "t05_deadlines_include_queue_and_discard_old_work"]
-HTTP = ["n00_public_addresses_dns_rebinding_and_peer", "n00_redirect_origin_headers_proxy_and_limits",
+HTTP = ["n00_http_local_addresses_and_dns_refresh", "n00_redirect_origin_headers_proxy_and_limits",
         "t02_dns_two_servers_failover_and_both_families",
         "t02_dns_both_failed_never_falls_back_to_hosts_or_system",
-        "t02_dns_fake_ip_mixed_results_and_redirect_rebinding_rejected"]
+        "t02_dns_fake_ip_mixed_results_are_preserved"]
 
 
 class Acceptance(t02.Acceptance):

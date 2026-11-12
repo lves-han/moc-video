@@ -32,7 +32,7 @@ export async function detailsScenario(prototype: { player: Player; base: string;
   const gates = new Map<string, Promise<void>>();
   let related: { id: string; title: string; kind: string; ref: Bridge_MediaRef } | null = null;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
+    if (name === "t01_control" || (name === "player_fullscreen" || name === "app_font_url")) return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     const key = name === "get_details" ? JSON.stringify(args?.input?.ref) : name;
     const response = await rpc({ command: name, args });

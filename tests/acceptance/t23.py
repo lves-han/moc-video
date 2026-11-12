@@ -207,8 +207,11 @@ def check_zip(path, expected_bytes):
         names = archive.namelist()
         require(names and len(names) == len(set(names)), "Empty/duplicate archive entries")
         for row in archive.infolist():
-            name = PurePosixPath(row.filename)
-            require(not name.is_absolute() and ".." not in name.parts and "\\" not in row.filename, "Unsafe ZIP entry")
+            # ZipInfo.filename is normalized on Windows; inspect archive bytes'
+            # original spelling before applying the portable path policy.
+            raw_name = row.orig_filename
+            name = PurePosixPath(raw_name)
+            require(not name.is_absolute() and ".." not in name.parts and "\\" not in raw_name, "Unsafe ZIP entry")
             require((row.external_attr >> 16) & 0o170000 != 0o120000, "Unexpected ZIP symlink")
         require(sum(row.file_size for row in archive.infolist()) == expected_bytes, "ZIP payload length differs")
         require(archive.testzip() is None, "ZIP CRC differs")

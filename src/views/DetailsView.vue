@@ -6,7 +6,7 @@ import { api } from "../api";
 import Icon from '../components/Icon.vue';
 import MediaRow from '../components/MediaRow.vue';
 import { locale, t } from "../i18n";
-import { correspondingEpisode } from '../line-preference';
+import { correspondingEpisode, prioritizePlaybackGroups } from '../line-preference';
 import type { Bridge_Episode, Bridge_EpisodeGroup, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
 
 const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string, explicitLine?: boolean]; resume: [record: WatchHistoryRecord]; back: [] }>();
@@ -21,7 +21,7 @@ watch(plotElement, element => {
   observer?.disconnect();
   if (element) { observer = new ResizeObserver(() => { longPlot.value = element.scrollHeight > element.clientHeight + 1; }); observer.observe(element); }
 });
-const groups = computed(() => details.value?.groups ?? []);
+const groups = computed(() => prioritizePlaybackGroups(details.value?.groups ?? []));
 const group = computed(() => groups.value.find(item => item.id === chosenGroup.value) ?? groups.value[0] ?? null);
 const episodes = computed(() => groups.value.flatMap(item => item.episodes));
 const single = computed(() => episodes.value.length === 1 ? episodes.value[0]! : null);
@@ -81,6 +81,7 @@ function imageFailed(id: string) { broken.add(`${state.details.request_epoch}:${
 const logo = computed(() => image((details.value as typeof details.value & { logo?: Bridge_ImageRef })?.logo));
 const backdrop = computed(() => image(details.value?.backdrop) ?? image(details.value?.poster));
 const candidate = computed(() => app.matching.details?.details ?? null);
+const candidateGroups = computed(() => prioritizePlaybackGroups(candidate.value?.groups ?? []));
 function candidateEpisodes(group: Bridge_EpisodeGroup) {
   const target = episodes.value.find(episode => videoId(episode.ref) === app.matching.result?.video_id);
   const match = details.value && target ? correspondingEpisode(details.value, target, group) : null;
@@ -143,7 +144,7 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
     <p v-if="app.matching.loading" role="status">{{ word('正在加载可用线路…', 'Loading available lines…') }}</p>
     <div v-if="(app.matching.result?.candidates.length ?? 0) > 1 || (!candidate && !app.matching.loading)" class="details-candidates"><NButton v-for="item in app.matching.result?.candidates ?? []" :key="item.content_ref.data" class="details-candidate" :class="{ selected: candidate?.ref.data === item.content_ref.data }" :loading="app.matching.loading" @click="app.loadCandidate(item.content_ref)">{{ item.title }}<template v-if="item.year"> ({{ item.year }})</template></NButton></div>
     <NAlert v-if="app.matching.error" type="error">{{ app.matching.error.message }}</NAlert>
-    <section v-for="item in candidate?.groups ?? []" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in candidateEpisodes(item)" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
+    <section v-for="item in candidateGroups" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in candidateEpisodes(item)" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
     <NButton class="details-confirm-cancel" @click="app.invalidatePlayback()">{{ t('Cancel') }}</NButton>
   </NModal>
   </div>

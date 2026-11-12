@@ -11,7 +11,7 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import platform
 import plistlib
 import re
@@ -69,7 +69,7 @@ def validate_tool(name, row):
     require(row.get("status") == "version_observed" and row.get("exit") == 0,
             f"{name}: successful official version command required")
     argv = row.get("argv", [])
-    require(len(argv) >= 2 and Path(argv[0]).is_absolute() and argv[-1] == "--version",
+    require(len(argv) >= 2 and (PurePosixPath(argv[0]).is_absolute() or PureWindowsPath(argv[0]).is_absolute()) and argv[-1] == "--version",
             f"{name}: absolute version argv required")
     match = re.search(CORE_TOOLS[name], row.get("stdout", ""), re.M)
     require(match is not None, f"{name}: unrecognized version output")

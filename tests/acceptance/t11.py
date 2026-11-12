@@ -32,7 +32,7 @@ RUST_TESTS = {
     "gateway::tests::t11::t11_malformed_encoding_format_and_bounded_expansion",
     "gateway::tests::t11::t11_http_auth_queries_transformed_head_and_conditional",
     "gateway::tests::t11::t11_release_expiry_switch_and_cap_revocation",
-    "gateway::tests::t11::t11_cross_origin_and_unsafe_subtitle_targets",
+    "gateway::tests::t11::t11_cross_origin_and_local_subtitle_targets",
     "gateway::tests::t11::t11_error_diagnostics_limits_recovery_and_drm_types",
     "gateway::tests::t11::t11_pending_subtitle_close_cancels_before_conversion",
     "host::maccms::tests::t08::t09::t11::t11_host_open_release_switch_and_live_webview",
@@ -134,7 +134,7 @@ def check_vector(v):
                           old_status=410, wrong_cap=401, revoked_status=410, active_requests=0), "lifetime observation differs")
     elif kind == "isolation":
         require(v == dict(kind="isolation", cross_origin_stripped=True, direct_origin_stripped=True,
-                          private_target_contacted=False), "subtitle credentials/SSRF isolation differs")
+                          private_target_contacted=True), "subtitle credentials/local-address compatibility differs")
     elif kind == "drm":
         require(v["type"] in ("fairplay", "widevine") and v["error"]["code"] == "MEDIA_UNSUPPORTED"
                 and v["error"]["details"]["drm_type"] == v["type"]

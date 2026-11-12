@@ -1,5 +1,6 @@
 """Independent corrupt/missing installer and clean-target evidence counterexamples."""
 import copy
+import os
 import datetime as dt
 import json
 from pathlib import Path
@@ -321,6 +322,7 @@ class EvidenceTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 t23.inside(name, t23.ROOT / "evidence/releases")
 
+    @unittest.skipIf(os.name == "nt", "POSIX executable mode and symlink evidence")
     def test_symlink_and_executable_mode_change_are_detected(self):
         with tempfile.TemporaryDirectory(prefix="t23-tree-", dir=t23.ROOT / "evidence") as temporary:
             folder = Path(temporary)
@@ -344,7 +346,9 @@ class EvidenceTests(unittest.TestCase):
                 t23.check_zip(archive, 8)
             for name in ("../escape", "/absolute", "folder\\escape"):
                 with zipfile.ZipFile(archive, "w") as stream:
-                    stream.writestr(name, b"product")
+                    entry = zipfile.ZipInfo("placeholder")
+                    entry.filename = name  # Preserve raw ZIP names on Windows too.
+                    stream.writestr(entry, b"product")
                 with self.subTest(name=name), self.assertRaises(ValueError):
                     t23.check_zip(archive, 7)
 

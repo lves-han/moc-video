@@ -137,6 +137,16 @@
           "default": "lime",
           "description": "用户色系；每种色系包含系统浅色/深色配色，明暗自动跟随系统。沿用Settings单写队列。"
         },
+        "font_family": {
+          "type": "string",
+          "enum": ["noto-sans-sc", "noto-serif-sc"],
+          "default": "noto-sans-sc"
+        },
+        "font_scale": {
+          "type": "integer",
+          "enum": [90, 100, 110, 120],
+          "default": 100
+        },
         "last_metadata_config_id": {
           "anyOf": [
             {

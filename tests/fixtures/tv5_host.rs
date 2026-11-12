@@ -101,61 +101,36 @@ fn tv5_watchlist_crud_restart_and_closed_inputs() {
     );
 }
 #[test]
-fn tv5_migration_v1_keeps_all_history_fields() {
+fn tv5_old_history_version_is_rejected_and_preserved() {
     let temp = TempDir::new().unwrap();
     let database = temp.path().join("moc-video.db");
     legacy5(&database);
-    assert_eq!(version5(&database), 1);
+    let before = std::fs::read(&database).unwrap();
     let host = Host::open(temp.path().join("settings.json")).unwrap();
-    assert_eq!(
-        ok(&host, "list_watchlist", json!({})),
-        json!({"entries":[]})
-    );
-    assert_eq!(version5(&database), 2);
-    assert_eq!(
-        ok(&host, "list_history", json!({}))["entries"],
-        json!([history5()])
-    );
-    ok(&host, "add_watchlist", entry5());
-    assert_eq!(
-        ok(&host, "list_history", json!({}))["entries"],
-        json!([history5()])
-    );
-    let columns: i64 = Connection::open(database)
-        .unwrap()
-        .query_row(
-            "SELECT count(*) FROM pragma_table_info('watch_history')",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap();
-    assert_eq!(columns, 19);
+    for command in ["list_history", "list_watchlist"] {
+        let response = call(&host, command, json!({}));
+        error(&response, "INTERNAL_ERROR");
+        assert_eq!(
+            response["error"]["details"]["reason"],
+            "unsupported_version"
+        );
+    }
+    drop(host);
+    assert_eq!(version5(&database), 1);
+    assert_eq!(std::fs::read(&database).unwrap(), before);
     println!(
-        "TV5_UPGRADE:{}",
-        json!({"before":1,"after":2,"history_fields":19,"history_kept":true})
+        "TV5_OLD_VERSION:{}",
+        json!({"rejected":true,"version":1,"bytes_preserved":true})
     );
 }
 #[test]
-fn tv5_migration_failure_rolls_back_and_old_database_remains_usable() {
+fn tv5_old_database_remains_usable_after_rejection() {
     let temp = TempDir::new().unwrap();
     let database = temp.path().join("moc-video.db");
     legacy5(&database);
-    Connection::open(&database)
-        .unwrap()
-        .execute_batch(
-            "CREATE TABLE watchlist(kept TEXT); INSERT INTO watchlist VALUES('old data');",
-        )
-        .unwrap();
     let host = Host::open(temp.path().join("settings.json")).unwrap();
-    let failed = call(&host, "list_watchlist", json!({}));
-    error(&failed, "INTERNAL_ERROR");
-    assert!(
-        failed["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("initialization failed")
-    );
-    assert_eq!(version5(&database), 1);
+    error(&call(&host, "list_history", json!({})), "INTERNAL_ERROR");
+    drop(host);
     let old = Connection::open(&database).unwrap();
     assert_eq!(
         old.query_row("SELECT title FROM watch_history", [], |r| r
@@ -163,20 +138,25 @@ fn tv5_migration_failure_rolls_back_and_old_database_remains_usable() {
             .unwrap(),
         history5()["title"].as_str().unwrap()
     );
+    old.execute_batch(
+        "CREATE TABLE old_marker(value TEXT); INSERT INTO old_marker VALUES ('preserved');",
+    )
+    .unwrap();
+    drop(old);
+    let host = Host::open(temp.path().join("settings.json")).unwrap();
+    error(&call(&host, "list_history", json!({})), "INTERNAL_ERROR");
+    drop(host);
+    assert_eq!(version5(&database), 1);
+    let old = Connection::open(database).unwrap();
     assert_eq!(
-        old.query_row("SELECT kept FROM watchlist", [], |r| r.get::<_, String>(0))
+        old.query_row("SELECT value FROM old_marker", [], |r| r
+            .get::<_, String>(0))
             .unwrap(),
-        "old data"
+        "preserved"
     );
-    old.execute_batch("DROP TABLE watchlist;").unwrap();
-    assert_eq!(
-        ok(&host, "list_history", json!({}))["entries"],
-        json!([history5()])
-    );
-    assert_eq!(version5(&database), 2);
     println!(
-        "TV5_MIGRATION_FAILURE:{}",
-        json!({"explicit_error":true,"old_version":1,"old_data_usable":true,"retry":2})
+        "TV5_OLD_USABLE:{}",
+        json!({"explicit_error":true,"version":1,"old_data_usable":true})
     );
 }
 

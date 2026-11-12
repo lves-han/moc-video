@@ -371,11 +371,19 @@ impl Host {
             "get_live_channels" => return self.live_channels(input, job),
             "open_local" => return self.open_local(input, job),
             "list_local_videos" => {
-                let settings = self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"))?.settings.clone();
+                let settings = self
+                    .committed
+                    .lock()
+                    .map_err(|_| ApiError::internal("Host commit lock poisoned"))?
+                    .settings
+                    .clone();
                 // Scan outside the commit lock; a library edited meanwhile publishes nothing.
                 let (view, table) = local::scan(&settings);
                 job.check()?;
-                let mut committed = self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
+                let mut committed = self
+                    .committed
+                    .lock()
+                    .map_err(|_| ApiError::internal("Host commit lock poisoned"))?;
                 if committed.settings["local_paths"] != settings["local_paths"] {
                     return Err(ApiError::cancelled());
                 }
@@ -440,14 +448,21 @@ impl Host {
                 let stale: Vec<String> = committed
                     .live
                     .keys()
-                    .filter(|id| live_config(input, id).ok() != live_config(&committed.settings, id).ok())
+                    .filter(|id| {
+                        live_config(input, id).ok() != live_config(&committed.settings, id).ok()
+                    })
                     .cloned()
                     .collect();
                 for id in &stale {
                     committed.live.remove(id);
                 }
                 if let Some(gateway) = &committed.gateway {
-                    gateway.revoke(&stale.iter().map(|id| format!("live:{id}")).collect::<Vec<_>>());
+                    gateway.revoke(
+                        &stale
+                            .iter()
+                            .map(|id| format!("live:{id}"))
+                            .collect::<Vec<_>>(),
+                    );
                 }
                 tmdb_api::configure(input);
                 // A changed library forgets its scan and stops files it may no longer cover.
@@ -543,12 +558,20 @@ impl Host {
                     .get(config_id)
                     .ok_or_else(|| ApiError::bad("Load the live channel list first"))?;
                 if input["revision"] != revision.as_str() {
-                    return Err(ApiError::new("REVISION_MISMATCH", "Live channel list changed; reload it"));
+                    return Err(ApiError::new(
+                        "REVISION_MISMATCH",
+                        "Live channel list changed; reload it",
+                    ));
                 }
                 let index = input["index"].as_u64().expect("Channel index") as usize;
-                let channel = channels.get(index).ok_or_else(|| ApiError::bad("Unknown live channel"))?;
+                let channel = channels
+                    .get(index)
+                    .ok_or_else(|| ApiError::bad("Unknown live channel"))?;
                 if !channel.supported() {
-                    return Err(ApiError::new("MEDIA_UNSUPPORTED", "Only http(s) live channels can be played"));
+                    return Err(ApiError::new(
+                        "MEDIA_UNSUPPORTED",
+                        "Only http(s) live channels can be played",
+                    ));
                 }
                 let record = live_record(config_id, revision, index, channel);
                 if committed.gateway.is_none() {
@@ -615,30 +638,52 @@ impl Host {
 
     fn open_local(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
         let id = input["id"].as_str().expect("File ID");
-        let lock = || self.committed.lock().map_err(|_| ApiError::internal("Host commit lock poisoned"));
+        let lock = || {
+            self.committed
+                .lock()
+                .map_err(|_| ApiError::internal("Host commit lock poisoned"))
+        };
         let (listed, path, file) = {
             let committed = lock()?;
-            let listed = committed.local.get(id).cloned()
-                .ok_or_else(|| ApiError::new("SOURCE_NOT_FOUND", "Refresh the local library first"))?;
+            let listed = committed.local.get(id).cloned().ok_or_else(|| {
+                ApiError::new("SOURCE_NOT_FOUND", "Refresh the local library first")
+            })?;
             let (path, file) = local::checked_file(&committed.settings, &listed)?;
             (listed, path, file)
         };
         if !local::supported(&path) {
-            return Err(ApiError::new("MEDIA_UNSUPPORTED", "This video format is not supported yet"));
+            return Err(ApiError::new(
+                "MEDIA_UNSUPPORTED",
+                "This video format is not supported yet",
+            ));
         }
         // MKV index reading happens outside the commit lock (ADR-066/067).
         let (plan, file) = if local::remuxed(&path) {
-            (Some(Arc::new(crate::remux::Plan::open_file(&path, file)?)), None)
-        } else { (None, Some(file)) };
+            (
+                Some(Arc::new(crate::remux::Plan::open_file(&path, file)?)),
+                None,
+            )
+        } else {
+            (None, Some(file))
+        };
         job.check()?;
         let mut committed = lock()?;
         if committed.local.get(id) != Some(&listed) {
             return Err(ApiError::cancelled());
         }
-        let title: String = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default().chars().take(512).collect();
+        let title: String = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
+            .chars()
+            .take(512)
+            .collect();
         let record = Arc::new(local_record(id, &path, &title));
         if committed.gateway.is_none() {
-            committed.gateway = Some(Gateway::with_media_cache(self.clock.clone(), self.media_cache.clone())?);
+            committed.gateway = Some(Gateway::with_media_cache(
+                self.clock.clone(),
+                self.media_cache.clone(),
+            )?);
         }
         let gateway = committed.gateway.as_ref().expect("Gateway ready");
         let view = match plan {
@@ -656,7 +701,11 @@ impl Host {
                 "episode_ref": {"source_id": "local"}}),
             playback_epoch: None,
         });
-        let updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(1).max(1);
+        let updated = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(1)
+            .max(1);
         Ok(json!({"session": view, "match_id": match_id, "record": {
             "content_id": identity("metadata", &["local", "file", id]), "metadata_identity": identity_value, "video_id": id,
             "season_number": null, "episode_number": null, "title": if title.is_empty() { id.to_owned() } else { title },
@@ -686,7 +735,10 @@ impl Host {
         let text = std::str::from_utf8(&response.body)
             .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Live list is not UTF-8 text"))?;
         let (format, channels) = live::parse(text)?;
-        let digest = format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(&response.body));
+        let digest = format!(
+            "{:x}",
+            <sha2::Sha256 as sha2::Digest>::digest(&response.body)
+        );
         let revision = identity("live_list", &[config_id, &digest]);
         let mut committed = self
             .committed
@@ -696,9 +748,17 @@ impl Host {
         if live_config(&committed.settings, config_id).ok() != Some(config) {
             return Err(ApiError::cancelled());
         }
-        let view: Vec<Value> = channels.iter().enumerate().map(|(i, c)| c.view(i)).collect();
-        committed.live.insert(config_id.into(), (revision.clone(), channels));
-        Ok(json!({"config_id": config_id, "revision": revision, "format": format, "channels": view}))
+        let view: Vec<Value> = channels
+            .iter()
+            .enumerate()
+            .map(|(i, c)| c.view(i))
+            .collect();
+        committed
+            .live
+            .insert(config_id.into(), (revision.clone(), channels));
+        Ok(
+            json!({"config_id": config_id, "revision": revision, "format": format, "channels": view}),
+        )
     }
 
     fn runtime(&self, committed: &Committed) -> Result<Value, ApiError> {
@@ -1020,7 +1080,12 @@ impl Host {
                 let aliases = (capability == "search")
                     .then(|| identity("http_source", &["stremio", crate::settings::TMDB_CONFIG_ID]))
                     .and_then(|id| committed.stremio.get(&id).cloned())
-                    .map(|tmdb| (tmdb, crate::settings::metadata_language(&committed.settings)));
+                    .map(|tmdb| {
+                        (
+                            tmdb,
+                            crate::settings::metadata_language(&committed.settings),
+                        )
+                    });
                 drop(committed);
                 let http = maccms::Http::default();
                 let _search = if capability == "search" {
@@ -1036,11 +1101,17 @@ impl Host {
                         )
                     })
                 } else if capability == "search" {
-                    approximate_search(&catalog, &http, key["query"].as_str().expect("Query"), aliases.as_ref(), job)
-                        .map(|mut mapped| {
-                            mapped.value = json!({"items":mapped.value});
-                            (mapped, None)
-                        })
+                    approximate_search(
+                        &catalog,
+                        &http,
+                        key["query"].as_str().expect("Query"),
+                        aliases.as_ref(),
+                        job,
+                    )
+                    .map(|mut mapped| {
+                        mapped.value = json!({"items":mapped.value});
+                        (mapped, None)
+                    })
                 } else {
                     catalog
                         .details(&http, key, job)
@@ -1609,6 +1680,16 @@ impl Host {
             .as_ref()
             .map(|gateway| gateway.address)
     }
+
+    pub(crate) fn font_url(&self, id: &str) -> Result<String, ApiError> {
+        self.committed
+            .lock()
+            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?
+            .gateway
+            .as_ref()
+            .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Font gateway is not ready"))?
+            .font_url(id)
+    }
 }
 
 /// An accepted retry skips the Session: the snapshot already holds its confirmed identity.
@@ -1677,13 +1758,32 @@ fn live_config(settings: &Value, config_id: &str) -> Result<Value, ApiError> {
         .flatten()
         .find(|config| config["config_id"] == config_id && config["enabled"] == true)
         .cloned()
-        .ok_or_else(|| ApiError::new("SOURCE_NOT_FOUND", "Live list is not configured or disabled"))
+        .ok_or_else(|| {
+            ApiError::new(
+                "SOURCE_NOT_FOUND",
+                "Live list is not configured or disabled",
+            )
+        })
 }
 
 /// A live channel becomes a one-stream record; HLS unless the address names a file type.
-fn live_record(config_id: &str, revision: &str, index: usize, channel: &live::Channel) -> resolution::LinkRecord {
-    let path = channel.url.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase();
-    let progressive = [".mp4", ".m4v", ".mov", ".webm", ".flv", ".ts", ".mp3", ".aac"].iter().any(|e| path.ends_with(e));
+fn live_record(
+    config_id: &str,
+    revision: &str,
+    index: usize,
+    channel: &live::Channel,
+) -> resolution::LinkRecord {
+    let path = channel
+        .url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let progressive = [
+        ".mp4", ".m4v", ".mov", ".webm", ".flv", ".ts", ".mp3", ".aac",
+    ]
+    .iter()
+    .any(|e| path.ends_with(e));
     let provider = format!("live:{config_id}");
     resolution::LinkRecord {
         stream_id: "live".into(),
@@ -1757,7 +1857,11 @@ fn approximate_search(
     let mut last = None;
     for query in crate::fuzzy::relaxed(typed) {
         let mapped = catalog.search(http, &query, 1, job)?;
-        if mapped.value.as_array().is_some_and(|items| !items.is_empty()) {
+        if mapped
+            .value
+            .as_array()
+            .is_some_and(|items| !items.is_empty())
+        {
             return Ok(finish(mapped));
         }
         last = Some(mapped);
@@ -1765,12 +1869,21 @@ fn approximate_search(
     // Best effort: an unreachable TMDB leaves the (empty) MacCMS answer as it is.
     if let Some((tmdb, _)) = aliases {
         let mut titles: Vec<String> = Vec::new();
-        if let Ok(child) = job.limited_child(&Uuid::new_v4().to_string(), "default_metadata", 5_000) {
+        if let Ok(child) = job.limited_child(&Uuid::new_v4().to_string(), "default_metadata", 5_000)
+        {
             for language in ["zh-CN", "en"] {
                 if let Ok(found) = tmdb.search(http, typed, language, &child) {
-                    for item in found.value["items"].as_array().into_iter().flatten().take(3) {
+                    for item in found.value["items"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .take(3)
+                    {
                         let title = item["title"].as_str().unwrap_or("").to_owned();
-                        if !title.is_empty() && !titles.contains(&title) && crate::fuzzy::normalize(&title) != crate::fuzzy::normalize(typed) {
+                        if !title.is_empty()
+                            && !titles.contains(&title)
+                            && crate::fuzzy::normalize(&title) != crate::fuzzy::normalize(typed)
+                        {
                             titles.push(title);
                         }
                     }
@@ -1780,7 +1893,11 @@ fn approximate_search(
         for title in titles {
             for query in crate::fuzzy::relaxed(&title).into_iter().take(3) {
                 let mapped = catalog.search(http, &query, 1, job)?;
-                if mapped.value.as_array().is_some_and(|items| !items.is_empty()) {
+                if mapped
+                    .value
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty())
+                {
                     let mut mapped = mapped;
                     if let Some(items) = mapped.value.as_array_mut() {
                         crate::fuzzy::rank(&title, items);
@@ -1790,5 +1907,8 @@ fn approximate_search(
             }
         }
     }
-    Ok(last.unwrap_or(maccms::Mapped { value: json!([]), images: Vec::new() }))
+    Ok(last.unwrap_or(maccms::Mapped {
+        value: json!([]),
+        images: Vec::new(),
+    }))
 }

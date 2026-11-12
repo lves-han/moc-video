@@ -23,7 +23,10 @@ pub fn defaults() -> Value {
 }
 
 fn tmdb(settings: &Value) -> Value {
-    settings.get("tmdb").cloned().unwrap_or_else(|| defaults()["tmdb"].clone())
+    settings
+        .get("tmdb")
+        .cloned()
+        .unwrap_or_else(|| defaults()["tmdb"].clone())
 }
 
 /// Language used for Stremio metadata: the TMDB choice, or the app language when it follows.
@@ -40,8 +43,14 @@ pub fn metadata_language(settings: &Value) -> &'static str {
 /// Source configurations the host registers: user sources, then the built-in TMDB source.
 pub fn source_configs(settings: &Value) -> Vec<Value> {
     let tmdb = tmdb(settings);
-    let instance = tmdb["instance_url"].as_str().unwrap_or(TMDB_INSTANCE).trim_end_matches('/');
-    let mut configs = settings["source_configs"].as_array().expect("Validated configs").clone();
+    let instance = tmdb["instance_url"]
+        .as_str()
+        .unwrap_or(TMDB_INSTANCE)
+        .trim_end_matches('/');
+    let mut configs = settings["source_configs"]
+        .as_array()
+        .expect("Validated configs")
+        .clone();
     let mut config = json!({"kind": "stremio", "config_id": TMDB_CONFIG_ID, "name": "TMDB",
         "enabled": tmdb["enabled"] == true, "manifest_urls": [format!("{instance}/en-US/manifest.json")], "tmdb": true});
     // API mode answers through a virtual addon; the fingerprint re-syncs on key/endpoint changes.
@@ -235,16 +244,132 @@ impl SettingsFile {
             .sync_all()
             .map_err(|_| ApiError::internal("Settings temporary sync failed"))?;
         before_replace()?;
-        temporary
+        #[cfg(windows)]
+        let result = persist_windows(temporary, &self.path);
+        #[cfg(not(windows))]
+        let result = temporary
             .persist(&self.path)
-            .map_err(|_| ApiError::internal("Settings atomic replacement failed"))?;
+            .map(|_| ())
+            .map_err(|error| error.error);
+        result.map_err(|error| {
+            let failure = ApiError::internal("Settings atomic replacement failed");
+            #[cfg(windows)]
+            let failure = failure
+                .with_details(json!({"stage":"settings_replace", "os_code":error.raw_os_error()}));
+            #[cfg(not(windows))]
+            let _ = error;
+            failure
+        })?;
         Ok(())
     }
+}
+
+#[cfg(windows)]
+fn persist_windows(temporary: NamedTempFile, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_NORMAL, SetFileAttributesW};
+    let name: Vec<u16> = temporary
+        .path()
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    // Match tempfile's durable attributes, then use std's FileRenameInfoEx support
+    // for replacing a file with open readers. Tempfile 3.27 uses only MoveFileExW.
+    if unsafe { SetFileAttributesW(name.as_ptr(), FILE_ATTRIBUTE_NORMAL) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // RAII cleans the temporary path on failure; the destination is never removed first.
+    fs::rename(temporary.path(), destination)
 }
 
 #[cfg(test)]
 mod preset_tests {
     use super::*;
+
+    #[test]
+    fn atomic_replacement_keeps_open_reader_snapshots() {
+        let folder = tempfile::tempdir().unwrap();
+        let store = SettingsFile {
+            path: folder.path().join("settings.json"),
+        };
+        let mut settings = defaults();
+        store.save(&settings).unwrap();
+        for index in 0..256 {
+            let mut previous = fs::File::open(&store.path).unwrap();
+            let expected_previous = settings.clone();
+            settings["volume"] = json!(if index % 2 == 0 { 0.25 } else { 0.75 });
+            store
+                .save(&settings)
+                .unwrap_or_else(|error| panic!("replacement {index}: {error:?}"));
+            let mut bytes = Vec::new();
+            previous.read_to_end(&mut bytes).unwrap();
+            assert_eq!(
+                serde_json::from_slice::<Value>(&bytes).unwrap(),
+                expected_previous
+            );
+            assert_eq!(
+                serde_json::from_slice::<Value>(&fs::read(&store.path).unwrap()).unwrap(),
+                settings
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn atomic_replacement_reports_denied_access_without_changing_settings() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let folder = tempfile::tempdir().unwrap();
+        let store = SettingsFile {
+            path: folder.path().join("settings.json"),
+        };
+        let mut settings = defaults();
+        store.save(&settings).unwrap();
+        let original = fs::read(&store.path).unwrap();
+        settings["volume"] = json!(0.5);
+        let blocked = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&store.path)
+            .unwrap();
+        let error = store.save(&settings).unwrap_err();
+        assert_eq!(error.code, "INTERNAL_ERROR");
+        assert_eq!(error.details.unwrap()["stage"], "settings_replace");
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        drop(blocked);
+        let permissions = fs::metadata(&store.path).unwrap().permissions();
+        let mut readonly = permissions.clone();
+        readonly.set_readonly(true);
+        fs::set_permissions(&store.path, readonly).unwrap();
+        let result = store.save(&settings);
+        fs::set_permissions(&store.path, permissions).unwrap();
+        assert!(result.is_err());
+        assert_eq!(fs::read(&store.path).unwrap(), original);
+        store.save(&settings).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&fs::read(&store.path).unwrap()).unwrap(),
+            settings
+        );
+        assert_eq!(fs::read_dir(folder.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn font_preferences_accept_only_packaged_options_and_preserve_existing_profiles() {
+        let mut settings = defaults();
+        validate(&settings).unwrap();
+        for family in ["noto-sans-sc", "noto-serif-sc"] {
+            settings["font_family"] = json!(family);
+            for scale in [90, 100, 110, 120] {
+                settings["font_scale"] = json!(scale);
+                validate(&settings).unwrap();
+            }
+        }
+        settings["font_family"] = json!("system");
+        assert!(validate(&settings).is_err());
+        settings["font_family"] = json!("noto-sans-sc");
+        settings["font_scale"] = json!(130);
+        assert!(validate(&settings).is_err());
+    }
 
     #[test]
     fn bundled_sources_are_valid_and_persist_without_duplication() {
@@ -253,10 +378,19 @@ mod preset_tests {
         let (_, first) = SettingsFile::load(path.clone()).unwrap();
         validate(&first).unwrap();
         assert_eq!(first["source_configs"].as_array().unwrap().len(), 8);
-        assert!(first["source_configs"].as_array().unwrap().iter().all(|c| c["kind"] == "maccms"));
+        assert!(
+            first["source_configs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["kind"] == "maccms")
+        );
         let configs = source_configs(&first);
         assert_eq!(configs[8]["config_id"], TMDB_CONFIG_ID);
-        assert_eq!(configs[8]["manifest_urls"][0], "https://tmdb.elfhosted.com/en-US/manifest.json");
+        assert_eq!(
+            configs[8]["manifest_urls"][0],
+            "https://tmdb.elfhosted.com/en-US/manifest.json"
+        );
         assert_eq!(SettingsFile::load(path).unwrap().1, first);
     }
 
@@ -281,14 +415,20 @@ mod preset_tests {
         settings["tmdb"]["language"] = json!("en");
         assert_eq!(metadata_language(&settings), "en");
         settings["tmdb"]["instance_url"] = json!("https://tmdb.example.test/base/");
-        assert_eq!(source_configs(&settings)[0]["manifest_urls"][0], "https://tmdb.example.test/base/en-US/manifest.json");
+        assert_eq!(
+            source_configs(&settings)[0]["manifest_urls"][0],
+            "https://tmdb.example.test/base/en-US/manifest.json"
+        );
         let live = json!({"config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "name": "Live", "url": "https://live.test/list.m3u", "enabled": true});
         settings["live_configs"] = json!([live.clone()]);
         validate(&settings).unwrap();
         settings["live_configs"] = json!([live.clone(), live.clone()]);
         assert!(validate(&settings).is_err(), "duplicate live id");
         settings["live_configs"] = json!([{"config_id": "6a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "name": "Live", "url": "rtp://239.0.0.1:5000", "enabled": true}]);
-        assert!(validate(&settings).is_err(), "live list URL must be http(s)");
+        assert!(
+            validate(&settings).is_err(),
+            "live list URL must be http(s)"
+        );
         settings["live_configs"] = json!([]);
         settings["source_configs"] = json!([{"kind": "maccms", "config_id": TMDB_CONFIG_ID, "name": "x", "enabled": true, "api_url": "https://a.test/api"}]);
         assert!(validate(&settings).is_err());

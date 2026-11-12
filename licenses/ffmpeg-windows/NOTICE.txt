@@ -1,0 +1,20 @@
+Windows x64 FFmpeg runtime
+
+The Windows build dynamically links four unmodified LGPL shared libraries:
+avcodec-63.dll, avformat-63.dll, avutil-61.dll, swresample-7.dll.
+Compatible DLLs can replace these files beside moc-video.exe.
+Windows uses LGPL version 3 or later (COPYING.LGPLv3 and COPYING.GPLv3).
+The existing macOS trimmed-source LGPL 2.1+ notice describes the macOS build.
+
+Package: ffmpeg-n9.0.2-48-gd4070a14ce-win64-lgpl-shared-9.0.zip
+Release: autobuild-2026-11-10-12-39
+SHA256: cdc19c20aa80d46f78cfc69c8d87430ee34990864e30379db02d1447cd111e83
+Download and build/source information:
+https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/autobuild-2026-11-10-12-39
+https://github.com/FFmpeg-Builds/FFmpeg-Builds
+FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/d4070a14ce
+
+The reproducible download and SHA256 check are in
+src-tauri/ffmpeg/build_ffmpeg.py. Only the four runtime DLLs are bundled;
+the SDK's executables, headers and import libraries are build dependencies.
+The Windows runtime's upstream configuration is in BUILD-CONFIG.txt.

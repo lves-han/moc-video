@@ -84,6 +84,56 @@ fn resolve_input(context: &Value) -> Value {
 }
 
 #[test]
+fn direct_media_route_preserves_upstream_order_and_episode_bindings() {
+    let fixture = Fixture::new(|request, port| {
+        if let Some(reply) = metadata_reply(request) {
+            return reply;
+        }
+        if request.target.starts_with("/share/") {
+            return Reply {
+                status: 404,
+                ..Reply::raw("Not found", "text/html")
+            };
+        }
+        let mut raw = item(port);
+        raw["vod_name"] = json!("Same title");
+        raw["vod_play_from"] = json!("web-player$$$direct-hls");
+        raw["vod_play_url"] = json!(format!(
+            "Special$http://maccms.fixture.test:{port}/share/token$$$Special$http://maccms.fixture.test:{port}/direct/index.m3u8?token=keep"
+        ));
+        Reply::json(response(json!([raw]), json!([])))
+    });
+    let (_temp, host, provider, _, input) = setup_both(
+        &fixture,
+        Arc::new(crate::requests::MonotonicClock::default()),
+    );
+    ok(&host, "match_playback", input.clone());
+    let details = inspect(&host, &provider);
+    assert_eq!(details["groups"][0]["title"], "web-player");
+    assert_eq!(details["groups"][1]["title"], "direct-hls");
+    let reference = &details["groups"][1]["episodes"][0]["ref"];
+    let fields: Vec<String> = serde_json::from_str(reference["data"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        fields[2], "1",
+        "the upstream group index stays in the opaque reference"
+    );
+    let matched = ok(&host, "match_playback", choose(&input, &details, 1, 0));
+    let resolution = ok(&host, "resolve_episode", resolve_input(&matched["context"]));
+    assert_eq!(resolution["episode_ref"], *reference);
+    assert_eq!(resolution["streams"][0]["kind"], "hls");
+    assert_eq!(resolution["streams"][0]["playable"], true);
+    assert_eq!(resolution["streams"][0]["label"], "direct-hls · Special");
+    assert!(
+        !fixture
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| r.target.starts_with("/share/"))
+    );
+}
+
+#[test]
 fn t08_maccms_http_match_manual_resolve_probe_register_release() {
     let fixture = fixture();
     let (_temp, host, provider, _, input) = setup_both(

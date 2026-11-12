@@ -2,7 +2,7 @@
 import copy
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import queue
 import tempfile
 import unittest
@@ -234,12 +234,12 @@ class FunctionalStageTests(unittest.TestCase):
 class NativeLaunchTests(unittest.TestCase):
     def test_macos_launch_uses_process_scoped_restoration_override(self):
         with mock.patch.object(t01.sys, "platform", "darwin"):
-            self.assertEqual(t01.NativeSession.launch_argv(Path("/fixture/test app/native")),
+            self.assertEqual(t01.NativeSession.launch_argv(PurePosixPath("/fixture/test app/native")),
                              ["/fixture/test app/native", "-ApplePersistenceIgnoreState", "YES"])
 
     def test_other_platform_launch_keeps_original_arguments(self):
         with mock.patch.object(t01.sys, "platform", "linux"):
-            self.assertEqual(t01.NativeSession.launch_argv(Path("/fixture/native")), ["/fixture/native"])
+            self.assertEqual(t01.NativeSession.launch_argv(PurePosixPath("/fixture/native")), ["/fixture/native"])
 
 
 class NativeResultTests(unittest.TestCase):
@@ -552,6 +552,7 @@ class AutomationArtifactTests(unittest.TestCase):
         self.executable = root / "native"
         self.executable.write_bytes(b"T01_FIXTURE_CAP")
 
+    @unittest.skipUnless(t01.sys.platform == "darwin", "requires the macOS automation build artifact")
     def test_real_built_automation_artifacts_are_accepted(self):
         # The build suite precedes these regressions in the native acceptance gate.
         t01.validate_automation(t01.ROOT / "target/t01/frontend-automation",

@@ -3064,3 +3064,17 @@
 - 网络：按远端已批准 ADR-068 接受内网、回环与 Fake-IP，保留固定 DNS、TLS、协议与凭据处理；App 的服务令牌限定到配置端点，局域网服务域名可用系统 DNS。方案、任务卡、架构和新 ADR 已同步。
 - 独立复审：`docs/reviews/doc-review/round-58.md`，`DOC-REVIEW-VERDICT: CLEAR`。受审 protected 为 `f0cb326abf5b9501c976263fcb8983cdae8429a23dbc75d2d96e847982d54d07`，ADR-078 摘要为 `ac35750afc3ba7a4b28ba185458d8ee5dd360ed9e4af3dc1941cdfafc6920f8d`。
 - 检查：路线结构 54 卡、ADR 编号唯一、远端决定前缀完整、文档差异检查通过；提交范围限定为本次方案、相关规划与复审记录。业务实现和播放验收仍为 NOT RUN。
+
+## 本地与远端代码合并 2026-11-12
+
+- 来源：用户要求「合并本地与远端的代码」。本次在原目录 `/Users/eason/jp/application` 完成实际代码合并。
+- 基线：本地原 HEAD 为 `7a70e34`，远端 main 为 `aaee8b0`；两边独立提交历史，以此前共同代码快照 `f311339` 做三方内容合并。合并前本地 473 个可见源码文件、原暂存/未暂存补丁、原 index 及 Git bundle 保存在 `evidence/merge-backups/20261112T012111Z/`；恢复分支为 `backup/local-before-merge-20261112t012111z`，本地完整快照提交为 `f66948f88507a7fabe2167664f2cdfde2c319955`。
+- 内容：接入远端字体下载/选择、完整重置/恢复、IP 放宽、播放线路优先级与错误页修复、Windows/Linux FFmpeg 和构建配置。保留本地跨源搜索片名过滤、过滤后取前十条及两处对应测试夹具调整；对比远端的应用代码差异仅上述五个文件。三方合并未产生内容冲突，原依赖、FFmpeg 动态库、缓存与本机证据保留。
+- 验证（当前 macOS arm64，经原 run.py 执行）：
+  - 原生库：237 PASS、0 FAIL、7 ignored；`evidence/runs/20261112T012239063313-diag-merge-native/output.log`。部分环境门控场景的返回沿原测试设计记录，未据此宣称真机 GUI 或其他平台通过。
+  - 前端：240 PASS；`evidence/runs/20261112T012449586139-diag-merge-frontend-tests/output.log`。类型检查与生产构建通过；`evidence/runs/20261112T012457757721-diag-merge-frontend-build/output.log`，保留既有包体积与动态导入提示。
+  - 集成：T05 16 PASS、T25 delivery 3 PASS；`evidence/runs/20261112T012502711485-diag-merge-integration/output.log`。
+  - 契约：31 命令、248 结构、89 语义、6 生命周期向量通过；`evidence/runs/20261112T012521253213-diag-merge-contracts/output.log`。
+  - 格式：初次检查发现本地新增过滤测试的排版差异（exit1，`evidence/runs/20261112T012522782730-diag-merge-format/output.log`），仅修正该测试排版后通过；`evidence/runs/20261112T012543236049-diag-merge-format-final/output.log`。修正后过滤测试再跑 2 PASS；`evidence/runs/20261112T012544640200-diag-merge-filter-final/output.log`。
+- 交付：生成保留本地快照与远端提交为双亲的本地 main 合并提交，使原工作目录接入远端提交历史。新播放服务 T0.47–T0.49 继续等待开发指令。
+- 未运行：GUI 实际播放、打包安装与 Windows/Linux 实机检查。

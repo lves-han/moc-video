@@ -33,7 +33,7 @@ export async function sourcesScenario(ready: Ready, prototype: { player: Player;
   };
   const original = window.__TAURI__!.core, calls: { command: string; input: any }[] = [], errors: string[] = [];
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === "t01_control" || name === "player_fullscreen") return original.invoke<T>(name, args);
+    if (name === "t01_control" || (name === "player_fullscreen" || name === "app_font_url")) return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     return await rpc({ command: name, args });
   } };

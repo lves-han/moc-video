@@ -62,7 +62,7 @@ class VttOracleTests(unittest.TestCase):
                 t11.parse_vtt(text)
         for vector in [dict(kind="host", tracks=0), dict(kind="drm", type="none"),
                        dict(kind="cancel", late_bytes=1, active_requests=0),
-                       dict(kind="isolation", cross_origin_stripped=True, direct_origin_stripped=True, private_target_contacted=True)]:
+                       dict(kind="isolation", cross_origin_stripped=True, direct_origin_stripped=True, private_target_contacted=False)]:
             with self.subTest(vector=vector), self.assertRaises((ValueError, KeyError)):
                 t11.check_vector(vector)
 

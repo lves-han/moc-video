@@ -65,7 +65,12 @@ fn t24_cache_gateway_hits_ranges_headers_and_clear() {
     assert_eq!(count(&fixture, path), 5);
     assert_eq!(cache.status()["entry_count"], 3);
     for entry in std::fs::read_dir(temp.path().join("media-cache")).unwrap() {
-        let data = std::fs::read(entry.unwrap().path()).unwrap();
+        let entry = entry.unwrap();
+        if entry.file_name() == ".lock" {
+            assert_eq!(entry.metadata().unwrap().len(), 0);
+            continue;
+        }
+        let data = std::fs::read(entry.path()).unwrap();
         assert!(!String::from_utf8_lossy(&data).contains("PRIVATE_SOURCE"));
     }
     assert_eq!(cache.clear().unwrap()["used_bytes"], 0);

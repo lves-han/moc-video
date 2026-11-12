@@ -217,3 +217,20 @@ test('REQ-LINE-PREFERENCE: only current presented frames advancing naturally tri
   frame(300, 20); assert.equal(successes.length, 0); frame(400, 20.1); assert.deepEqual(copy(successes), [binding]);
   const late = [...callbacks.values()][0]!; player.stop(); late(6000, 21); assert.equal(successes.length, 1); assert.equal(callbacks.size, 0);
 });
+
+
+test('direct media route labels are preferred without changing stored order or identities', async () => {
+  const { prioritizePlaybackGroups } = await import('../src/line-preference.ts');
+  const web = { id: 'original-0', title: 'hnyun' }, hls = { id: 'original-1', title: 'hnM3U8' }, mp4 = { id: 'original-2', title: 'MP4' };
+  const groups = [web, hls, mp4];
+  const ordered = prioritizePlaybackGroups(groups);
+  assert.deepEqual(ordered, [hls, mp4, web]);
+  assert.deepEqual(groups, [web, hls, mp4]);
+  assert.equal(ordered[0], hls);
+});
+
+test('unknown and season route labels keep their original presentation order', async () => {
+  const { prioritizePlaybackGroups } = await import('../src/line-preference.ts');
+  const groups = [{title:'Season 0'}, {title:'Season 1'}, {title:'Custom stream'}];
+  assert.deepEqual(prioritizePlaybackGroups(groups), groups);
+});

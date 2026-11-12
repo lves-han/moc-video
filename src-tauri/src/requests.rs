@@ -231,9 +231,15 @@ impl Job {
     }
     /// Bound optional work while reserving time for the parent to publish its result.
     pub fn limited_child(&self, id: &str, operation: &str, limit_ms: u64) -> Result<Job, ApiError> {
-        let deadline = self.deadline.saturating_sub(1_000).min(self.clock.now_ms().saturating_add(limit_ms));
+        let deadline = self
+            .deadline
+            .saturating_sub(1_000)
+            .min(self.clock.now_ms().saturating_add(limit_ms));
         if self.clock.now_ms() >= deadline {
-            return Err(ApiError::new("UPSTREAM_TIMEOUT", "No time remains for optional work"));
+            return Err(ApiError::new(
+                "UPSTREAM_TIMEOUT",
+                "No time remains for optional work",
+            ));
         }
         self.register_child(id, operation, deadline)
     }

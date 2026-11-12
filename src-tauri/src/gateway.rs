@@ -113,6 +113,8 @@ struct Shared {
     records: Mutex<Records>,
     clock: Arc<dyn Clock>,
     token: String,
+    font_cap: String,
+    font_slots: Arc<tokio::sync::Semaphore>,
     stop: AtomicBool,
     idle_ms: AtomicU64,
     http: Http,
@@ -124,6 +126,13 @@ pub struct Gateway {
     worker: Option<JoinHandle<()>>,
 }
 impl Gateway {
+    pub(crate) fn font_url(&self, id: &str) -> Result<String, ApiError> {
+        let font = crate::fonts::get(id)?;
+        Ok(format!(
+            "http://{}/fonts/{}?cap={}",
+            self.address, font.id, self.shared.font_cap
+        ))
+    }
     pub fn start() -> Result<Self, ApiError> {
         Self::with_clock(Arc::new(MonotonicClock::default()))
     }
@@ -157,6 +166,8 @@ impl Gateway {
             records: Mutex::new(Records::default()),
             clock,
             token: capability()?,
+            font_cap: capability()?,
+            font_slots: Arc::new(tokio::sync::Semaphore::new(1)),
             stop: AtomicBool::new(false),
             idle_ms: AtomicU64::new(30_000),
             http,
@@ -229,10 +240,19 @@ impl Gateway {
     pub fn open_live(&self, selected: Arc<LinkRecord>) -> Result<Value, ApiError> {
         self.open_session(selected, true, None)
     }
-    pub fn open_file(&self, selected: Arc<LinkRecord>, file: std::fs::File) -> Result<Value, ApiError> {
+    pub fn open_file(
+        &self,
+        selected: Arc<LinkRecord>,
+        file: std::fs::File,
+    ) -> Result<Value, ApiError> {
         self.open_session(selected, false, Some(Arc::new(file)))
     }
-    fn open_session(&self, selected: Arc<LinkRecord>, live: bool, local_file: Option<Arc<std::fs::File>>) -> Result<Value, ApiError> {
+    fn open_session(
+        &self,
+        selected: Arc<LinkRecord>,
+        live: bool,
+        local_file: Option<Arc<std::fs::File>>,
+    ) -> Result<Value, ApiError> {
         if !selected.link.playable {
             return Err(ApiError::new(
                 "MEDIA_UNSUPPORTED",
@@ -306,12 +326,23 @@ impl Gateway {
         Ok(value)
     }
     /// A local MKV session: its HLS playlist, init and media segments, and text tracks.
-    pub fn open_remux(&self, selected: Arc<LinkRecord>, plan: Arc<crate::remux::Plan>) -> Result<Value, ApiError> {
-        let mut records = self.shared.records.lock().map_err(|_| ApiError::internal("Resource registry poisoned"))?;
+    pub fn open_remux(
+        &self,
+        selected: Arc<LinkRecord>,
+        plan: Arc<crate::remux::Plan>,
+    ) -> Result<Value, ApiError> {
+        let mut records = self
+            .shared
+            .records
+            .lock()
+            .map_err(|_| ApiError::internal("Resource registry poisoned"))?;
         let now = self.shared.clock.now_ms();
         records.sweep(now);
         if records.sessions.len() >= 256 {
-            return Err(ApiError::new("RESOURCE_LIMIT", "Playback session table is full"));
+            return Err(ApiError::new(
+                "RESOURCE_LIMIT",
+                "Playback session table is full",
+            ));
         }
         let id = Uuid::new_v4().to_string();
         let cap = capability()?;
@@ -321,7 +352,10 @@ impl Gateway {
             kind,
             diagnostic: Diagnostic::default(),
         };
-        let mut resources = HashMap::from([("index".to_owned(), resource("remux-playlist")), ("init".to_owned(), resource("remux-init"))]);
+        let mut resources = HashMap::from([
+            ("index".to_owned(), resource("remux-playlist")),
+            ("init".to_owned(), resource("remux-init")),
+        ]);
         for n in 0..plan.segments.len() {
             resources.insert(format!("s{n}"), resource("remux-segment"));
         }
@@ -334,8 +368,20 @@ impl Gateway {
             "source_id": selected.link.provider, "source_revision": selected.source_revision, "episode_ref": selected.episode_ref,
             "stream_kind": "hls", "mime_type": "application/vnd.apple.mpegurl", "media_url": self.url(&format!("/media/{id}/index"), &cap),
             "subtitles": subtitles, "expires_at": expires_after(SESSION_IDLE_MS)?});
-        records.sessions.insert(id, Session { resources, selected, live: false, remux: Some(plan), local_file: None, cap,
-            cancelled: Arc::new(AtomicBool::new(false)), active: 0, last_activity: now });
+        records.sessions.insert(
+            id,
+            Session {
+                resources,
+                selected,
+                live: false,
+                remux: Some(plan),
+                local_file: None,
+                cap,
+                cancelled: Arc::new(AtomicBool::new(false)),
+                active: 0,
+                last_activity: now,
+            },
+        );
         Ok(value)
     }
     pub fn close(&self, id: &str) {
@@ -775,6 +821,10 @@ async fn serve(
     };
     let origin = req.origin.as_deref();
     let head = req.method == Method::HEAD;
+    if req.path.starts_with("/fonts/") {
+        serve_font(&shared, &req, &mut read, &mut write).await;
+        return;
+    }
     if req.path == "/host-health" {
         let authorized = req
             .headers
@@ -1798,38 +1848,86 @@ fn response_headers(headers: &HeaderMap) -> HeaderMap {
         .collect()
 }
 /// Generates one piece of a local MKV session on demand; FFmpeg work runs off the async workers.
-async fn transfer_remux(req: &Request, lease: &RequestLease, write: &mut OwnedWriteHalf, sent: &mut bool) -> Result<(), ApiError> {
-    let plan = lease.remux.clone().ok_or_else(|| ApiError::internal("Remux plan missing"))?;
+async fn transfer_remux(
+    req: &Request,
+    lease: &RequestLease,
+    write: &mut OwnedWriteHalf,
+    sent: &mut bool,
+) -> Result<(), ApiError> {
+    let plan = lease
+        .remux
+        .clone()
+        .ok_or_else(|| ApiError::internal("Remux plan missing"))?;
     let cap = {
-        let records = lease.shared.records.lock().map_err(|_| ApiError::internal("Resource registry poisoned"))?;
-        records.sessions.get(&lease.target).map(|s| s.cap.clone()).ok_or_else(expired)?
+        let records = lease
+            .shared
+            .records
+            .lock()
+            .map_err(|_| ApiError::internal("Resource registry poisoned"))?;
+        records
+            .sessions
+            .get(&lease.target)
+            .map(|s| s.cap.clone())
+            .ok_or_else(expired)?
     };
-    let (kind, resource, address, target) = (lease.kind, lease.resource.clone(), lease.shared.address, lease.target.clone());
+    let (kind, resource, address, target) = (
+        lease.kind,
+        lease.resource.clone(),
+        lease.shared.address,
+        lease.target.clone(),
+    );
     let cancelled = lease.cancelled.clone();
-    let (mime, body) = tokio::task::spawn_blocking(move || -> Result<(&'static str, Vec<u8>), ApiError> {
-        if cancelled.load(Ordering::SeqCst) { return Err(ApiError::cancelled()); }
-        match kind {
-            "remux-playlist" => Ok(("application/vnd.apple.mpegurl",
-                plan.playlist(|name| format!("http://{address}/media/{target}/{name}?cap={cap}")).into_bytes())),
-            "remux-init" => Ok(("video/mp4", plan.init().to_vec())),
-            "remux-segment" => {
-                let n = resource.strip_prefix('s').and_then(|n| n.parse().ok()).ok_or_else(|| ApiError::bad("Invalid segment"))?;
-                Ok(("video/mp4", plan.segment_cancellable(n, &cancelled)?))
+    let (mime, body) =
+        tokio::task::spawn_blocking(move || -> Result<(&'static str, Vec<u8>), ApiError> {
+            if cancelled.load(Ordering::SeqCst) {
+                return Err(ApiError::cancelled());
             }
-            _ => {
-                let index = resource.strip_prefix('t').and_then(|n| n.parse().ok()).ok_or_else(|| ApiError::bad("Invalid subtitle"))?;
-                Ok(("text/vtt; charset=utf-8", plan.subtitle_cancellable(index, &cancelled)?.into_bytes()))
+            match kind {
+                "remux-playlist" => Ok((
+                    "application/vnd.apple.mpegurl",
+                    plan.playlist(|name| {
+                        format!("http://{address}/media/{target}/{name}?cap={cap}")
+                    })
+                    .into_bytes(),
+                )),
+                "remux-init" => Ok(("video/mp4", plan.init().to_vec())),
+                "remux-segment" => {
+                    let n = resource
+                        .strip_prefix('s')
+                        .and_then(|n| n.parse().ok())
+                        .ok_or_else(|| ApiError::bad("Invalid segment"))?;
+                    Ok(("video/mp4", plan.segment_cancellable(n, &cancelled)?))
+                }
+                _ => {
+                    let index = resource
+                        .strip_prefix('t')
+                        .and_then(|n| n.parse().ok())
+                        .ok_or_else(|| ApiError::bad("Invalid subtitle"))?;
+                    Ok((
+                        "text/vtt; charset=utf-8",
+                        plan.subtitle_cancellable(index, &cancelled)?.into_bytes(),
+                    ))
+                }
             }
-        }
-    })
-    .await
-    .map_err(|_| ApiError::internal("Remux worker failed"))??;
-    if lease.cancelled.load(Ordering::SeqCst) { return Err(ApiError::cancelled()); }
+        })
+        .await
+        .map_err(|_| ApiError::internal("Remux worker failed"))??;
+    if lease.cancelled.load(Ordering::SeqCst) {
+        return Err(ApiError::cancelled());
+    }
     let mut headers = HeaderMap::new();
     headers.insert("content-type", mime.parse().expect("Static MIME"));
     headers.insert("cache-control", "no-store".parse().expect("Static header"));
     *sent = true;
-    respond(write, 200, &headers, &body, req.origin.as_deref(), req.method == Method::HEAD).await
+    respond(
+        write,
+        200,
+        &headers,
+        &body,
+        req.origin.as_deref(),
+        req.method == Method::HEAD,
+    )
+    .await
 }
 /// Serves a library file registered by the Host: full body or one byte range.
 async fn transfer_file(
@@ -1840,37 +1938,79 @@ async fn transfer_file(
     sent: &mut bool,
 ) -> Result<(), ApiError> {
     let missing = || ApiError::new("SOURCE_NOT_FOUND", "Local file was moved or deleted");
-    let file = lease.local_file.clone().ok_or_else(|| ApiError::internal("Local file handle missing"))?;
+    let file = lease
+        .local_file
+        .clone()
+        .ok_or_else(|| ApiError::internal("Local file handle missing"))?;
     let length = file.metadata().map_err(|_| missing())?.len();
     let mut headers = HeaderMap::new();
-    let mime = lease.selected.as_ref().and_then(|s| s.link.mime_type.clone()).unwrap_or_else(|| "video/mp4".into());
-    headers.insert("content-type", mime.parse().map_err(|_| ApiError::internal("Local MIME"))?);
+    let mime = lease
+        .selected
+        .as_ref()
+        .and_then(|s| s.link.mime_type.clone())
+        .unwrap_or_else(|| "video/mp4".into());
+    headers.insert(
+        "content-type",
+        mime.parse().map_err(|_| ApiError::internal("Local MIME"))?,
+    );
     headers.insert("accept-ranges", "bytes".parse().expect("Static header"));
     headers.insert("cache-control", "no-store".parse().expect("Static header"));
     let range = req.headers.get("range").and_then(|v| v.to_str().ok());
     let (status, start, end) = match range {
         None => (200, 0, length.saturating_sub(1)),
         Some(value) if valid_range(value) => {
-            let (from, to) = value.strip_prefix("bytes=").and_then(|v| v.split_once('-')).expect("Validated range");
+            let (from, to) = value
+                .strip_prefix("bytes=")
+                .and_then(|v| v.split_once('-'))
+                .expect("Validated range");
             let (start, end) = if from.is_empty() {
                 let suffix: u64 = to.parse().expect("Validated suffix");
                 (length.saturating_sub(suffix), length.saturating_sub(1))
             } else {
                 let start: u64 = from.parse().expect("Validated start");
-                (start, to.parse::<u64>().map(|e| e.min(length.saturating_sub(1))).unwrap_or(length.saturating_sub(1)))
+                (
+                    start,
+                    to.parse::<u64>()
+                        .map(|e| e.min(length.saturating_sub(1)))
+                        .unwrap_or(length.saturating_sub(1)),
+                )
             };
             if length == 0 || start >= length {
-                headers.insert("content-range", format!("bytes */{length}").parse().expect("Range header"));
+                headers.insert(
+                    "content-range",
+                    format!("bytes */{length}").parse().expect("Range header"),
+                );
                 *sent = true;
-                return respond(write, 416, &headers, &[], req.origin.as_deref(), req.method == Method::HEAD).await;
+                return respond(
+                    write,
+                    416,
+                    &headers,
+                    &[],
+                    req.origin.as_deref(),
+                    req.method == Method::HEAD,
+                )
+                .await;
             }
-            headers.insert("content-range", format!("bytes {start}-{end}/{length}").parse().expect("Range header"));
+            headers.insert(
+                "content-range",
+                format!("bytes {start}-{end}/{length}")
+                    .parse()
+                    .expect("Range header"),
+            );
             (206, start, end)
         }
         Some(_) => return Err(ApiError::bad("Invalid single byte Range")),
     };
     let body = if length == 0 { 0 } else { end - start + 1 };
-    write_head(write, status, &headers, Some(body), req.origin.as_deref(), false).await?;
+    write_head(
+        write,
+        status,
+        &headers,
+        Some(body),
+        req.origin.as_deref(),
+        false,
+    )
+    .await?;
     *sent = true;
     if req.method == Method::HEAD || body == 0 {
         return Ok(());
@@ -1883,11 +2023,20 @@ async fn transfer_file(
         let (buffer, count) = tokio::task::spawn_blocking(move || {
             let mut buffer = vec![0; want];
             #[cfg(unix)]
-            let result = { use std::os::unix::fs::FileExt; file.read_at(&mut buffer, offset) };
+            let result = {
+                use std::os::unix::fs::FileExt;
+                file.read_at(&mut buffer, offset)
+            };
             #[cfg(windows)]
-            let result = { use std::os::windows::fs::FileExt; file.seek_read(&mut buffer, offset) };
+            let result = {
+                use std::os::windows::fs::FileExt;
+                file.seek_read(&mut buffer, offset)
+            };
             result.map(|count| (buffer, count))
-        }).await.map_err(|_| missing())?.map_err(|_| missing())?;
+        })
+        .await
+        .map_err(|_| missing())?
+        .map_err(|_| missing())?;
         if count == 0 {
             return Err(missing());
         }
@@ -1922,6 +2071,109 @@ async fn write_chunk(
     }
     Ok(())
 }
+async fn serve_font(
+    shared: &Shared,
+    req: &Request,
+    read: &mut OwnedReadHalf,
+    write: &mut OwnedWriteHalf,
+) {
+    let origin = req.origin.as_deref();
+    let head = req.method == Method::HEAD;
+    if req.cap.as_deref() != Some(shared.font_cap.as_str()) {
+        let _ = error_response(
+            write,
+            &ApiError::new("UNAUTHORIZED", "Font capability rejected"),
+            origin,
+            head,
+        )
+        .await;
+        return;
+    }
+    let font = match crate::fonts::get(req.path.strip_prefix("/fonts/").unwrap_or("")) {
+        Ok(font) => font,
+        Err(error) => {
+            let _ = error_response(write, &error, origin, head).await;
+            return;
+        }
+    };
+    if req.method == Method::OPTIONS {
+        let valid = origin.is_some()
+            && req
+                .headers
+                .get("access-control-request-method")
+                .is_some_and(|v| v == "GET" || v == "HEAD")
+            && req
+                .headers
+                .get("access-control-request-headers")
+                .is_none_or(|v| {
+                    v.to_str().is_ok_and(|v| {
+                        v.split(',').all(|name| {
+                            matches!(
+                                name.trim().to_ascii_lowercase().as_str(),
+                                "cache-control" | "pragma"
+                            )
+                        })
+                    })
+                });
+        if valid {
+            let headers = HeaderMap::from_iter([(
+                "access-control-allow-headers".parse().unwrap(),
+                "Cache-Control, Pragma".parse().unwrap(),
+            )]);
+            let _ = respond(write, 204, &headers, &[], origin, true).await;
+        } else {
+            let _ = error_response(
+                write,
+                &ApiError::bad("Font preflight rejected"),
+                origin,
+                true,
+            )
+            .await;
+        }
+        return;
+    }
+    if req.method != Method::GET && !head {
+        let _ = error_response(write, &ApiError::bad("Fonts accept GET/HEAD"), origin, head).await;
+        return;
+    }
+    let headers = HeaderMap::from_iter([
+        ("content-type".parse().unwrap(), "font/ttf".parse().unwrap()),
+        (
+            "cache-control".parse().unwrap(),
+            "no-store".parse().unwrap(),
+        ),
+    ]);
+    if head {
+        let _ = write_head(write, 200, &headers, Some(font.bytes as u64), origin, false).await;
+        return;
+    }
+    let Ok(_slot) = shared.font_slots.clone().try_acquire_owned() else {
+        let _ = error_response(
+            write,
+            &ApiError::new("RESOURCE_LIMIT", "Font download already active"),
+            origin,
+            false,
+        )
+        .await;
+        return;
+    };
+    let mut extra = [0; 1];
+    let result = tokio::select! {
+        result = tokio::time::timeout(Duration::from_secs(180), crate::fonts::download(&shared.http, font)) => {
+            result.unwrap_or_else(|_| Err(ApiError::new("UPSTREAM_TIMEOUT", "Font download timed out")))
+        }
+        _ = read.read(&mut extra) => Err(ApiError::cancelled()),
+    };
+    match result {
+        Ok(bytes) => {
+            let _ = respond(write, 200, &headers, &bytes, origin, false).await;
+        }
+        Err(error) => {
+            let _ = error_response(write, &error, origin, false).await;
+        }
+    }
+}
+
 async fn write_head(
     write: &mut OwnedWriteHalf,
     status: u16,
@@ -1938,7 +2190,10 @@ async fn write_head(
         "HTTP/1.1 {status} {reason}\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nVary: Origin\r\n"
     );
     if let Some(origin) = origin {
-        head.push_str(&format!("Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range, If-Range, If-None-Match, If-Modified-Since\r\nAccess-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, ETag\r\n"));
+        head.push_str(&format!("Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, ETag\r\n"));
+        if !headers.contains_key("access-control-allow-headers") {
+            head.push_str("Access-Control-Allow-Headers: Range, If-Range, If-None-Match, If-Modified-Since\r\n");
+        }
     }
     for (name, value) in headers {
         if let Ok(value) = value.to_str() {

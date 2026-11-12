@@ -974,68 +974,15 @@ fn n00_type_probe_formats_html_unknown_and_bound() {
 }
 
 #[test]
-fn n00_public_addresses_dns_rebinding_and_peer() {
-    for address in [
-        "127.0.0.1",
-        "10.0.0.1",
-        "172.16.0.1",
-        "192.168.1.2",
-        "169.254.1.1",
-        "0.0.0.0",
-        "224.1.1.1",
-        "240.1.1.1",
-        "100.64.0.1",
-        "198.18.0.1",
-        "192.0.2.1",
-        "::",
-        "::1",
-        "fc00::1",
-        "fe80::1",
-        "ff02::1",
-        "::ffff:127.0.0.1",
-        "2001:db8::1",
-        "2002:7f00:1::",
-        "64:ff9b::7f00:1",
-    ] {
-        assert!(
-            !public_ip(address.parse().unwrap()),
-            "unsafe address: {address}"
-        );
-    }
-    for address in [
-        "8.8.8.8",
-        "1.1.1.1",
-        "2606:4700:4700::1111",
-        "::ffff:8.8.8.8",
-    ] {
-        assert!(
-            public_ip(address.parse().unwrap()),
-            "public address: {address}"
-        );
-    }
-    let http = Http::default();
-    let url: Url = "http://public.example/api".parse().unwrap();
-    let public: SocketAddr = "8.8.8.8:80".parse().unwrap();
-    let private: SocketAddr = "[::ffff:127.0.0.1]:80".parse().unwrap();
-    assert!(
-        http.check_addresses(&url, &[public, private], false)
-            .is_err()
-    );
-    assert!(http.check_addresses(&url, &[], false).is_err());
-    assert!(http.check_peer(&url, &[public], Some(private)).is_err());
-    assert!(http.check_peer(&url, &[public], None).is_err());
-    let count = Arc::new(AtomicUsize::new(0));
-    let dns_count = count.clone();
-    let fixture = Fixture::new(|_, _| Reply::raw("safe", "text/plain"));
+fn n00_http_local_addresses_and_dns_refresh() {
+    let fixture = Fixture::new(|_, _| Reply::raw("local target", "text/plain"));
     let (_temp, host) = setup(fixture.url("/api"));
+    let count = Arc::new(AtomicUsize::new(0));
+    let observed = count.clone();
     let dns = DnsFixture::new(move |kind| {
         Some(if kind == 1 {
-            let n = dns_count.fetch_add(1, Ordering::SeqCst);
-            if n == 0 {
-                vec![127, 0, 0, 1]
-            } else {
-                vec![127, 0, 0, 2]
-            }
+            observed.fetch_add(1, Ordering::SeqCst);
+            vec![127, 0, 0, 1]
         } else {
             vec![]
         })
@@ -1043,52 +990,50 @@ fn n00_public_addresses_dns_rebinding_and_peer() {
     let http = Http {
         nameserver: Some(vec![dns.address]),
     };
-    let fetch = || {
-        http.get(
-            fixture.url("/dns").parse().unwrap(),
-            HeaderMap::new(),
-            &job(&host, "default_metadata"),
-            100,
-            false,
-            false,
-        )
-    };
-    assert_eq!(fetch().unwrap().body, b"safe");
-    assert_eq!(fetch().err().unwrap().code, "UPSTREAM_FAILED");
-    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
-    assert_eq!(count.load(Ordering::SeqCst), 2);
-    assert!(dns.queries.lock().unwrap().contains(&1));
-    assert!(dns.queries.lock().unwrap().contains(&28));
-    let mixed_dns = DnsFixture::new(|kind| {
-        Some(if kind == 1 {
-            vec![8, 8, 8, 8]
-        } else {
-            "fc00::1"
-                .parse::<std::net::Ipv6Addr>()
-                .unwrap()
-                .octets()
-                .to_vec()
-        })
-    });
-    let mixed = Http {
-        nameserver: Some(vec![mixed_dns.address]),
-    };
-    assert_eq!(
-        mixed
+    for path in ["/first", "/second"] {
+        let response = http
             .get(
-                fixture.url("/mixed").parse().unwrap(),
+                fixture.url(path).parse().unwrap(),
+                HeaderMap::new(),
+                &job(&host, "default_metadata"),
+                100,
+                false,
+                false,
+            )
+            .unwrap();
+        assert_eq!(response.body, b"local target");
+    }
+    let port = Url::parse(&fixture.url("/")).unwrap().port().unwrap();
+    let target = format!("http://127.0.0.1:{port}/literal");
+    assert_eq!(
+        Http::default()
+            .get(
+                target.parse().unwrap(),
                 HeaderMap::new(),
                 &job(&host, "default_metadata"),
                 100,
                 false,
                 false
             )
-            .err()
             .unwrap()
-            .code,
-        "UPSTREAM_FAILED"
+            .body,
+        b"local target"
     );
-    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
+    let mapped: Url = format!("http://[::ffff:127.0.0.1]:{port}/mapped")
+        .parse()
+        .unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    assert_eq!(
+        runtime.block_on(http.addresses(&mapped)).unwrap(),
+        vec![SocketAddr::new("::ffff:127.0.0.1".parse().unwrap(), port)]
+    );
+    assert_eq!(fixture.requests.lock().unwrap().len(), 3);
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+    let queries = dns.queries.lock().unwrap();
+    assert!(queries.contains(&1) && queries.contains(&28));
     for target in [
         "file:///etc/passwd",
         "http://user:password@public.example/api",
@@ -1528,8 +1473,8 @@ fn n00_metadata_limits_and_foreign_section_refs() {
         "sync_catalog",
         json!({"kind": "maccms", "config_id": CONFIG}),
     );
-    error(&result, "BAD_REQUEST");
-    assert_eq!(result["error"]["details"]["reason"], "unsafe_target");
+    error(&result, "UPSTREAM_FAILED");
+    assert_eq!(result["error"]["details"]["reason"], Value::Null);
     assert!(!result["error"].to_string().contains("secret"));
 }
 

@@ -8,6 +8,37 @@ fn runtime() -> tokio::runtime::Runtime {
         .unwrap()
 }
 
+/// Explicit network diagnostic; uses the production resolver without fixture injection.
+#[test]
+#[ignore = "requires the current machine's real network; output is diagnostic, not source acceptance"]
+fn t02_dns_live_production_resolver_diagnostic() {
+    let sources: Value =
+        serde_json::from_str(include_str!("../../src/data/defaultSources.json")).unwrap();
+    let http = Http::default();
+    assert!(http.nameserver.is_none());
+    let runtime = runtime();
+    for source in sources.as_array().unwrap() {
+        let value = source["api_url"]
+            .as_str()
+            .or_else(|| source["manifest_urls"][0].as_str())
+            .unwrap();
+        let url: Url = value.parse().unwrap();
+        let result = runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(10), http.addresses(&url)).await
+        });
+        let row = match result {
+            Ok(Ok(addresses)) => json!({
+                "host": url.host_str(),
+                "addresses": addresses.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                "ip_validation": false,
+            }),
+            Ok(Err(error)) => json!({"host": url.host_str(), "error": error.message}),
+            Err(_) => json!({"host": url.host_str(), "error": "diagnostic DNS deadline"}),
+        };
+        println!("DNS_DIAGNOSTIC {row}");
+    }
+}
+
 #[test]
 fn t02_dns_two_servers_failover_and_both_families() {
     let failed = DnsFixture::with_rcode(2, |_| Some(vec![]));
@@ -40,7 +71,6 @@ fn t02_dns_two_servers_failover_and_both_families() {
             .unwrap();
         assert!(addresses.contains(&"1.1.1.1:443".parse().unwrap()));
         assert!(addresses.contains(&"[2606:4700:4700::1111]:443".parse().unwrap()));
-        http.check_addresses(&url, &addresses, false).unwrap();
     }
     assert!(!failed.queries.lock().unwrap().is_empty());
     let queries = healthy.queries.lock().unwrap();
@@ -176,13 +206,20 @@ fn t02_dns_two_silent_servers_deadline_and_cancellation() {
 }
 
 #[test]
-fn t02_dns_fake_ip_mixed_results_and_redirect_rebinding_rejected() {
-    for address in ["198.18.1.114", "198.19.255.254", "10.0.0.2", "fc00::1"] {
-        let ip: IpAddr = address.parse().unwrap();
+fn t02_dns_fake_ip_mixed_results_are_preserved() {
+    for address in [
+        "172.19.0.59",
+        "198.18.1.114",
+        "198.19.255.254",
+        "10.0.0.2",
+        "fc00::1",
+        "::1",
+    ] {
+        let ip: std::net::IpAddr = address.parse().unwrap();
         let dns = DnsFixture::new(move |kind| {
             Some(match (kind, ip) {
-                (1, IpAddr::V4(ip)) => ip.octets().to_vec(),
-                (28, IpAddr::V6(ip)) => ip.octets().to_vec(),
+                (1, std::net::IpAddr::V4(ip)) => ip.octets().to_vec(),
+                (28, std::net::IpAddr::V6(ip)) => ip.octets().to_vec(),
                 (1, _) => vec![8, 8, 8, 8],
                 (28, _) => "2606:4700:4700::1111"
                     .parse::<std::net::Ipv6Addr>()
@@ -195,52 +232,52 @@ fn t02_dns_fake_ip_mixed_results_and_redirect_rebinding_rejected() {
         let http = Http {
             nameserver: Some(vec![dns.address]),
         };
-        let (_temp, host) = setup("https://public.example/api".into());
-        let error = http
-            .get(
-                "https://public.example/api".parse().unwrap(),
-                HeaderMap::new(),
-                &job(&host, "default_metadata"),
-                100,
-                false,
-                false,
-            )
-            .err()
+        let addresses = runtime()
+            .block_on(http.addresses(&"https://public.example/api".parse().unwrap()))
             .unwrap();
-        assert_eq!(error.details.unwrap()["reason"], "unsafe_target");
+        assert!(
+            addresses.contains(&SocketAddr::new(ip, 443)),
+            "missing {address}"
+        );
+        assert_eq!(addresses.len(), 2);
     }
-    let count = Arc::new(AtomicUsize::new(0));
-    let observed = count.clone();
-    let dns = DnsFixture::new(move |kind| {
-        Some(if kind == 1 {
-            if observed.fetch_add(1, Ordering::SeqCst) == 0 {
-                vec![127, 0, 0, 1]
-            } else {
-                vec![198, 18, 1, 114]
-            }
-        } else {
-            vec![]
-        })
-    });
-    let fixture = Fixture::new(|_, _| Reply::redirect("/rebound".into()));
-    let (_temporary, host) = setup(fixture.url("/redirect"));
-    let http = Http {
-        nameserver: Some(vec![dns.address]),
-    };
-    let error = http
-        .get(
-            fixture.url("/redirect").parse().unwrap(),
+    n00_http_local_addresses_and_dns_refresh();
+    n00_redirect_origin_headers_proxy_and_limits();
+}
+
+/// A real source request through the production transport, including current TUN/Fake-IP.
+#[test]
+#[ignore = "requires live source servers; emits actual HTTP outcomes"]
+fn t02_dns_live_http_proxy_compatibility() {
+    let sources: Value =
+        serde_json::from_str(include_str!("../../src/data/defaultSources.json")).unwrap();
+    for source in sources.as_array().unwrap() {
+        let value = source["api_url"]
+            .as_str()
+            .or_else(|| source["manifest_urls"][0].as_str())
+            .unwrap();
+        let url: Url = value.parse().unwrap();
+        let (_temp, host) = setup(value.into());
+        let result = Http::default().get(
+            url.clone(),
             HeaderMap::new(),
             &job(&host, "default_metadata"),
-            100,
+            8 * 1024 * 1024,
             false,
             false,
-        )
-        .err()
-        .unwrap();
-    assert_eq!(error.details.unwrap()["reason"], "unsafe_target");
-    assert_eq!(fixture.requests.lock().unwrap().len(), 1);
-    assert_eq!(count.load(Ordering::SeqCst), 2);
-    n00_public_addresses_dns_rebinding_and_peer();
-    n00_redirect_origin_headers_proxy_and_limits();
+        );
+        let row = match result {
+            Ok(response) => {
+                json!({"host": url.host_str(), "http_success": true, "bytes": response.body.len(), "json": serde_json::from_slice::<Value>(&response.body).is_ok()})
+            }
+            Err(error) => {
+                assert_ne!(
+                    error.details.as_ref().map(|d| &d["reason"]),
+                    Some(&json!("unsafe_target"))
+                );
+                json!({"host": url.host_str(), "http_success": false, "error": error.message, "details": error.details})
+            }
+        };
+        println!("HTTP_COMPATIBILITY {row}");
+    }
 }

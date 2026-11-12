@@ -1,4 +1,4 @@
-//! Anonymous MacCMS JSON protocol and the public-HTTP boundary.
+//! Anonymous MacCMS JSON protocol and the shared HTTP boundary.
 //! Upstream URLs stay in native records; wire references contain only identities.
 use crate::{
     contracts::{ApiError, Contracts, wire_size},
@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, SocketAddr},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -96,46 +96,6 @@ pub fn http_url(value: &str, config: bool) -> Result<Url, ApiError> {
     Ok(url)
 }
 
-// Conservative public-unicast policy, including the IANA special-purpose ranges.
-pub fn public_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => {
-            let n = u32::from(ip);
-            ![
-                (Ipv4Addr::new(0, 0, 0, 0), 8),
-                (Ipv4Addr::new(10, 0, 0, 0), 8),
-                (Ipv4Addr::new(100, 64, 0, 0), 10),
-                (Ipv4Addr::new(127, 0, 0, 0), 8),
-                (Ipv4Addr::new(169, 254, 0, 0), 16),
-                (Ipv4Addr::new(172, 16, 0, 0), 12),
-                (Ipv4Addr::new(192, 0, 0, 0), 24),
-                (Ipv4Addr::new(192, 0, 2, 0), 24),
-                (Ipv4Addr::new(192, 88, 99, 0), 24),
-                (Ipv4Addr::new(192, 168, 0, 0), 16),
-                (Ipv4Addr::new(198, 18, 0, 0), 15),
-                (Ipv4Addr::new(198, 51, 100, 0), 24),
-                (Ipv4Addr::new(203, 0, 113, 0), 24),
-                (Ipv4Addr::new(224, 0, 0, 0), 3),
-            ]
-            .iter()
-            .any(|(base, bits)| n >> (32 - bits) == u32::from(*base) >> (32 - bits))
-        }
-        IpAddr::V6(ip) => {
-            if let Some(v4) = ip.to_ipv4_mapped() {
-                return public_ip(IpAddr::V4(v4));
-            }
-            let s = ip.segments();
-            // Global unicast 2000::/3, excluding protocol assignments,
-            // documentation, 6to4 (embedded IPv4), and reserved blocks.
-            s[0] & 0xe000 == 0x2000
-                && !(s[0] == 0x2001 && s[1] <= 0x1ff)
-                && !(s[0] == 0x2001 && s[1] == 0xdb8)
-                && s[0] != 0x2002
-                && !(s[0] == 0x3fff && s[1] & 0xf000 == 0)
-        }
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct Http {
     #[cfg(test)]
@@ -149,44 +109,6 @@ pub struct Response {
 }
 
 impl Http {
-    fn allowed(&self, url: &Url, ip: IpAddr) -> bool {
-        // This fixed allowlist is compiled only into Rust unit-test binaries.
-        #[cfg(test)]
-        if matches!(
-            url.host_str(),
-            Some("maccms.fixture.test" | "other.fixture.test")
-        ) && ip == IpAddr::V4(Ipv4Addr::LOCALHOST)
-        {
-            return true;
-        }
-        let _ = url;
-        public_ip(ip)
-    }
-
-    pub(crate) fn check_addresses(
-        &self,
-        url: &Url,
-        addresses: &[SocketAddr],
-        config: bool,
-    ) -> Result<(), ApiError> {
-        if addresses.is_empty() || addresses.iter().any(|a| !self.allowed(url, a.ip())) {
-            return Err(unsafe_target(config));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_peer(
-        &self,
-        url: &Url,
-        addresses: &[SocketAddr],
-        peer: Option<SocketAddr>,
-    ) -> Result<(), ApiError> {
-        if !peer.is_some_and(|peer| addresses.contains(&peer) && self.allowed(url, peer.ip())) {
-            return Err(unsafe_target(false));
-        }
-        Ok(())
-    }
-
     async fn addresses(&self, url: &Url) -> Result<Vec<SocketAddr>, ApiError> {
         let host = url.host_str().ok_or_else(|| unsafe_target(false))?;
         let port = url
@@ -209,7 +131,7 @@ impl Http {
         }
         // Async DNS is part of the same cancellable future as connect/body I/O.
         // A blocking system lookup would keep Runtime::drop waiting past the
-        // request deadline. Query both families before accepting any address.
+        // request deadline. Keep both families, including LAN and proxy Fake-IP.
         use hickory_resolver::{
             config::{NameServerConfig, ResolveHosts, ResolverConfig},
             net::runtime::TokioRuntimeProvider,
@@ -257,6 +179,9 @@ impl Http {
         }
         while let Some(result) = lookups.join_next().await {
             if let Ok(Ok(ips)) = result {
+                if ips.is_empty() {
+                    continue;
+                }
                 return Ok(ips
                     .into_iter()
                     .map(|ip| SocketAddr::new(ip, port))
@@ -316,8 +241,9 @@ impl Http {
             let status = response.status().as_u16();
             return Err(
                 access_status(status, response.headers()).unwrap_or_else(|| {
-                    upstream("Public HTTP server returned an unsuccessful status")
-                        .with_details(json!({"http_status": status}))
+                    upstream(&format!("Public HTTP server returned HTTP {status}"))
+                        .with_details(json!({"http_status": status,
+                            "stage": if probe { "media_probe" } else { "upstream_request" }}))
                 }),
             );
         }
@@ -377,9 +303,9 @@ impl Http {
                 ));
             }
             let addresses = self.addresses(&url).await?;
-            self.check_addresses(&url, &addresses, config)?;
-            // A fresh client per connection avoids reusing a peer after DNS changes.
-            // URL hostname remains intact for Host, SNI and certificate validation.
+            // Bind the configured DNS result, including proxy Fake-IP/LAN addresses.
+            // Keep the hostname for Host, SNI and certificate validation. IP address
+            // and actual-peer restrictions were removed at the user's request.
             let client = Client::builder()
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
@@ -392,7 +318,6 @@ impl Http {
                 .request(method.clone(), url.clone())
                 .headers(headers.clone());
             let response = request.send().await.map_err(http_error)?;
-            self.check_peer(&url, &addresses, response.remote_addr())?;
             if matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
                 if hop == 5 {
                     return Err(upstream("HTTP redirect limit exceeded"));
@@ -447,11 +372,56 @@ pub(crate) fn redirect_headers(
     Ok(())
 }
 
+fn certificate_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    // Schannel exposes localized OS messages. Inspect its HRESULT before text.
+    let text = error.to_string();
+    #[cfg(windows)]
+    {
+        let windows_certificate = [
+            0x800B0101_u32,
+            0x800B0109,
+            0x800B010A,
+            0x800B010C,
+            0x800B010F,
+            0x800B0110,
+        ]
+        .iter()
+        .any(|code| {
+            let code = *code as i32;
+            error.downcast_ref::<std::io::Error>().and_then(|e| e.raw_os_error()) == Some(code)
+                // native-tls 0.2 skips its inner io::Error in source(). Its
+                // Display still preserves the OS message and numeric code.
+                || text == std::io::Error::from_raw_os_error(code).to_string()
+        });
+        if windows_certificate {
+            return true;
+        }
+    }
+    text.to_lowercase().contains("certificate")
+}
+
+#[cfg(all(test, windows))]
+mod windows_tls_errors {
+    #[test]
+    fn localized_certificate_errors_keep_their_category() {
+        assert!(super::certificate_error(
+            &std::io::Error::from_raw_os_error(0x800B0109_u32 as i32)
+        ));
+        assert!(!super::certificate_error(
+            &std::io::Error::from_raw_os_error(5)
+        ));
+        #[cfg(windows)]
+        assert!(super::certificate_error(&std::io::Error::other(
+            std::io::Error::from_raw_os_error(0x800B0109_u32 as i32).to_string()
+        )));
+    }
+}
+
 fn http_error(error: reqwest::Error) -> ApiError {
     if error.is_timeout() {
         ApiError::new("UPSTREAM_TIMEOUT", "Public HTTP request timed out")
     } else if std::iter::successors(std::error::Error::source(&error), |source| source.source())
-        .any(|source| source.to_string().to_lowercase().contains("certificate"))
+        .any(certificate_error)
     {
         upstream("Public HTTP certificate validation failed")
             .with_details(json!({"reason":"tls_certificate","stage":"public_http"}))
@@ -1474,17 +1444,6 @@ impl Catalog {
                 "Media request exceeds 1 MiB",
             ));
         }
-        // Validate network targets even when a suffix already identifies the media.
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| ApiError::internal("HTTP runtime initialization failed"))?;
-        let addresses = runtime.block_on(watched(
-            job,
-            Duration::from_millis(job.connect_timeout_ms()?),
-            http.addresses(&url),
-        ))?;
-        http.check_addresses(&url, &addresses, false)?;
         let suffix = url
             .path()
             .rsplit('.')
