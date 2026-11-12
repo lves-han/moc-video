@@ -6,9 +6,14 @@ license = "MIT"
 
 [dependencies]
 axum = "0.8"
+hickory-resolver = "=0.26.3"
+moc-core = { path = "../crates/moc-core" }
+reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "gzip", "json", "query"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde_json = "1"
 subtle = "2"
 tempfile = "3"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+time = "0.3"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+url = "2"
 uuid = { version = "1", features = ["v4"] }

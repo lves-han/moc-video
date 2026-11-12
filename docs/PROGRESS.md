@@ -3144,3 +3144,18 @@
 - 实现：建立 Rust workspace、服务与共享 crate，提供配置、SQLite 初始化、Bearer 鉴权、health、私有持久令牌、Docker 与关闭访问日志的反向代理示例，并记录 OpenAPI 契约。
 - 验收 A1：PASS；日志：`evidence/runs/20261112T043453088555-A1/output.log`；容器验收 3 项通过，覆盖健康响应、缺失/错误令牌、令牌重启复用、环境变量优先、数据库初始化、日志脱敏与资源清理。服务容器硬限制 512 MiB、构建硬限制 2048 MiB，宿主采样峰值和限制之和见 `evidence/acceptance/T1.1-A1.json`；实际构建容器曾核对硬限制 2147483648 字节。
 - 补充检查：稳定源码 `cargo check --locked --workspace` 通过，日志 `evidence/runs/20261112T042850924072-diag-t11-cargo-stable/output.log`；共享 App 代码未迁移。
+
+## T1.2 TMDB 元数据、语言与稳定内容身份 2026-11-12T04:54:12+00:00
+
+- 结果：DONE
+- 实现：服务提供按令牌和语言隔离的 TMDB manifest、catalog、搜索与详情；补齐首页所需目录，保持电影/剧集、`tmdb:` 及 IMDb/季集身份。上游使用固定公共 DNS、有限响应及超时，不输出密钥；共享 TMDB 展示映射供 App 与服务复用。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T045124693912-A1/output.log`；受控上游容器检查三项通过，覆盖目录和搜索分页、语言、别名、IMDb/无 IMDb 季集、身份冲突、无效密钥及脱敏；按容器硬上限与宿主采样合计核对资源。
+- 相关回归：原桌面 App TMDB Host 与身份两项测试通过，日志 `evidence/runs/20261112T044736891405-diag-t12-app-tmdb/output.log`；服务鉴权三项通过，日志 `evidence/runs/20261112T045257946854-diag-t12-core-regression-final/output.log`。桌面编译、前端构建及 Compose 配置检查通过。
+- 发布兼容：为共享 crate 调整现有第三方清单处理并同步桌面锁摘要；Docker 运行时提供 TLS 所需证书及库。任务范围补录上述实际涉及文件。真实 TMDB 网络和密钥验证 NOT RUN，使用受控样本。
+
+## T1.2 最终验收 2026-11-12T04:54:57+00:00
+
+- 结果：DONE
+- 更正：上条 DONE 记录写入后，原控制器发现 Compose 配置晚于验收而拒绝完成登记；已对最终文件重新运行验收，旧记录及结果保留。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T045433887799-A1/output.log`；3 项通过，涵盖最终版本的 TMDB 路由、身份、密钥及容器资源检查。
+- 原桌面 App 两项 TMDB/身份回归及服务鉴权回归此前均通过；真实 TMDB 网络及完整发布流程 NOT RUN。

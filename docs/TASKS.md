@@ -2613,14 +2613,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.2 TMDB 元数据、语言与稳定内容身份
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.1
 - 需求：REQ-SERVICE-META（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §4.1、5.1–5.2、9）→ A1
 - 上下文：方案 §4.1、5.1–5.2、9；ADR-077/078/079；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.1 的服务配置、鉴权、HTTP 与数据库；现有 tmdb_api.rs 的目录和详情映射。
 - 不变量：TMDB_CONFIG_ID、addon key、内容命名空间和 video ID 与当前格式一致；密钥留在服务端。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`crates/moc-core/`, `server/src/metadata/`, `server/src/main.rs`, `server/src/lib.rs`, `server/src/state.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/src/tmdb_api.rs`, `src-tauri/src/stremio.rs`, `src-tauri/src/host.rs`, `src-tauri/Cargo.toml`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`, `src-tauri/src/lib.rs`
+- 范围：`crates/moc-core/`, `server/src/metadata/`, `server/src/main.rs`, `server/src/lib.rs`, `server/src/state.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/src/tmdb_api.rs`, `src-tauri/src/stremio.rs`, `src-tauri/src/host.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `server/Dockerfile`, `server/README.md`, `packaging/release.py`, `packaging/playback-service.compose.yml`, `licenses/`, `docs/runtime.lock.json`, `src-tauri/src/lib.rs`
 - 验收范围：`server/src/metadata/tmdb.rs`, `src-tauri/src/tmdb_api.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.1 的 HTTP/鉴权检查（仅实际受影响部分）。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

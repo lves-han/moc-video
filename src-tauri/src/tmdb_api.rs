@@ -225,37 +225,11 @@ fn manifest(http: &Http, creds: &Credentials, job: &Job, lang: &str) -> Result<V
 }
 
 fn image(creds: &Credentials, size: &str, path: &Value) -> Value {
-    path.as_str()
-        .filter(|p| p.starts_with('/'))
-        .map(|p| json!(format!("{}/{size}{p}", creds.image_url)))
-        .unwrap_or(Value::Null)
+    moc_core::tmdb::image(&creds.image_url, size, path)
 }
 
 fn summary(creds: &Credentials, kind: &str, item: &Value, genres: &[(u64, String)]) -> Value {
-    let date = item[if kind == "movie" {
-        "release_date"
-    } else {
-        "first_air_date"
-    }]
-    .as_str()
-    .unwrap_or("");
-    let names: Vec<&str> = item["genre_ids"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|id| {
-            genres
-                .iter()
-                .find(|(g, _)| Some(*g) == id.as_u64())
-                .map(|(_, n)| n.as_str())
-        })
-        .collect();
-    let year = date.get(..4).unwrap_or("");
-    json!({"id": format!("tmdb:{}", item["id"]), "type": kind,
-        "name": item[if kind == "movie" { "title" } else { "name" }], "poster": image(creds, "w342", &item["poster_path"]),
-        "background": image(creds, "w1280", &item["backdrop_path"]), "description": item["overview"],
-        "year": year, "releaseInfo": year, "genres": names, "genre": names,
-        "imdbRating": item["vote_average"].as_f64().filter(|v| *v > 0.0).map(|v| format!("{v:.1}"))})
+    moc_core::tmdb::summary(&creds.image_url, kind, item, genres)
 }
 
 fn catalog(
@@ -361,11 +335,7 @@ fn catalog(
 }
 
 fn runtime(minutes: Option<u64>) -> Value {
-    match minutes.filter(|m| *m > 0) {
-        Some(m) if m >= 60 => json!(format!("{}h{}min", m / 60, m % 60)),
-        Some(m) => json!(format!("{m}min")),
-        None => Value::Null,
-    }
+    moc_core::tmdb::runtime(minutes)
 }
 
 fn meta(

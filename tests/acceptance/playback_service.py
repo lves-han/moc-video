@@ -80,7 +80,7 @@ class ServiceCore(unittest.TestCase):
         cls.sampler.join(timeout=2)
 
     @classmethod
-    def start(cls, token=None):
+    def start(cls, token=None, extra_env=None):
         if cls.container:
             docker("rm", "-f", cls.container)
         cls.container = cls.name
@@ -88,6 +88,8 @@ class ServiceCore(unittest.TestCase):
                 "-p", "127.0.0.1::8787", "-v", cls.volume + ":/data"]
         if token is not None:
             args += ["-e", "MOC_SERVICE_TOKEN=" + token]
+        for key, value in (extra_env or {}).items():
+            args += ["-e", key + "=" + value]
         docker(*args, cls.image)
         port = docker("port", cls.container, "8787/tcp").rsplit(":", 1)[1]
         cls.url = f"http://127.0.0.1:{port}/v1/health"
@@ -152,17 +154,90 @@ class ServiceCore(unittest.TestCase):
         self.assertLessEqual(self.host_peak + BUILD_LIMIT, 4096 * MIB)
 
 
+class TmdbMetadata(ServiceCore):
+    test_1_config_auth = None
+    test_2_token_restart_and_env_priority = None
+    test_3_redaction_and_resources = None
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.fixture = cls.name + "-fixture"
+        cls.addClassCleanup(subprocess.run, ["docker", "rm", "-f", cls.fixture], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        docker("run", "-d", "--name", cls.fixture, "--memory", str(256 * MIB),
+               "-v", str(ROOT / "tests/fixtures/service/tmdb_fixture.py") + ":/fixture.py:ro",
+               "python:3.12-slim", "python", "-u", "/fixture.py")
+        docker("exec", cls.fixture, "python", "-c", "import socket,time\nfor _ in range(100):\n try:\n  socket.create_connection(('127.0.0.1',80),timeout=1).close(); break\n except OSError: time.sleep(.1)\nelse: raise SystemExit('fixture did not start')")
+        address = docker("inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cls.fixture)
+        if not address:
+            raise RuntimeError("fixture container has no address")
+        cls.fixture_env = {"MOC_TMDB_API_URL": "http://" + address + "/3", "MOC_TMDB_KEY": "fixture-key"}
+
+    @classmethod
+    def resource(cls, path, token="app-token"):
+        request = urllib.request.Request(cls.url.rsplit("/v1/health", 1)[0] + "/stremio/" + token + "/tmdb/" + path)
+        try:
+            response = urllib.request.urlopen(request, timeout=20)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            return response.status, json.load(response)
+
+    def test_1_routes_fields(self):
+        self.start("app-token", self.fixture_env)
+        status, manifest = self.resource("zh-CN/manifest.json")
+        self.assertEqual(status, 200, manifest)
+        self.assertEqual((status, manifest["id"], len(manifest["catalogs"])), (200, "tmdb-addon", 22))
+        catalog_ids = {(item["type"], item["id"]) for item in manifest["catalogs"]}
+        self.assertTrue({("movie", "tmdb.now_playing"), ("movie", "tmdb.upcoming"), ("series", "tmdb.on_air"), ("series", "tmdb.variety")} <= catalog_ids)
+        for kind, catalog in (("movie", "tmdb.upcoming"), ("series", "tmdb.on_air"), ("series", "tmdb.variety")):
+            self.assertEqual(self.resource(f"zh-CN/catalog/{kind}/{catalog}.json")[0], 200)
+        status, catalog = self.resource("zh-CN/catalog/movie/tmdb.search/search=film&skip=20.json")
+        self.assertEqual(status, 200)
+        self.assertEqual((catalog["metas"][0]["id"], catalog["metas"][0]["name"]), ("tmdb:42", "电影 P2"))
+        status, meta = self.resource("en-US/meta/movie/tmdb:42.json")
+        self.assertEqual((status, meta["meta"]["original_title"], meta["meta"]["aliases"]), (200, "Original Film", ["Alias"]))
+
+    def test_2_identity_language(self):
+        self.start("app-token", self.fixture_env)
+        status, meta = self.resource("zh-CN/meta/series/tmdb:42.json")
+        self.assertEqual((status, meta["meta"]["type"], meta["meta"]["videos"][0]["id"]), (200, "series", "tt1234567:1:1"))
+        self.assertEqual(meta["meta"]["aliases"], ["别名"])
+        self.assertEqual(self.resource("en-US/meta/series/tmdb:42.json")[1]["meta"]["name"], "Series")
+        self.assertEqual(self.resource("en-US/meta/series/tmdb:43.json")[1]["meta"]["videos"][0]["id"], "tmdb:43:1:1")
+        self.assertEqual(self.resource("en-US/meta/movie/tmdb:99.json")[0], 502)
+        self.assertEqual(self.resource("en-US/meta/unknown/tmdb:42.json")[0], 400)
+        self.assertEqual(self.resource("en-US/meta/movie/tmdb:wrong.json")[0], 400)
+
+    def test_3_auth_errors(self):
+        self.start("app-token", {"MOC_TMDB_API_URL": self.fixture_env["MOC_TMDB_API_URL"]})
+        status, body = self.resource("en-US/manifest.json")
+        self.assertEqual((status, body["error"]["code"]), (401, "UNAUTHORIZED"))
+        self.start("app-token", {**self.fixture_env, "MOC_TMDB_KEY": "invalid-test-key"})
+        status, body = self.resource("en-US/manifest.json")
+        self.assertEqual((status, body["error"]["code"]), (401, "UNAUTHORIZED"))
+        self.assertNotIn("invalid-test-key", json.dumps(body))
+        self.assertNotIn("invalid-test-key", docker("logs", self.container))
+        self.assertEqual(self.resource("en-US/manifest.json", token="wrong")[0], 401)
+        self.assertEqual(int(docker("inspect", "--format", "{{.HostConfig.Memory}}", self.fixture)), 256 * MIB)
+        self.assertLessEqual(self.host_peak + BUILD_LIMIT + SERVICE_LIMIT + 256 * MIB, 4096 * MIB)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(ServiceCore))
-    case_ids = ["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"]
+    test_class = ServiceCore if args.suite == "service-core" else TmdbMetadata
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
+    case_ids = (["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"] if args.suite == "service-core" else
+                ["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"])
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    for method, case_id in zip(("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"), case_ids):
+    methods = (("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources") if args.suite == "service-core" else
+               ("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"))
+    for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:
             ET.SubElement(case, "failure").text = failures[method]
@@ -172,7 +247,7 @@ def main():
     ET.ElementTree(suite).write(args.junit, encoding="utf-8", xml_declaration=True)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps({"suite": args.suite, "tests": result.testsRun, "successful": result.wasSuccessful(),
-                                       "host_peak_bytes": ServiceCore.host_peak, "build_memory_cap": BUILD_LIMIT,
+                                       "host_peak_bytes": test_class.host_peak, "build_memory_cap": BUILD_LIMIT,
                                        "service_memory_cap": SERVICE_LIMIT}, indent=2) + "\n")
     return 0 if result.wasSuccessful() and result.testsRun == 3 else 1
 

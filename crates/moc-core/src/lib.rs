@@ -1,1 +1,3 @@
-//! Shared code moves here when both the application and service need it.
+//! Data mappings shared by the application and the service.
+
+pub mod tmdb;
