@@ -446,6 +446,238 @@
           }
         }
       }
+    },
+    "/v1/sources": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List playback sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sources"
+                  ],
+                  "properties": {
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PlaybackSource"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Create or reimport a source"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          },
+          "201": {
+            "description": "Source saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSource"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSourceInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sources/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update a source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSourceInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete a source"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          },
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/v1/sources/{id}/check": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Check search and detail"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/sources/import": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import sources with per-item results"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -481,7 +713,8 @@
             "description": "Unix timestamp of the last successful home snapshot"
           },
           "sources": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "snapshot_error": {
             "type": "string",
@@ -515,6 +748,91 @@
             }
           }
         }
+      },
+      "PlaybackSourceInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "api"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "maccms_json",
+              "maccms_xml"
+            ]
+          },
+          "api": {
+            "type": "string",
+            "format": "uri"
+          },
+          "client_config_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "ext": {},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "parse_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PlaybackSource": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PlaybackSourceInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "revision",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "configured",
+                  "checking",
+                  "ready",
+                  "failed",
+                  "disabled"
+                ]
+              },
+              "checked_at": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        ]
       }
     }
   }

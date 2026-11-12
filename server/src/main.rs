@@ -1,10 +1,12 @@
+mod adapters;
 mod config;
 mod db;
 mod metadata;
+mod sources;
 
 use axum::{
     Json, Router,
-    extract::{OriginalUri, Path, Request, State},
+    extract::{OriginalUri, Path, Query, Request, State},
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -21,6 +23,7 @@ struct AppState {
     cache: metadata::cache::Cache,
     home: Arc<tokio::sync::RwLock<metadata::home::Home>>,
     sources: metadata::sources::Store,
+    playback_sources: sources::Store,
 }
 
 async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
@@ -38,8 +41,9 @@ async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) 
 
 async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     let home = state.home.read().await;
+    let source_count = state.playback_sources.list().ok().map(|v| v.len());
     Json(
-        json!({"version":env!("CARGO_PKG_VERSION"),"status":"ok","tmdb":if state.tmdb.is_configured() { "configured" } else { "not_configured" },"snapshot_at":home.built_at,"snapshot_error":home.error,"sources":0}),
+        json!({"version":env!("CARGO_PKG_VERSION"),"status":"ok","tmdb":if state.tmdb.is_configured() { "configured" } else { "not_configured" },"snapshot_at":home.built_at,"snapshot_error":home.error,"sources":source_count}),
     )
 }
 
@@ -234,6 +238,160 @@ fn api_error(status: StatusCode, code: &str, message: &str) -> Response {
         .into_response()
 }
 
+async fn playback_list(State(state): State<AppState>) -> Response {
+    match state.playback_sources.list() {
+        Ok(items) => Json(json!({"sources":items})).into_response(),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Source database failed",
+        ),
+    }
+}
+
+async fn playback_create(
+    State(state): State<AppState>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    match state.playback_sources.save(&input, None) {
+        Ok(item) => (StatusCode::CREATED, Json(item)).into_response(),
+        Err(e) => api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
+    }
+}
+
+async fn playback_update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    match state.playback_sources.save(&input, Some(&id)) {
+        Ok(item) => Json(item).into_response(),
+        Err("source not found") => {
+            api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found")
+        }
+        Err(e) => api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", e),
+    }
+}
+
+async fn playback_delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    match state.playback_sources.remove(&id) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found"),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Source database failed",
+        ),
+    }
+}
+
+async fn playback_check(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let source = match state.playback_sources.get(&id) {
+        Ok(Some(value)) => value,
+        Ok(None) => return api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found"),
+        Err(_) => {
+            return api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Source database failed",
+            );
+        }
+    };
+    if source["enabled"] != true {
+        return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", "Source is disabled");
+    }
+    let revision = source["revision"].as_u64().expect("stored source revision");
+    if state
+        .playback_sources
+        .status(&id, revision, "checking")
+        .is_err()
+    {
+        return api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Source database failed",
+        );
+    }
+    let start = std::time::Instant::now();
+    let result = async {
+        let keyword = query.get("query").map(String::as_str).unwrap_or("电影");
+        let items = adapters::maccms::search(&source, keyword).await?;
+        let sample = items.first().ok_or("source search returned no sample")?;
+        let detail = adapters::maccms::detail(
+            &source,
+            sample["vod_id"]
+                .as_str()
+                .ok_or("source content ID missing")?,
+        )
+        .await?;
+        Ok::<_, &'static str>((items.len(), detail["groups"].as_array().map_or(0, Vec::len)))
+    }
+    .await;
+    let status = if result.is_ok() { "ready" } else { "failed" };
+    match state.playback_sources.status(&id, revision, status) {
+        Ok(true) => {}
+        Ok(false) => {
+            return api_error(
+                StatusCode::CONFLICT,
+                "REVISION_MISMATCH",
+                "Source changed during check",
+            );
+        }
+        Err(_) => {
+            return api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Source database failed",
+            );
+        }
+    }
+    match result {Ok((results,groups))=>Json(json!({"id":id,"revision":revision,"status":"ready","sample_count":results,"groups":groups,"elapsed_ms":start.elapsed().as_millis()})).into_response(),Err(error)=>api_error(StatusCode::BAD_GATEWAY,"UPSTREAM_FAILED",error)}
+}
+
+async fn playback_import(
+    State(state): State<AppState>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    let entries = input["sources"]
+        .as_array()
+        .or_else(|| input["sites"].as_array());
+    let Some(entries) = entries.filter(|items| items.len() <= 256) else {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "BAD_REQUEST",
+            "Expected source list",
+        );
+    };
+    let mut results = Vec::new();
+    for item in entries {
+        let kind = item["kind"].as_str().or_else(|| item["type"].as_str());
+        let kind = match (kind, item["type"].as_u64()) {
+            (Some("maccms" | "maccms_json" | "t1_json" | "T1_JSON" | "t1Json"), _)
+            | (_, Some(1)) => "maccms_json",
+            (Some("maccms_xml" | "t0_xml" | "T0_XML" | "t0Xml"), _) | (_, Some(0)) => "maccms_xml",
+            _ => {
+                results.push(json!({"status":"skipped","reason":"unsupported source type"}));
+                continue;
+            }
+        };
+        let client = item["client_config_id"]
+            .as_str()
+            .or_else(|| item["config_id"].as_str())
+            .map(str::to_owned)
+            .or_else(|| item["key"].as_str().map(|key| format!("import:{key}")));
+        let candidate = json!({"client_config_id":client,"name":item["name"],"kind":kind,"api":item.get("api").or_else(||item.get("api_url")).cloned().unwrap_or(serde_json::Value::Null),"ext":item["ext"],"headers":item["headers"],"enabled":item.get("enabled").cloned().unwrap_or(json!(true)),"parse_ids":item["parse_ids"]});
+        match state.playback_sources.save(&candidate, None) {
+            Ok(source) => results.push(json!({"status":"ok","source":source})),
+            Err(error) => results.push(json!({"status":"failed","error":error})),
+        }
+    }
+    Json(json!({"results":results})).into_response()
+}
+
 async fn list_sources(State(state): State<AppState>) -> Response {
     match state.sources.list() {
         Ok(items) => Json(json!({"sources":items})).into_response(),
@@ -372,6 +530,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env()?);
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
     let sources = metadata::sources::Store::new(&config.data_dir);
+    let playback_sources = sources::Store::new(&config.data_dir);
     let home = Arc::new(tokio::sync::RwLock::new(metadata::home::initialize(
         &cache,
     )?));
@@ -393,6 +552,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(list_sources).post(import_sources),
         )
         .route("/v1/metadata-sources/import", post(import_sources))
+        .route("/v1/sources", get(playback_list).post(playback_create))
+        .route("/v1/sources/import", post(playback_import))
+        .route(
+            "/v1/sources/{id}",
+            axum::routing::put(playback_update).delete(playback_delete),
+        )
+        .route("/v1/sources/{id}/check", post(playback_check))
         .route(
             "/v1/metadata-sources/{id}",
             axum::routing::put(update_source).delete(delete_source),
@@ -408,6 +574,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cache,
             home,
             sources,
+            playback_sources,
         });
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     eprintln!("Service listening on {}", listener.local_addr()?);

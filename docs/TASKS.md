@@ -2806,14 +2806,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.6 播放源管理与 MacCMS JSON/XML 适配
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.5
 - 需求：REQ-SERVICE-PLAY（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.6、6.6、7.1–7.2）→ A1
 - 上下文：方案 §5.6、6.6、7.1–7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：第一期服务及元数据；当前 MacCMS JSON 解析、XML 代表性响应和本地播放源配置样本。
 - 不变量：来源修改产生版本并使旧短期结果失效；只导入已实现类型并逐项报告；分组/flag、剧集及子线路的逻辑定位信息随规范模型交给 lookup。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/sources.rs`, `server/src/adapters/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `crates/moc-core/`, `licenses/`, `docs/runtime.lock.json`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`
+- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/sources.rs`, `server/src/adapters/`, `server/src/db.rs`, `server/src/state.rs`, `server/src/main.rs`, `server/src/lib.rs`, `crates/moc-core/`, `src-tauri/src/maccms.rs`, `server/src/metadata/http.rs`, `licenses/`, `docs/runtime.lock.json`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`
 - 验收范围：`server/src/sources.rs`, `server/src/adapters/maccms.rs`, `server/src/db.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；复用共享解析被修改时选择其已有相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

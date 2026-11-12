@@ -476,20 +476,79 @@ class AppMetadataApp(unittest.TestCase):
         self.assertTrue(result["endpoint_and_token_changed"] and result["reconnect_ready_and_both_favorites_open"])
 
 
+class PlaybackSources(StremioMetadata):
+    test_1_manifest_proxy = None
+    test_2_source_identity_import = None
+    test_3_capabilities_fallback = None
+    test_4_multi_manifest_import = None
+
+    def test_1_json_xml(self):
+        self.start("app-token", self.fixture_env)
+        base=self.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3")
+        ids=[]
+        for kind,path in (("maccms_json","maccms-json"),("maccms_xml","maccms-xml")):
+            payload={"name":kind,"kind":kind,"api":base+"/"+path+"?sig=a%2Fb+c","headers":{"X-Fixture":"allowed"},"enabled":True,"client_config_id":"local-"+kind}
+            status,source=self.native("POST","/v1/sources",payload)
+            self.assertEqual(status,201,source); ids.append(source["id"])
+            status,checked=self.native("POST","/v1/sources/"+source["id"]+"/check?query=Film")
+            self.assertEqual((status,checked["status"],checked["groups"]),(200,"ready",2))
+            self.assertNotIn("https://media.test",json.dumps(checked))
+        type(self).source_ids=ids
+        parser=subprocess.run(["cargo","test","--locked","--offline","-p","moc-service","json_xml_and_locators_preserve_urls","--","--test-threads=1"],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        self.assertEqual(parser.returncode,0,parser.stdout[-3000:]); self.assertIn("1 passed",parser.stdout)
+        env=dict(os.environ,T16_FIXTURE_HOST=self.fixture_control)
+        result=subprocess.run(["cargo","test","--locked","--offline","-p","moc-service","t16_live_fixture_json_xml_search_and_detail","--","--ignored","--test-threads=1"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        self.assertEqual(result.returncode,0,result.stdout[-3000:]); self.assertIn("1 passed",result.stdout)
+
+    def test_2_lifecycle_check(self):
+        source=self.native("GET","/v1/sources")[1]["sources"][0]
+        self.assertEqual(source["status"],"ready")
+        revision=source["revision"]; source["enabled"]=False
+        status,disabled=self.native("PUT","/v1/sources/"+source["id"],source)
+        self.assertEqual((status,disabled["revision"],disabled["status"]),(200,revision+1,"disabled"))
+        self.assertEqual(self.native("POST","/v1/sources/"+source["id"]+"/check")[0],400)
+        source["enabled"]=True; source["api"]=source["api"].replace("maccms-json","maccms-invalid")
+        status,updated=self.native("PUT","/v1/sources/"+source["id"],source)
+        self.assertEqual((status,updated["revision"]),(200,revision+2))
+        status,error=self.native("POST","/v1/sources/"+source["id"]+"/check")
+        self.assertEqual((status,error["error"]["code"]),(502,"UPSTREAM_FAILED"))
+        self.assertEqual(self.native("GET","/v1/sources")[1]["sources"][0]["status"],"failed")
+        self.assertEqual(self.request("app-token")[1]["sources"],2)
+
+    def test_3_import_idempotent(self):
+        base=self.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3")
+        body={"sites":[{"key":"json-site","name":"JSON","type":1,"api":base+"/maccms-json","headers":{"X-Fixture":"allowed"}},
+                       {"key":"xml-site","name":"XML","type":0,"api":base+"/maccms-xml","headers":{"X-Fixture":"allowed"}},
+                       {"key":"later","name":"Later","type":4,"api":base+"/later"}]}
+        status,first=self.native("POST","/v1/sources/import",body); self.assertEqual(status,200)
+        self.assertEqual([row["status"] for row in first["results"]],["ok","ok","skipped"])
+        second=self.native("POST","/v1/sources/import",body)[1]
+        self.assertEqual([row["source"]["id"] for row in first["results"][:2]],[row["source"]["id"] for row in second["results"][:2]])
+        self.assertEqual([row["source"]["revision"] for row in second["results"][:2]],[1,1])
+        local={"sources":[{"config_id":"app-config-id","name":"App source","kind":"maccms","api_url":base+"/maccms-json","headers":{"X-Fixture":"allowed"}}]}
+        imported=self.native("POST","/v1/sources/import",local)[1]["results"][0]
+        repeated=self.native("POST","/v1/sources/import",local)[1]["results"][0]
+        self.assertEqual((imported["status"],imported["source"]["id"]),("ok",repeated["source"]["id"]))
+        self.assertEqual(self.native("DELETE","/v1/sources/"+self.source_ids[1])[0],204)
+        self.assertEqual(int(docker("inspect","--format","{{.HostConfig.Memory}}",self.fixture)),256*MIB)
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
                 "app-metadata":["REQ-SERVICE-META/app-service-transport", "REQ-SERVICE-META/app-metadata-identity-import", "REQ-SERVICE-META/app-service-errors", "REQ-SERVICE-META/app-multi-manifest-partial-import"],
-                "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"]}[args.suite]
+                "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
+                "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
     methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
@@ -497,7 +556,8 @@ def main():
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),
                "app-metadata":("test_1_service_transport", "test_2_identity_import", "test_3_service_errors", "test_4_partial_import"),
-               "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records")}[args.suite]
+               "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
+               "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent")}[args.suite]
     for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:

@@ -3183,3 +3183,11 @@
 - 验收 A2：PASS；日志：`evidence/runs/20261112T055842845648-A2/output.log`；隔离 macOS App 窗口人工操作及受控服务记录在 `evidence/manual/T1.5-service-window.json`。实际核对两个扩展同 ID 的详情、历史和收藏，中英文 TMDB 目录/搜索，原记录从 7 秒续播并推进到 10 秒，服务断连提示及重试，未配置服务时原 TMDB，以及变更测试地址和令牌后的两条收藏。窗口资源为一次宿主 RSS 与容器硬上限合并采样，非连续峰值。
 - 相关回归：状态与重连 26 项通过 `evidence/runs/20261112T055244987966-diag-t15-state-regression/output.log`；Stremio 扩展 4 项通过 `evidence/runs/20261112T055855069573-diag-t15-stremio-regression/output.log`；契约检查、前端类型及构建通过。窗口发现字体命令参数命名不一致并修复；实际重启后字体正常加载。
 - 环境：使用独立测试应用标识和资料目录，测试结束清理自建容器、卷、镜像及隔离资料；未使用真实服务密钥，真实第三方网络和其他平台 NOT RUN。因共享依赖与验收需要，恢复了 npm 依赖和本机编译产物。
+
+## T1.6 播放源管理与 MacCMS JSON/XML 适配 2026-11-12T06:17:34+00:00
+
+- 结果：DONE
+- 实现：增加鉴权播放源增删改、启停、版本、检查与逐项导入；支持 App 原 MacCMS 配置及 TVBox/zyfun 的 JSON/XML 格式，暂未接入类型标为跳过。适配器搜索/详情生成分组、剧集及可唯一验证的逻辑定位信息，保留配置头、ext、解析器引用及原始地址。共享分组拆分供原 App 复用，跨 origin 仅保留公开协商头。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T061700610507-A1/output.log`；3 项通过，覆盖 JSON/XML 的实际搜索详情及签名 URL、分组、可验证定位、检查/启停/版本、错误、幂等导入和跳过未支持类型。受控服务与上游容器硬上限及宿主采样见 `evidence/acceptance/T1.6-A1.json`。
+- 相关回归：原 App 分组顺序、URL 保真和歧义两项通过 `evidence/runs/20261112T061230375626-diag-t16-app-maccms-regression/output.log`；Stremio 四项与 TMDB 三项通过，分别记录于 `evidence/runs/20261112T061250301016-diag-t16-stremio-regression/output.log`、`evidence/runs/20261112T061315887203-diag-t16-tmdb-regression/output.log`。服务 OpenAPI 验证通过；外部来源实网 NOT RUN。
+- 范围：补入 `src-tauri/src/maccms.rs` 和 `server/src/metadata/http.rs`，用于共享拆分与受影响的通用传输；相关回归如上。

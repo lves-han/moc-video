@@ -34,6 +34,16 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/maccms":
             movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
             return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})
+        if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid"):
+            if self.headers.get("X-Fixture") != "allowed":
+                self.send_response(403); self.end_headers(); return
+            if "sig=" in url.query and "sig=a%2Fb+c" not in url.query:
+                self.send_response(400); self.end_headers(); return
+            if url.path == "/maccms-invalid": return self.send_json({"code":0,"message":"closed"})
+            if url.path == "/maccms-json":
+                return self.send_json({"code":1,"page":1,"pagecount":1,"list":[{"vod_id":101,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"hls$$$direct","vod_play_url":"Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2$$$https://media.test/direct"}]})
+            data=b'<rss><list><video><id>101</id><name>Film</name><type>movie</type><year>2020</year><dl><dd flag="hls"><![CDATA[Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2]]></dd><dd flag="direct"><![CDATA[https://media.test/direct]]></dd></dl></video></list></rss>'
+            self.send_response(200); self.send_header("Content-Type","application/xml"); self.send_header("Content-Length",str(len(data))); self.end_headers(); self.wfile.write(data); return
         if url.path == "/video.mp4":
             return self.media()
         if query.get("api_key") != ["fixture-key"]:

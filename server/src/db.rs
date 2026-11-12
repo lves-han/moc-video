@@ -23,5 +23,12 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         manifest_url TEXT NOT NULL, manifest TEXT NOT NULL, revision INTEGER NOT NULL,
         UNIQUE(origin_config_id,origin_addon_key));",
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS playback_sources (
+        id TEXT PRIMARY KEY, client_config_id TEXT UNIQUE, name TEXT NOT NULL,
+        kind TEXT NOT NULL, api TEXT NOT NULL, ext TEXT, headers TEXT NOT NULL,
+        enabled INTEGER NOT NULL, parse_ids TEXT NOT NULL, revision INTEGER NOT NULL,
+        status TEXT NOT NULL, checked_at INTEGER);",
+    )?;
     Ok(())
 }

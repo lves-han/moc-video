@@ -4,7 +4,7 @@ use hickory_resolver::{
 };
 use reqwest::{
     StatusCode,
-    header::{AUTHORIZATION, COOKIE, HeaderMap, LOCATION, PROXY_AUTHORIZATION},
+    header::{HeaderMap, LOCATION},
     redirect::Policy,
 };
 use serde_json::Value;
@@ -40,20 +40,39 @@ fn redirect(url: &Url, next: &Url, headers: &mut HeaderMap) -> Result<(), Error>
         }) {
             return Err(Error::Failed);
         }
-        headers.remove(AUTHORIZATION);
-        headers.remove(PROXY_AUTHORIZATION);
-        headers.remove(COOKIE);
+        *headers = headers
+            .iter()
+            .filter(|(name, _)| {
+                matches!(
+                    name.as_str(),
+                    "accept"
+                        | "accept-language"
+                        | "user-agent"
+                        | "range"
+                        | "if-range"
+                        | "if-none-match"
+                        | "if-modified-since"
+                        | "accept-encoding"
+                )
+            })
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
     }
     Ok(())
 }
 
 pub async fn json(url: Url, headers: HeaderMap) -> Result<Value, Error> {
+    let bytes = bytes(url, headers).await?;
+    serde_json::from_slice(&bytes).map_err(|_| Error::Failed)
+}
+
+pub async fn bytes(url: Url, headers: HeaderMap) -> Result<Vec<u8>, Error> {
     tokio::time::timeout(Duration::from_secs(8), fetch(url, headers))
         .await
         .map_err(|_| Error::Failed)?
 }
 
-async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Value, Error> {
+async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Vec<u8>, Error> {
     for _ in 0..=5 {
         if !valid(&url) {
             return Err(Error::Failed);
@@ -127,7 +146,7 @@ async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Value, Error> {
             }
             bytes.extend_from_slice(&chunk);
         }
-        return serde_json::from_slice(&bytes).map_err(|_| Error::Failed);
+        return Ok(bytes);
     }
     Err(Error::Failed)
 }
@@ -135,6 +154,7 @@ async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Value, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use reqwest::header::{AUTHORIZATION, COOKIE};
     #[test]
     fn redirects_protect_credentials_and_tls() {
         let source = Url::parse("https://first.example/path").unwrap();
@@ -142,8 +162,13 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, "Bearer sample".parse().unwrap());
         headers.insert(COOKIE, "example=sample".parse().unwrap());
+        headers.insert("x-api-key", "sample".parse().unwrap());
         assert!(redirect(&source, &other, &mut headers).is_ok());
-        assert!(!headers.contains_key(AUTHORIZATION) && !headers.contains_key(COOKIE));
+        assert!(
+            !headers.contains_key(AUTHORIZATION)
+                && !headers.contains_key(COOKIE)
+                && !headers.contains_key("x-api-key")
+        );
         assert!(
             redirect(
                 &source,
