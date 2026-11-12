@@ -3,7 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 import time
 
-STATE = {"fail": False, "delay": 0.0, "counts": {}}
+STATE = {"fail": False, "fail_addon_b": False, "delay": 0.0, "media_url": "", "counts": {}}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -12,7 +12,9 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(url.query)
         if url.path == "/control":
             if "fail" in query: STATE["fail"] = query["fail"][0] == "1"
+            if "fail_addon_b" in query: STATE["fail_addon_b"] = query["fail_addon_b"][0] == "1"
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
+            if "media_url" in query: STATE["media_url"] = query["media_url"][0]
             if "reset" in query: STATE["counts"].clear()
             return self.send_json(STATE)
         if url.path == "/stats":
@@ -23,8 +25,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(503)
             self.end_headers()
             return
+        if STATE["fail_addon_b"] and url.path.startswith("/addon-b/"):
+            self.send_response(503)
+            self.end_headers()
+            return
         if url.path.startswith(("/addon-a/", "/addon-b/")):
             return self.addon(url)
+        if url.path == "/maccms":
+            movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
+            return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})
+        if url.path == "/video.mp4":
+            return self.media()
         if query.get("api_key") != ["fixture-key"]:
             self.send_response(401)
             self.end_headers()
@@ -54,8 +65,10 @@ class Handler(BaseHTTPRequestHandler):
         addon = parts[0]
         label = "Addon A" if addon == "addon-a" else "Addon B"
         if parts[1:] == ["manifest.json"]:
-            return self.send_json({"id":addon,"version":"1.0.0","name":label,"resources":["catalog",{"name":"meta","types":["movie"],"idPrefixes":["same:"]}],"types":["movie"],"idPrefixes":["same:"],"catalogs":[{"type":"movie","id":"catalog","name":label,"extra":[{"name":"search","isRequired":True},{"name":"skip"}]}]})
-        if len(parts) == 5 and parts[1:4] == ["catalog", "movie", "catalog"]:
+            return self.send_json({"id":addon,"version":"1.0.0","name":label,"description":"fixture","resources":["catalog",{"name":"meta","types":["movie"],"idPrefixes":["same:"]}],"types":["movie"],"idPrefixes":["same:"],"catalogs":[{"type":"movie","id":"all","name":label,"extra":[{"name":"skip"}]},{"type":"movie","id":"catalog","name":label,"extra":[{"name":"search","isRequired":True},{"name":"skip"}]}]})
+        if len(parts) == 4 and parts[1:3] == ["catalog", "movie"] and parts[3] == "all.json":
+            return self.send_json({"metas":[{"id":"same:42","type":"movie","name":label}]})
+        if len(parts) == 5 and parts[1:3] == ["catalog", "movie"] and parts[3] in ("catalog", "all"):
             extras = parse_qs(parts[4].removesuffix('.json'))
             return self.send_json({"metas":[{"id":"same:42","type":"movie","name":label,"query":extras.get("search"),"skip":extras.get("skip")} ]})
         if len(parts) == 4 and parts[1:3] == ["meta", "movie"]:
@@ -70,6 +83,30 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def do_HEAD(self):
+        if urlsplit(self.path).path == "/video.mp4": return self.media(head=True)
+        self.send_response(404); self.end_headers()
+
+    def media(self, head=False):
+        with open("/video.mp4", "rb") as stream:
+            data=stream.read()
+        start,end=0,len(data)-1
+        raw=self.headers.get("Range", "")
+        if raw.startswith("bytes="):
+            values=raw[6:].split("-",1)
+            if values[0]: start=int(values[0])
+            if len(values)>1 and values[1]: end=min(int(values[1]),end)
+            if start>end or start>=len(data):
+                self.send_response(416); self.end_headers(); return
+        payload=data[start:end+1]
+        self.send_response(206 if raw else 200)
+        self.send_header("Content-Type","video/mp4")
+        self.send_header("Accept-Ranges","bytes")
+        self.send_header("Content-Length",str(len(payload)))
+        if raw: self.send_header("Content-Range",f"bytes {start}-{end}/{len(data)}")
+        self.end_headers()
+        if not head: self.wfile.write(payload)
 
     def log_message(self, *_args):
         pass

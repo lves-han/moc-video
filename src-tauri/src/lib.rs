@@ -18,6 +18,7 @@ pub mod requests;
 #[cfg(not(mobile))]
 mod reset;
 pub mod resolution;
+pub mod service;
 pub mod settings;
 pub mod source_dispatch;
 
@@ -72,7 +73,7 @@ fn app_reset_recovery(window: WebviewWindow, action: String) -> Result<(), Strin
 }
 
 #[cfg(not(mobile))]
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 fn app_font_url(
     window: WebviewWindow,
     state: tauri::State<'_, std::sync::Arc<host::Host>>,
@@ -80,6 +81,42 @@ fn app_font_url(
 ) -> Result<String, String> {
     require_main(&window)?;
     state.font_url(&font_id).map_err(|e| e.message)
+}
+
+#[cfg(not(mobile))]
+#[tauri::command(rename_all = "snake_case")]
+async fn app_service_import(
+    window: WebviewWindow,
+    url: String,
+    token: String,
+    configs: Vec<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    require_main(&window)?;
+    if configs.len() > 32
+        || serde_json::to_vec(&configs).map_or(true, |bytes| bytes.len() > 1024 * 1024)
+    {
+        return Err("Metadata source configuration is too large".into());
+    }
+    service::import(&url, &token, &configs)
+        .await
+        .map_err(|error| error.message)
+}
+
+#[cfg(not(mobile))]
+#[tauri::command(rename_all = "snake_case")]
+async fn app_service_delete(
+    window: WebviewWindow,
+    url: String,
+    token: String,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    require_main(&window)?;
+    if ids.len() > 16 {
+        return Err("Too many metadata sources".into());
+    }
+    service::delete(&url, &token, &ids)
+        .await
+        .map_err(|error| error.message)
 }
 
 #[cfg(not(mobile))]
@@ -204,6 +241,8 @@ pub fn run() {
         app_reset,
         app_reset_recovery,
         app_font_url,
+        app_service_import,
+        app_service_delete,
         automation::t01_control
     ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
@@ -215,7 +254,9 @@ pub fn run() {
         window_bounds_now,
         app_reset,
         app_reset_recovery,
-        app_font_url
+        app_font_url,
+        app_service_import,
+        app_service_delete
     ];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;

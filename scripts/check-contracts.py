@@ -58,6 +58,9 @@ def check(directory):
     for name, definition in baseline_app['$defs'].items():
         actual = json.loads(json.dumps(app['$defs'][name]))
         if name == 'Settings':
+            assert 'playback_service' not in actual['required'], 'Playback service setting must remain optional'
+            service = actual['properties'].pop('playback_service', {})
+            assert set(service.get('required', [])) == {'enabled', 'url', 'token', 'groups'}, 'Playback service contract changed'
             # ADR-065: the built-in TMDB setting replaces the removed preset marker; old cases stay valid.
             assert 'tmdb' not in actual['required'], 'TMDB setting must remain optional'
             assert set(actual['properties'].pop('tmdb', {}).get('required', [])) == {'enabled', 'instance_url', 'language'}, 'TMDB setting contract changed'

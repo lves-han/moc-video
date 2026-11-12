@@ -1,5 +1,6 @@
 """T1.1 container acceptance; execute through scripts/run.py."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,7 +38,24 @@ class ServiceCore(unittest.TestCase):
         cls.image = cls.name + ":test"
         cls.volume = cls.name
         cls.container = None
-        cls.host_peak = 0
+        cls.host_peak = psutil.Process(os.getppid()).memory_info().rss + psutil.Process().memory_info().rss
+        cls.host_peak_build = cls.host_peak
+        cls.host_peak_runtime = 0
+        cls.in_build = True
+        cls.other_owned_caps = 0
+        ui_state = ROOT / "evidence/tmp/t15-window/resources.json"
+        if ui_state.exists():
+            resources = json.loads(ui_state.read_text())
+            for name in (resources.get("service"), resources.get("fixture")):
+                if not isinstance(name, str) or not name.startswith("moc-t15-"):
+                    continue
+                inspected = subprocess.run(["docker", "inspect", name], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                if inspected.returncode == 0:
+                    data = json.loads(inspected.stdout)[0]
+                    if data["State"]["Running"]:
+                        limit = data["HostConfig"]["Memory"]
+                        if not limit: raise RuntimeError("owned UI fixture has no hard memory cap")
+                        cls.other_owned_caps += limit
         cls.stop_sampling = threading.Event()
         cls.addClassCleanup(cls.cleanup)
         cls.sampler = threading.Thread(target=cls.sample, daemon=True)
@@ -56,6 +74,7 @@ class ServiceCore(unittest.TestCase):
                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1500)
         if result.returncode:
             raise RuntimeError("bounded container build failed: " + result.stdout[-3000:])
+        cls.in_build = False
         docker("volume", "create", cls.volume)
 
     @classmethod
@@ -69,6 +88,16 @@ class ServiceCore(unittest.TestCase):
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
             cls.host_peak = max(cls.host_peak, total)
+            if cls.in_build:
+                cls.host_peak_build = max(cls.host_peak_build, total)
+            else:
+                cls.host_peak_runtime = max(cls.host_peak_runtime, total)
+
+    def assert_budget(self, fixture=False):
+        self.assertGreater(self.host_peak_build, 0)
+        self.assertGreater(self.host_peak_runtime, 0)
+        self.assertLessEqual(self.host_peak_build + BUILD_LIMIT + self.other_owned_caps, 4096 * MIB)
+        self.assertLessEqual(self.host_peak_runtime + SERVICE_LIMIT + (256 * MIB if fixture else 0) + self.other_owned_caps, 4096 * MIB)
 
     @classmethod
     def cleanup(cls):
@@ -151,7 +180,7 @@ class ServiceCore(unittest.TestCase):
         self.assertNotIn("Authorization", logs)
         limit = int(docker("inspect", "--format", "{{.HostConfig.Memory}}", self.container))
         self.assertEqual(limit, SERVICE_LIMIT)
-        self.assertLessEqual(self.host_peak + BUILD_LIMIT, 4096 * MIB)
+        self.assert_budget()
 
 
 class TmdbMetadata(ServiceCore):
@@ -165,6 +194,7 @@ class TmdbMetadata(ServiceCore):
         cls.fixture = cls.name + "-fixture"
         cls.addClassCleanup(subprocess.run, ["docker", "rm", "-f", cls.fixture], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         docker("run", "-d", "--name", cls.fixture, "--memory", str(256 * MIB),
+               "-p", "127.0.0.1::80",
                "-v", str(ROOT / "tests/fixtures/service/tmdb_fixture.py") + ":/fixture.py:ro",
                "-v", cls.volume + ":/service-data",
                "python:3.12-slim", "python", "-u", "/fixture.py")
@@ -173,6 +203,8 @@ class TmdbMetadata(ServiceCore):
         if not address:
             raise RuntimeError("fixture container has no address")
         cls.fixture_env = {"MOC_TMDB_API_URL": "http://" + address + "/3", "MOC_TMDB_KEY": "fixture-key"}
+        port = docker("port", cls.fixture, "80/tcp").rsplit(":", 1)[1]
+        cls.fixture_control = "http://127.0.0.1:" + port
 
     @classmethod
     def resource(cls, path, token="app-token"):
@@ -225,7 +257,7 @@ class TmdbMetadata(ServiceCore):
         self.assertNotIn("invalid-test-key", docker("logs", self.container))
         self.assertEqual(self.resource("en-US/manifest.json", token="wrong")[0], 401)
         self.assertEqual(int(docker("inspect", "--format", "{{.HostConfig.Memory}}", self.fixture)), 256 * MIB)
-        self.assertLessEqual(self.host_peak + BUILD_LIMIT + SERVICE_LIMIT + 256 * MIB, 4096 * MIB)
+        self.assert_budget(fixture=True)
 
 
 class CacheHome(TmdbMetadata):
@@ -373,24 +405,99 @@ class StremioMetadata(TmdbMetadata):
         self.assertEqual(self.resource("en-US/manifest.json")[0], 200)
 
 
+class AppMetadata(TmdbMetadata):
+    test_1_routes_fields = None
+    test_2_identity_language = None
+    test_3_auth_errors = None
+
+    def test_1_service_transport(self):
+        result = subprocess.run(["cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "t15_redirect_refuses_cross_origin_token", "--", "--test-threads=1"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1200)
+        self.assertEqual(result.returncode, 0, result.stdout[-3000:])
+        self.assertIn("1 passed", result.stdout)
+
+    def test_2_identity_import(self):
+        self.start("app-token", self.fixture_env)
+        endpoint = self.url.rsplit("/v1/health",1)[0]
+        environment = dict(os.environ, T15_SERVICE_URL=endpoint, T15_ADDON_BASE=self.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3"), T15_CONTROL_URL=self.fixture_control, T15_CONTAINER=self.container)
+        result = subprocess.run(["cargo", "test", "--locked", "--offline", "--manifest-path", "src-tauri/Cargo.toml", "--lib", "t15_service_host_group_migration_and_records", "--", "--ignored", "--nocapture", "--test-threads=1"], cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1200)
+        type(self).host_output = result.stdout
+        self.assertEqual(result.returncode, 0, result.stdout[-4000:])
+        self.assertIn("T15_SERVICE_HOST:partial,retry,search,identity,history,watchlist,restart", result.stdout)
+
+    def test_3_service_errors(self):
+        self.assertNotIn("app-token", docker("logs", self.container))
+        self.assert_budget(fixture=True)
+
+    def test_4_partial_import(self):
+        self.assertIn("T15_SERVICE_HOST:partial,retry,search,identity,history,watchlist,restart", getattr(type(self), "host_output", ""))
+        stats = json.loads(docker("exec", self.fixture, "python", "-c", "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1/stats').read().decode())"))["counts"]
+        self.assertTrue(any(path.startswith("/addon-a/catalog/movie/catalog/") for path in stats))
+        self.assertTrue(any(path.startswith("/addon-b/catalog/movie/catalog/") for path in stats))
+
+
+class AppMetadataApp(unittest.TestCase):
+    host_peak = host_peak_build = host_peak_runtime = other_owned_caps = 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.observation = json.loads((ROOT / "evidence/manual/T1.5-service-window.json").read_text())
+        paths = ["src", "src-tauri/src", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/build.rs", "src-tauri/capabilities", "protocol/app.schema.json", "crates/moc-core/src", "server/src", "server/Cargo.toml", "server/Dockerfile", "Cargo.lock", "tests/fixtures/service/tmdb_fixture.py"]
+        rows=[]
+        for name in paths:
+            path = ROOT / name
+            for file in ([path] if path.is_file() else path.rglob("*")):
+                if file.is_file(): rows.append((str(file.relative_to(ROOT)), hashlib.sha256(file.read_bytes()).hexdigest()))
+        digest = hashlib.sha256(json.dumps(sorted(rows), separators=(",", ":")).encode()).hexdigest()
+        if digest != cls.observation["product_hash"]: raise AssertionError("Window observation was made on different product inputs")
+        cls.host_peak = cls.observation["resource_sample"]["host_including_all_visible_webkit_bytes"]
+
+    def test_1_metadata_browse(self):
+        result = self.observation["observed"]
+        self.assertEqual(result["addon_details"], ["Addon A", "Addon B"])
+        self.assertTrue(result["search_addon_a_and_b"] and result["fixture_addon_search_requests"] >= 2)
+        self.assertEqual((result["tmdb_english_title"], result["tmdb_chinese_title"]), ("Film", "电影"))
+        self.assertTrue(result["tmdb_search_chinese"] and result["font_startup_fixed"])
+        sample = self.observation["resource_sample"]
+        self.assertLessEqual(sample["combined_bytes"], sample["limit_bytes"])
+        self.assertEqual(sample["sample_count"], 1)
+
+    def test_2_existing_records_resume(self):
+        result = self.observation["observed"]
+        self.assertIn("Film", result["history_titles"])
+        self.assertEqual(result["initial_position_ms"], 7000)
+        self.assertEqual(result["playback_observed_seconds"], [7, 10])
+        self.assertTrue(result["playback_video_visible"] and result["legacy_tmdb_without_service"] and result["service_error_and_retry"])
+
+    def test_3_multi_manifest_records(self):
+        result = self.observation["observed"]
+        self.assertEqual(set(result["watchlist_titles"]), {"Addon A", "Addon B"})
+        self.assertTrue({"Addon A", "Addon B"} <= set(result["history_titles"]))
+        self.assertEqual(result["same_raw_id"], "same:42")
+        self.assertTrue(result["endpoint_and_token_changed"] and result["reconnect_ready_and_both_favorites_open"])
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
-                "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"]}[args.suite]
+                "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
+                "app-metadata":["REQ-SERVICE-META/app-service-transport", "REQ-SERVICE-META/app-metadata-identity-import", "REQ-SERVICE-META/app-service-errors", "REQ-SERVICE-META/app-multi-manifest-partial-import"],
+                "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
     methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
-               "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import")}[args.suite]
+               "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),
+               "app-metadata":("test_1_service_transport", "test_2_identity_import", "test_3_service_errors", "test_4_partial_import"),
+               "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records")}[args.suite]
     for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:
@@ -400,9 +507,12 @@ def main():
     args.junit.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(suite).write(args.junit, encoding="utf-8", xml_declaration=True)
     args.report.parent.mkdir(parents=True, exist_ok=True)
+    resources = (test_class.observation["resource_sample"] if args.suite == "app-metadata-app" else
+                 {"host_peak_bytes": test_class.host_peak, "host_peak_build_bytes": test_class.host_peak_build,
+                  "host_peak_runtime_bytes": test_class.host_peak_runtime, "build_memory_cap": BUILD_LIMIT,
+                  "service_memory_cap": SERVICE_LIMIT, "other_owned_container_caps": test_class.other_owned_caps})
     args.report.write_text(json.dumps({"suite": args.suite, "tests": result.testsRun, "successful": result.wasSuccessful(),
-                                       "host_peak_bytes": test_class.host_peak, "build_memory_cap": BUILD_LIMIT,
-                                       "service_memory_cap": SERVICE_LIMIT}, indent=2) + "\n")
+                                       "resources": resources}, indent=2) + "\n")
     return 0 if result.wasSuccessful() and result.testsRun == len(case_ids) else 1
 
 

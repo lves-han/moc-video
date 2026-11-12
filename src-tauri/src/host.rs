@@ -98,6 +98,7 @@ impl Host {
         let source_cache_path = path.with_file_name("source-cache");
         let (store, settings) = SettingsFile::load(path)?;
         tmdb_api::configure(&settings);
+        crate::service::configure(&settings);
         let mut sources = SourceDispatch::default();
         sources.replace_configs(&crate::settings::source_configs(&settings));
         Ok(Arc::new(Self {
@@ -465,6 +466,7 @@ impl Host {
                     );
                 }
                 tmdb_api::configure(input);
+                crate::service::configure(input);
                 // A changed library forgets its scan and stops files it may no longer cover.
                 if input["local_paths"] != committed.settings["local_paths"] {
                     committed.local.clear();

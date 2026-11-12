@@ -56,6 +56,10 @@ impl Store {
         if manifest["id"].as_str().filter(|s| !s.is_empty()).is_none()
             || !manifest["resources"].is_array()
             || !manifest["types"].is_array()
+            || manifest["name"].as_str().is_none_or(str::is_empty)
+            || manifest["version"].as_str().is_none_or(str::is_empty)
+            || !manifest["description"].is_string()
+            || !manifest["catalogs"].is_array()
         {
             return Err("invalid Stremio manifest");
         }

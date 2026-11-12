@@ -3174,3 +3174,12 @@
 - 实现：服务提供鉴权来源列表、逐扩展导入、更新和删除，持久保存原配置、扩展键、命名空间规则及顺序；重复导入复用来源 ID。按 manifest 声明代理目录、搜索、分页和详情，保留路径编码、缓存、CORS 与语言状态。已识别的 TMDB 扩展沿原语言路径规则处理。
 - 验收 A1：PASS；日志：`evidence/runs/20261112T051739614776-A1/output.log`；4 项通过，覆盖两个扩展同 ID 隔离、部分失败、重复导入、重启回读、所需 extra、能力状态和含斜杠 ID；单元检查跨地址凭据及已知语言路径。
 - 相关回归：TMDB 三项通过 `evidence/runs/20261112T051927877800-diag-t14-tmdb-regression-verified/output.log`；首页缓存三项通过 `evidence/runs/20261112T051952285136-diag-t14-home-regression-verified/output.log`。容器硬限制与宿主峰值见 `evidence/acceptance/T1.4-A1.json`；外部扩展实网 NOT RUN。
+
+## T1.5 App 接入服务与当前历史、收藏衔接 2026-11-12T05:59:47+00:00
+
+- 结果：DONE
+- 实现：App 增加服务连接、受限原生传输及来源导入；同配置的扩展在全部成功并回读后启用代理，部分失败保留原配置并可重试。原 addon key 和命名空间规则保持，令牌留在设置及宿主内；服务地址、令牌变更使传输重新同步。补齐新命令权限、设置契约和类型。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T055809947330-A1/output.log`；4 项通过，覆盖真实宿主与受控 Docker 服务的鉴权、跨 origin 跳转拒绝、两个扩展的部分失败/重试、搜索、历史收藏、服务重启和凭据脱敏。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T055842845648-A2/output.log`；隔离 macOS App 窗口人工操作及受控服务记录在 `evidence/manual/T1.5-service-window.json`。实际核对两个扩展同 ID 的详情、历史和收藏，中英文 TMDB 目录/搜索，原记录从 7 秒续播并推进到 10 秒，服务断连提示及重试，未配置服务时原 TMDB，以及变更测试地址和令牌后的两条收藏。窗口资源为一次宿主 RSS 与容器硬上限合并采样，非连续峰值。
+- 相关回归：状态与重连 26 项通过 `evidence/runs/20261112T055244987966-diag-t15-state-regression/output.log`；Stremio 扩展 4 项通过 `evidence/runs/20261112T055855069573-diag-t15-stremio-regression/output.log`；契约检查、前端类型及构建通过。窗口发现字体命令参数命名不一致并修复；实际重启后字体正常加载。
+- 环境：使用独立测试应用标识和资料目录，测试结束清理自建容器、卷、镜像及隔离资料；未使用真实服务密钥，真实第三方网络和其他平台 NOT RUN。因共享依赖与验收需要，恢复了 npm 依赖和本机编译产物。

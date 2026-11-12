@@ -430,7 +430,7 @@ fn http_error(error: reqwest::Error) -> ApiError {
     }
 }
 
-async fn watched<T>(
+pub(crate) async fn watched<T>(
     job: &Job,
     timeout: Duration,
     future: impl Future<Output = Result<T, ApiError>>,

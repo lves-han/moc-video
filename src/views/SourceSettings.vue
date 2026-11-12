@@ -32,6 +32,21 @@ const statusText = (config: { kind: HttpSourceConfig["kind"]; config_id: string;
 
 const busy = ref(false);
 const failure = ref("");
+const serviceDraft = reactive({ url: state.settings.playback_service?.url ?? "http://127.0.0.1:8787", token: state.settings.playback_service?.token ?? "" });
+const serviceEnabled = computed(() => state.settings.playback_service?.enabled === true);
+const pendingGroup = (id: string) => {
+  const service = state.settings.playback_service;
+  const config = state.settings.source_configs.find(row => row.config_id === id);
+  if (!service?.enabled || config?.kind !== "stremio") return false;
+  const group = service.groups.find(row => row.config_id === id);
+  return !group || group.status !== "ready" || group.addons.length !== config.manifest_urls.length || group.addons.some((addon, index) => addon.original_url !== config.manifest_urls[index]);
+};
+async function connectService() {
+  const url = serviceDraft.url.trim().replace(/\/+$/, ""), token = serviceDraft.token.trim();
+  if (!url || !token) { failure.value = word("请输入服务地址和令牌。", "Enter the service address and token."); return; }
+  await run(() => controller.connectPlaybackService(url, token));
+}
+const disconnectService = () => run(() => controller.disconnectPlaybackService());
 async function run(work: () => Promise<unknown>) {
   busy.value = true; failure.value = "";
   try { await work(); return true; }
@@ -123,6 +138,12 @@ async function copyDiagnostics() {
     <NAlert v-if="failure" class="sources-failure" type="error" role="alert">{{ failure }}</NAlert>
 
     <template v-if="section === 'metadata'">
+      <div class="setting-row">
+        <div><h3>{{ word('播放服务', 'Playback service') }}</h3><p>{{ serviceEnabled ? word('已连接；扩展可重试迁入。', 'Connected; add-ons can be retried.') : word('连接后由服务提供元数据。本机和局域网可使用 HTTP。', 'The service supplies metadata. HTTP is available on local networks.') }}</p></div>
+      </div>
+      <div class="setting-row"><label for="service-url">{{ word('服务地址', 'Service address') }}</label><input id="service-url" v-model="serviceDraft.url" class="setting-select compact-select tmdb-instance" :disabled="busy" /></div>
+      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" class="setting-select compact-select tmdb-instance" :disabled="busy" /></div>
+      <div class="setting-row"><span></span><div class="sources-row-actions"><NButton class="service-connect" type="primary" :disabled="busy" @click="connectService">{{ serviceEnabled ? word('更新并重试', 'Update and retry') : word('连接并导入', 'Connect and import') }}</NButton><NButton v-if="serviceEnabled" class="service-disconnect" :disabled="busy" @click="disconnectService">{{ word('断开', 'Disconnect') }}</NButton></div></div>
       <div class="setting-row tmdb-row">
         <div>
           <h3>TMDB</h3>
@@ -131,6 +152,7 @@ async function copyDiagnostics() {
         </div>
         <NSwitch class="tmdb-enabled" :value="tmdb.enabled" :disabled="busy" :aria-label="word('启用 TMDB', 'Enable TMDB')" @update:value="saveTmdb({ enabled: $event })" />
       </div>
+      <template v-if="!serviceEnabled">
       <div class="setting-row">
         <div><h3><label for="tmdb-mode">{{ word('接入方式', 'Connection') }}</label></h3><p>{{ apiMode ? word('使用自己的 TMDB API Key 直接访问官方接口。', 'Calls the official TMDB API with your own key.') : word('通过 TMDB Stremio 扩展获取，无需 API Key。', 'Uses the TMDB Stremio add-on; no API key needed.') }}</p></div>
         <select id="tmdb-mode" class="setting-select compact-select tmdb-mode" :value="apiMode || choosingApi ? 'api' : 'stremio'" :disabled="busy" @change="changeMode(($event.target as HTMLSelectElement).value)"><option value="stremio">{{ t('Stremio add-on') }}</option><option value="api">{{ word('TMDB 官方 API', 'TMDB official API') }}</option></select>
@@ -155,6 +177,7 @@ async function copyDiagnostics() {
         <div class="tmdb-instance-controls"><input id="tmdb-instance" v-model="instanceDraft" class="setting-select compact-select tmdb-instance" :disabled="busy" @keydown.enter.prevent="saveInstance" /><NButton class="tmdb-instance-save" :disabled="busy || instanceDraft === tmdb.instance_url" @click="saveInstance">{{ t('Save') }}</NButton></div>
       </div>
       <p v-if="instanceError && !apiMode" class="sources-row-error" role="alert">{{ instanceError }}</p>
+      </template>
       <div class="setting-row">
         <div><h3><label for="tmdb-language">{{ t('Metadata language') }}</label></h3><p>{{ word('默认跟随应用语言。', 'Follows the app language by default.') }}</p></div>
         <select id="tmdb-language" class="setting-select compact-select tmdb-language" :value="tmdb.language" :disabled="busy" @change="saveTmdb({ language: ($event.target as HTMLSelectElement).value as Tmdb['language'] })"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
@@ -179,6 +202,7 @@ async function copyDiagnostics() {
       <span class="source-status" :class="statusOf(config)" :aria-label="statusText(config)" /><div class="sources-row-text">
         <h3>{{ config.name }}</h3>
         <p>{{ hostOf(config) }} · <span class="sources-state">{{ statusText(config) }}</span></p>
+        <p v-if="pendingGroup(config.config_id)" class="sources-row-error" role="status">{{ word('待迁入，可在播放服务中重试。', 'Import pending; retry in Playback service.') }}</p>
         <p v-if="sourceError(config)" class="sources-row-error" role="alert">{{ sourceError(config) }}</p>
       </div>
       <div class="sources-row-actions">

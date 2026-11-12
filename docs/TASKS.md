@@ -2740,14 +2740,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.5 App 接入服务与当前历史、收藏衔接
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.4
 - 需求：REQ-SERVICE-META（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §2.2、3、8.1、9、10 第一期）→ A1、A2
 - 上下文：方案 §2.2、3、8.1、9、10 第一期；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.1–T1.4 的服务、两种元数据源和导入接口；当前 App 中已保存的 TMDB/自定义 Stremio 历史与收藏。
 - 不变量：服务地址/令牌/语言与内容身份解耦；同配置组内全部扩展导入且回读成功后再切到服务，部分失败保留完整原组；原播放流程继续到第二期。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`src/`, `src-tauri/capabilities/`, `protocol/`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `src-tauri/src/`, `src-tauri/build.rs`, `src-tauri/tests/`, `scripts/check-contracts.py`, `tests/acceptance/t05_models.py`
+- 范围：`src/`, `src-tauri/capabilities/`, `server/src/metadata/sources.rs`, `protocol/`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `tests/t15-service.test.ts`, `docs/PROGRESS.md`, `src-tauri/src/`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/build.rs`, `src-tauri/tests/`, `licenses/dependencies.json`, `scripts/check-contracts.py`, `tests/acceptance/t05_models.py`
 - 验收范围：`src/views/SettingsView.vue`, `src/views/SourceSettings.vue`, `src/state.ts`, `src/App.vue`, `src-tauri/src/settings.rs`, `src-tauri/src/stremio.rs`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：受接入影响的既有设置/历史相关检查；不重复桌面长播。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

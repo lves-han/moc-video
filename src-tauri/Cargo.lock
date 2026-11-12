@@ -2354,6 +2354,7 @@ dependencies = [
  "jsonschema",
  "libc",
  "moc-core",
+ "percent-encoding",
  "reqwest",
  "rusqlite",
  "serde",

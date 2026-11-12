@@ -1,6 +1,6 @@
 import { reactive } from "vue";
 import { api, Api, ApiFailure, settingsQueue, SettingsQueue } from "./api.ts";
-import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
+import { createPlayer, nativeInvoke, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
 import { t } from "./i18n.ts";
 import { captureLine, correspondingEpisode, createLinePreferences, preferredContent, preferredSelection, type LinePreference } from './line-preference.ts';
 import { sourceChecks } from './source-health.ts';
@@ -1084,6 +1084,11 @@ export class AppController {
       return { ...settings, source_configs: draft.config_id
         ? settings.source_configs.map(row => row.config_id === id ? config : row) : [...settings.source_configs, config] };
     });
+    const service = this.state.settings.playback_service;
+    if (config.kind === "stremio" && service?.enabled) {
+      await this.connectPlaybackService(service.url, service.token);
+      return;
+    }
     try { if (config.enabled) await this.syncConfig(config.kind, id); }
     finally { await this.loadSources(); }
   }
@@ -1092,15 +1097,45 @@ export class AppController {
     try { if (tmdb.enabled) await this.syncConfig("stremio", TMDB_CONFIG_ID); }
     finally { await this.loadSources(); }
   }
+  async connectPlaybackService(url: string, token: string) {
+    const configs = clone(this.state.settings.source_configs);
+    const result = await nativeInvoke<{ groups: NonNullable<Settings["playback_service"]>["groups"] }>(
+      "app_service_import", { url, token, configs });
+    await this.updateSettings(settings => {
+      if (JSON.stringify(settings.source_configs) !== JSON.stringify(configs)) throw new Error("Sources changed during import; retry. / 来源已变化，请重试。");
+      return { ...settings, playback_service: { enabled: true, url, token, groups: result.groups } };
+    });
+    this.sourceCheckTimes.mark(TMDB_CONFIG_ID);
+    for (const group of result.groups) if (group.status === "ready") this.sourceCheckTimes.mark(group.config_id);
+    await this.loadSources();
+  }
+  async disconnectPlaybackService() {
+    await this.updateSettings(settings => {
+      const { playback_service: _service, ...remaining } = settings;
+      return remaining;
+    });
+    await this.loadSources();
+  }
   async setSourceEnabled(id: string, enabled: boolean) {
     const config = this.state.settings.source_configs.find(row => row.config_id === id);
     requireBinding(config, "Source configuration is missing");
     await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.map(row => row.config_id === id ? { ...row, enabled } : row) }));
+    const service = this.state.settings.playback_service;
+    if (config.kind === "stremio" && enabled && service?.enabled && service.groups.find(group => group.config_id === id)?.status !== "ready") {
+      await this.connectPlaybackService(service.url, service.token);
+      return;
+    }
     try { if (enabled) await this.syncConfig(config.kind, id); }
     finally { await this.loadSources(); }
   }
   async removeSourceConfig(id: string) {
+    const service = this.state.settings.playback_service;
+    const group = service?.groups.find(row => row.config_id === id);
+    if (service?.enabled && group?.addons.length) {
+      await nativeInvoke("app_service_delete", { url: service.url, token: service.token, ids: group.addons.map(addon => addon.source_id) });
+    }
     await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.filter(row => row.config_id !== id),
+      ...(settings.playback_service ? { playback_service: { ...settings.playback_service, groups: settings.playback_service.groups.filter(group => group.config_id !== id) } } : {}),
       last_metadata_config_id: settings.last_metadata_config_id === id ? null : settings.last_metadata_config_id }));
     await this.loadSources();
   }

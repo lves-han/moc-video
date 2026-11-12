@@ -176,6 +176,41 @@
           "maximum": 9007199254740991,
           "default": 268435456
         },
+        "playback_service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "url": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "token": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "groups": {
+              "type": "array", "maxItems": 32,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "properties": {
+                  "config_id": { "type": "string", "format": "uuid" },
+                  "status": { "enum": ["ready", "pending"] },
+                  "addons": {
+                    "type": "array", "maxItems": 16,
+                    "items": {
+                      "type": "object", "additionalProperties": false,
+                      "properties": {
+                        "original_url": { "type": "string", "format": "uri" },
+                        "source_id": { "type": "string", "format": "uuid" },
+                        "addon_key": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "localized": { "type": "boolean" }
+                      },
+                      "required": ["original_url", "source_id", "addon_key", "localized"]
+                    }
+                  }
+                },
+                "required": ["config_id", "status", "addons"]
+              }
+            }
+          },
+          "required": ["enabled", "url", "token", "groups"],
+          "description": "播放服务连接及逐扩展身份映射。"
+        },
         "tmdb": {
           "type": "object",
           "description": "内置通用TMDB元数据源；固定config_id，Stremio扩展方式。缺省等同启用elfhosted实例并跟随应用语言。",

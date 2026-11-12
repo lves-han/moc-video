@@ -3,7 +3,7 @@
   "target": "aarch64-apple-darwin",
   "locks": {
     "package-lock.json": "c213eb7d0e57ed9362dce1ee0aae8a2211b277e883a15be193172f749065880c",
-    "src-tauri/Cargo.lock": "3becac244ae8dff6bd9e4bd4f91dea98c86a8ad5aa093ca7a95629f109dd4b09"
+    "src-tauri/Cargo.lock": "2c9a9884a3279a44637200a50a2005e080c9e0ab282a191199b1ef895cf25d42"
   },
   "cargo_metadata_argv": [
     "cargo",

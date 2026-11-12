@@ -38,6 +38,9 @@ fn plain(value: &str) -> String {
 }
 
 fn fetch(http: &Http, url: Url, job: &Job, config: bool) -> Result<Response, ApiError> {
+    if url.host_str() == Some(crate::service::HOST) {
+        return crate::service::proxy(&url, job);
+    }
     if url.host_str() == Some(super::tmdb_api::HOST) {
         return super::tmdb_api::respond(http, &url, job);
     }
@@ -99,6 +102,20 @@ fn tmdb_host(url: &Url) -> bool {
     ) || cfg!(test)
         && url.host_str() == Some("maccms.fixture.test")
         && url.path().starts_with("/tmdb/")
+}
+
+pub fn migration_identity(raw: &str) -> Result<(String, bool), ApiError> {
+    let configured = http_url(raw, true)?;
+    if !configured.path().ends_with("/manifest.json")
+        || configured.query().is_some()
+        || configured.fragment().is_some()
+    {
+        return Err(ApiError::bad("Invalid Stremio manifest URL"));
+    }
+    let known = tmdb_host(&configured);
+    let canonical = language_url(&configured, "en", known)?;
+    let localized = known && canonical.path().ends_with("/en-US/manifest.json");
+    Ok((identity("addon", &[canonical.as_str()]), localized))
 }
 
 fn language_url(url: &Url, language: &str, tmdb: bool) -> Result<Url, ApiError> {
@@ -426,6 +443,7 @@ impl Catalog {
         let mut bodies = Vec::new();
         let mut failures = Vec::new();
         let builtin_tmdb = captured.config["tmdb"] == true;
+        let service_addons = &captured.config["service_addons"];
         if cached.is_some_and(|rows| rows.len() != urls.len()) {
             return Err(SyncFailure {
                 error: upstream("Cached manifests are incomplete"),
@@ -444,7 +462,8 @@ impl Catalog {
                     if configured.query().is_some() {
                         return Err(ApiError::bad("Query-configured Stremio manifests require a verified request convention"));
                     }
-                    let tmdb = builtin_tmdb || tmdb_host(&configured);
+                    let migrated = &service_addons[chunk_index * 4 + offset];
+                    let tmdb = builtin_tmdb || migrated["localized"] == true || tmdb_host(&configured);
                     let url = language_url(&configured, "en", tmdb)?;
                     let body = match cached {
                         Some(rows) => URL_SAFE_NO_PAD.decode(&rows[chunk_index * 4 + offset]).map_err(|_| upstream("Cached manifest is damaged"))?,
@@ -455,7 +474,7 @@ impl Catalog {
                     let manifest: Value = serde_json::from_slice(&body).map_err(|_| upstream("Stremio manifest is not JSON"))?;
                     Contracts::get().validate("StremioManifest", &manifest).map_err(|_| upstream("Stremio manifest fields are invalid"))?;
                     let localized = tmdb && url.path().ends_with("/en-US/manifest.json") && manifest["id"] == "tmdb-addon";
-                    let key = if builtin_tmdb { identity("addon", &[crate::settings::TMDB_CONFIG_ID]) } else { identity("addon", &[url.as_str()]) };
+                    let key = if builtin_tmdb { identity("addon", &[crate::settings::TMDB_CONFIG_ID]) } else if let Some(key)=migrated["addon_key"].as_str() { key.to_owned() } else { identity("addon", &[url.as_str()]) };
                     Ok((Addon { key, url, manifest, localized, tmdb }, format!("{:x}", Sha256::digest(&body)), URL_SAFE_NO_PAD.encode(&body)))
                 })).collect::<Vec<_>>().into_iter().map(|worker| worker.join().unwrap_or_else(|_| Err(ApiError::internal("Stremio manifest worker failed")))).collect::<Vec<_>>()
             });

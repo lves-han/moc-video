@@ -89,6 +89,8 @@ fn main() {
         "app_reset",
         "app_reset_recovery",
         "app_font_url",
+        "app_service_import",
+        "app_service_delete",
         #[cfg(feature = "t01-automation")]
         "t01_control",
     ];
