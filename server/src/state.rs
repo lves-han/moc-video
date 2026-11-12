@@ -55,6 +55,7 @@ pub struct Registry {
     pub lines: HashMap<String, Line>,
     pub cache: HashMap<String, CacheEntry>,
     pub mapping_generation: u64,
+    pub parser_generation: u64,
 }
 impl Registry {
     pub fn bytes(&self) -> usize {

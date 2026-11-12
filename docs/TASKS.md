@@ -3173,14 +3173,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.14 JSON 解析接口管理与按 flag 解析
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.11, T1.12
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §5.6 parsers、6.6、5.8）→ A1
 - 上下文：方案 §5.6 parsers、6.6、5.8；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T4 的 parse/jx/flag 输出；T1.8 缓存/刷新与来源版本规则；json 解析接口样例。
 - 不变量：按用户配置解析且头归属正确；保留调用方逻辑线路定位信息；解析配置变更使旧缓存失效，失败明确返回。
 - 未决项：不同 json 解析服务的字段名在配置中明确；以本卡样例核对编码与返回形态。
-- 范围：`server/src/parsers.rs`, `server/src/adapters/`, `server/src/lookups.rs`, `server/src/line_cache.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
+- 范围：`server/src/parsers.rs`, `server/src/adapters/`, `server/src/lookups.rs`, `server/src/state.rs`, `server/src/line_cache.rs`, `server/src/db.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`
 - 验收范围：`server/src/parsers.rs`, `server/src/adapters/json_parse.rs`, `server/src/line_cache.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.8 的缓存/刷新、T1.11–T1.12 的待解析分支。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

@@ -1094,15 +1094,73 @@ class StremioStreamAdapter(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+class JsonParser(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_config_flags(self):
+        self.start('app-token', self.fixture_env)
+        self.fixture_request('/control?t4_mode=parse&parser_mode=normal&reset_parser=1')
+        base = self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        parser={'name':'parser','api':base+'/json-parser?gen=1&sig=a%2Fb+c','flags':['fixture-flag'],'headers':{'X-Parser':'allowed'},'url_field':'data.stream'}
+        status, parser=self.native('POST','/v1/parsers',parser);self.assertEqual(status,201,parser)
+        status, other=self.native('POST','/v1/parsers',{'name':'other','api':base+'/json-other','flags':['other'],'headers':{'X-Parser':'allowed'},'url_field':'data.stream'});self.assertEqual(status,201,other)
+        self.assertEqual(len(self.native('GET','/v1/parsers')[1]['parsers']),2)
+        body={'name':'T4','kind':'t4_query','api':base+'/t4-query','headers':{'X-Fixture':'allowed'},'parse_ids':[other['id'],parser['id']]}
+        status, source=self.native('POST','/v1/sources',body);self.assertEqual(status,201,source)
+        type(self).parser=parser;type(self).source=source;type(self).other=other
+        _,events=self.ndjson('/v1/lookups',self.input([source['id']]))
+        lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events)
+        self.assertTrue(all(line['kind']=='hls' for line in lines));type(self).line=lines[0]
+        requests=self.fixture_request('/stats')['parser_requests'];self.assertTrue(requests)
+        self.assertTrue(all(r['path']=='/json-parser' for r in requests))
+        self.assertTrue(all(r['header']=='allowed' for r in requests))
+        self.assertTrue(all('sig=a%2Fb+c' in r['raw_query'] for r in requests))
+
+    def test_2_url_headers_result(self):
+        requests=self.fixture_request('/stats')['parser_requests']
+        self.assertIn('https://watch.test/episode?id=a%2Fb&part=1',[r['query']['url'][0] for r in requests])
+        self.assertEqual(self.line['play']['url'],'https://media.test/parsed.m3u8?generation=1')
+        self.assertEqual(self.line['play']['headers']['referer'],'https://parsed.test/')
+        self.assertEqual(self.line['play']['headers']['x-media'],'media')
+        self.assertNotIn('x-parser',self.line['play']['headers'])
+        self.fixture_request('/control?t4_mode=jx')
+        _,events=self.ndjson('/v1/lookups',self.input([self.source['id']],refresh=True))
+        lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['kind']=='hls' for x in lines))
+
+    def test_3_failure_cache_revision(self):
+        before=len(self.fixture_request('/stats')['parser_requests'])
+        _,events=self.ndjson('/v1/lookups',self.input([self.source['id']]))
+        self.assertEqual(len(self.fixture_request('/stats')['parser_requests']),before)
+        parser=dict(self.parser);parser['api']=parser['api'].replace('gen=1','gen=2')
+        status,updated=self.native('PUT','/v1/parsers/'+parser['id'],parser);self.assertEqual(status,200,updated);self.assertEqual(updated['revision'],2)
+        status,line=self.native('POST','/v1/lines/'+self.line['line_id']+'/refresh',{});self.assertEqual(status,200,line)
+        self.assertEqual(line['line_id'],self.line['line_id']);self.assertEqual(line['play']['url'],'https://media.test/parsed.m3u8?generation=2')
+        _,events=self.ndjson('/v1/lookups',self.input([self.source['id']]))
+        self.assertTrue(all(e['line']['play']['url'].endswith('generation=2') for e in events if e['event']=='line'))
+        for mode in ('html','missing'):
+            self.fixture_request('/control?parser_mode='+mode)
+            _,events=self.ndjson('/v1/lookups',self.input([self.source['id']],refresh=True))
+            lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['reason']=='parser_failed' for x in lines))
+        updated['enabled']=False;self.assertEqual(self.native('PUT','/v1/parsers/'+updated['id'],updated)[0],200)
+        _,events=self.ndjson('/v1/lookups',self.input([self.source['id']],refresh=True))
+        lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['reason']=='needs_sniffing' for x in lines))
+        self.assertEqual(self.native('DELETE','/v1/parsers/'+self.other['id'])[0],204)
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1119,7 +1177,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

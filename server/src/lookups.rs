@@ -402,9 +402,8 @@ async fn process(
         return Err("source configuration changed");
     }
     let target = target(metadata);
-    let cache_key = line_cache::cache_key(&target, source);
     let now = crate::metadata::cache::now();
-    let cached = {
+    let (cached, parser_generation) = {
         let mut reg = state
             .lookup_runtime
             .registry
@@ -414,16 +413,18 @@ async fn process(
         if !reg.lookups.contains_key(lookup_id) {
             return Err("lookup cancelled");
         }
-        if refresh {
+        let generation = reg.parser_generation;
+        let cached = if refresh {
             None
         } else {
             reg.cache
-                .get(&cache_key)
+                .get(&line_cache::cache_key(&target, source, generation))
                 .map(|entry| entry.template.clone())
-        }
+        };
+        (cached, generation)
     };
     if let Some(template) = cached {
-        return emit_lines(state, lookup_id, metadata, &template, tx)
+        return emit_lines(state, lookup_id, metadata, &template, parser_generation, tx)
             .await
             .map(|(status, count)| (status, count, None));
     }
@@ -442,7 +443,7 @@ async fn process(
                     content_id: request_id,
                     lines,
                 };
-                emit_lines(state, lookup_id, metadata, &template, tx)
+                emit_lines(state, lookup_id, metadata, &template, parser_generation, tx)
                     .await
                     .map(|(status, count)| (status, count, None))
             }
@@ -457,7 +458,7 @@ async fn process(
                 .into(),
             lines: reused["lines"].as_array().cloned().unwrap_or_default(),
         };
-        return emit_lines(state, lookup_id, metadata, &template, tx)
+        return emit_lines(state, lookup_id, metadata, &template, parser_generation, tx)
             .await
             .map(|(status, count)| (status, count, None));
     }
@@ -495,7 +496,8 @@ async fn process(
                     .registry
                     .lock()
                     .expect("lookup registry");
-                if tx.is_closed()
+                if reg.parser_generation != parser_generation
+                    || tx.is_closed()
                     || !reg.lookups.contains_key(lookup_id)
                     || !source_current(state, source)
                     || !metadata_current(state, metadata)
@@ -517,7 +519,7 @@ async fn process(
                     content_id: chosen.into(),
                     lines: candidate["lines"].as_array().cloned().unwrap_or_default(),
                 };
-                return emit_lines(state, lookup_id, metadata, &template, tx)
+                return emit_lines(state, lookup_id, metadata, &template, parser_generation, tx)
                     .await
                     .map(|(status, count)| (status, count, None));
             }
@@ -578,10 +580,14 @@ async fn emit_lines(
     lookup_id: &str,
     metadata: &Value,
     template: &Template,
+    parser_generation: u64,
     tx: &mpsc::Sender<Value>,
 ) -> Result<(&'static str, usize), &'static str> {
     let mut template = template.clone();
     template.lines = crate::adapters::resolve(&template.source, &template.lines).await?;
+    template.lines =
+        crate::adapters::json_parse::resolve(&state.parsers, &template.source, &template.lines)
+            .await?;
     let _gate = state.metadata_gate.lock().await;
     let lines = {
         let mut registry = state
@@ -591,7 +597,8 @@ async fn emit_lines(
             .expect("lookup registry");
         let now = crate::metadata::cache::now();
         registry.prune(now);
-        if tx.is_closed()
+        if registry.parser_generation != parser_generation
+            || tx.is_closed()
             || !registry.lookups.contains_key(lookup_id)
             || !source_current(state, &template.source)
             || !metadata_current(state, metadata)
@@ -619,7 +626,7 @@ async fn emit_lines(
             &state.reports,
         )?;
         registry.cache.insert(
-            line_cache::cache_key(&target, &template.source),
+            line_cache::cache_key(&target, &template.source, parser_generation),
             crate::state::CacheEntry {
                 expires_at: now + state.lookup_runtime.cache_ttl,
                 template: template.clone(),
@@ -665,7 +672,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             "Missing confirmation identity",
         );
     };
-    let (metadata, candidate, mut cancellation, mapping_generation) = {
+    let (metadata, candidate, mut cancellation, mapping_generation, parser_generation) = {
         let mut reg = state
             .lookup_runtime
             .registry
@@ -694,6 +701,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             candidate.clone(),
             lookup.cancelled.subscribe(),
             reg.mapping_generation,
+            reg.parser_generation,
         )
     };
     if !source_current(&state, &candidate.source) || !metadata_current(&state, &metadata) {
@@ -720,6 +728,13 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
     };
+    let lines = match tokio::select! {
+        _=cancellation.changed()=>return expired("lookup_not_found"),
+        result=crate::adapters::json_parse::resolve(&state.parsers, &candidate.source, &lines)=>result,
+    } {
+        Ok(value) => value,
+        Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+    };
     let _gate = state.metadata_gate.lock().await;
     let result = {
         let mut reg = state
@@ -728,6 +743,9 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             .lock()
             .expect("lookup registry");
         reg.prune(crate::metadata::cache::now());
+        if reg.parser_generation != parser_generation {
+            return expired("parser_changed");
+        }
         if reg.mapping_generation != mapping_generation {
             return expired("mapping_changed");
         }
@@ -785,7 +803,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             };
         }
         reg.cache.insert(
-            line_cache::cache_key(&target, &candidate.source),
+            line_cache::cache_key(&target, &candidate.source, parser_generation),
             crate::state::CacheEntry {
                 expires_at: crate::metadata::cache::now() + state.lookup_runtime.cache_ttl,
                 template,
@@ -817,7 +835,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
 }
 
 pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let line = {
+    let (line, parser_generation) = {
         let mut reg = state
             .lookup_runtime
             .registry
@@ -825,7 +843,7 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
             .expect("lookup registry");
         reg.prune(crate::metadata::cache::now());
         match reg.lines.get(&id) {
-            Some(line) => line.clone(),
+            Some(line) => (line.clone(), reg.parser_generation),
             None => return expired("line_not_found"),
         }
     };
@@ -890,6 +908,11 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
             Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
         }
     };
+    let resolved =
+        match crate::adapters::json_parse::resolve(&state.parsers, &source, &resolved).await {
+            Ok(value) => value,
+            Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        };
     let matching: Vec<_> = resolved
         .iter()
         .filter(|item| {
@@ -923,6 +946,9 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
         .expect("lookup registry");
     let now = crate::metadata::cache::now();
     reg.prune(now);
+    if reg.parser_generation != parser_generation {
+        return expired("parser_changed");
+    }
     if !source_current(&state, &source) || !metadata_current(&state, &line.target) {
         reg.lines.remove(&id);
         return expired("source_changed");

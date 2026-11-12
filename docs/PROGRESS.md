@@ -3271,3 +3271,11 @@
 - 按用户补充要求，本地文件改用与其他来源共用的沉浸式播放器，保留返回、进度、倍速、字幕、错误重试和文件会话释放；本地观看历史沿现有会话绑定保存。
 - 验证：隔离 Mac 窗口中 MP4 播放、返回列表、退出后从约 20 秒续播，以及 MKV/HLS 内嵌字幕实际显示；观察记录见 `evidence/manual/local-immersive-player.json`。补充的迟到会话清理和重试身份保护已通过类型检查；隔离应用和资料已清理。
 - 回归：本地会话及播放器、历史和目录共 71 项通过 `evidence/runs/20261112T092930635019-local-player-regression/output.log`；服务选线 13 项通过 `evidence/runs/20261112T093026759938-local-player-service-regression/output.log`；最终类型检查通过 `evidence/runs/20261112T093208459035-local-player-check-final/output.log`。
+
+## T1.14 JSON 解析接口管理与按 flag 解析 2026-11-12
+
+- 结果：DONE
+- 实现：新增解析器配置、启停与删除；按来源关联和 flag 选择解析器，保留原线路定位，分别处理解析请求头和播放请求头。配置变更清除短期缓存并保护在途查询；已有线路刷新读取新配置。网页、缺失字段和接口失败返回明确原因。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T094211963782-A1/output.log`；3 项通过，覆盖 parse/jx、地址编码、签名参数、字段及请求头、错误响应、配置变更和刷新。
+- 相关回归：线路生命周期 5 项通过 `evidence/runs/20261112T094416085704-T1.14-regression-lookup-lifecycle/output.log`；T4 查询和 DRPYJS0 4 项通过 `evidence/runs/20261112T094502247282-T1.14-regression-t4-query-adapters/output.log`；T4 REST 2 项通过 `evidence/runs/20261112T094520123974-T1.14-regression-t4-rest-adapter/output.log`；OpenAPI 格式校验通过。
+- 兼容范围：JSON 字段路径和页面 URL 参数可配置，实网解析接口 NOT RUN。补入短期线路状态模块，用于识别配置更新期间的在途结果。

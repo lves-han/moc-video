@@ -30,6 +30,7 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         enabled INTEGER NOT NULL, parse_ids TEXT NOT NULL, revision INTEGER NOT NULL,
         status TEXT NOT NULL, checked_at INTEGER);",
     )?;
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS json_parsers (id TEXT PRIMARY KEY, client_config_id TEXT UNIQUE, payload TEXT NOT NULL);")?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS mappings (
         id TEXT PRIMARY KEY, metadata_source_id TEXT NOT NULL, media_type TEXT NOT NULL,

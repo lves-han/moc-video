@@ -6,6 +6,7 @@ mod lookups;
 mod mappings;
 mod matching;
 mod metadata;
+mod parsers;
 mod reports;
 mod sources;
 mod state;
@@ -30,6 +31,7 @@ struct AppState {
     home: Arc<tokio::sync::RwLock<metadata::home::Home>>,
     sources: metadata::sources::Store,
     playback_sources: sources::Store,
+    parsers: parsers::Store,
     mappings: mappings::Store,
     lookup_runtime: state::Runtime,
     reports: reports::Store,
@@ -319,6 +321,76 @@ async fn mapping_revoke(State(state): State<AppState>, Path(id): Path<String>) -
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",
             "Mapping database failed",
+        ),
+    }
+}
+
+async fn parser_list(State(state): State<AppState>) -> Response {
+    match state.parsers.list() {
+        Ok(items) => Json(json!({"parsers":items})).into_response(),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Parser database failed",
+        ),
+    }
+}
+async fn parser_create(
+    State(state): State<AppState>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    parser_save(state, input, None)
+}
+async fn parser_update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<serde_json::Value>,
+) -> Response {
+    parser_save(state, input, Some(id))
+}
+fn parser_save(state: AppState, input: serde_json::Value, id: Option<String>) -> Response {
+    let mut reg = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
+    match state.parsers.save(&input, id.as_deref()) {
+        Ok(item) => {
+            reg.parser_generation = reg.parser_generation.wrapping_add(1);
+            reg.cache.clear();
+            (
+                if id.is_some() {
+                    StatusCode::OK
+                } else {
+                    StatusCode::CREATED
+                },
+                Json(item),
+            )
+                .into_response()
+        }
+        Err("parser not found") => {
+            api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Parser not found")
+        }
+        Err(message) => api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", message),
+    }
+}
+async fn parser_delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    let mut reg = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry");
+    match state.parsers.remove(&id) {
+        Ok(true) => {
+            reg.parser_generation = reg.parser_generation.wrapping_add(1);
+            reg.cache.clear();
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Parser not found"),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Parser database failed",
         ),
     }
 }
@@ -657,6 +729,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
     let sources = metadata::sources::Store::new(&config.data_dir);
     let playback_sources = sources::Store::new(&config.data_dir);
+    let parsers = parsers::Store::new(&config.data_dir);
     let mappings = mappings::Store::new(&config.data_dir);
     let lookup_runtime = state::Runtime::from_env()?;
     let reports = reports::Store::new(&config.data_dir);
@@ -682,6 +755,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/v1/metadata-sources/import", post(import_sources))
         .route("/v1/sources", get(playback_list).post(playback_create))
+        .route("/v1/parsers", get(parser_list).post(parser_create))
+        .route(
+            "/v1/parsers/{id}",
+            axum::routing::put(parser_update).delete(parser_delete),
+        )
         .route("/v1/sources/import", post(playback_import))
         .route("/v1/mappings", get(mapping_list).post(lookups::confirm))
         .route("/v1/mappings/{id}", axum::routing::delete(mapping_revoke))
@@ -710,6 +788,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             home,
             sources,
             playback_sources,
+            parsers,
             mappings,
             lookup_runtime,
             reports,

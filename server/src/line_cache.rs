@@ -28,7 +28,7 @@ pub fn key(target: &Value, source: &Value, content_id: &str, locator: &Option<Va
     )
 }
 
-pub fn cache_key(target: &Value, source: &Value) -> String {
+pub fn cache_key(target: &Value, source: &Value, parser_generation: u64) -> String {
     format!(
         "{:x}",
         Sha256::digest(
@@ -38,7 +38,8 @@ pub fn cache_key(target: &Value, source: &Value) -> String {
                 target["meta_id"],
                 target["video_id"],
                 source["id"],
-                source["revision"]
+                source["revision"],
+                parser_generation
             ])
             .to_string()
         )

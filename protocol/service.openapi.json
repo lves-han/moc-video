@@ -1047,6 +1047,144 @@
           }
         }
       }
+    },
+    "/v1/parsers": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configured parsers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "parsers"
+                  ],
+                  "properties": {
+                    "parsers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Parser"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Parser saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parser"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      }
+    },
+    "/v1/parsers/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parser updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parser"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Parser not found"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Parser not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1539,6 +1677,85 @@
               "lease_expires_at": {
                 "type": "integer",
                 "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ParserInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "api"
+        ],
+        "properties": {
+          "client_config_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "api": {
+            "type": "string",
+            "format": "uri"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty matches all flags; * matches any flag."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Headers sent to the parser API."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "url_param": {
+            "type": "string",
+            "default": "url"
+          },
+          "url_field": {
+            "type": "string",
+            "default": "url",
+            "description": "Dot-separated path to the playback URL in the JSON response."
+          }
+        }
+      },
+      "Parser": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParserInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "revision",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "json"
+                ]
               }
             }
           }

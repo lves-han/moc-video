@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": []}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": []}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,6 +20,8 @@ class Handler(BaseHTTPRequestHandler):
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
             if "detail_delay" in query: STATE["detail_delay"] = float(query["detail_delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
+            if "parser_mode" in query: STATE["parser_mode"] = query["parser_mode"][0]
+            if "reset_parser" in query: STATE["parser_requests"].clear()
             if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
             if "reset" in query: STATE["counts"].clear()
             if "reset_t4" in query: STATE["t4_requests"].clear()
@@ -43,6 +45,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.stream_addon(url)
         if url.path.startswith(("/addon-a/", "/addon-b/", "/addon-same/")):
             return self.addon(url)
+        if url.path in ("/json-parser", "/json-other"):
+            STATE["parser_requests"].append({"path":url.path,"query":query,"raw_query":url.query,"header":self.headers.get("X-Parser")})
+            if self.headers.get("X-Parser") != "allowed": self.send_response(403); self.end_headers(); return
+            if STATE["parser_mode"] == "html": self.send_response(200); self.end_headers(); self.wfile.write(b"<html>error</html>"); return
+            if STATE["parser_mode"] == "missing": return self.send_json({"data":{}})
+            return self.send_json({"data":{"stream":"https://media.test/parsed.m3u8?generation="+query.get("gen",["1"])[0]},"headers":{"Referer":"https://parsed.test/","X-Media":"media"}})
         if url.path in ("/t4-query", "/t4-js0", "/web/302redirect"):
             STATE["t4_requests"].append({"path":url.path,"query":query,"header":self.headers.get("X-Fixture")})
             if self.headers.get("X-Fixture") != "allowed":
@@ -56,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                 mode = STATE["t4_mode"]
                 values = ["HD","https://media.test/hd.m3u8?generation=2","SD","https://media.test/sd.mp4?generation=2"]
                 if mode == "normal": values = ["HD","https://media.test/hd.m3u8?generation=1","SD","https://media.test/sd.mp4?generation=1"]
+                if mode in ("parse", "jx"): values = ["HD","https://watch.test/episode?id=a%2Fb&part=1","SD","https://watch.test/episode?id=c%2Fd&part=2"]
                 if mode == "reverse": values = values[2:] + values[:2]
                 if mode == "duplicate": values[2] = "HD"
                 if mode == "missing": return self.send_json({"parse":0})

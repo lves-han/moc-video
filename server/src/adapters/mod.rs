@@ -1,3 +1,4 @@
+pub mod json_parse;
 pub mod maccms;
 pub mod stremio_stream;
 pub mod t4_drpyjs0;
