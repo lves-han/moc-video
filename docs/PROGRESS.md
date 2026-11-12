@@ -3191,3 +3191,14 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261112T061700610507-A1/output.log`；3 项通过，覆盖 JSON/XML 的实际搜索详情及签名 URL、分组、可验证定位、检查/启停/版本、错误、幂等导入和跳过未支持类型。受控服务与上游容器硬上限及宿主采样见 `evidence/acceptance/T1.6-A1.json`。
 - 相关回归：原 App 分组顺序、URL 保真和歧义两项通过 `evidence/runs/20261112T061230375626-diag-t16-app-maccms-regression/output.log`；Stremio 四项与 TMDB 三项通过，分别记录于 `evidence/runs/20261112T061250301016-diag-t16-stremio-regression/output.log`、`evidence/runs/20261112T061315887203-diag-t16-tmdb-regression/output.log`。服务 OpenAPI 验证通过；外部来源实网 NOT RUN。
 - 范围：补入 `src-tauri/src/maccms.rs` 和 `server/src/metadata/http.rs`，用于共享拆分与受影响的通用传输；相关回归如上。
+
+## T1.7 跨源匹配、对应关系与撤销 2026-11-12T06:31:02+00:00
+
+- 结果：DONE
+- 实现：共享原 App 的片名规范化与过滤，提供双查询、整页先过滤、类型/年份/目标集筛选和自动或人工候选；持久对应关系按元数据来源、类型、影片及播放源隔离，保留确认方式和证据，用户撤销单独记账。复用前重新核对内容身份和目标集，正常增集保留对应关系。提供列表与撤销接口；查找生命周期及 POST 确认由 T1.8 接入。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T062846543925-A1/output.log`；4 项通过，覆盖无关全文结果、尾年冲突、衍生内容、未知类型、重复/缺失目标集、同名候选、用户撤销、来源/类型隔离、增集与身份冲突。容器硬上限和宿主峰值见 `evidence/acceptance/T1.7-A1.json`。
+- 相关回归：原 App 片名规范化及搜索 3 项通过 `evidence/runs/20261112T062651203824-diag-t17-app-fuzzy-regression/output.log`；季集规则 13 项通过 `evidence/runs/20261112T062712979916-diag-t17-episode-regression/output.log`。服务 OpenAPI 已验证；外部来源实网 NOT RUN。
+
+## T1.7 日志路径更正 2026-11-12
+
+- 上条季集规则回归日志的正确路径为 `evidence/runs/20261112T062712979917-diag-t17-episode-regression/output.log`，结果 13 项通过。

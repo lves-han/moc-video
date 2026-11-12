@@ -30,5 +30,17 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         enabled INTEGER NOT NULL, parse_ids TEXT NOT NULL, revision INTEGER NOT NULL,
         status TEXT NOT NULL, checked_at INTEGER);",
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS mappings (
+        id TEXT PRIMARY KEY, metadata_source_id TEXT NOT NULL, media_type TEXT NOT NULL,
+        meta_id TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL,
+        content_id TEXT NOT NULL, confirmed_by TEXT NOT NULL, evidence TEXT NOT NULL,
+        updated_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(metadata_source_id,media_type,meta_id,source_id));
+        CREATE TABLE IF NOT EXISTS mapping_revocations (
+        metadata_source_id TEXT NOT NULL, media_type TEXT NOT NULL, meta_id TEXT NOT NULL,
+        source_id TEXT NOT NULL, content_id TEXT NOT NULL,
+        PRIMARY KEY(metadata_source_id,media_type,meta_id,source_id,content_id));",
+    )?;
     Ok(())
 }

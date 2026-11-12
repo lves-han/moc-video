@@ -3,7 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 import time
 
-STATE = {"fail": False, "fail_addon_b": False, "delay": 0.0, "media_url": "", "counts": {}}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "delay": 0.0, "media_url": "", "counts": {}}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -13,6 +13,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/control":
             if "fail" in query: STATE["fail"] = query["fail"][0] == "1"
             if "fail_addon_b" in query: STATE["fail_addon_b"] = query["fail_addon_b"][0] == "1"
+            if "add_episode" in query: STATE["add_episode"] = query["add_episode"][0] == "1"
+            if "changed_title" in query: STATE["changed_title"] = query["changed_title"][0] == "1"
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
             if "reset" in query: STATE["counts"].clear()
@@ -34,12 +36,13 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/maccms":
             movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
             return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})
-        if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid"):
+        if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid", "/maccms-match"):
             if self.headers.get("X-Fixture") != "allowed":
                 self.send_response(403); self.end_headers(); return
             if "sig=" in url.query and "sig=a%2Fb+c" not in url.query:
                 self.send_response(400); self.end_headers(); return
             if url.path == "/maccms-invalid": return self.send_json({"code":0,"message":"closed"})
+            if url.path == "/maccms-match": return self.matching(query)
             if url.path == "/maccms-json":
                 return self.send_json({"code":1,"page":1,"pagecount":1,"list":[{"vod_id":101,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"hls$$$direct","vod_play_url":"Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2$$$https://media.test/direct"}]})
             data=b'<rss><list><video><id>101</id><name>Film</name><type>movie</type><year>2020</year><dl><dd flag="hls"><![CDATA[Episode 1$https://media.test/video?sig=a$b#Episode 2$https://media.test/2]]></dd><dd flag="direct"><![CDATA[https://media.test/direct]]></dd></dl></video></list></rss>'
@@ -69,6 +72,31 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         self.send_json(data)
+
+    def matching(self, query):
+        def video(identifier, title, kind="电影", year="2020", episodes="Full$https://media.test/film"):
+            return {"vod_id":identifier,"vod_name":title,"type_name":kind,"vod_year":year,"vod_play_from":"hls","vod_play_url":episodes}
+        records={
+            "101":video("101","Film (2020)"), "102":video("102","Film (2019)",year="2019"),
+            "103":video("103","Film 解说"), "104":video("104","Film Special",kind="其他"),
+            "105":video("105","Film 2"), "106":video("106","Film",kind="电视剧"),
+            "107":video("107","Same"), "108":video("108","Same"), "109":video("109","Mystery",kind="其他",year=""),
+            "201":video("201","Show",kind="电视剧",episodes="S01E02$https://media.test/2#S01E03$https://media.test/3"),
+            "202":video("202","Show",kind="电视剧",episodes="S01E02$https://media.test/a#S01E02$https://media.test/b"),
+            "203":video("203","Show",kind="电视剧",episodes="S01E03$https://media.test/3")}
+        if STATE["add_episode"]: records["201"]["vod_play_url"] += "#S01E04$https://media.test/4"
+        if STATE["changed_title"]: records["201"]["vod_name"] = "Different Show"
+        if "ids" in query:
+            rows=[records[query["ids"][0]]] if query["ids"][0] in records else []
+        else:
+            text=query.get("wd",[""])[0]
+            if text=="Film": rows=[video(str(300+i),f"Unrelated {i}") for i in range(12)]+[records[str(i)] for i in range(101,107)]
+            elif text=="Original": rows=[records["101"]]
+            elif text=="Same": rows=[records["107"],records["108"]]
+            elif text=="Mystery": rows=[records["109"]]
+            elif text=="Show": rows=[records["201"],records["202"],records["203"]]
+            else: rows=[]
+        return self.send_json({"code":1,"page":1,"pagecount":1,"list":rows})
 
     def addon(self, url):
         parts = [unquote(part) for part in url.path.strip('/').split('/')]

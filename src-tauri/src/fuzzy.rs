@@ -3,45 +3,7 @@
 //! by closeness to what the user typed.
 use serde_json::Value;
 
-fn halfwidth(c: char) -> char {
-    match c {
-        '\u{3000}' => ' ',
-        '\u{FF01}'..='\u{FF5E}' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
-        _ => c,
-    }
-}
-
-fn separator(c: char) -> bool {
-    c.is_whitespace()
-        || c.is_ascii_punctuation()
-        || "、。，！？：；“”‘’《》〈〉【】（）「」『』·・—–…～".contains(c)
-}
-
-/// Full-width folded, punctuation removed, lowercase; ASCII words keep one space between them,
-/// spaces next to CJK characters are dropped.
-pub fn normalize(text: &str) -> String {
-    let words: Vec<String> = text
-        .chars()
-        .map(halfwidth)
-        .collect::<String>()
-        .split(separator)
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect();
-    let mut out = String::new();
-    for word in words {
-        let joins = out
-            .chars()
-            .last()
-            .is_some_and(|c| c.is_ascii_alphanumeric())
-            && word.starts_with(|c: char| c.is_ascii_alphanumeric());
-        if joins {
-            out.push(' ');
-        }
-        out.push_str(&word);
-    }
-    out
-}
+pub use moc_core::matching::{normalize, related};
 
 const NUMERALS: &str = "0123456789一二三四五六七八九十百零";
 const ROMAN: [&str; 9] = ["ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
@@ -146,10 +108,6 @@ pub fn score(query: &str, title: &str) -> f64 {
 /// Whether a search result title names the queried title at all. Some MacCMS
 /// sites answer `wd` with full-text relevance (descriptions, cast), so an
 /// unrelated title can come back first; matching keeps only containment.
-pub fn related(query: &str, title: &str) -> bool {
-    let (q, t) = (normalize(query), normalize(title));
-    !q.is_empty() && !t.is_empty() && (t.contains(&q) || t.chars().count() >= 2 && q.contains(&t))
-}
 
 /// Stable sort of search cards by closeness of their titles to the typed query.
 pub fn rank(query: &str, items: &mut [Value]) {

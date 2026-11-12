@@ -1,6 +1,8 @@
 mod adapters;
 mod config;
 mod db;
+mod mappings;
+mod matching;
 mod metadata;
 mod sources;
 
@@ -24,6 +26,7 @@ struct AppState {
     home: Arc<tokio::sync::RwLock<metadata::home::Home>>,
     sources: metadata::sources::Store,
     playback_sources: sources::Store,
+    mappings: mappings::Store,
 }
 
 async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
@@ -245,6 +248,50 @@ async fn playback_list(State(state): State<AppState>) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",
             "Source database failed",
+        ),
+    }
+}
+
+async fn mapping_list(
+    State(state): State<AppState>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let (Some(source), Some(kind), Some(id)) = (
+        query.get("metadata_source_id"),
+        query.get("type"),
+        query.get("meta_id"),
+    ) else {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "BAD_REQUEST",
+            "Missing metadata identity",
+        );
+    };
+    if source.is_empty() || id.is_empty() || !matches!(kind.as_str(), "movie" | "series") {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "BAD_REQUEST",
+            "Invalid metadata identity",
+        );
+    }
+    match state.mappings.list(source, kind, id) {
+        Ok(items) => Json(json!({"mappings":items})).into_response(),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Mapping database failed",
+        ),
+    }
+}
+
+async fn mapping_revoke(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    match state.mappings.revoke(&id) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Mapping not found"),
+        Err(_) => api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "Mapping database failed",
         ),
     }
 }
@@ -531,6 +578,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
     let sources = metadata::sources::Store::new(&config.data_dir);
     let playback_sources = sources::Store::new(&config.data_dir);
+    let mappings = mappings::Store::new(&config.data_dir);
     let home = Arc::new(tokio::sync::RwLock::new(metadata::home::initialize(
         &cache,
     )?));
@@ -554,6 +602,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/metadata-sources/import", post(import_sources))
         .route("/v1/sources", get(playback_list).post(playback_create))
         .route("/v1/sources/import", post(playback_import))
+        .route("/v1/mappings", get(mapping_list))
+        .route("/v1/mappings/{id}", axum::routing::delete(mapping_revoke))
         .route(
             "/v1/sources/{id}",
             axum::routing::put(playback_update).delete(playback_delete),
@@ -575,6 +625,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             home,
             sources,
             playback_sources,
+            mappings,
         });
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     eprintln!("Service listening on {}", listener.local_addr()?);

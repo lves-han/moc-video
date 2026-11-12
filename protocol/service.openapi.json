@@ -678,6 +678,101 @@
           }
         }
       }
+    },
+    "/v1/mappings": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metadata_source_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "meta_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching mappings, including revoked entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mappings"
+                  ],
+                  "properties": {
+                    "mappings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Mapping"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid metadata identity"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      }
+    },
+    "/v1/mappings/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Mapping revoked"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Mapping not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -833,6 +928,66 @@
             }
           }
         ]
+      },
+      "Mapping": {
+        "type": "object",
+        "required": [
+          "id",
+          "metadata_source_id",
+          "type",
+          "meta_id",
+          "source_id",
+          "source_revision",
+          "content_id",
+          "confirmed_by",
+          "evidence",
+          "updated_at",
+          "revoked"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metadata_source_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series"
+            ]
+          },
+          "meta_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source_revision": {
+            "type": "integer"
+          },
+          "content_id": {
+            "type": "string"
+          },
+          "confirmed_by": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "user"
+            ]
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "updated_at": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

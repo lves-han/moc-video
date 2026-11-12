@@ -534,13 +534,55 @@ class PlaybackSources(StremioMetadata):
         self.assert_budget(fixture=True)
 
 
+class SourceMatching(StremioMetadata):
+    test_1_manifest_proxy = None
+    test_2_source_identity_import = None
+    test_3_capabilities_fallback = None
+    test_4_multi_manifest_import = None
+
+    def test_1_queries_filter(self):
+        self.start("app-token", self.fixture_env)
+        env=dict(os.environ,T17_FIXTURE_HOST=self.fixture_control)
+        result=subprocess.run(["cargo","test","--locked","--offline","-p","moc-service","t17_matching_mapping_with_controlled_source","--","--ignored","--nocapture","--test-threads=1"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        type(self).match_output=result.stdout
+        self.assertEqual(result.returncode,0,result.stdout[-4000:])
+        self.assertIn("T17_MATCHING:filter,ambiguity,revoke,isolation,add-episode,identity-conflict",result.stdout)
+
+    def test_2_auto_confirm_negatives(self):
+        result=subprocess.run(["cargo","test","--locked","--offline","-p","moc-core","episode_rules_reject_ambiguous_and_conflicting_seasons","--","--test-threads=1"],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        self.assertEqual(result.returncode,0,result.stdout[-3000:]); self.assertIn("1 passed",result.stdout)
+        result=subprocess.run(["cargo","test","--locked","--offline","-p","moc-service","title_year_handles_unicode_and_query_fallback","--","--test-threads=1"],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=600)
+        self.assertEqual(result.returncode,0,result.stdout[-3000:]); self.assertIn("1 passed",result.stdout)
+        self.assertIn("T17_MATCHING:",getattr(type(self),"match_output",""))
+
+    def test_3_mapping_reuse_identity(self):
+        seed="""import sqlite3,json
+c=sqlite3.connect('/service-data/service.sqlite3')
+rows=[('11111111-1111-4111-8111-111111111111','tmdb','movie','tmdb:42','source-a',1,'101','user','{}',1,0),('22222222-2222-4222-8222-222222222222','other','movie','tmdb:42','source-a',1,'101','user','{}',1,0)]
+c.executemany('INSERT INTO mappings VALUES (?,?,?,?,?,?,?,?,?,?,?)',rows);c.commit()
+"""
+        docker("exec",self.fixture,"python","-c",seed)
+        status,body=self.native("GET","/v1/mappings?metadata_source_id=tmdb&type=movie&meta_id=tmdb%3A42")
+        self.assertEqual((status,len(body["mappings"])),(200,1))
+        self.assertEqual(body["mappings"][0]["metadata_source_id"],"tmdb")
+        self.assertIn("add-episode,identity-conflict",getattr(type(self),"match_output",""))
+
+    def test_4_user_revoke(self):
+        mid="11111111-1111-4111-8111-111111111111"
+        self.assertEqual(self.native("DELETE","/v1/mappings/"+mid)[0],204)
+        row=self.native("GET","/v1/mappings?metadata_source_id=tmdb&type=movie&meta_id=tmdb%3A42")[1]["mappings"][0]
+        self.assertTrue(row["revoked"])
+        self.assertFalse(self.native("GET","/v1/mappings?metadata_source_id=other&type=movie&meta_id=tmdb%3A42")[1]["mappings"][0]["revoked"])
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
@@ -548,7 +590,8 @@ def main():
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
                 "app-metadata":["REQ-SERVICE-META/app-service-transport", "REQ-SERVICE-META/app-metadata-identity-import", "REQ-SERVICE-META/app-service-errors", "REQ-SERVICE-META/app-multi-manifest-partial-import"],
                 "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
-                "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"]}[args.suite]
+                "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"],
+                "source-matching":["REQ-SERVICE-PLAY/matching-queries-filter", "REQ-SERVICE-PLAY/matching-auto-confirm-negatives", "REQ-SERVICE-PLAY/mapping-reuse-identity", "REQ-SERVICE-PLAY/mapping-user-revoke"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
     methods = {"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
@@ -557,7 +600,8 @@ def main():
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),
                "app-metadata":("test_1_service_transport", "test_2_identity_import", "test_3_service_errors", "test_4_partial_import"),
                "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
-               "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent")}[args.suite]
+               "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent"),
+               "source-matching":("test_1_queries_filter", "test_2_auto_confirm_negatives", "test_3_mapping_reuse_identity", "test_4_user_revoke")}[args.suite]
     for method, case_id in zip(methods, case_ids):
         case = ET.SubElement(suite, "testcase", name=case_id)
         if method in failures:
