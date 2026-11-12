@@ -3279,3 +3279,12 @@
 - 验收 A1：PASS；日志：`evidence/runs/20261112T094211963782-A1/output.log`；3 项通过，覆盖 parse/jx、地址编码、签名参数、字段及请求头、错误响应、配置变更和刷新。
 - 相关回归：线路生命周期 5 项通过 `evidence/runs/20261112T094416085704-T1.14-regression-lookup-lifecycle/output.log`；T4 查询和 DRPYJS0 4 项通过 `evidence/runs/20261112T094502247282-T1.14-regression-t4-query-adapters/output.log`；T4 REST 2 项通过 `evidence/runs/20261112T094520123974-T1.14-regression-t4-rest-adapter/output.log`；OpenAPI 格式校验通过。
 - 兼容范围：JSON 字段路径和页面 URL 参数可配置，实网解析接口 NOT RUN。补入短期线路状态模块，用于识别配置更新期间的在途结果。
+
+## T1.15 多类型配置导入与三期 App 联调 2026-11-12
+
+- 结果：DONE
+- 实现：按 TVBox、zyfun 3.4.1+ 和旧版分别识别来源/解析器类型，解析相对 URL 与关联项，逐项报告导入、跳过或失败，重复导入沿用身份。应用支持各已实现来源、粘贴导入、逐项结果与手动刷新线路；线路失效时清除来源缓存，重查保留目标集及续播进度。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T100412113248-A1/output.log`；3 项通过，覆盖两类配置、两代 zyfun 解析器编号、地址/关联、幂等、失败保留和线路 410 后的缓存清理。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T100446209599-A2/output.log`；2 项窗口记录通过。受控桌面应用中，导入的 T4、Stremio 线路均播放；T4 解析请求头生效。移除 Stremio Primary 后刷新触发重查，旧线路消失，选择 T4 后同一集从约 20 秒续播。窗口观察与限制见 `evidence/manual/T1.15-provider-window.json`。
+- 相关回归：线路生命周期 5 项 `evidence/runs/20261112T100332691317-T1.15-final-lookup-lifecycle/output.log`，MacCMS 来源管理 3 项 `evidence/runs/20261112T100405661602-T1.15-final-playback-sources/output.log`，选线界面 4 项 `evidence/runs/20261112T100408416977-T1.15-final-app-source-selection/output.log`，播放器与选线 17 项 `evidence/runs/20261112T100424696621-T1.15-final-ui-regression/output.log`；OpenAPI 校验通过 `evidence/runs/20261112T100427577108-T1.15-final-openapi/output.log`。
+- 环境与范围：macOS arm64 隔离 App、Docker 服务及受控上游；外部真实来源、其他平台实机 NOT RUN。类型与版本依据 [zyfun 数据结构](https://github.com/Hiram-Wong/zyfun#-数据结构)；脚本、jar、网页嗅探按配置结果列为跳过。使用说明见 `server/README.md`。本卡补入详情页、App 和线路生命周期文件以实现手动刷新及续播恢复；测试资源已清理。

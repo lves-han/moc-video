@@ -1152,15 +1152,102 @@ class JsonParser(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+class ProviderImportIntegration(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_type_mapping(self):
+        self.start('app-token',self.fixture_env)
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        tv={'format':'tvbox','base_url':base+'/config/main.json','parses':[{'key':'p','name':'Parser','type':1,'url':'../json-parser?url=','flags':['fixture-flag'],'headers':{'X-Parser':'allowed'}}], 'sites':[
+            {'key':'xml','name':'XML','type':0,'api':'../maccms-xml'}, {'key':'json','name':'JSON','type':1,'api':'../maccms-json'},
+            {'key':'t4','name':'T4','type':4,'api':'../t4-query','headers':{'X-Fixture':'allowed'},'parse_ids':['p'],'ext':'../config.json'},
+            {'key':'addon','name':'Addon','kind':'stremio_stream','api':'../stream-tt/manifest.json','headers':{'X-Fixture':'allowed'}}, {'key':'jar','name':'JAR','type':3,'api':'csp_X'}]}
+        status,result=self.native('POST','/v1/sources/import',tv);self.assertEqual(status,200,result)
+        self.assertEqual([r['status'] for r in result['results']],['ok','ok','ok','ok','skipped'])
+        self.assertEqual([r['source']['kind'] for r in result['results'][:4]],['maccms_xml','maccms_json','t4_query','stremio_stream'])
+        self.assertEqual(result['results'][2]['source']['parse_ids'],[result['parsers'][0]['parser']['id']])
+        self.assertEqual(result['results'][2]['source']['ext'],base+'/config.json')
+        self.assertEqual(result['parsers'][0]['parser']['url_param'],'url')
+        type(self).tv=tv;type(self).first=result
+        zy={'format':'zyfun','base_url':base+'/config/main.json','analyze':[{'id':'zparse','name':'Z parser','type':2,'api':'../json-parser?jx=','flag':['fixture-flag'],'isActive':True}], 'site':[
+            {'id':'zquery','name':'Z query','type':6,'api':'../t4-query'}, {'id':'zrest','name':'Z REST','type':8,'api':'../cat/owner'}, {'id':'zscript','name':'Script','type':7,'api':'../x.js'}, {'id':'z4','name':'Unmapped','type':4,'api':'../t4-query'}]}
+        status,result=self.native('POST','/v1/sources/import',zy);self.assertEqual(status,200,result)
+        self.assertEqual([r['status'] for r in result['results']],['ok','ok','skipped','skipped'])
+        self.assertEqual([r['source']['kind'] for r in result['results'][:2]],['t4_query','t4_rest'])
+        self.assertEqual(result['parsers'][0]['parser']['url_param'],'jx')
+        type(self).zy=zy
+
+    def test_2_idempotent_skip(self):
+        status,result=self.native('POST','/v1/sources/import',self.tv);self.assertEqual(status,200,result)
+        for old,new in zip(self.first['results'][:4],result['results'][:4]):
+            self.assertEqual((old['source']['id'],old['source']['revision']),(new['source']['id'],new['source']['revision']))
+        self.assertEqual(self.first['parsers'][0]['parser']['id'],result['parsers'][0]['parser']['id'])
+        source=self.first['results'][3]['source']
+        self.fixture_request('/control?stream_mode=normal')
+        _,events=self.ndjson('/v1/lookups',self.input([source['id']],refresh=True))
+        primary=next(e['line'] for e in events if e['event']=='line' and e['line']['line_name']=='Primary')
+        self.fixture_request('/control?stream_mode=missing')
+        self.assertEqual(self.native('POST','/v1/lines/'+primary['line_id']+'/refresh',{})[0],410)
+        _,events=self.ndjson('/v1/lookups',self.input([source['id']]))
+        self.assertFalse(any(e['event']=='line' and e['line']['line_name']=='Primary' for e in events),events)
+        bad=json.loads(json.dumps(self.tv));bad['sites']=[bad['sites'][2]];bad['sites'][0]['api']='javascript:bad';bad['parses']=[]
+        status,result=self.native('POST','/v1/sources/import',bad);self.assertEqual(status,200);self.assertEqual(result['results'][0]['status'],'failed')
+        stored=self.native('GET','/v1/sources')[1]['sources'];self.assertTrue(any(s['id']==self.first['results'][2]['source']['id'] for s in stored))
+        legacy={'format':'zyfun-legacy','analyze':[{'name':'old json','type':1,'api':'https://parse.test/?url='},{'name':'old web','type':0,'api':'https://parse.test/'}],'site':[]}
+        _,result=self.native('POST','/v1/sources/import',legacy);self.assertEqual([x['status'] for x in result['parsers']],['ok','skipped'])
+        self.assert_budget(fixture=True)
+
+    def test_3_settings_contract(self):
+        page=(ROOT/'src/views/SourceSettings.vue').read_text();state=(ROOT/'src/state.ts').read_text()
+        for value in ('t4_query','t4_drpyjs0','t4_rest','stremio_stream','importRemote','importResults','zyfun-legacy'): self.assertIn(value,page)
+        self.assertIn('importServiceSources',state)
+        spec=json.loads((ROOT/'protocol/service.openapi.json').read_text())
+        self.assertIn('/v1/sources/import',spec['paths']);self.assertIn('/v1/parsers',spec['paths'])
+
+
+class ProviderImportIntegrationApp(unittest.TestCase):
+    host_peak = host_peak_build = host_peak_runtime = other_owned_caps = 0
+
+    @classmethod
+    def setUpClass(cls):
+        cls.observation=json.loads((ROOT/'evidence/manual/T1.15-provider-window.json').read_text())
+        paths=['src','src-tauri/src','src-tauri/Cargo.toml','src-tauri/build.rs','src-tauri/capabilities','protocol/app.schema.json','crates/moc-core/src','server/src','server/Cargo.toml','server/Dockerfile','Cargo.lock','tests/fixtures/service/tmdb_fixture.py']
+        rows=[]
+        for name in paths:
+            path=ROOT/name
+            for file in ([path] if path.is_file() else path.rglob('*')):
+                if file.is_file(): rows.append((str(file.relative_to(ROOT)),hashlib.sha256(file.read_bytes()).hexdigest()))
+        digest=hashlib.sha256(json.dumps(sorted(rows),separators=(',',':')).encode()).hexdigest()
+        if digest != cls.observation['product_hash']: raise AssertionError('Product changed after window validation')
+
+    def test_1_t4_play(self):
+        observed=self.observation['observed']
+        self.assertGreater(observed['t4_playing_seconds'][1],observed['t4_playing_seconds'][0])
+        self.assertGreater(observed['parser_calls_with_header'],0)
+        self.assertTrue(observed['old_primary_absent_after_refresh'] and observed['fallback_source_ready'])
+        self.assertEqual(observed['recovered_episode'],'tt7654321:1:3')
+        self.assertGreaterEqual(observed['position_after_refresh_seconds'],observed['position_before_refresh_seconds'])
+
+    def test_2_stremio_play(self):
+        observed=self.observation['observed']
+        self.assertGreater(observed['stremio_playing_seconds'][1],observed['stremio_playing_seconds'][0])
+        self.assertGreater(observed['stremio_series_requests'],0)
+        self.assertGreater(observed['stremio_resumed_seconds'],0)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1177,7 +1264,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

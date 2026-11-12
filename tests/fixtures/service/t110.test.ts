@@ -156,6 +156,20 @@ test('expired line restarts lookup for the same episode', async () => {
   assert.equal(root.route.name, 'playback');
 });
 
+test('refreshing a vanished line restarts the same episode lookup', async () => {
+  const rounds: string[] = [];
+  const { app } = setup(async (command, input) => {
+    if (command === 'start_line_round') { rounds.push(input.round_id); assert.equal(input.video_id, video); return view(input.round_id, true, line.line_id); }
+    if (command === 'refresh_line') throw new ApiFailure({ code:'SESSION_EXPIRED',message:'line not found',retryable:false });
+    if (command === 'cancel_line_round') return { ok:true };
+    throw new Error(command);
+  });
+  await app.startServiceRound(video, false, false);
+  await app.refreshServiceLine(line.line_id);
+  assert.equal(rounds.length, 2); assert.notEqual(rounds[0], rounds[1]);
+  assert.equal(app.serviceRound.videoId, video); assert.equal(app.serviceRound.open, true);
+});
+
 test('late lookup after cancellation is retired', async () => {
   let complete!: (value: unknown) => void;
   let round = ''; let cancelled = 0;

@@ -1200,6 +1200,11 @@ export class AppController {
     await this.refreshServiceSources();
     if (warning) this.serviceSources.error = warning;
   }
+  async importServiceSources(payload: Record<string, unknown>) {
+    const result = await nativeInvoke<{ results: Array<{ name?: string; status: string; reason?: string; error?: string }>; parsers?: Array<{ name?: string; status: string; reason?: string; error?: string }> }>('app_playback_sources', { action: 'import', id: null, payload: clone(payload) });
+    await this.refreshServiceSources();
+    return result;
+  }
   async changeServiceSource(action: 'create' | 'update' | 'delete', source: Partial<ServiceSource>, id: string | null = null) {
     await nativeInvoke('app_playback_sources', { action, id, payload: action === 'delete' ? null : clone(source) });
     await this.refreshServiceSources();
@@ -1353,7 +1358,7 @@ export class AppController {
     requireBinding(metadataSource, 'Metadata source is unavailable in the playback service');
     this.invalidatePlayback();
     const generation = this.serviceGeneration, round = crypto.randomUUID();
-    this.serviceRoundId = round; this.serviceRound.open = true; this.serviceRound.videoId = videoId; this.serviceRound.autoPlay = autoPlay; this.serviceRound.error = '';
+    this.serviceRoundId = round; this.serviceRound.snapshot = null; this.serviceRound.open = true; this.serviceRound.videoId = videoId; this.serviceRound.autoPlay = autoPlay; this.serviceRound.error = '';
     await this.cleanup;
     if (generation !== this.serviceGeneration) return;
     try {
@@ -1380,6 +1385,21 @@ export class AppController {
         await this.startServiceRound(video, true, autoPlay);
       } else if (generation === this.serviceGeneration) this.serviceRound.error = failure(cause).message;
     }
+  }
+  async refreshServiceLine(lineId: string) {
+    const round = this.serviceRoundId, generation = this.serviceGeneration;
+    if (!round || this.serviceRound.busy) return;
+    this.serviceRound.busy = true;
+    try {
+      const snapshot = await this.api.call('refresh_line', { round_id: round, line_id: lineId }) as ServiceRoundView;
+      if (generation === this.serviceGeneration && round === this.serviceRoundId) this.serviceRound.snapshot = snapshot;
+    } catch (cause) {
+      if (generation === this.serviceGeneration && failure(cause).code === 'SESSION_EXPIRED') {
+        const video = this.serviceRound.videoId;
+        this.serviceRound.busy = false;
+        await this.startServiceRound(video, false, false);
+      } else if (generation === this.serviceGeneration) this.serviceRound.error = failure(cause).message;
+    } finally { if (generation === this.serviceGeneration) this.serviceRound.busy = false; }
   }
   async chooseServiceLine(lineId: string, retried = false) {
     const round = this.serviceRoundId, generation = this.serviceGeneration;

@@ -50,6 +50,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.headers.get("X-Parser") != "allowed": self.send_response(403); self.end_headers(); return
             if STATE["parser_mode"] == "html": self.send_response(200); self.end_headers(); self.wfile.write(b"<html>error</html>"); return
             if STATE["parser_mode"] == "missing": return self.send_json({"data":{}})
+            if STATE["parser_mode"] == "window": return self.send_json({"url":STATE["media_url"],"headers":{"Referer":"https://parsed.test/"}})
             return self.send_json({"data":{"stream":"https://media.test/parsed.m3u8?generation="+query.get("gen",["1"])[0]},"headers":{"Referer":"https://parsed.test/","X-Media":"media"}})
         if url.path in ("/t4-query", "/t4-js0", "/web/302redirect"):
             STATE["t4_requests"].append({"path":url.path,"query":query,"header":self.headers.get("X-Fixture")})
@@ -64,6 +65,7 @@ class Handler(BaseHTTPRequestHandler):
                 mode = STATE["t4_mode"]
                 values = ["HD","https://media.test/hd.m3u8?generation=2","SD","https://media.test/sd.mp4?generation=2"]
                 if mode == "normal": values = ["HD","https://media.test/hd.m3u8?generation=1","SD","https://media.test/sd.mp4?generation=1"]
+                if mode == "window": return self.send_json({"url":"https://watch.test/episode?id=a%2Fb&part=1","parse":1})
                 if mode in ("parse", "jx"): values = ["HD","https://watch.test/episode?id=a%2Fb&part=1","SD","https://watch.test/episode?id=c%2Fd&part=2"]
                 if mode == "reverse": values = values[2:] + values[:2]
                 if mode == "duplicate": values[2] = "HD"
@@ -228,6 +230,7 @@ class Handler(BaseHTTPRequestHandler):
         mode=STATE['stream_mode'];generation='1' if mode == 'normal' else '2'
         first={'name':'Primary','url':'https://media.test/a.m3u8?token='+generation,'behaviorHints':{'videoHash':'0123456789abcdef','proxyHeaders':{'request':{'Referer':'https://fixture.test/','User-Agent':'FixturePlayer'}}}}
         second={'name':'Backup','url':'https://media.test/b.mp4?token='+generation,'behaviorHints':{'videoHash':'fedcba9876543210'}}
+        if mode == 'window': first['url'] = STATE['media_url']; second['url'] = STATE['media_url'] + '?backup=1'
         streams=[first,second,{'infoHash':'a'*40,'name':'Torrent'},{'name':'Website','externalUrl':'https://media.test/page'},{'name':'DASH','url':'https://media.test/video.mpd'},{'name':'Unknown','url':'https://media.test/opaque?id=unknown'}]
         if mode == 'reordered': streams[0],streams[1] = streams[1],streams[0]
         if mode == 'missing': streams = [item for item in streams if item.get('name') != 'Primary']

@@ -533,13 +533,48 @@ async fn playback_check(
     match result {Ok((results,groups,capabilities))=>Json(json!({"id":id,"revision":revision,"status":"ready","sample_count":results,"groups":groups,"capabilities":capabilities,"elapsed_ms":start.elapsed().as_millis()})).into_response(),Err(error)=>api_error(StatusCode::BAD_GATEWAY,"UPSTREAM_FAILED",error)}
 }
 
+fn import_url(value: &serde_json::Value, base: Option<&url::Url>) -> Option<String> {
+    let value = value.as_str()?;
+    let parsed = url::Url::parse(value)
+        .ok()
+        .or_else(|| base.and_then(|base| base.join(value).ok()))?;
+    if !metadata::http::valid(&parsed) || parsed.fragment().is_some() {
+        return None;
+    }
+    Some(parsed.to_string())
+}
+
 async fn playback_import(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
+    use sha2::{Digest, Sha256};
+    let format = input["format"].as_str().unwrap_or("legacy");
+    if !matches!(format, "legacy" | "tvbox" | "zyfun" | "zyfun-legacy") {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "BAD_REQUEST",
+            "Unknown import format",
+        );
+    }
+    let base = match input
+        .get("base_url")
+        .filter(|v| !v.is_null() && v.as_str() != Some(""))
+    {
+        Some(value) => match value
+            .as_str()
+            .and_then(|v| url::Url::parse(v).ok())
+            .filter(metadata::http::valid)
+        {
+            Some(value) => Some(value),
+            None => return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", "Invalid base URL"),
+        },
+        None => None,
+    };
     let entries = input["sources"]
         .as_array()
-        .or_else(|| input["sites"].as_array());
+        .or_else(|| input["sites"].as_array())
+        .or_else(|| input["site"].as_array());
     let Some(entries) = entries.filter(|items| items.len() <= 256) else {
         return api_error(
             StatusCode::BAD_REQUEST,
@@ -547,28 +582,178 @@ async fn playback_import(
             "Expected source list",
         );
     };
+    let parser_entries = input["parsers"]
+        .as_array()
+        .or_else(|| input["parses"].as_array())
+        .or_else(|| input["analyze"].as_array());
+    if parser_entries.is_some_and(|p| p.len() > 256) {
+        return api_error(StatusCode::BAD_REQUEST, "BAD_REQUEST", "Too many parsers");
+    }
+    let identity = |item: &serde_json::Value, prefix: &str| -> String {
+        let key = item["client_config_id"]
+            .as_str()
+            .or_else(|| item["config_id"].as_str())
+            .or_else(|| item["key"].as_str())
+            .or_else(|| item["id"].as_str());
+        if format == "legacy" && key.is_some() {
+            return if item["client_config_id"].is_string() || item["config_id"].is_string() {
+                key.unwrap().to_owned()
+            } else {
+                format!("import:{}", key.unwrap())
+            };
+        }
+        let value = key.map(str::to_owned).unwrap_or_else(|| {
+            format!(
+                "{}:{}",
+                item["name"],
+                item["api"]
+                    .as_str()
+                    .or_else(|| item["url"].as_str())
+                    .unwrap_or("")
+            )
+        });
+        format!(
+            "import:{prefix}:{format}:{:x}",
+            Sha256::digest(value.as_bytes())
+        )
+    };
+    let mut parser_results = Vec::new();
+    let mut imported = std::collections::HashMap::new();
+    for item in parser_entries.into_iter().flatten() {
+        let label = item["name"].as_str().unwrap_or("");
+        let json_type = match format {
+            "zyfun" => item["type"] == 2 || item["kind"] == "json",
+            "zyfun-legacy" => item["type"] == 1 || item["kind"] == "json",
+            "tvbox" => item["type"] == 1 || item["kind"] == "json",
+            _ => item["kind"] == "json" || item["type"] == 1,
+        };
+        if !json_type {
+            parser_results
+                .push(json!({"name":label,"status":"skipped","reason":"unsupported parser type"}));
+            continue;
+        }
+        let api = item
+            .get("api")
+            .filter(|v| v.as_str().is_some_and(|s| !s.is_empty()))
+            .or_else(|| item.get("url"))
+            .and_then(|v| import_url(v, base.as_ref()));
+        let Some(api) = api else {
+            parser_results
+                .push(json!({"name":label,"status":"failed","error":"invalid parser URL"}));
+            continue;
+        };
+        let url_param = item["url_param"]
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| {
+                url::Url::parse(&api).ok().and_then(|url| {
+                    url.query_pairs()
+                        .filter(|(_, v)| v.is_empty())
+                        .last()
+                        .map(|(k, _)| k.into_owned())
+                })
+            })
+            .unwrap_or_else(|| "url".to_owned());
+        let candidate = json!({"client_config_id":identity(item,"parser"),"name":item["name"],"api":api,"flags":item.get("flags").or_else(||item.get("flag")).cloned().unwrap_or(json!([])),"headers":item.get("headers").filter(|v| !v.is_null()).cloned().unwrap_or(json!({})),"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"url_param":url_param,"url_field":item.get("url_field").cloned().unwrap_or(json!("url"))});
+        let mut registry = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        match state.parsers.save(&candidate, None) {
+            Ok(parser) => {
+                for key in [
+                    item["key"].as_str(),
+                    item["id"].as_str(),
+                    item["name"].as_str(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    imported.insert(key.to_owned(), parser["id"].clone());
+                }
+                registry.parser_generation = registry.parser_generation.wrapping_add(1);
+                registry.cache.clear();
+                parser_results.push(json!({"name":label,"status":"ok","parser":parser}));
+            }
+            Err(error) => {
+                parser_results.push(json!({"name":label,"status":"failed","error":error}))
+            }
+        }
+    }
     let mut results = Vec::new();
     for item in entries {
+        let label = item["name"].as_str().unwrap_or("");
         let kind = item["kind"].as_str().or_else(|| item["type"].as_str());
-        let kind = match (kind, item["type"].as_u64()) {
-            (Some("maccms" | "maccms_json" | "t1_json" | "T1_JSON" | "t1Json"), _)
-            | (_, Some(1)) => "maccms_json",
-            (Some("maccms_xml" | "t0_xml" | "T0_XML" | "t0Xml"), _) | (_, Some(0)) => "maccms_xml",
-            (Some("t4_query" | "t4_drpys" | "T4_DRPYS"), _) | (_, Some(4 | 6)) => "t4_query",
-            (Some("t4_drpyjs0" | "T4_DRPYJS0" | "drpyjs0"), _) | (_, Some(2)) => "t4_drpyjs0",
-            (Some("t4_rest" | "t4_catvod" | "T4_CATVOD"), _) | (_, Some(8)) => "t4_rest",
-            (Some("stremio_stream"), _) => "stremio_stream",
+        let numeric = item["type"].as_u64();
+        let kind = match (kind, numeric, format) {
+            (Some("maccms" | "maccms_json" | "t1_json" | "T1_JSON" | "t1Json"), _, _)
+            | (_, Some(1), _) => "maccms_json",
+            (Some("maccms_xml" | "t0_xml" | "T0_XML" | "t0Xml"), _, _) | (_, Some(0), _) => {
+                "maccms_xml"
+            }
+            (Some("t4_query" | "t4_drpys" | "T4_DRPYS"), _, _)
+            | (_, Some(4), "tvbox" | "legacy")
+            | (_, Some(6), "zyfun" | "zyfun-legacy" | "legacy") => "t4_query",
+            (Some("t4_drpyjs0" | "T4_DRPYJS0" | "drpyjs0"), _, _) | (_, Some(2), "legacy") => {
+                "t4_drpyjs0"
+            }
+            (Some("t4_rest" | "t4_catvod" | "T4_CATVOD"), _, _)
+            | (_, Some(8), "zyfun" | "zyfun-legacy" | "legacy") => "t4_rest",
+            (Some("stremio_stream"), _, _) => "stremio_stream",
             _ => {
-                results.push(json!({"status":"skipped","reason":"unsupported source type"}));
+                results.push(
+                    json!({"name":label,"status":"skipped","reason":"unsupported source type"}),
+                );
                 continue;
             }
         };
-        let client = item["client_config_id"]
-            .as_str()
-            .or_else(|| item["config_id"].as_str())
-            .map(str::to_owned)
-            .or_else(|| item["key"].as_str().map(|key| format!("import:{key}")));
-        let candidate = json!({"client_config_id":client,"name":item["name"],"kind":kind,"api":item.get("api").or_else(||item.get("api_url")).cloned().unwrap_or(serde_json::Value::Null),"ext":item["ext"],"headers":item["headers"],"enabled":item.get("enabled").cloned().unwrap_or(json!(true)),"parse_ids":item["parse_ids"]});
+        let api = item
+            .get("api")
+            .or_else(|| item.get("api_url"))
+            .and_then(|v| import_url(v, base.as_ref()));
+        let Some(api) = api else {
+            results.push(json!({"name":label,"status":"failed","error":"invalid source URL"}));
+            continue;
+        };
+        let mut parse_ids = Vec::new();
+        let mut missing = false;
+        if let Some(ids) = item
+            .get("parse_ids")
+            .or_else(|| item.get("parsers"))
+            .and_then(|v| v.as_array())
+        {
+            for key in ids {
+                if let Some(id) = key.as_str().and_then(|key| imported.get(key)) {
+                    parse_ids.push(id.clone());
+                } else if format == "legacy" {
+                    parse_ids.push(key.clone());
+                } else {
+                    missing = true;
+                }
+            }
+        }
+        if missing {
+            results.push(
+                json!({"name":label,"status":"failed","error":"associated parser not imported"}),
+            );
+            continue;
+        }
+        let ext = match item["ext"].as_str() {
+            Some(value) if value.starts_with("./") || value.starts_with("../") => {
+                match import_url(&json!(value), base.as_ref()) {
+                    Some(value) => json!(value),
+                    None => {
+                        results.push(
+                            json!({"name":label,"status":"failed","error":"invalid extension URL"}),
+                        );
+                        continue;
+                    }
+                }
+            }
+            _ => item["ext"].clone(),
+        };
+        let candidate = json!({"client_config_id":identity(item,"source"),"name":item["name"],"kind":kind,"api":api,"ext":ext,"headers":item.get("headers").or_else(|| item.get("header")).cloned().unwrap_or(json!({})),"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"parse_ids":parse_ids});
         let mut registry = state
             .lookup_runtime
             .registry
@@ -579,12 +764,12 @@ async fn playback_import(
                 if let Some(id) = source["id"].as_str() {
                     registry.changed(id);
                 }
-                results.push(json!({"status":"ok","source":source}))
+                results.push(json!({"name":label,"status":"ok","source":source}));
             }
-            Err(error) => results.push(json!({"status":"failed","error":error})),
+            Err(error) => results.push(json!({"name":label,"status":"failed","error":error})),
         }
     }
-    Json(json!({"results":results})).into_response()
+    Json(json!({"results":results,"parsers":parser_results})).into_response()
 }
 
 async fn list_sources(State(state): State<AppState>) -> Response {

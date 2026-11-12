@@ -36,20 +36,31 @@ const failure = ref("");
 const serviceDraft = reactive({ url: state.settings.playback_service?.url ?? "http://127.0.0.1:8787", token: state.settings.playback_service?.token ?? "" });
 const serviceEnabled = computed(() => state.settings.playback_service?.enabled === true);
 const remoteEditing = ref(false);
-const remoteDraft = reactive({ id: '', name: '', api: '', kind: 'maccms_json', headers: '{}' });
+const remoteDraft = reactive({ id: '', name: '', api: '', kind: 'maccms_json', headers: '{}', ext: '', parseIds: '' });
+const importEditing = ref(false);
+const importDraft = reactive({ format: 'tvbox', baseUrl: '', text: '' });
+const importResults = ref<Array<{ name?: string; status: string; reason?: string; error?: string }>>([]);
+async function importRemote() {
+  let config: Record<string, unknown>;
+  try { const value = JSON.parse(importDraft.text); if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(); config = value; }
+  catch { failure.value = word('请填写 JSON 配置对象。', 'Enter a JSON configuration object.'); return; }
+  await run(async () => { const result = await controller.importServiceSources({ ...config, format: importDraft.format, base_url: importDraft.baseUrl.trim() || null }); importResults.value = [...(result.parsers ?? []), ...result.results]; });
+}
 watch(() => [props.section, serviceEnabled.value], () => {
   if (props.section === 'playback' && serviceEnabled.value) void controller.refreshServiceSources().catch(() => {});
 }, { immediate: true });
 function editRemote(source?: ServiceSource) {
-  Object.assign(remoteDraft, source ? { id: source.id, name: source.name, api: source.api, kind: source.kind, headers: JSON.stringify(source.headers) } : { id: '', name: '', api: '', kind: 'maccms_json', headers: '{}' });
+  Object.assign(remoteDraft, source ? { id: source.id, name: source.name, api: source.api, kind: source.kind, headers: JSON.stringify(source.headers), ext: source.ext == null ? '' : JSON.stringify(source.ext), parseIds: source.parse_ids.join(', ') } : { id: '', name: '', api: '', kind: 'maccms_json', headers: '{}', ext: '', parseIds: '' });
   remoteEditing.value = true;
 }
 async function saveRemote() {
   let headers: Record<string, string>;
   try { headers = JSON.parse(remoteDraft.headers); if (!headers || Array.isArray(headers) || typeof headers !== 'object' || Object.values(headers).some(value => typeof value !== 'string')) throw new Error(); }
   catch { failure.value = word('请求头需要使用 JSON 对象。', 'Headers must be a JSON object.'); return; }
+  let ext: unknown = null;
+  try { if (remoteDraft.ext.trim()) ext = JSON.parse(remoteDraft.ext); } catch { failure.value = word('扩展参数需要使用 JSON。', 'Extension must be valid JSON.'); return; }
   const old = controller.serviceSources.items.find(source => source.id === remoteDraft.id);
-  const body = { ...old, name: remoteDraft.name.trim(), api: remoteDraft.api.trim(), kind: remoteDraft.kind, headers, enabled: old?.enabled ?? true };
+  const body = { ...old, name: remoteDraft.name.trim(), api: remoteDraft.api.trim(), kind: remoteDraft.kind, headers, ext, parse_ids: remoteDraft.parseIds.split(',').map(value => value.trim()).filter(Boolean), enabled: old?.enabled ?? true };
   if (await run(() => controller.changeServiceSource(old ? 'update' : 'create', body, old?.id ?? null))) remoteEditing.value = false;
 }
 const retryMigration = () => run(() => controller.migratePlaybackSources());
@@ -207,7 +218,7 @@ async function copyDiagnostics() {
     </template>
 
     <template v-else-if="serviceEnabled">
-      <div class="sources-heading"><h3>{{ word('播放源', 'Playback sources') }}</h3><NButton class="sources-add" :disabled="busy" @click="editRemote()">{{ word('添加来源', 'Add source') }}</NButton></div>
+      <div class="sources-heading"><h3>{{ word('播放源', 'Playback sources') }}</h3><div class="sources-row-actions"><NButton class="sources-import" :disabled="busy" @click="importEditing = true">{{ word('导入配置', 'Import configuration') }}</NButton><NButton class="sources-add" :disabled="busy" @click="editRemote()">{{ word('添加来源', 'Add source') }}</NButton></div></div>
       <NButton v-if="configs.some(config => config.kind === 'maccms')" :disabled="busy" @click="retryMigration">{{ word('迁入本地来源', 'Import local sources') }}</NButton>
       <NAlert v-if="controller.serviceSources.error" type="error">{{ controller.serviceSources.error }} <NButton size="small" @click="retryMigration">{{ t('Retry') }}</NButton></NAlert>
       <article v-for="source in controller.serviceSources.items" :key="source.id" class="sources-row">
@@ -217,9 +228,18 @@ async function copyDiagnostics() {
       <NModal v-model:show="remoteEditing" preset="card" class="tv-dialog" :title="word('播放源', 'Playback source')" :style="{ width: 'min(640px, calc(100vw - 32px))' }">
         <label>{{ word('名称', 'Name') }}<input v-model="remoteDraft.name" class="setting-select" /></label>
         <label>{{ word('接口地址', 'API address') }}<input v-model="remoteDraft.api" class="setting-select" /></label>
-        <label>{{ word('格式', 'Format') }}<select v-model="remoteDraft.kind" class="setting-select"><option value="maccms_json">MacCMS JSON</option><option value="maccms_xml">MacCMS XML</option></select></label>
+        <label>{{ word('格式', 'Format') }}<select v-model="remoteDraft.kind" class="setting-select"><option value="maccms_json">MacCMS JSON</option><option value="maccms_xml">MacCMS XML</option><option value="t4_query">T4 Query</option><option value="t4_drpyjs0">T4 DRPYJS0</option><option value="t4_rest">T4 REST (CatVod)</option><option value="stremio_stream">Stremio Stream</option></select></label>
         <label>{{ word('请求头（JSON）', 'Headers (JSON)') }}<textarea v-model="remoteDraft.headers" /></label>
+        <label>{{ word('扩展参数（JSON，可选）', 'Extension (JSON, optional)') }}<textarea v-model="remoteDraft.ext" /></label>
+        <label>{{ word('解析器 ID（逗号分隔，可选）', 'Parser IDs (comma-separated, optional)') }}<input v-model="remoteDraft.parseIds" class="setting-select" /></label>
         <NButton type="primary" :disabled="busy || !remoteDraft.name.trim() || !remoteDraft.api.trim()" @click="saveRemote">{{ t('Save') }}</NButton>
+      </NModal>
+      <NModal v-model:show="importEditing" preset="card" class="tv-dialog" :title="word('导入播放源', 'Import playback sources')" :style="{ width: 'min(720px, calc(100vw - 32px))' }">
+        <label>{{ word('配置类型', 'Configuration format') }}<select v-model="importDraft.format" class="setting-select"><option value="tvbox">TVBox</option><option value="zyfun">zyfun 3.4.1+</option><option value="zyfun-legacy">zyfun ≤ 3.4.0</option></select></label>
+        <label>{{ word('配置地址（用于相对路径，可选）', 'Configuration URL (for relative paths, optional)') }}<input v-model="importDraft.baseUrl" class="setting-select" /></label>
+        <label>{{ word('配置内容（JSON）', 'Configuration (JSON)') }}<textarea v-model="importDraft.text" rows="8" /></label>
+        <NButton type="primary" :disabled="busy || !importDraft.text.trim()" @click="importRemote">{{ word('导入', 'Import') }}</NButton>
+        <ul v-if="importResults.length" aria-live="polite"><li v-for="(item, index) in importResults" :key="index">{{ item.name || word('未命名', 'Unnamed') }} · {{ item.status }} {{ item.reason || item.error || '' }}</li></ul>
       </NModal>
     </template>
     <template v-else-if="native">

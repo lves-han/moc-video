@@ -28,15 +28,17 @@ fn expired(reason: &str) -> Response {
     (StatusCode::GONE,Json(json!({"error":{"code":"SESSION_EXPIRED","message":"Lookup or line expired","retryable":true,"reason":reason}}))).into_response()
 }
 fn retire(state: &AppState, id: &str, reason: &str) -> Response {
-    state
+    let mut registry = state
         .lookup_runtime
         .registry
         .lock()
-        .expect("lookup registry")
-        .lines
-        .remove(id);
+        .expect("lookup registry");
+    if let Some(line) = registry.lines.remove(id) {
+        registry.changed(&line.source_id);
+    }
     expired(reason)
 }
+
 fn response(rx: mpsc::Receiver<Value>) -> Response {
     let stream = ReceiverStream::new(rx).map(|value| Ok::<_, Infallible>(format!("{}\n", value)));
     (

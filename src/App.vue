@@ -244,11 +244,12 @@ async function onHashChange() {
   } catch (error) { preferenceError.value = String(error); }
   finally { poster?.style.removeProperty('view-transition-name'); document.querySelectorAll<HTMLElement>('.poster-link').forEach(element => element.style.removeProperty('view-transition-name')); }
 }
-async function playEpisode(videoId: string, explicitLine = false) {
+async function playEpisode(videoId: string, explicitLine = false, resumePosition?: number) {
   try {
     await flushHistory();
     if (native && appState.settings.playback_service?.enabled) {
-      if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
+      if (resumePosition && resumePosition > 0) wantedResume = { video_id: videoId, position_ms: resumePosition };
+      else if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
       await appController.startServiceRound(videoId, false, !explicitLine);
       return;
     }
