@@ -1137,7 +1137,8 @@
               "maccms_json",
               "maccms_xml",
               "t4_query",
-              "t4_drpyjs0"
+              "t4_drpyjs0",
+              "t4_rest"
             ]
           },
           "api": {

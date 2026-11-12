@@ -3247,3 +3247,12 @@
 - 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T084723945336-T111-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T084616551471-T111-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T084824983962-T111-openapi/output.log`。
 - 兼容范围：按 [zyfun 查询式适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Drpys.ts)、[DRPYJS0 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4DrpyJs0.ts)和 [drpy-node T4 文档](https://github.com/zourjke/drpy-node/blob/main/docs/t4api.md) 的 GET 查询及 JSON 响应实现；同名服务的其他私有参数仍需对应样本。外部来源实网 NOT RUN。
 - 范围：补入匹配、对应关系和短期线路状态模块以接入统一分发；任务开始后为补齐 T1.10 恢复/综艺而先完成的六个界面文件列入范围，仅用于覆盖已提交的基线变化。
+
+## T1.12 T4 REST（CatVod）接口适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `t4_rest` 来源，按来源版本初始化并调用 POST `/search`、`/detail`、`/play`；初始化扩展和返回的可选上下文随来源隔离。未返回独立上下文的服务按接口地址串行初始化和请求，避免共享状态串用；配置变更重新初始化，错误来源单独失败。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T085803711205-A1/output.log`；2 项通过，覆盖初始化和请求体、播放地址及头、两个独立上下文、同地址共享状态隔离、配置变更及单来源初始化失败。
+- 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T085830194469-T112-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T085901982739-T112-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T085947629379-T112-openapi/output.log`。
+- 兼容范围：路由和基础请求体按 [zyfun CatVod 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Catvod.ts) 实现；`init.ext` 和返回 `context` 是本次受控样本验证的可选约定。POST 重定向限同源 307/308。外部服务实网 NOT RUN。
+- 范围：补入共享 HTTP 传输模块以支持 POST，延续现有 TLS、响应上限及跨源保护。

@@ -3089,14 +3089,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.12 T4 REST（CatVod）接口适配
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 T4 REST、5.6、6.6、7.2）→ A1
 - 上下文：方案 §1 T4 REST、5.6、6.6、7.2；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：来源管理和 lookup 管线；CatVod /init、/home、/category、/detail、/search、/play 资料及样本。
 - 不变量：初始化/请求上下文归属来源版本；play 结果保留上游可验证的逻辑线路定位信息，按方案 5.9 交给公共刷新层。
 - 未决项：具体 REST 服务的鉴权/初始化字段在本卡用实际响应或维护方样例核对，并记录支持范围。
-- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
+- 范围：`Cargo.toml`, `Cargo.lock`, `server/src/adapters/`, `server/src/metadata/http.rs`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `licenses/`, `docs/runtime.lock.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `server/Cargo.toml`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/t4_rest.rs`, `server/src/sources.rs`, `server/src/lookups.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：无；共用分发改动时复用 T1.6/T1.8 的相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

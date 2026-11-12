@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": []}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -23,6 +23,7 @@ class Handler(BaseHTTPRequestHandler):
             if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
             if "reset" in query: STATE["counts"].clear()
             if "reset_t4" in query: STATE["t4_requests"].clear()
+            if "reset_rest" in query: STATE["rest_requests"].clear(); STATE["rest_contexts"].clear()
             return self.send_json(STATE)
         if url.path == "/stats":
             return self.send_json(STATE)
@@ -199,6 +200,36 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"meta":{"id":parts[3].removesuffix('.json'),"type":"movie","name":label}})
         self.send_response(404)
         self.end_headers()
+
+    def do_POST(self):
+        url = urlsplit(self.path)
+        parts = url.path.strip('/').split('/')
+        if len(parts) != 3 or parts[0] != 'cat' or parts[2] not in ('init', 'search', 'detail', 'play'):
+            self.send_response(404); self.end_headers(); return
+        try: body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))))
+        except (ValueError, TypeError): self.send_response(400); self.end_headers(); return
+        owner, action = parts[1], parts[2]
+        recorded = {'owner':owner,'action':action,'body':body,'header':self.headers.get('X-Fixture'),'query':parse_qs(url.query)}
+        STATE['rest_requests'].append(recorded)
+        if self.headers.get('X-Fixture') != 'allowed': self.send_response(403); self.end_headers(); return
+        if action == 'init':
+            ext = body.get('ext') or {}
+            if ext.get('tenant') == 'FAIL': self.send_response(503); self.end_headers(); return
+            context = {'owner':owner,'tenant':ext.get('tenant')}
+            STATE['rest_contexts'][owner] = context
+            if owner == 'shared': time.sleep(.05); return self.send_json({})
+            return self.send_json({'context':context})
+        if owner == 'shared':
+            time.sleep(.05)
+            if 'context' in body or owner not in STATE['rest_contexts']: self.send_response(403); self.end_headers(); return
+            recorded['effective_tenant'] = STATE['rest_contexts'][owner]['tenant']
+        elif body.get('context') != STATE['rest_contexts'].get(owner): self.send_response(403); self.end_headers(); return
+        video={'vod_id':'201','vod_name':'Show','type_name':'电视剧','vod_year':'2020','vod_play_from':'rest-flag','vod_play_url':'S01E02$rest-2#S01E03$rest-3'}
+        if action == 'search': return self.send_json({'list':[video] if body.get('wd') == 'Show' else []})
+        if action == 'detail': return self.send_json({'list':[video] if body.get('id') == '201' else []})
+        if body.get('id') != 'rest-2' or body.get('flag') != 'rest-flag': self.send_response(400); self.end_headers(); return
+        suffix = '?tenant=' + STATE['rest_contexts'][owner]['tenant'] if owner == 'shared' else ''
+        return self.send_json({'url':'https://media.test/'+owner+'.m3u8'+suffix,'header':{'Referer':'https://fixture.test/'+owner}})
 
     def send_json(self, data):
         payload = json.dumps(data, ensure_ascii=False).encode()

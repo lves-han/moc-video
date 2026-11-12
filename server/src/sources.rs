@@ -112,7 +112,12 @@ pub fn validate(input: &Value) -> Result<Value, &'static str> {
         .ok_or("invalid source name")?;
     let kind = input["kind"]
         .as_str()
-        .filter(|v| matches!(*v, "maccms_json" | "maccms_xml" | "t4_query" | "t4_drpyjs0"))
+        .filter(|v| {
+            matches!(
+                *v,
+                "maccms_json" | "maccms_xml" | "t4_query" | "t4_drpyjs0" | "t4_rest"
+            )
+        })
         .ok_or("unsupported source kind")?;
     let api = input["api"].as_str().ok_or("missing source URL")?;
     let parsed = Url::parse(api).map_err(|_| "invalid source URL")?;

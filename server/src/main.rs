@@ -464,6 +464,7 @@ async fn playback_import(
             (Some("maccms_xml" | "t0_xml" | "T0_XML" | "t0Xml"), _) | (_, Some(0)) => "maccms_xml",
             (Some("t4_query" | "t4_drpys" | "T4_DRPYS"), _) | (_, Some(4 | 6)) => "t4_query",
             (Some("t4_drpyjs0" | "T4_DRPYJS0" | "drpyjs0"), _) | (_, Some(2)) => "t4_drpyjs0",
+            (Some("t4_rest" | "t4_catvod" | "T4_CATVOD"), _) | (_, Some(8)) => "t4_rest",
             _ => {
                 results.push(json!({"status":"skipped","reason":"unsupported source type"}));
                 continue;

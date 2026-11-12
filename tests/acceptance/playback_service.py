@@ -945,13 +945,76 @@ class T4QueryAdapters(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+class T4RestAdapter(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_init_and_routes(self):
+        self.start('app-token',self.fixture_env)
+        self.fixture_request('/control?reset_rest=1')
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        sources=[]
+        for name,tenant in (('a','A'),('b','B'),('bad','FAIL')):
+            payload={'name':name,'kind':'t4_rest','api':base+'/cat/'+name+'?sig=fixture','ext':{'tenant':tenant},'headers':{'X-Fixture':'allowed'},'enabled':True}
+            status,source=self.native('POST','/v1/sources',payload);self.assertEqual(status,201,source);sources.append(source)
+        type(self).rest_sources=sources
+        status,events=self.ndjson('/v1/lookups',self.input([v['id'] for v in sources]))
+        self.assertEqual(status,200,events)
+        lines=[event['line'] for event in events if event['event']=='line'];self.assertEqual(len(lines),2,events)
+        self.assertEqual({line['source_id'] for line in lines},{sources[0]['id'],sources[1]['id']})
+        self.assertTrue(any(event.get('source_id')==sources[2]['id'] and event.get('status')=='failed' for event in events))
+        for line,name in zip(sorted(lines,key=lambda v:v['play']['url']),('a','b')):
+            self.assertEqual(line['play']['url'],'https://media.test/'+name+'.m3u8')
+            self.assertEqual(line['play']['headers']['referer'],'https://fixture.test/'+name)
+        requests=self.fixture_request('/stats')['rest_requests']
+        for owner,tenant in (('a','A'),('b','B')):
+            relevant=[r for r in requests if r['owner']==owner]
+            self.assertEqual(relevant[0]['action'],'init');self.assertEqual(relevant[0]['body'],{'ext':{'tenant':tenant}})
+            self.assertEqual(sum(r['action']=='init' for r in relevant),1)
+            self.assertTrue(all(r['header']=='allowed' and r['query'].get('sig')==['fixture'] for r in relevant))
+            self.assertTrue(any(r['action']=='search' and r['body']=={'wd':'Show','pg':1,'context':{'owner':owner,'tenant':tenant}} for r in relevant))
+            self.assertTrue(any(r['action']=='detail' and r['body']=={'id':'201','context':{'owner':owner,'tenant':tenant}} for r in relevant))
+            self.assertTrue(any(r['action']=='play' and r['body']=={'flag':'rest-flag','id':'rest-2','context':{'owner':owner,'tenant':tenant}} for r in relevant))
+
+    def test_2_context_and_errors(self):
+        source=dict(self.rest_sources[0]);source['ext']={'tenant':'A2'}
+        status,updated=self.native('PUT','/v1/sources/'+source['id'],source)
+        self.assertEqual(status,200,updated);self.assertEqual(updated['revision'],source['revision']+1)
+        _,events=self.ndjson('/v1/lookups',self.input([source['id'],self.rest_sources[1]['id'],self.rest_sources[2]['id']],refresh=True))
+        self.assertEqual(len([e for e in events if e['event']=='line']),2,events)
+        self.assertTrue(any(e.get('source_id')==self.rest_sources[2]['id'] and e.get('status')=='failed' for e in events))
+        requests=self.fixture_request('/stats')['rest_requests']
+        a=[r for r in requests if r['owner']=='a'];b=[r for r in requests if r['owner']=='b']
+        self.assertEqual([r['body']['ext']['tenant'] for r in a if r['action']=='init'],['A','A2'])
+        self.assertEqual(sum(r['action']=='init' for r in b),1)
+        self.assertTrue(any(r['action']=='play' and r['body']['context']['tenant']=='A2' for r in a))
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        shared=[]
+        for tenant in ('C','D'):
+            payload={'name':'shared-'+tenant,'kind':'t4_rest','api':base+'/cat/shared','ext':{'tenant':tenant},'headers':{'X-Fixture':'allowed'},'enabled':True}
+            status,value=self.native('POST','/v1/sources',payload);self.assertEqual(status,201,value);shared.append(value)
+        _,events=self.ndjson('/v1/lookups',self.input([source['id'] for source in shared]))
+        urls={line['play']['url'] for line in (event['line'] for event in events if event['event']=='line')}
+        self.assertEqual(urls,{'https://media.test/shared.m3u8?tenant=C','https://media.test/shared.m3u8?tenant=D'},events)
+        requests=[r for r in self.fixture_request('/stats')['rest_requests'] if r['owner']=='shared']
+        self.assertGreaterEqual(len(requests),12,requests);self.assertEqual(len(requests)%2,0)
+        for index in range(0,len(requests),2):
+            self.assertEqual(requests[index]['action'],'init')
+            self.assertEqual(requests[index]['body']['ext']['tenant'],requests[index+1]['effective_tenant'])
+        self.assertEqual({r['effective_tenant'] for r in requests if r['action']=='play'},{'C','D'})
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
@@ -961,6 +1024,7 @@ def main():
                 "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
                 "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"],
                 "source-matching":["REQ-SERVICE-PLAY/matching-queries-filter", "REQ-SERVICE-PLAY/matching-auto-confirm-negatives", "REQ-SERVICE-PLAY/mapping-reuse-identity", "REQ-SERVICE-PLAY/mapping-user-revoke"],
+                "t4-rest-adapter":["REQ-SERVICE-PROVIDERS/t4-rest-init-and-routes", "REQ-SERVICE-PROVIDERS/t4-rest-context-and-errors"],
                 "t4-query-adapters":["REQ-SERVICE-PROVIDERS/t4-query-parameters", "REQ-SERVICE-PROVIDERS/t4-drpyjs0-parameters", "REQ-SERVICE-PROVIDERS/t4-play-shapes-headers", "REQ-SERVICE-PROVIDERS/t4-query-refresh-identity"],
                 "app-source-selection-app":["REQ-SERVICE-PLAY/app-playback-selection-switch", "REQ-SERVICE-PLAY/app-resume-service-errors", "REQ-SERVICE-PLAY/app-new-history-restart", "REQ-SERVICE-PLAY/app-offline-local-live"],
                 "app-source-selection":["REQ-SERVICE-PLAY/ui-line-round-actions", "REQ-SERVICE-PLAY/ui-config-migration-records", "REQ-SERVICE-PLAY/ui-decoupled-metadata", "REQ-SERVICE-PLAY/ui-playing-failed-reporting"],
@@ -976,6 +1040,7 @@ def main():
                "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
                "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent"),
                "source-matching":("test_1_queries_filter", "test_2_auto_confirm_negatives", "test_3_mapping_reuse_identity", "test_4_user_revoke"),
+               "t4-rest-adapter":("test_1_init_and_routes", "test_2_context_and_errors"),
                "t4-query-adapters":("test_1_query_parameters", "test_2_js0_parameters", "test_3_play_shapes", "test_4_refresh_identity"),
                "app-source-selection-app":("test_1_selection_switch", "test_2_failure_recovery", "test_3_history_restart", "test_4_offline"),
                "app-source-selection":("test_1_actions", "test_2_migration", "test_3_metadata", "test_4_reports"),

@@ -67,12 +67,26 @@ pub async fn json(url: Url, headers: HeaderMap) -> Result<Value, Error> {
 }
 
 pub async fn bytes(url: Url, headers: HeaderMap) -> Result<Vec<u8>, Error> {
-    tokio::time::timeout(Duration::from_secs(8), fetch(url, headers))
+    tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, None))
         .await
         .map_err(|_| Error::Failed)?
 }
 
-async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Vec<u8>, Error> {
+pub async fn post_json(url: Url, headers: HeaderMap, body: &Value) -> Result<Value, Error> {
+    let bytes = tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, Some(body)))
+        .await
+        .map_err(|_| Error::Failed)??;
+    if bytes.is_empty() {
+        return Ok(serde_json::json!({}));
+    }
+    serde_json::from_slice(&bytes).map_err(|_| Error::Failed)
+}
+
+async fn fetch(
+    mut url: Url,
+    mut headers: HeaderMap,
+    body: Option<&Value>,
+) -> Result<Vec<u8>, Error> {
     for _ in 0..=5 {
         if !valid(&url) {
             return Err(Error::Failed);
@@ -116,8 +130,12 @@ async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Vec<u8>, Error> {
             .resolve_to_addrs(host, &addresses)
             .build()
             .map_err(|_| Error::Failed)?;
-        let mut response = client
-            .get(url.clone())
+        let request = if let Some(body) = body {
+            client.post(url.clone()).json(body)
+        } else {
+            client.get(url.clone())
+        };
+        let mut response = request
             .headers(headers.clone())
             .send()
             .await
@@ -129,6 +147,15 @@ async fn fetch(mut url: Url, mut headers: HeaderMap) -> Result<Vec<u8>, Error> {
                 .and_then(|v| v.to_str().ok())
                 .ok_or(Error::Failed)?;
             let next = url.join(location).map_err(|_| Error::Failed)?;
+            if body.is_some()
+                && (url.origin() != next.origin()
+                    || !matches!(
+                        response.status(),
+                        StatusCode::TEMPORARY_REDIRECT | StatusCode::PERMANENT_REDIRECT
+                    ))
+            {
+                return Err(Error::Failed);
+            }
             redirect(&url, &next, &mut headers)?;
             url = next;
             continue;
