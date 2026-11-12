@@ -76,11 +76,11 @@ def materials(root=ROOT):
     require({row["card"] for row in historical} == {"T0.35", "T0.37"}, "Both prior evidence scopes required")
     require(all(row["status"] == "NOT RUN" for row in lock["deferred"]) and len(lock["deferred"]) == 5,
             "Unrun desktop/minimum OS targets must remain NOT RUN")
-    require([row["card"] for row in lock["mobile"]] == [f"T1.{i}" for i in range(1, 7)]
+    require([row["card"] for row in lock["mobile"]] == [f"T2.{i}" for i in range(1, 7)]
             and all(row["status"] == "NOT RUN" for row in lock["mobile"]), "Mobile checklist/status missing")
     readme = (root / "README.md").read_text()
     for marker in ("packaging/T23.md", "docs/runtime.lock.json", "docs/release-evidence/T25.md", "NOT RUN",
-                   "e6c9b946636adb29afe1bc849f536d2244b1dc38", "T25-lifecycle", "T1.1", "诊断"):
+                   "e6c9b946636adb29afe1bc849f536d2244b1dc38", "T25-lifecycle", "T2.1", "诊断"):
         require(marker in readme, "README delivery reference missing: " + marker)
     require((root / "docs/release-evidence/T25.md").is_file(), "Delivery index missing")
     return dict(version_lock=dict(path="docs/runtime.lock.json", sha256=file_hash(root / "docs/runtime.lock.json")),

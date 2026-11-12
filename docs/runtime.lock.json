@@ -1058,34 +1058,34 @@
     ],
     "mobile": [
       {
-        "card": "T1.1",
+        "card": "T2.1",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       },
       {
-        "card": "T1.2",
+        "card": "T2.2",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       },
       {
-        "card": "T1.3",
+        "card": "T2.3",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       },
       {
-        "card": "T1.4",
+        "card": "T2.4",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       },
       {
-        "card": "T1.5",
+        "card": "T2.5",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       },
       {
-        "card": "T1.6",
+        "card": "T2.6",
         "status": "NOT RUN",
-        "authorization": "Await user authorization at T1.1 phase gate"
+        "authorization": "Await user authorization at T2.1 phase gate"
       }
     ]
   }

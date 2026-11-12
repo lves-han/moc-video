@@ -71,9 +71,11 @@ A2 使用用户授权的本机隔离测试：核对当前安装包、独立测�
 - macos-x86_64、windows-x86_64、linux-x11、linux-wayland：**NOT RUN**。真实 macOS 14 最低版本机器：**NOT RUN**；本机隔离测试在 macOS 27.0.1 arm64 完成；干净系统生命周期未验证。
 - Vite 仍可能报告主 JS 包体积提示；T24 独立报告中两项搜索海报问题保留。当前交付状态以本卡实际报告为准。
 
-## 后续移动阶段
+## 后续服务与移动阶段
 
-桌面 T0.36 完成后停止桌面监管，T1.1 等待用户授权（ADR-007/062）：T1.1/M00 Android/iOS 真机可行性与版本基线；T1.2/M01 Android 本地 Rust 来源；T1.3/M02 移动页面与播放器；T1.4/M03 Android 安装发行；T1.5/M04 iOS 本地来源与网关；T1.6/M05 iOS 真机闭环及移动交付。移动适配、签名和真机测试均为 **NOT RUN**。
+T1 为独立播放服务，共 15 张功能卡：T1.1–T1.5 元数据服务，T1.6–T1.10 播放服务与 App 选线，T1.11–T1.15 接口适配与联调，对应 [播放服务方案](docs/FOLLOWUP-PLAYBACK-SERVICE.md) 前三期。服务开发等待用户明确启动指令；普通卡只验本卡，三期 App 操作在阶段末卡收口，沿用个人娱乐应用的验收安排（ADR-078/079）。
+
+桌面 T0.36 完成后停止桌面监管，T2.1 等待用户授权（ADR-007/062）：T2.1/M00 Android/iOS 真机可行性与版本基线；T2.2/M01 Android 本地 Rust 来源；T2.3/M02 移动页面与播放器；T2.4/M03 Android 安装发行；T2.5/M04 iOS 本地来源与网关；T2.6/M05 iOS 真机闭环及移动交付。移动适配、签名和真机测试均为 **NOT RUN**。
 
 [需求规格](docs/SPEC.md) · [契约](docs/ARCHITECTURE.md) · [任务/覆盖表](docs/TASKS.md) · [决定](docs/DECISIONS.md) · [原前端历史](docs/FRONTEND_BASELINE.md)。历史资料保存其当时状态，当前实现与发布范围沿已采纳 ADR 和上述真实证据追溯。
 

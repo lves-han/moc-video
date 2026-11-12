@@ -59,7 +59,7 @@ class DeliveryTests(unittest.TestCase):
             def write(value):
                 version.write_text(json.dumps(dict(final_delivery=value)))
             write(lock)
-            self.assertEqual(t25.materials(root)["mobile"][0]["card"], "T1.1")
+            self.assertEqual(t25.materials(root)["mobile"][0]["card"], "T2.1")
             for mutate in (lambda d: d["deferred"][0].update(status="PASS"),
                            lambda d: d["mobile"][0].update(status="PASS"),
                            lambda d: d["locks"].update({"package-lock.json": "stale"}),
