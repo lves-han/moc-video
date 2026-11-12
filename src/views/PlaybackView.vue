@@ -3,12 +3,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import type { VideoPlayerStore } from "@videojs/core/dom";
 import { appState, appController, createPlaybackController, metadataVideoId } from "../state.ts";
 import { settingsQueue } from "../api.ts";
-import type { PlaybackContext, ResumeSnapshot } from "../models.ts";
+import type { PlaybackContext, PlaybackViewSession, ResumeSnapshot } from "../models.ts";
 import { locale } from "../i18n";
 import Icon from "../components/Icon.vue";
 
-const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean }>();
-const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; 'service-failed': [context: PlaybackContext]; "update:autoNext": [value: boolean]; seek: [] }>();
+const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean; local?: { session: PlaybackViewSession; title: string; position_ms: number } | null }>();
+const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; 'service-failed': [context: PlaybackContext]; 'local-close': []; 'local-retry': []; "update:autoNext": [value: boolean]; seek: [] }>();
 const playback = createPlaybackController(appState, undefined, onEnded, runtime => {
   if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
   else appController.applyRuntime(runtime);
@@ -30,18 +30,19 @@ let audioInitialized = false;
 const imageLoadEpoch = ref(0);
 watch(() => appState.details.data, () => imageLoadEpoch.value++);
 const poster = computed(() => {
+  if (props.local) return null;
   const data = appState.details.data;
   const id = (data?.details.backdrop ?? data?.details.poster)?.resource_id;
   const epoch = appState.details.request_epoch;
   return data && id && data.images[id] ? { url: data.images[id]!.url, key: `${epoch}:${imageLoadEpoch.value}:${id}`, title: data.details.title,
     error: () => playback.imageError(data, id, epoch) } : null;
 });
-const title = computed(() => appState.details.data?.details.title ?? word("正在播放", "Now playing"));
-const groups = computed(() => appState.details.data?.details.groups ?? []);
-const currentVideo = computed(() => appController.matching.pending ?? props.context?.metadata_video_id ?? "");
+const title = computed(() => props.local?.title ?? appState.details.data?.details.title ?? word("正在播放", "Now playing"));
+const groups = computed(() => props.local ? [] : appState.details.data?.details.groups ?? []);
+const currentVideo = computed(() => props.local ? "" : appController.matching.pending ?? props.context?.metadata_video_id ?? "");
 const currentGroup = computed(() => groups.value.find(group => group.episodes.some(episode => metadataVideoId(episode.ref) === currentVideo.value)) ?? null);
 const currentEpisode = computed(() => currentGroup.value?.episodes.find(episode => metadataVideoId(episode.ref) === currentVideo.value) ?? null);
-const nowPlaying = computed(() => currentEpisode.value ? [appState.details.data!.details.title, currentGroup.value!.title, currentEpisode.value.label].filter(Boolean).join(" · ") : "");
+const nowPlaying = computed(() => props.local?.title ?? (currentEpisode.value ? [appState.details.data!.details.title, currentGroup.value!.title, currentEpisode.value.label].filter(Boolean).join(" · ") : ""));
 const nextVideo = computed(() => currentVideo.value ? appController.nextVideo(currentVideo.value) : null);
 const nextEpisode = computed(() => groups.value.flatMap(group => group.episodes).find(episode => metadataVideoId(episode.ref) === nextVideo.value));
 function episodeImage(episode: typeof nextEpisode.value) {
@@ -75,7 +76,7 @@ function syncCaptionTrack() {
 watch(() => state.session?.session_id, syncCaptionTrack, { flush: "post" });
 const mediaReady = ref(false);
 const loading = computed(() => !state.error && (busy.value || state.phase === "resolving" || state.phase === "preparing" ||
-  Boolean(props.context && !mediaReady.value && state.phase !== "ended" && state.phase !== "failed")));
+  Boolean((props.context || props.local) && !mediaReady.value && state.phase !== "ended" && state.phase !== "failed")));
 const longLoading = ref(false);
 let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 watch(loading, active => {
@@ -141,6 +142,7 @@ async function back() {
     } catch (cause) { ui.diagnostic = String(cause); }
     return;
   }
+  if (props.local) { emit('local-close'); return; }
   location.hash = backHref.value;
 }
 function onEscape(event: KeyboardEvent) {
@@ -226,7 +228,8 @@ onMounted(async () => {
   state.volume = appState.settings.volume;
   state.muted = appState.settings.muted;
   playback.setVolume(state.volume); playback.setMuted(state.muted); audioInitialized = true;
-  if (props.context) void playback.load(props.context, { resume: props.resume, resolution: appController.takeServiceResolution(props.context) });
+  if (props.local) void playback.loadLocal(props.local.session, props.local.position_ms);
+  else if (props.context) void playback.load(props.context, { resume: props.resume, resolution: appController.takeServiceResolution(props.context) });
   const container = officialPlayer.value?.querySelector<HTMLElement>('media-container');
   (container ?? panel.value)?.focus({ preventScroll: true });
 });
@@ -258,7 +261,7 @@ defineExpose({ playback });
         <div v-if="caption" class="playback-captions" aria-hidden="true">{{ caption }}</div>
         <div v-show="loading" class="playback-loading" role="status">
           <img v-if="poster" :key="poster.key" class="playback-backdrop" :src="poster.url" alt="" @error="poster.error" />
-          <div class="playback-loading-copy"><h1>{{ title }}</h1><p>{{ currentEpisode?.label }}</p><span class="playback-spinner loading-spinner" /><p v-if="longLoading" class="playback-long-loading">{{ word('正在查找可用线路', 'Finding an available stream') }}</p></div>
+          <div class="playback-loading-copy"><h1>{{ title }}</h1><p>{{ currentEpisode?.label }}</p><span class="playback-spinner loading-spinner" /><p v-if="longLoading" class="playback-long-loading">{{ local ? word('正在打开本地视频', 'Opening local video') : word('正在查找可用线路', 'Finding an available stream') }}</p></div>
         </div>
         <component :is="'media-buffering-indicator'" :delay.prop="300" class="playback-buffering"><span class="playback-spinner" /></component>
         <component :is="'media-controls'">
@@ -266,7 +269,7 @@ defineExpose({ playback });
             <div class="playback-shade" />
             <header class="playback-header">
               <button class="playback-back playback-glass" :aria-label="word('返回', 'Back')" :title="word('返回', 'Back')" @click="back"><Icon name="back" :size="24" /></button>
-              <div><h2>{{ title }}</h2><p>{{ currentGroup?.title }} · {{ currentEpisode?.label }}</p></div>
+              <div><h2>{{ title }}</h2><p>{{ local ? word('本地视频', 'Local video') : `${currentGroup?.title ?? ''} · ${currentEpisode?.label ?? ''}` }}</p></div>
             </header>
             <div class="playback-bar playback-glass">
               <div class="playback-timeline">
@@ -292,7 +295,7 @@ defineExpose({ playback });
                   </div>
                   <component :is="'media-playback-rate-button'" commandfor="playback-rate-menu" class="playback-button playback-rate" :title="word('倍速', 'Speed')" />
                   <component :is="'media-menu'" id="playback-rate-menu" class="playback-rate-menu playback-glass" side="top" align="end" @pointerdown.stop @pointerup.stop @click.stop><component :is="'media-menu-content'"><component :is="'media-playback-rate-radio-group'" /></component></component>
-                  <button data-player-tray class="playback-button" :aria-label="word('选集托盘', 'Episode tray')" :title="word('选集托盘', 'Episode tray')" :aria-expanded="Boolean(tray)" @click="tray ? closeTray() : openTray('episodes', $event.currentTarget)"><Icon name="film" :size="24" /></button>
+                  <button data-player-tray class="playback-button" :aria-label="local ? word('播放选项', 'Playback options') : word('选集托盘', 'Episode tray')" :title="local ? word('播放选项', 'Playback options') : word('选集托盘', 'Episode tray')" :aria-expanded="Boolean(tray)" @click="tray ? closeTray() : openTray(local ? 'tracks' : 'episodes', $event.currentTarget)"><Icon name="film" :size="24" /></button>
                   <component :is="'media-fullscreen-button'" id="playback-fullscreen" class="playback-button" :title="word('全屏', 'Fullscreen')"><component :is="'media-icon'" family="compat" name="fullscreen-enter" class="when-windowed" /><component :is="'media-icon'" family="compat" name="fullscreen-exit" class="when-fullscreen" /></component>
                 </div>
               </div>
@@ -304,8 +307,8 @@ defineExpose({ playback });
         </component>
         <section class="playback-tray playback-glass" :class="{ open: tray }" :inert="!tray ? true : undefined" :aria-hidden="!tray" :aria-label="word('播放选项', 'Playback options')" @pointerdown.stop @pointerup.stop @click.stop>
           <div class="playback-tray-header" role="tablist" :aria-label="word('播放选项', 'Playback options')">
-            <button data-action="episodes" data-tray-tab="episodes" role="tab" :aria-label="word('选集', 'Episodes')" :title="word('选集', 'Episodes')" :aria-selected="tray === 'episodes'" @click="openTray('episodes')"><Icon name="film" :size="16" />{{ word('选集', 'Episodes') }}</button>
-            <button data-tray-tab="streams" role="tab" :aria-selected="tray === 'streams'" @click="openTray('streams')">{{ word('线路', 'Streams') }}</button>
+            <button v-if="!local" data-action="episodes" data-tray-tab="episodes" role="tab" :aria-label="word('选集', 'Episodes')" :title="word('选集', 'Episodes')" :aria-selected="tray === 'episodes'" @click="openTray('episodes')"><Icon name="film" :size="16" />{{ word('选集', 'Episodes') }}</button>
+            <button v-if="!local" data-tray-tab="streams" role="tab" :aria-selected="tray === 'streams'" @click="openTray('streams')">{{ word('线路', 'Streams') }}</button>
             <button data-tray-tab="tracks" role="tab" :aria-selected="tray === 'tracks'" @click="openTray('tracks')">{{ word('字幕与音频', 'Subtitles & audio') }}</button>
             <button class="playback-button playback-tray-close" :aria-label="word('关闭托盘', 'Close tray')" @click="closeTray"><Icon name="close" :size="24" /></button>
           </div>
@@ -334,8 +337,8 @@ defineExpose({ playback });
           </div>
           <div class="playback-recovery-actions">
             <button v-if="ui.imageError" data-action="retry-images" @click="playback.retryImages()">{{ word('重试图片', 'Retry image') }}</button>
-            <button v-if="ui.action === 'retry'" data-action="retry" @click="playback.retry()">{{ word('重试', 'Retry') }}</button>
-            <button v-if="ui.action === 'reconnect'" data-action="reconnect" @click="playback.reconnect()">{{ word('重新连接', 'Reconnect') }}</button>
+            <button v-if="ui.action === 'retry'" data-action="retry" @click="local ? emit('local-retry') : playback.retry()">{{ word('重试', 'Retry') }}</button>
+            <button v-if="ui.action === 'reconnect'" data-action="reconnect" @click="local ? emit('local-retry') : playback.reconnect()">{{ word('重新连接', 'Reconnect') }}</button>
           </div>
         </section>
         <aside v-if="nextVisible && !tray" class="playback-next playback-glass" :aria-label="word('下一集', 'Next episode')" @pointerdown.stop @pointerup.stop @click.stop>
@@ -343,7 +346,7 @@ defineExpose({ playback });
           <div class="playback-next-copy"><span class="playback-next-kicker">{{ word('下一集', 'Next episode') }}</span><h3>{{ nextEpisode?.label }}</h3><div class="playback-next-actions"><button class="playback-primary" :disabled="busy" @click="playNext">{{ word('立即播放', 'Play now') }}</button><button @click="cancelNext">{{ word('取消', 'Cancel') }}</button><span v-if="countdown !== null" class="playback-countdown" role="timer" :style="{ '--countdown': countdown }">{{ countdown }}</span></div></div>
         </aside>
         <div v-if="!tray && (state.error && !ui.autoplayBlocked || ui.diagnostic)" class="playback-error-backdrop" @pointerdown.stop @pointerup.stop @click.stop>
-          <section class="playback-error playback-glass" role="alert"><h2>{{ word('播放遇到问题', 'Playback failed') }}</h2><p>{{ state.error ? `${state.error.code} · ${state.error.message}` : ui.diagnostic }}</p><div><button class="playback-primary" @click="ui.action === 'reconnect' ? playback.reconnect() : playback.retry()">{{ word('重试', 'Retry') }}</button><button @click="openTray('streams', $event.currentTarget)">{{ word('换线路', 'Change stream') }}</button><button @click="back">{{ word('返回影片', 'Back to details') }}</button></div></section>
+          <section class="playback-error playback-glass" role="alert"><h2>{{ word('播放遇到问题', 'Playback failed') }}</h2><p>{{ state.error ? `${state.error.code} · ${state.error.message}` : ui.diagnostic }}</p><div><button class="playback-primary" @click="local ? emit('local-retry') : ui.action === 'reconnect' ? playback.reconnect() : playback.retry()">{{ word('重试', 'Retry') }}</button><button v-if="!local" @click="openTray('streams', $event.currentTarget)">{{ word('换线路', 'Change stream') }}</button><button @click="back">{{ local ? word('返回本地视频', 'Back to local videos') : word('返回影片', 'Back to details') }}</button></div></section>
         </div>
         <p v-if="appController.lineMemory.error" class="playback-line-error" role="status">{{ appController.lineMemory.error }}</p>
         <button v-if="ui.autoplayBlocked" class="playback-start playback-glass" :aria-label="word('继续播放', 'Continue playback')" @click="playback.play()"><Icon name="play" :size="28" />{{ word('继续播放', 'Continue playback') }}</button>
@@ -365,7 +368,7 @@ defineExpose({ playback });
     <p class="playback-sr-only playback-now">{{ nowPlaying }}</p>
     <p class="playback-sr-only" role="status" data-playback-phase>{{ state.phase }}</p>
     <p v-if="state.session && state.duration_ms === null" class="playback-sr-only" role="status">{{ word('时长未知', 'Unknown duration') }}</p>
-    <p v-if="!context" class="playback-sr-only" role="status">{{ word('请从影片详情选择已确认的剧集。', 'Choose a confirmed episode from film details.') }}</p>
+    <p v-if="!context && !local" class="playback-sr-only" role="status">{{ word('请从影片详情选择已确认的剧集。', 'Choose a confirmed episode from film details.') }}</p>
     <p v-if="ui.imageError" class="playback-sr-only" role="alert">{{ ui.imageError }}</p>
   </main>
 </template>

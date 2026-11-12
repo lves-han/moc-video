@@ -3265,3 +3265,9 @@
 - 相关回归：T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T091506435382-T113-t18-regression/output.log`；该回归后对资源级前缀继承作了小幅修正，最终 A1 已覆盖修正后的 TMDB 和第三方元数据；服务 OpenAPI 验证通过 `evidence/runs/20261112T091606127511-T113-openapi/output.log`。
 - 兼容依据：[Stremio manifest](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md)、[stream](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md) 与 [stream 请求](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/requests/defineStreamHandler.md)。带未知查询参数且没有视频哈希的流保守要求重查；外部真实扩展和其他平台实机 NOT RUN。
 - 范围：补入短期线路状态模块，用于保留扩展不支持原因；来源能力保存在现有元数据缓存中，来源检查会主动刷新。
+
+## 本地视频沉浸式播放页 2026-11-12
+
+- 按用户补充要求，本地文件改用与其他来源共用的沉浸式播放器，保留返回、进度、倍速、字幕、错误重试和文件会话释放；本地观看历史沿现有会话绑定保存。
+- 验证：隔离 Mac 窗口中 MP4 播放、返回列表、退出后从约 20 秒续播，以及 MKV/HLS 内嵌字幕实际显示；观察记录见 `evidence/manual/local-immersive-player.json`。补充的迟到会话清理和重试身份保护已通过类型检查；隔离应用和资料已清理。
+- 回归：本地会话及播放器、历史和目录共 71 项通过 `evidence/runs/20261112T092930635019-local-player-regression/output.log`；服务选线 13 项通过 `evidence/runs/20261112T093026759938-local-player-service-regression/output.log`；最终类型检查通过 `evidence/runs/20261112T093208459035-local-player-check-final/output.log`。

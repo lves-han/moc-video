@@ -13,15 +13,15 @@ import SearchView from "./views/SearchView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId, liveAvailable } from "./state.ts";
-import { finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
-import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
+import { api, finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
+import { entryFromRecord, historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
 import { locale, t, type Message } from "./i18n";
 import { palette, paletteOptions, normalizePalette } from "./ui/theme";
 import { installFocusNavigation } from "./ui/focus";
-import type { AppSource, Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
+import type { AppSource, Bridge_MediaRef, CommandData, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
 
 const native = Boolean(window.__TAURI__);
 const desktopQuery = matchMedia("(min-width: 960px)");
@@ -101,7 +101,9 @@ const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
 });
 // A rematch that needs the user keeps hash #/playback; its confirmation/result UI lives in CatalogView.
 const matchNeedsUser = computed(() => ["needs_confirmation", "not_found"].includes(appController.matching.result?.status ?? ""));
-const formalPlayback = computed(() => appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value && !appController.serviceRound.open));
+type LocalPlayback = CommandData<'open_local'> & { position_ms: number };
+const localPlayback = ref<LocalPlayback | null>(null);
+const formalPlayback = computed(() => Boolean(localPlayback.value) || appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value && !appController.serviceRound.open));
 const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
 const playbackView = ref<InstanceType<typeof PlaybackView>>();
 defineExpose({ playbackController: () => playbackView.value?.playback });
@@ -288,6 +290,13 @@ async function updateRoute() {
   lastHash = location.hash;
   rememberHome(); hash.value = location.hash;
   const next = readHash();
+  if (localPlayback.value && next.name !== 'local') {
+    const session = localPlayback.value.session;
+    await playbackView.value?.playback.stop();
+    await api.call('close_playback', { session_id: session.session_id }).catch(() => {});
+    localPlayback.value = null;
+    if (current !== sequence) return;
+  }
   if (next.name === "playback") return;
   pendingResume.value = null;
   try {
@@ -365,6 +374,14 @@ function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
     capture: { session_id: session.session_id, match_id: context.match_id, playback_epoch: state.playback_epoch } };
 }
 function historySnapshot(finished = false): HistoryEntry | null {
+  if (localPlayback.value) {
+    const local = localPlayback.value, playback = appState.playback, session = playback.session;
+    if (!session || session.session_id !== local.session.session_id || !playback.duration_ms || playback.position_ms <= 0) return null;
+    const completed = finished || playback.phase === 'ended';
+    const record: WatchHistoryRecord = { ...local.record, duration_ms: playback.duration_ms, completed,
+      position_ms: completed ? playback.duration_ms : Math.min(playback.duration_ms, playback.position_ms), updated_at: Date.now() };
+    return { ...entryFromRecord(record), capture: { session_id: session.session_id, match_id: local.match_id, playback_epoch: playback.playback_epoch } };
+  }
   if (native) return nativeHistorySnapshot(finished);
   const state = appState.playback, context = state.context;
   const film = baseFilms.find(film => film.id === context?.metadata_ref.identity.meta_id);
@@ -390,6 +407,40 @@ async function persistHistory(snapshot: HistoryEntry) {
 async function flushHistory(finished = false) {
   const snapshot = historySnapshot(finished);
   if (snapshot) { lastWrite = Date.now(); lastHistory = snapshot; await persistHistory(snapshot); }
+}
+function openLocalPlayback(value: LocalPlayback) { localPlayback.value = value; }
+async function closeLocalPlayback() {
+  const current = localPlayback.value;
+  const session = current?.session;
+  await flushHistory();
+  latestHistory = null;
+  await playbackView.value?.playback.stop();
+  if (session) await api.call('close_playback', { session_id: session.session_id }).catch(() => {});
+  if (localPlayback.value === current) {
+    localPlayback.value = null;
+    if (location.hash.startsWith('#/local?')) location.hash = '#/local';
+  }
+}
+async function retryLocalPlayback() {
+  const current = localPlayback.value;
+  if (!current?.record.video_id) return;
+  const position = appState.playback.position_ms;
+  await flushHistory(); latestHistory = null;
+  await playbackView.value?.playback.stop();
+  await api.call('close_playback', { session_id: current.session.session_id }).catch(() => {});
+  if (localPlayback.value !== current) return;
+  try {
+    const opened = await api.call('open_local', { id: current.record.video_id });
+    if (localPlayback.value !== current) {
+      await api.call('close_playback', { session_id: opened.session.session_id }).catch(() => {});
+      return;
+    }
+    localPlayback.value = { ...opened, position_ms: position };
+  } catch (cause) {
+    if (localPlayback.value !== current) return;
+    appState.playback.phase = 'failed';
+    appState.playback.error = { code: 'UPSTREAM_FAILED', message: cause instanceof Error ? cause.message : String(cause), retryable: true };
+  }
 }
 function retryHistorySave() { const snapshot = failedHistory ?? lastHistory; if (snapshot) void persistHistory(snapshot); }
 function discardPendingHistory(id: string | null) {
@@ -519,7 +570,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @service-failed="switchFailedServiceLine" @seek="flushHistory()" @update:auto-next="autoNext = $event">
+  <PlaybackView v-if="formalPlayback" :key="localPlayback?.session.session_id ?? 'service'" ref="playbackView" :context="localPlayback ? null : playbackContext" :local="localPlayback ? { session: localPlayback.session, title: localPlayback.record.title, position_ms: localPlayback.position_ms } : null" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @service-failed="switchFailedServiceLine" @local-close="closeLocalPlayback" @local-retry="retryLocalPlayback" @seek="flushHistory()" @update:auto-next="autoNext = $event">
   <template #preferences><div class="playback-preferences">
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
@@ -677,7 +728,7 @@ onBeforeUnmount(() => {
 
       <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': route.page === 'settings', 'tv-library-main':['history','local','live'].includes(route.page), 'tv-search-main':route.page === 'search' }">
         <SearchView v-if="route.page === 'search'" ref="searchView" @open="openDetails" />
-        <LocalView v-else-if="route.page === 'local'" />
+        <LocalView v-else-if="route.page === 'local'" @play="openLocalPlayback" />
         <LiveView v-else-if="route.page === 'live'" />
         <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />

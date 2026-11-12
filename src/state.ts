@@ -58,6 +58,9 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   let video: HTMLVideoElement | undefined;
   let tail: Promise<void> = Promise.resolve();
   let pendingResume: ResumeSnapshot | null = null;
+  let pendingLocalResume: number | null = null;
+  let pendingLocalSession: PlaybackViewSession | null = null;
+  let localMode = false;
   let wantsPlaying = false;
   let recovered = false;
   let reconnected = false;
@@ -72,9 +75,9 @@ export function createPlaybackController(root: AppState = appState, client: Pick
 
   function current(epoch: number, session?: PlaybackViewSession) {
     return epoch === state.playback_epoch && (guestEpoch === undefined || guestEpoch === root.runtime.cloudstream.engine_epoch)
-      && (serviceContext(state.context) || !root.selected_playback_source || !state.context || sameSource(root.selected_playback_source, state.context.episode_ref))
+      && (localMode || serviceContext(state.context) || !root.selected_playback_source || !state.context || sameSource(root.selected_playback_source, state.context.episode_ref))
       && (!session || state.session?.session_id === session.session_id
-      && state.engine_epoch === root.runtime.engine_epoch && state.context !== null && sameRef(state.context.episode_ref, session.episode_ref));
+      && state.engine_epoch === root.runtime.engine_epoch && (localMode || state.context !== null && sameRef(state.context.episode_ref, session.episode_ref)));
   }
 
   async function request<C extends Command>(command: C, input: CommandInput<C>, host?: string) {
@@ -132,6 +135,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     context = structuredCloneContext(context);
     if (options.resume && !sameContext(options.resume.context, context)) return Promise.reject(new Error("Resume context differs from playback context"));
     const epoch = ++state.playback_epoch;
+    localMode = false; pendingLocalResume = null;
     guestEpoch = root.sources.data?.providers.find(source => source.id === context.episode_ref.source_id)?.kind === "cloudstream"
       ? root.runtime.cloudstream.engine_epoch : undefined;
     player?.stop();
@@ -141,7 +145,8 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       context.selected_stream_id = null;
       if (root.route.name === "playback" && root.route.context.match_id === context.match_id) root.route.context.selected_stream_id = null;
     }
-    retiring.push({ session: state.session, resolution: keep && state.resolution?.id === keep.id ? null : state.resolution });
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: keep && state.resolution?.id === keep.id ? null : state.resolution });
+    pendingLocalSession = null;
     state.session = null;
     state.resolution = keep;
     state.context = structuredCloneContext(context);
@@ -208,6 +213,37 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     return tail;
   }
 
+  function loadLocal(session: PlaybackViewSession, positionMs = 0): Promise<void> {
+    if (session.source_id !== "local" || session.episode_ref.source_id !== "local") return Promise.reject(new Error("Local session identity differs"));
+    const epoch = ++state.playback_epoch;
+    localMode = true; guestEpoch = undefined; pendingResume = null;
+    player?.stop();
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: state.resolution });
+    pendingLocalSession = session;
+    state.session = null; state.resolution = null; state.context = null;
+    state.phase = "preparing"; state.error = null; state.position_ms = Math.max(0, positionMs);
+    state.duration_ms = null; state.buffered = [];
+    pendingLocalResume = state.position_ms; wantsPlaying = true; recovered = false; reconnected = false;
+    ui.autoplayBlocked = false; ui.diagnostic = ""; ui.action = ""; queried.clear();
+    for (const id of pendingRequests) void client.call("cancel_request", { target_request_id: id }).catch(() => {});
+    tail = tail.then(async () => {
+      await drainRetired();
+      if (!current(epoch) || pendingLocalSession?.session_id !== session.session_id) return;
+      if (!player) throw new Error("Playback view is not mounted");
+      if (root.runtime.phase !== "ready" || !root.runtime.engine_epoch) await connect();
+      if (!current(epoch) || pendingLocalSession?.session_id !== session.session_id) return;
+      state.engine_epoch = root.runtime.engine_epoch;
+      state.session = session; pendingLocalSession = null;
+      player.open(sessionSource(session), { playback_epoch: epoch, engine_epoch: state.engine_epoch, session_id: session.session_id });
+      player.setVolume(state.volume); player.setSpeed(state.speed); video!.muted = state.muted;
+      player.selectSubtitle(session.subtitles.length ? 0 : null);
+      state.subtitle_id = session.subtitles[0]?.id ?? null;
+    }).catch(cause => {
+      if (current(epoch)) fail(failure(cause));
+    });
+    return tail;
+  }
+
   async function diagnose(original: Bridge_ApiError, epoch: number, session: PlaybackViewSession) {
     const key = String(original.details?.resource_key ?? "video");
     if (!current(epoch, session)) return;
@@ -262,17 +298,18 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       state.duration_ms = event.duration_ms;
       if (video) state.position_ms = Math.max(0, Math.round(video.currentTime * 1000));
       if (!["playing", "paused", "buffering"].includes(state.phase)) state.phase = "ready";
-      if (pendingResume && event.duration_ms === null && pendingResume.position_ms > 0) ui.diagnostic = "恢复播放位置正在等待媒体时长";
-      if (pendingResume && (event.duration_ms !== null || pendingResume.position_ms === 0)) {
-        const resume = pendingResume;
-        pendingResume = null;
+      const positionMs = pendingResume?.position_ms ?? pendingLocalResume;
+      if (positionMs !== null && event.duration_ms === null && positionMs > 0) ui.diagnostic = "恢复播放位置正在等待媒体时长";
+      if (positionMs !== null && (event.duration_ms !== null || positionMs === 0)) {
+        const wasPlaying = pendingResume?.was_playing ?? true;
+        pendingResume = null; pendingLocalResume = null;
         if (ui.diagnostic === "恢复播放位置正在等待媒体时长") ui.diagnostic = "";
         if (event.duration_ms !== null) {
-          const position = Math.min(event.duration_ms, resume.position_ms);
+          const position = localMode && positionMs >= event.duration_ms - 5000 ? 0 : Math.min(event.duration_ms, positionMs);
           if (video!.currentTime !== position / 1000) player!.seek(position / 1000);
           state.position_ms = position;
         }
-        if (resume.was_playing) void play();
+        if (wasPlaying) void play();
       }
     } else if (event.type === "failed") {
       if (serviceContext(state.context)) reportService(state.session.session_id, event.playback_epoch, 'failed', event.error.code);
@@ -303,9 +340,10 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   async function stop() {
     ++state.playback_epoch;
     player?.stop();
-    pendingResume = null;
+    pendingResume = null; pendingLocalResume = null; localMode = false;
     wantsPlaying = false;
-    retiring.push({ session: state.session, resolution: state.resolution });
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: state.resolution });
+    pendingLocalSession = null;
     state.session = null; state.resolution = null; state.context = null;
     state.phase = "idle"; state.position_ms = 0; state.duration_ms = null; state.buffered = [];
     state.error = null; ui.action = ""; ui.autoplayBlocked = false;
@@ -372,7 +410,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   }
 
   return {
-    state, ui, load, stop, play, pause, seek, reconnect, imageError, retryImages, receive,
+    state, ui, load, loadLocal, stop, play, pause, seek, reconnect, imageError, retryImages, receive,
     attach(element: HTMLVideoElement) {
       if (player) throw new Error("Playback controller already owns a video");
       video = element;
