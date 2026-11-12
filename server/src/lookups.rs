@@ -73,8 +73,12 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
         .as_str()
         .filter(|s| matches!(*s, "zh-CN" | "en-US"))
         .ok_or("invalid language")?;
-    let (body, revision) = if source == "tmdb" {
-        (state.tmdb.meta(lang, kind, id).await?, 0)
+    let (body, revision, namespace_prefixes) = if source == "tmdb" {
+        (
+            state.tmdb.meta(lang, kind, id).await?,
+            0,
+            Vec::<String>::new(),
+        )
     } else {
         let entry = state
             .sources
@@ -84,6 +88,26 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
         let revision = entry["revision"]
             .as_u64()
             .ok_or("invalid metadata revision")?;
+        let manifest = &entry["manifest"];
+        let meta_resource = manifest["resources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|value| value.as_str() == Some("meta") || value["name"] == "meta");
+        let prefixes = meta_resource
+            .and_then(|value| {
+                if value.is_object() {
+                    value.get("idPrefixes").and_then(Value::as_array)
+                } else {
+                    manifest["idPrefixes"].as_array()
+                }
+            })
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
         (
             crate::metadata::stremio::response(
                 &entry,
@@ -93,6 +117,7 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
             )
             .await?,
             revision,
+            prefixes,
         )
     };
     let meta = &body["meta"];
@@ -128,9 +153,21 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
         Value::Null
     };
     let seasons: Vec<u64> = videos.iter().filter_map(|v| v["season"].as_u64()).collect();
+    let imdb_id = meta["imdb_id"]
+        .as_str()
+        .filter(|value| crate::adapters::stremio_stream::imdb(value))
+        .filter(|value| {
+            source == "tmdb"
+                || id == *value
+                || video_id == *value
+                || video_id
+                    .strip_prefix(*value)
+                    .is_some_and(|suffix| suffix.starts_with(':'))
+        })
+        .or_else(|| crate::adapters::stremio_stream::imdb(id).then_some(id));
     Ok(
         json!({"metadata_source_id":source,"metadata_revision":revision,"type":kind,"meta_id":id,"video_id":video_id,"lang":lang,
-        "title":meta["name"],"original_title":meta["original_title"],"english_title":meta["english_title"],"aliases":meta["aliases"],"year":meta["year"],"episode":episode,"seasons":seasons}),
+        "title":meta["name"],"original_title":meta["original_title"],"english_title":meta["english_title"],"aliases":meta["aliases"],"year":meta["year"],"episode":episode,"seasons":seasons,"imdb_id":imdb_id,"namespace_prefixes":namespace_prefixes}),
     )
 }
 
@@ -309,7 +346,7 @@ async fn run(
                 _=cancellation.changed()=>{},
                 result=tokio::time::timeout(Duration::from_secs(15),task)=>{
                     match result {
-                        Ok(Ok((status,lines)))=>{let _=send(&tx,json!({"event":"source","source_id":source_id,"status":status,"lines":lines})).await;}
+                        Ok(Ok((status,lines,reason)))=>{let mut value=json!({"event":"source","source_id":source_id,"status":status,"lines":lines});if let Some(reason)=reason{value["reason"]=json!(reason);}let _=send(&tx,value).await;}
                         Ok(Err(message))=>{let _=send(&tx,json!({"event":"source","source_id":source_id,"status":"failed","error":{"code":"UPSTREAM_FAILED","message":message}})).await;}
                         Err(_)=>{let _=send(&tx,json!({"event":"source","source_id":source_id,"status":"timeout"})).await;}
                     }
@@ -360,7 +397,7 @@ async fn process(
     source: &Value,
     refresh: bool,
     tx: &mpsc::Sender<Value>,
-) -> Result<(&'static str, usize), &'static str> {
+) -> Result<(&'static str, usize, Option<&'static str>), &'static str> {
     if !source_current(state, source) || !metadata_current(state, metadata) {
         return Err("source configuration changed");
     }
@@ -386,7 +423,30 @@ async fn process(
         }
     };
     if let Some(template) = cached {
-        return emit_lines(state, lookup_id, metadata, &template, tx).await;
+        return emit_lines(state, lookup_id, metadata, &template, tx)
+            .await
+            .map(|(status, count)| (status, count, None));
+    }
+    if source["kind"] == "stremio_stream" {
+        return match crate::adapters::stremio_stream::lookup(source, metadata, &state.cache).await?
+        {
+            crate::adapters::stremio_stream::ResultSet::Unsupported(reason) => {
+                Ok(("unsupported", 0, Some(reason)))
+            }
+            crate::adapters::stremio_stream::ResultSet::Ready { request_id, lines } => {
+                if lines.is_empty() {
+                    return Ok(("not_found", 0, None));
+                }
+                let template = Template {
+                    source: source.clone(),
+                    content_id: request_id,
+                    lines,
+                };
+                emit_lines(state, lookup_id, metadata, &template, tx)
+                    .await
+                    .map(|(status, count)| (status, count, None))
+            }
+        };
     }
     if let Some(reused) = state.mappings.reusable(metadata, source).await? {
         let template = Template {
@@ -397,7 +457,9 @@ async fn process(
                 .into(),
             lines: reused["lines"].as_array().cloned().unwrap_or_default(),
         };
-        return emit_lines(state, lookup_id, metadata, &template, tx).await;
+        return emit_lines(state, lookup_id, metadata, &template, tx)
+            .await
+            .map(|(status, count)| (status, count, None));
     }
     let revoked = state
         .mappings
@@ -421,6 +483,7 @@ async fn process(
                 "not_found"
             },
             0,
+            None,
         ));
     }
     if let Some(chosen) = proposal["selected"].as_str() {
@@ -454,7 +517,9 @@ async fn process(
                     content_id: chosen.into(),
                     lines: candidate["lines"].as_array().cloned().unwrap_or_default(),
                 };
-                return emit_lines(state, lookup_id, metadata, &template, tx).await;
+                return emit_lines(state, lookup_id, metadata, &template, tx)
+                    .await
+                    .map(|(status, count)| (status, count, None));
             }
             if let Err(error) = saved {
                 if error != "mapping was revoked" {
@@ -505,7 +570,7 @@ async fn process(
         json!({"event":"confirm","source_id":source["id"],"candidates":public}),
     )
     .await;
-    Ok(("needs_confirmation", 0))
+    Ok(("needs_confirmation", 0, None))
 }
 
 async fn emit_lines(
@@ -778,36 +843,62 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
     if !metadata_current(&state, &line.target) {
         return retire(&state, &id, "metadata_changed");
     }
-    let detail = match crate::adapters::detail(&source, &line.content_id).await {
-        Ok(value) => value,
-        Err("MacCMS content identity is missing or ambiguous") => {
+    let resolved = if source["kind"] == "stremio_stream" {
+        let manifest = match crate::adapters::stremio_stream::manifest(&source, &state.cache).await
+        {
+            Ok(value) => value,
+            Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        };
+        match crate::adapters::stremio_stream::streams(
+            &source,
+            &manifest,
+            line.target["type"].as_str().unwrap_or(""),
+            &line.content_id,
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err("Stremio capability changed") => return retire(&state, &id, "source_changed"),
+            Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        }
+    } else {
+        let detail = match crate::adapters::detail(&source, &line.content_id).await {
+            Ok(value) => value,
+            Err("MacCMS content identity is missing or ambiguous") => {
+                return retire(&state, &id, "line_not_found");
+            }
+            Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        };
+        let matches: Vec<_> = detail["groups"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|group| group["flag"] == locator["flag"])
+            .flat_map(|group| group["episodes"].as_array().into_iter().flatten())
+            .filter(|episode| episode["label"] == locator["episode"])
+            .collect();
+        if matches.is_empty() {
             return retire(&state, &id, "line_not_found");
         }
-        Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
-    };
-    let matches: Vec<_> = detail["groups"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|group| group["flag"] == locator["flag"])
-        .flat_map(|group| group["episodes"].as_array().into_iter().flatten())
-        .filter(|episode| episode["label"] == locator["episode"])
-        .collect();
-    if matches.is_empty() {
-        return retire(&state, &id, "line_not_found");
-    }
-    let base_locator = json!({"flag":locator["flag"],"episode":locator["episode"]});
-    if matches.len() != 1 || matches[0]["locator"] != base_locator {
-        return retire(&state, &id, "line_identity_ambiguous");
-    }
-    let requested = vec![json!({"flag":locator["flag"],"episode":matches[0]})];
-    let resolved = match crate::adapters::resolve(&source, &requested).await {
-        Ok(value) => value,
-        Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        let base_locator = json!({"flag":locator["flag"],"episode":locator["episode"]});
+        if matches.len() != 1 || matches[0]["locator"] != base_locator {
+            return retire(&state, &id, "line_identity_ambiguous");
+        }
+        let requested = vec![json!({"flag":locator["flag"],"episode":matches[0]})];
+        match crate::adapters::resolve(&source, &requested).await {
+            Ok(value) => value,
+            Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
+        }
     };
     let matching: Vec<_> = resolved
         .iter()
-        .filter(|item| item["episode"]["locator"] == *locator)
+        .filter(|item| {
+            if source["kind"] == "stremio_stream" {
+                item["episode"]["stable_key"] == locator["stream_key"]
+            } else {
+                item["episode"]["locator"] == *locator
+            }
+        })
         .collect();
     if matching.len() != 1 {
         return retire(
@@ -852,6 +943,7 @@ pub async fn refresh(State(state): State<AppState>, Path(id): Path<String>) -> R
     current.quality = episode["quality"].as_str().map(str::to_owned);
     current.needs_sniffing = episode["requires_parse"] == true;
     current.kind_hint = episode["kind_hint"].as_str().map(str::to_owned);
+    current.unsupported_reason = episode["unsupported_reason"].as_str().map(str::to_owned);
     current.play_expires_at = now + state.lookup_runtime.cache_ttl;
     Json(line_cache::output(&id, current, &state.reports)).into_response()
 }

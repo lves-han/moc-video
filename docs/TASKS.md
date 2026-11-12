@@ -3130,14 +3130,14 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 ```
 
 ### T1.13 Stremio 播放扩展与电影、剧集 ID 适配
-- [ ] 完成
+- [x] 完成
 - 依赖：T1.10
 - 需求：REQ-SERVICE-PROVIDERS（`docs/FOLLOWUP-PLAYBACK-SERVICE.md` §1 Stremio 播放、6.6–6.7）→ A1
 - 上下文：方案 §1 Stremio 播放、6.6–6.7；ADR-077/078/079/080；下文输入列出的现有模块和本节共同约定。
 - 输入：T1.2/T1.4 元数据的已核实 ID 与季集；来源模型和 lookup 管线；Stremio manifest/stream 协议。
 - 不变量：按资源/类型/前缀调用并核对目标身份；保留可验证的流定位特征，未知/重复特征在刷新时返回 410，不依赖返回顺序。
 - 未决项：无额外产品决定；外部实网可用性按当次环境记录。
-- 范围：`server/src/adapters/`, `server/src/metadata/`, `server/src/sources.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`, `server/src/line_cache.rs`
+- 范围：`server/src/adapters/`, `server/src/metadata/`, `server/src/sources.rs`, `server/src/state.rs`, `server/src/lookups.rs`, `server/src/main.rs`, `server/src/lib.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`, `docs/PROGRESS.md`, `Cargo.toml`, `Cargo.lock`, `server/Cargo.toml`, `licenses/`, `docs/runtime.lock.json`, `server/src/line_cache.rs`
 - 验收范围：`server/src/adapters/stremio_stream.rs`, `server/src/metadata/`, `server/src/sources.rs`, `protocol/service.openapi.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.8 的刷新定位/统计归属；元数据映射受影响时复用 T1.2/T1.4 相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。

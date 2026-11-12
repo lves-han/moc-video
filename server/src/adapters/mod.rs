@@ -1,4 +1,5 @@
 pub mod maccms;
+pub mod stremio_stream;
 pub mod t4_drpyjs0;
 pub mod t4_query;
 pub mod t4_rest;

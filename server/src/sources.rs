@@ -115,7 +115,12 @@ pub fn validate(input: &Value) -> Result<Value, &'static str> {
         .filter(|v| {
             matches!(
                 *v,
-                "maccms_json" | "maccms_xml" | "t4_query" | "t4_drpyjs0" | "t4_rest"
+                "maccms_json"
+                    | "maccms_xml"
+                    | "t4_query"
+                    | "t4_drpyjs0"
+                    | "t4_rest"
+                    | "stremio_stream"
             )
         })
         .ok_or("unsupported source kind")?;
@@ -123,6 +128,9 @@ pub fn validate(input: &Value) -> Result<Value, &'static str> {
     let parsed = Url::parse(api).map_err(|_| "invalid source URL")?;
     if !crate::metadata::http::valid(&parsed) || parsed.fragment().is_some() {
         return Err("invalid source URL");
+    }
+    if kind == "stremio_stream" && !parsed.path().ends_with("/manifest.json") {
+        return Err("invalid Stremio manifest URL");
     }
     let client = input["client_config_id"].as_str();
     if input

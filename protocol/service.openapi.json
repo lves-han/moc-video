@@ -1138,7 +1138,8 @@
               "maccms_xml",
               "t4_query",
               "t4_drpyjs0",
-              "t4_rest"
+              "t4_rest",
+              "stremio_stream"
             ]
           },
           "api": {
@@ -1201,6 +1202,10 @@
               "checked_at": {
                 "type": "integer",
                 "nullable": true
+              },
+              "capabilities": {
+                "type": "object",
+                "description": "Cached Stremio stream manifest capabilities for the current source revision."
               }
             }
           }
@@ -1436,6 +1441,10 @@
               },
               "lines": {
                 "type": "integer"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason a source cannot serve this target."
               },
               "error": {
                 "type": "object"

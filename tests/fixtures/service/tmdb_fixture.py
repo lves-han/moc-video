@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": []}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -24,6 +24,8 @@ class Handler(BaseHTTPRequestHandler):
             if "reset" in query: STATE["counts"].clear()
             if "reset_t4" in query: STATE["t4_requests"].clear()
             if "reset_rest" in query: STATE["rest_requests"].clear(); STATE["rest_contexts"].clear()
+            if "stream_mode" in query: STATE["stream_mode"] = query["stream_mode"][0]
+            if "reset_stream" in query: STATE["stream_requests"].clear()
             return self.send_json(STATE)
         if url.path == "/stats":
             return self.send_json(STATE)
@@ -37,6 +39,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(503)
             self.end_headers()
             return
+        if url.path.startswith(('/stream-tt/', '/stream-raw/', '/stream-series/', '/stream-none/', '/stream-open/')):
+            return self.stream_addon(url)
         if url.path.startswith(("/addon-a/", "/addon-b/", "/addon-same/")):
             return self.addon(url)
         if url.path in ("/t4-query", "/t4-js0", "/web/302redirect"):
@@ -200,6 +204,26 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"meta":{"id":parts[3].removesuffix('.json'),"type":"movie","name":label}})
         self.send_response(404)
         self.end_headers()
+
+    def stream_addon(self, url):
+        parts = [unquote(part) for part in url.path.strip('/').split('/')]
+        owner = parts[0]
+        STATE['stream_requests'].append({'owner':owner,'path':url.path,'query':parse_qs(url.query),'header':self.headers.get('X-Fixture')})
+        if self.headers.get('X-Fixture') != 'allowed': self.send_response(403); self.end_headers(); return
+        if parts[1:] == ['manifest.json']:
+            resource = {'name':'stream','types':['series'] if owner == 'stream-series' else ['movie','series'], 'idPrefixes':['same:'] if owner == 'stream-raw' else ['tt']}
+            if owner == 'stream-open': resource.pop('idPrefixes')
+            return self.send_json({'id':'fixture.'+owner,'name':owner,'version':'1.0.0','resources':['catalog'] if owner == 'stream-none' else [resource], 'types':['movie','series'], 'idPrefixes':['tt'] if owner == 'stream-open' else [], 'catalogs':[]})
+        if len(parts) != 4 or parts[1] != 'stream' or not parts[3].endswith('.json'):
+            self.send_response(404); self.end_headers(); return
+        mode=STATE['stream_mode'];generation='1' if mode == 'normal' else '2'
+        first={'name':'Primary','url':'https://media.test/a.m3u8?token='+generation,'behaviorHints':{'videoHash':'0123456789abcdef','proxyHeaders':{'request':{'Referer':'https://fixture.test/','User-Agent':'FixturePlayer'}}}}
+        second={'name':'Backup','url':'https://media.test/b.mp4?token='+generation,'behaviorHints':{'videoHash':'fedcba9876543210'}}
+        streams=[first,second,{'infoHash':'a'*40,'name':'Torrent'},{'name':'Website','externalUrl':'https://media.test/page'},{'name':'DASH','url':'https://media.test/video.mpd'},{'name':'Unknown','url':'https://media.test/opaque?id=unknown'}]
+        if mode == 'reordered': streams[0],streams[1] = streams[1],streams[0]
+        if mode == 'missing': streams = [item for item in streams if item.get('name') != 'Primary']
+        if mode == 'duplicate': streams.insert(1,dict(first))
+        return self.send_json({'streams':streams})
 
     def do_POST(self):
         url = urlsplit(self.path)

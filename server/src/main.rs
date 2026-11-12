@@ -250,7 +250,18 @@ fn api_error(status: StatusCode, code: &str, message: &str) -> Response {
 
 async fn playback_list(State(state): State<AppState>) -> Response {
     match state.playback_sources.list() {
-        Ok(items) => Json(json!({"sources":items})).into_response(),
+        Ok(mut items) => {
+            for item in &mut items {
+                if item["kind"] == "stremio_stream" {
+                    if let Ok(Some(manifest)) =
+                        adapters::stremio_stream::cached_manifest(item, &state.cache)
+                    {
+                        item["capabilities"] = manifest;
+                    }
+                }
+            }
+            Json(json!({"sources":items})).into_response()
+        }
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",
@@ -407,6 +418,11 @@ async fn playback_check(
     }
     let start = std::time::Instant::now();
     let result = async {
+        if source["kind"] == "stremio_stream" {
+            let manifest =
+                adapters::stremio_stream::refresh_manifest(&source, &state.cache).await?;
+            return Ok::<_, &'static str>((0, 0, Some(manifest)));
+        }
         let keyword = query.get("query").map(String::as_str).unwrap_or("电影");
         let items = adapters::search(&source, keyword).await?;
         let sample = items.first().ok_or("source search returned no sample")?;
@@ -417,7 +433,11 @@ async fn playback_check(
                 .ok_or("source content ID missing")?,
         )
         .await?;
-        Ok::<_, &'static str>((items.len(), detail["groups"].as_array().map_or(0, Vec::len)))
+        Ok::<_, &'static str>((
+            items.len(),
+            detail["groups"].as_array().map_or(0, Vec::len),
+            None,
+        ))
     }
     .await;
     let status = if result.is_ok() { "ready" } else { "failed" };
@@ -438,7 +458,7 @@ async fn playback_check(
             );
         }
     }
-    match result {Ok((results,groups))=>Json(json!({"id":id,"revision":revision,"status":"ready","sample_count":results,"groups":groups,"elapsed_ms":start.elapsed().as_millis()})).into_response(),Err(error)=>api_error(StatusCode::BAD_GATEWAY,"UPSTREAM_FAILED",error)}
+    match result {Ok((results,groups,capabilities))=>Json(json!({"id":id,"revision":revision,"status":"ready","sample_count":results,"groups":groups,"capabilities":capabilities,"elapsed_ms":start.elapsed().as_millis()})).into_response(),Err(error)=>api_error(StatusCode::BAD_GATEWAY,"UPSTREAM_FAILED",error)}
 }
 
 async fn playback_import(
@@ -465,6 +485,7 @@ async fn playback_import(
             (Some("t4_query" | "t4_drpys" | "T4_DRPYS"), _) | (_, Some(4 | 6)) => "t4_query",
             (Some("t4_drpyjs0" | "T4_DRPYJS0" | "drpyjs0"), _) | (_, Some(2)) => "t4_drpyjs0",
             (Some("t4_rest" | "t4_catvod" | "T4_CATVOD"), _) | (_, Some(8)) => "t4_rest",
+            (Some("stremio_stream"), _) => "stremio_stream",
             _ => {
                 results.push(json!({"status":"skipped","reason":"unsupported source type"}));
                 continue;

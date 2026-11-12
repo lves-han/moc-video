@@ -53,7 +53,7 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
         let path = value.path().to_ascii_lowercase();
         path.ends_with(".mpd") || path.ends_with(".mkv")
     });
-    let kind = if line.needs_sniffing || unsupported_format {
+    let kind = if line.needs_sniffing || unsupported_format || line.unsupported_reason.is_some() {
         "unsupported"
     } else if url.is_some() && line.kind_hint.as_deref() == Some("hls")
         || url
@@ -76,7 +76,9 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
     if let Some(play) = play {
         value["play"] = play;
     } else {
-        value["reason"] = json!(if line.needs_sniffing {
+        value["reason"] = json!(if let Some(reason) = line.unsupported_reason.as_deref() {
+            reason
+        } else if line.needs_sniffing {
             "needs_sniffing"
         } else if unsupported_format {
             "unsupported_media_format"
@@ -142,6 +144,9 @@ pub fn issue(
             quality: item["episode"]["quality"].as_str().map(str::to_owned),
             needs_sniffing: item["episode"]["requires_parse"] == true,
             kind_hint: item["episode"]["kind_hint"].as_str().map(str::to_owned),
+            unsupported_reason: item["episode"]["unsupported_reason"]
+                .as_str()
+                .map(str::to_owned),
             expires_at: now + runtime.handle_ttl,
             play_expires_at: now + runtime.cache_ttl,
         };

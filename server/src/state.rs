@@ -35,6 +35,7 @@ pub struct Line {
     pub quality: Option<String>,
     pub needs_sniffing: bool,
     pub kind_hint: Option<String>,
+    pub unsupported_reason: Option<String>,
     pub expires_at: i64,
     pub play_expires_at: i64,
 }

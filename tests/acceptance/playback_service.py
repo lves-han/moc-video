@@ -1008,13 +1008,99 @@ class T4RestAdapter(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+class StremioStreamAdapter(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def lookup(self, kind, meta_id, video_id, sources, metadata_source='tmdb', refresh=False):
+        body={'metadata_source_id':metadata_source,'meta_id':meta_id,'type':kind,'video_id':video_id,'lang':'en-US','sources':sources,'refresh':refresh}
+        return self.ndjson('/v1/lookups',body)
+
+    def test_1_ids(self):
+        self.start('app-token',self.fixture_env)
+        self.fixture_request('/control?stream_mode=normal&reset_stream=1')
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        sources=[]
+        for path in ('stream-tt','stream-raw','stream-series','stream-none','stream-open'):
+            payload={'name':path,'kind':'stremio_stream','api':base+'/'+path+'/manifest.json?auth=fixture','headers':{'X-Fixture':'allowed'},'enabled':True}
+            status,source=self.native('POST','/v1/sources',payload);self.assertEqual(status,201,source);sources.append(source)
+        type(self).stream_sources=sources
+        status,checked=self.native('POST','/v1/sources/'+sources[0]['id']+'/check')
+        self.assertEqual(status,200,checked);self.assertEqual(checked['capabilities']['resources'][0]['name'],'stream')
+        listed=self.native('GET','/v1/sources')[1]['sources'];self.assertEqual(next(s for s in listed if s['id']==sources[0]['id'])['capabilities']['id'],'fixture.stream-tt')
+        status,events=self.lookup('movie','tmdb:42','tmdb:42',[sources[0]['id']]);self.assertEqual(status,200,events)
+        movie=[event['line'] for event in events if event['event']=='line'];self.assertEqual(len(movie),5,events)
+        type(self).movie_lines=movie
+        _,series=self.lookup('series','tmdb:44','tt7654321:1:2',[sources[0]['id']]);self.assertEqual(len([e for e in series if e['event']=='line']),5,series)
+        requests=self.fixture_request('/stats')['stream_requests']
+        self.assertTrue(any(r['path'].endswith('/stream/movie/tt1234567.json') for r in requests))
+        self.assertTrue(any(r['path'].endswith('/stream/series/tt7654321:1:2.json') for r in requests))
+        self.assertTrue(all(r['header']=='allowed' for r in requests))
+        self.assertEqual(sum(r['path'].endswith('/stream-tt/manifest.json') for r in requests),1)
+        self.assertEqual(self.native('POST','/v1/sources/'+sources[0]['id']+'/check')[0],200)
+        self.assertEqual(sum(r['path'].endswith('/stream-tt/manifest.json') for r in self.fixture_request('/stats')['stream_requests']),2)
+        self.assertEqual(self.lookup('series','tmdb:44','tt7654321:1:999',[sources[0]['id']])[0],400)
+        imported=self.native('POST','/v1/metadata-sources/import',self.group())[1]['results']
+        metadata_ids=[r['source']['metadata_source_id'] for r in imported]
+        targets=[]
+        for metadata in metadata_ids:
+            _,events=self.lookup('movie','same:42','same:42',[sources[1]['id']],metadata)
+            line=next(e['line'] for e in events if e['event']=='line');targets.append(line['target']['metadata_source_id'])
+        self.assertEqual(targets,metadata_ids);self.assertNotEqual(*targets)
+        requests=self.fixture_request('/stats')['stream_requests']
+        self.assertGreaterEqual(sum(r['path'].endswith('/stream/movie/same:42.json') for r in requests),2)
+        _,events=self.lookup('movie','same:42','same:42',[sources[4]['id']],metadata_ids[0])
+        self.assertTrue(any(event['event']=='line' for event in events),events)
+
+    def test_2_capabilities(self):
+        tt,raw,series,none,_open=self.stream_sources
+        cases=[('series','tmdb:43','tmdb:43:1:1',tt,'imdb_id_missing'),('movie','tmdb:42','tmdb:42',raw,'id_prefix_unsupported'),('movie','tmdb:42','tmdb:42',series,'type_unsupported'),('movie','tmdb:42','tmdb:42',none,'stream_unsupported')]
+        for kind,meta,video,source,reason in cases:
+            status,events=self.lookup(kind,meta,video,[source['id']],refresh=True);self.assertEqual(status,200,events)
+            self.assertTrue(any(e.get('status')=='unsupported' and e.get('reason')==reason for e in events),(reason,events))
+            self.assertFalse(any(e['event']=='line' for e in events))
+
+    def test_3_formats_headers(self):
+        lines=self.movie_lines
+        self.assertFalse(any(line['line_name']=='Torrent' for line in lines))
+        primary=next(line for line in lines if line['line_name']=='Primary')
+        self.assertEqual(primary['kind'],'hls');self.assertEqual(primary['play']['headers']['referer'],'https://fixture.test/')
+        self.assertEqual(primary['play']['headers']['user-agent'],'FixturePlayer');self.assertNotIn('x-fixture',primary['play']['headers'])
+        external=next(line for line in lines if line['line_name']=='Website');self.assertEqual((external['kind'],external['reason']),('unsupported','external_url_unsupported'));self.assertNotIn('play',external)
+        dash=next(line for line in lines if line['line_name']=='DASH');self.assertEqual((dash['kind'],dash['reason']),('unsupported','unsupported_media_format'))
+
+    def test_4_refresh_identity(self):
+        tt=self.stream_sources[0]
+        primary=next(line for line in self.movie_lines if line['line_name']=='Primary')
+        self.fixture_request('/control?stream_mode=reordered')
+        status,updated=self.native('POST','/v1/lines/'+primary['line_id']+'/refresh',{})
+        self.assertEqual(status,200,updated);self.assertEqual(updated['line_id'],primary['line_id']);self.assertEqual(updated['play']['url'],'https://media.test/a.m3u8?token=2')
+        self.fixture_request('/control?stream_mode=duplicate')
+        status,error=self.native('POST','/v1/lines/'+primary['line_id']+'/refresh',{})
+        self.assertEqual((status,error['error']['reason']),(410,'line_identity_ambiguous'))
+        self.fixture_request('/control?stream_mode=normal')
+        _,events=self.lookup('movie','tmdb:42','tmdb:42',[tt['id']],refresh=True)
+        fresh=[e['line'] for e in events if e['event']=='line'];primary=next(line for line in fresh if line['line_name']=='Primary');unknown=next(line for line in fresh if line['line_name']=='Unknown')
+        self.assertEqual(self.native('POST','/v1/lines/'+unknown['line_id']+'/refresh',{})[0],410)
+        self.fixture_request('/control?stream_mode=missing')
+        status,error=self.native('POST','/v1/lines/'+primary['line_id']+'/refresh',{})
+        self.assertEqual((status,error['error']['reason']),(410,'line_not_found'))
+        self.start('app-token',self.fixture_env)
+        listed=self.native('GET','/v1/sources')[1]['sources']
+        self.assertEqual(next(source for source in listed if source['id']==tt['id'])['capabilities']['id'],'fixture.stream-tt')
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
     case_ids = {"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
@@ -1024,6 +1110,7 @@ def main():
                 "app-metadata-app":["REQ-SERVICE-META/app-metadata-browse", "REQ-SERVICE-META/app-existing-records-resume", "REQ-SERVICE-META/app-multi-manifest-records"],
                 "playback-sources":["REQ-SERVICE-PLAY/sources-json-xml", "REQ-SERVICE-PLAY/sources-lifecycle-check", "REQ-SERVICE-PLAY/sources-import-idempotent"],
                 "source-matching":["REQ-SERVICE-PLAY/matching-queries-filter", "REQ-SERVICE-PLAY/matching-auto-confirm-negatives", "REQ-SERVICE-PLAY/mapping-reuse-identity", "REQ-SERVICE-PLAY/mapping-user-revoke"],
+                "stremio-stream-adapter":["REQ-SERVICE-PROVIDERS/stremio-stream-ids", "REQ-SERVICE-PROVIDERS/stremio-stream-capabilities", "REQ-SERVICE-PROVIDERS/stremio-stream-formats-headers", "REQ-SERVICE-PROVIDERS/stremio-refresh-identity"],
                 "t4-rest-adapter":["REQ-SERVICE-PROVIDERS/t4-rest-init-and-routes", "REQ-SERVICE-PROVIDERS/t4-rest-context-and-errors"],
                 "t4-query-adapters":["REQ-SERVICE-PROVIDERS/t4-query-parameters", "REQ-SERVICE-PROVIDERS/t4-drpyjs0-parameters", "REQ-SERVICE-PROVIDERS/t4-play-shapes-headers", "REQ-SERVICE-PROVIDERS/t4-query-refresh-identity"],
                 "app-source-selection-app":["REQ-SERVICE-PLAY/app-playback-selection-switch", "REQ-SERVICE-PLAY/app-resume-service-errors", "REQ-SERVICE-PLAY/app-new-history-restart", "REQ-SERVICE-PLAY/app-offline-local-live"],
@@ -1040,6 +1127,7 @@ def main():
                "app-metadata-app":("test_1_metadata_browse", "test_2_existing_records_resume", "test_3_multi_manifest_records"),
                "playback-sources":("test_1_json_xml", "test_2_lifecycle_check", "test_3_import_idempotent"),
                "source-matching":("test_1_queries_filter", "test_2_auto_confirm_negatives", "test_3_mapping_reuse_identity", "test_4_user_revoke"),
+               "stremio-stream-adapter":("test_1_ids", "test_2_capabilities", "test_3_formats_headers", "test_4_refresh_identity"),
                "t4-rest-adapter":("test_1_init_and_routes", "test_2_context_and_errors"),
                "t4-query-adapters":("test_1_query_parameters", "test_2_js0_parameters", "test_3_play_shapes", "test_4_refresh_identity"),
                "app-source-selection-app":("test_1_selection_switch", "test_2_failure_recovery", "test_3_history_restart", "test_4_offline"),

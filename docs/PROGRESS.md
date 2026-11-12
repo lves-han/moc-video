@@ -3256,3 +3256,12 @@
 - 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T085830194469-T112-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T085901982739-T112-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T085947629379-T112-openapi/output.log`。
 - 兼容范围：路由和基础请求体按 [zyfun CatVod 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Catvod.ts) 实现；`init.ext` 和返回 `context` 是本次受控样本验证的可选约定。POST 重定向限同源 307/308。外部服务实网 NOT RUN。
 - 范围：补入共享 HTTP 传输模块以支持 POST，延续现有 TLS、响应上限及跨源保护。
+
+## T1.13 Stremio 播放扩展与电影、剧集 ID 适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `stremio_stream` 来源，读取并缓存实际 manifest 能力；按资源、类型、前缀和已核实的 IMDb/登记命名空间选择电影或剧集 ID。仅将 HTTP(S) 流交给播放器，传递扩展声明的播放头；BT 忽略，外链及不支持格式返回原因。刷新按视频哈希或不含查询参数的稳定地址定位，缺少特征、重复或消失时返回 410。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T091652923511-A1/output.log`；4 项通过，覆盖电影/剧集 ID、不同元数据来源同名 ID、manifest 能力和资源前缀覆盖、缺 IMDb、类型/格式限制、播放头、持久能力及重排/重复/消失的刷新身份。
+- 相关回归：T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T091506435382-T113-t18-regression/output.log`；该回归后对资源级前缀继承作了小幅修正，最终 A1 已覆盖修正后的 TMDB 和第三方元数据；服务 OpenAPI 验证通过 `evidence/runs/20261112T091606127511-T113-openapi/output.log`。
+- 兼容依据：[Stremio manifest](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md)、[stream](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md) 与 [stream 请求](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/requests/defineStreamHandler.md)。带未知查询参数且没有视频哈希的流保守要求重查；外部真实扩展和其他平台实机 NOT RUN。
+- 范围：补入短期线路状态模块，用于保留扩展不支持原因；来源能力保存在现有元数据缓存中，来源检查会主动刷新。
