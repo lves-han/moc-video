@@ -6,14 +6,14 @@ fn t24_cache_host_settings_permissions_and_restart() {
     let path = temp.path().join("settings.json");
     let host = Host::open(path.clone()).unwrap();
     let initial = ok(&host, "get_media_cache", json!({}));
-    assert_eq!(initial["max_bytes"], 268435456);
+    assert_eq!(initial["max_bytes"], 9_007_199_254_740_991u64);
     assert_eq!(initial["used_bytes"], 0);
     let mut settings = ok(&host, "get_settings", json!({}));
     settings["media_cache_max_bytes"] = json!(1048576);
     ok(&host, "save_settings", settings.clone());
     assert_eq!(
         ok(&host, "get_media_cache", json!({}))["max_bytes"],
-        1048576
+        9_007_199_254_740_991u64
     );
     let mut invalid = settings.clone();
     invalid["media_cache_max_bytes"] = json!(-1);
@@ -40,11 +40,11 @@ fn t24_cache_host_settings_permissions_and_restart() {
     let restarted = Host::open(path).unwrap();
     assert_eq!(
         ok(&restarted, "get_media_cache", json!({}))["max_bytes"],
-        1048576
+        9_007_199_254_740_991u64
     );
     settings["media_cache_max_bytes"] = json!(0);
     ok(&restarted, "save_settings", settings);
-    assert_eq!(ok(&restarted, "get_media_cache", json!({}))["max_bytes"], 0);
+    assert_eq!(ok(&restarted, "get_media_cache", json!({}))["max_bytes"], 9_007_199_254_740_991u64);
 }
 
 #[test]

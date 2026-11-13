@@ -13,6 +13,7 @@ pub mod host;
 pub mod line_round;
 pub mod matching;
 pub mod media_cache;
+pub mod prefetch;
 pub mod remux;
 pub mod requests;
 #[cfg(not(mobile))]

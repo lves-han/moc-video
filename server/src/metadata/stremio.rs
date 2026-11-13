@@ -163,9 +163,17 @@ pub async fn response(
             path.push(&format!("{id}.json"));
         }
     }
-    let value = http::json(url, Default::default())
-        .await
-        .map_err(|_| "Stremio upstream request failed")?;
+    let value = match http::json(url, Default::default()).await {
+        Ok(value) => value,
+        Err(_) if name == "meta" => {
+            if let Some(value) = cache.stale_detail(&key).map_err(|_| "metadata cache read failed")? {
+                eprintln!("Stremio detail refresh failed; serving cached detail");
+                return Ok(value);
+            }
+            return Err("Stremio upstream request failed");
+        }
+        Err(_) => return Err("Stremio upstream request failed"),
+    };
     if (name == "catalog" && !value["metas"].is_array())
         || (name == "meta" && !value["meta"].is_object())
     {

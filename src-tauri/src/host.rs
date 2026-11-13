@@ -103,6 +103,15 @@ pub struct Call {
     resolve_sequence: Option<u64>,
 }
 
+fn cache_episode_owner(context: &Value) -> Option<String> {
+    let metadata = &context["metadata_ref"]["identity"];
+    Some(identity("episode_cache", &[
+        metadata["config_id"].as_str()?, metadata["namespace"].as_str()?,
+        metadata["type"].as_str()?, metadata["meta_id"].as_str()?,
+        context["metadata_video_id"].as_str()?,
+    ]))
+}
+
 impl Host {
     pub fn open(path: PathBuf) -> Result<Arc<Self>, ApiError> {
         Self::with_clock(path, Arc::new(MonotonicClock::default()))
@@ -122,7 +131,7 @@ impl Host {
             requests: Arc::default(),
             clock,
             store,
-            media_cache: MediaCache::new(cache_path, crate::media_cache::limit(&settings)),
+            media_cache: MediaCache::for_episodes(cache_path),
             source_cache: source_cache::SourceCache::new(source_cache_path),
             committed: Mutex::new(Committed {
                 settings,
@@ -600,8 +609,9 @@ impl Host {
                         self.media_cache.clone(),
                     )?);
                 }
+                let owner = input["resolution_id"].as_str().and_then(|id| committed.resolution_contexts.get(id)).and_then(cache_episode_owner);
                 let gateway = committed.gateway.as_ref().expect("Gateway ready");
-                let view = gateway.open(selected)?;
+                let view = if let Some(owner) = owner { gateway.open_episode(selected, owner)? } else { gateway.open(selected)? };
                 if let Err(error) = job.check() {
                     gateway.close(view["session_id"].as_str().expect("Session ID"));
                     return Err(error);
@@ -1590,15 +1600,22 @@ impl Host {
                 self.media_cache.clone(),
             )?);
         }
+        let owner = value.get("details").and_then(|v| v.get("ref")).map(|reference| {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(reference.to_string().as_bytes()))
+        });
+        let keys: Vec<_> = references.values().map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
+        let caching = owner.as_deref().is_some_and(|owner| self.media_cache.register_images(owner, &keys).is_ok());
         let mut access = serde_json::Map::new();
         for (id, image) in references {
+            let cache_key = caching.then(|| crate::media_cache::key(source, "image", &image.url, &image.headers));
             access.insert(
                 id,
                 committed
                     .gateway
                     .as_ref()
                     .expect("Image gateway")
-                    .image(source, image)?,
+                    .image_cached(source, image, cache_key, if caching { owner.clone() } else { None })?,
             );
         }
         fn capabilities(value: &mut Value, access: &serde_json::Map<String, Value>) {
@@ -2192,7 +2209,7 @@ impl Host {
             )?);
         }
         let gateway = committed.gateway.as_ref().expect("Gateway ready");
-        let view = gateway.open(selected)?;
+        let view = if let Some(owner) = cache_episode_owner(&context) { gateway.open_episode(selected, owner)? } else { gateway.open(selected)? };
         if let Err(error) = job.check() {
             gateway.close(view["session_id"].as_str().expect("Session ID"));
             return Err(error);

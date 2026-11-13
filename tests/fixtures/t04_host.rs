@@ -332,6 +332,9 @@ fn t04_refused_media_fails_once_and_never_reaches_a_local_secret_upstream() {
     }
     for refusal in ["media-403", "media-challenge"] {
         *mode.lock().unwrap() = refusal;
+        // The episode cache can legitimately satisfy an earlier successful response.
+        // Clear it to exercise the upstream refusal and its no-retry behavior.
+        ok(&host, "clear_media_cache", json!({}));
         let before = path_requests(&fixture, "/media/");
         let (status, body) = media_get(media);
         assert_eq!(status, 502, "{body}");

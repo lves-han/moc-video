@@ -2496,6 +2496,8 @@ main {
 .playback-seek:is(:hover,[data-dragging]) > .playback-track { height: 8px; }
 .playback-view media-slider-fill, .playback-view media-slider-buffer { display: block; position: absolute; inset: 0 auto 0 0; border-radius: inherit; height: 100%; }
 .playback-view media-slider-buffer { width: var(--media-slider-buffer,0%); background: rgba(255,255,255,.5); }
+.playback-cached-range { position: absolute; top: 0; height: 100%; border-radius: inherit; background: rgba(141, 231, 199, .8); pointer-events: none; }
+.playback-cache-status { margin: 2px 0 4px; color: var(--tv-text-2, var(--muted)); font-size: 12px; }
 .playback-view media-slider-fill { width: var(--media-slider-fill,0%); background: var(--tv-text,#f5f5f7); }
 .playback-view media-slider-thumb { position: absolute; display: block; left: var(--media-slider-fill,0%); top: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--tv-text,#f5f5f7); transform: translate(-50%,-50%); opacity: 0; }
 .playback-seek:is(:hover,[data-dragging],:focus-within) > media-slider-thumb, .playback-volume:hover media-slider-thumb, .playback-volume:focus-within media-slider-thumb { opacity: 1; }

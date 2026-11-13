@@ -79,3 +79,26 @@ test("automatic next episode reuses the uniquely matching available source and l
     assert.deepEqual(calls, ["first", "next"]); assert.equal(app.serviceRound.open, true); assert.ok(app.serviceRound.error);
   });
 });
+
+test('details prefetch reuses the active lookup when playback is requested', async () => {
+  const ref = { source_id: 'metadata', source_revision: '1', data: JSON.stringify(['stremio_video', 'tmdb', 'movie', 'film', 'film']) };
+  const state = createAppState(); state.settings.playback_service = { enabled: true, groups: [] } as never;
+  state.details.phase = 'ready';
+  state.details.data = { metadata_ref: { identity: { config_id: TMDB_CONFIG_ID, type: 'movie', meta_id: 'film' } }, details: { ref, groups: [{ episodes: [{ ref }] }] } } as never;
+  let release!: (value: unknown) => void, queries = 0;
+  const api = { cancel: async () => {}, call: async (command: string, input: any) => {
+    if (command === 'start_line_round') { queries++; return await new Promise(resolve => { release = resolve; }); }
+    if (command === 'cancel_line_round') return {};
+    throw new Error(`Unexpected ${command}`);
+  } };
+  const app = new AppController(api as never, {} as never, state, null);
+  const pending = app.startServiceRound('film', false, null, true);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(app.serviceRound.open, false);
+  assert.equal(app.openPreparedServiceRound('other'), false);
+  assert.equal(app.openPreparedServiceRound('film'), true);
+  assert.equal(app.serviceRound.open, true);
+  release({ query_done: true, pending: 0, pending_confirm: 0, lines: [], candidates: [], sources: [], error: null });
+  await pending; assert.equal(queries, 1);
+  app.invalidatePlayback(); assert.equal(app.openPreparedServiceRound('film'), false);
+});
