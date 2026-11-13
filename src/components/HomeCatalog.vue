@@ -99,7 +99,7 @@ onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => 
   <div ref="root" class="home-catalog" :class="{ 'browse-catalog': category }" :data-category="category" :data-query="query">
     <div class="hero-observer"><CatalogHero :items="heroData?.page.sections[0]?.items ?? []" :images="heroData?.images ?? {}" :category="categoryTitle" :compact="wall" @open="emit('open', $event)" @image-error="heroRow && imageError(heroRow.section.section_ref, heroRow.filter, $event)" /></div>
     <p v-if="!state.settings.playback_service?.enabled" class="catalog-status" role="status">{{ word('请先连接服务。', 'Connect the service to browse.') }} <a href="#/settings">{{ word('打开设置', 'Open settings') }}</a></p>
-    <p v-if="state.home.phase === 'loading'" class="catalog-status" role="status">{{ t('Loading catalog') }}</p>
+    <p v-if="state.home.phase === 'loading'" class="catalog-status catalog-loading" role="status">{{ t('Loading catalog') }}</p>
     <p v-if="state.home.error" class="home-failed" role="alert">{{ state.home.error.message }} <button class="home-retry glass-pill" @click="app.loadCatalog()">{{ t('Retry') }}</button></p>
     <p v-if="state.home.phase === 'empty'" class="home-empty">{{ word('该来源暂无栏目', 'No catalogs from this source') }}</p>
     <FilterBar v-if="category" :model-value="selected" :facets="base?.filters" :locked-genre="lockedGenre" @update:model-value="filters" />

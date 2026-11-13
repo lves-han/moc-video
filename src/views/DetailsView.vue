@@ -135,7 +135,10 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
 <template>
   <div class="tv-details">
   <a class="details-back" href="#/home" @click.prevent="emit('back')">{{ word('返回', 'Back') }}</a>
-  <p v-if="state.details.phase === 'loading' && !details" class="details-loading" role="status" aria-busy="true">{{ t('Loading catalog') }}</p>
+  <section v-if="state.details.phase === 'loading' && !details" class="details-loading" role="status" aria-busy="true">
+    <div class="details-loading-art" aria-hidden="true"><div class="details-loading-copy"><span /><span /><span /></div></div>
+    <p>{{ word('正在加载影片详情…', 'Loading details…') }}</p>
+  </section>
   <NAlert v-if="state.details.phase === 'failed'" class="details-failed" type="error">{{ state.details.error?.message }}<NButton class="details-retry" size="small" @click="retry">{{ t('Retry') }}</NButton></NAlert>
   <NAlert v-if="app.detailsImage.error" class="details-image-error" type="error">{{ app.detailsImage.error }}<NButton class="details-retry" size="small" @click="retry">{{ t('Retry') }}</NButton></NAlert>
   <template v-if="details">
@@ -183,9 +186,11 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
     <section v-for="item in candidateGroups" :key="item.id" class="details-candidate-group" :data-group-id="item.id"><h3>{{ item.title }}</h3><div class="details-episode-grid"><NButton v-for="episode in candidateEpisodes(item)" :key="episode.id" class="details-candidate-episode" :data-episode-id="episode.id" :disabled="Boolean(app.matching.pending)" @click="confirm({ content_ref: candidate!.ref, group_id: item.id, episode_id: episode.id })">{{ episode.label }}</NButton></div></section>
     <NButton class="details-confirm-cancel" @click="app.invalidatePlayback()">{{ t('Cancel') }}</NButton>
   </NModal>
-  <NModal :show="app.serviceRound.open" preset="card" role="dialog" class="tv-dialog details-confirm" :title="word('选择播放线路', 'Choose a playback line')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateServiceModal">
-    <p v-if="!app.serviceRound.snapshot?.query_done || app.serviceRound.snapshot.pending || app.serviceRound.snapshot.pending_confirm" role="status">{{ word('正在查找和测试线路…', 'Finding and testing lines…') }}</p>
+  <NModal :show="app.serviceRound.open" preset="card" role="dialog" class="tv-dialog details-confirm" :title="app.serviceRound.autoSelecting ? word('正在准备下一集', 'Preparing next episode') : word('选择播放线路', 'Choose a playback line')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateServiceModal">
+    <p v-if="app.serviceRound.autoSelecting" role="status">{{ word('正在查找上一集的播放线路…', 'Finding the previous episode’s playback line…') }}</p>
+    <p v-else-if="!app.serviceRound.snapshot?.query_done || app.serviceRound.snapshot.pending || app.serviceRound.snapshot.pending_confirm" role="status">{{ word('正在查找和测试线路…', 'Finding and testing lines…') }}</p>
     <NAlert v-if="app.serviceRound.error" type="error">{{ app.serviceRound.error }} <NButton size="small" @click="retryServiceRound">{{ t('Retry') }}</NButton></NAlert>
+    <template v-if="!app.serviceRound.autoSelecting">
     <section v-for="source in sourceGroups" :key="source.source_id" class="line-source">
       <div class="line-source-heading"><strong>{{ source.name || source.source_id }}</strong><span>{{ sourceStatus(source) }}</span></div>
       <div v-for="line in source.lines" :key="line.line_id" class="line-source-row">
@@ -199,6 +204,7 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
       <NButton v-for="candidate in source.candidates" :key="candidate.candidate_id" class="details-candidate" :disabled="app.serviceRound.busy" @click="app.confirmServiceCandidate(candidate)">{{ word('确认', 'Confirm') }} · {{ candidate.title }}<template v-if="candidate.year"> ({{ candidate.year }})</template></NButton>
     </section>
     <p v-if="app.serviceRound.snapshot?.query_done && !app.serviceRound.snapshot.pending && !app.serviceRound.snapshot.lines.length && !app.serviceRound.snapshot.candidates.length">{{ word('没有找到可用线路', 'No lines found') }}</p>
+    </template>
     <NButton class="details-confirm-cancel" @click="updateServiceModal(false)">{{ t('Cancel') }}</NButton>
   </NModal>
   </div>

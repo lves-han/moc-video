@@ -100,7 +100,7 @@ onBeforeUnmount(cancel);
     <FilterBar :model-value="filters" :facets="section?.filters" @update:model-value="change($event)" />
     <p v-if="error" class="catalog-row-error" role="alert">{{ error }} <button class="glass-pill maccms-retry" @click="section ? load(section) : refresh()">{{ word('重试', 'Retry') }}</button></p>
     <p v-for="failure in failures" :key="failure.section_ref!" class="catalog-row-error" role="alert">{{ failure.title }} · {{ failure.error.message }} <button class="glass-pill maccms-retry" @click="failure.section_ref && load({ section_ref: failure.section_ref })">{{ word('重试', 'Retry') }}</button></p>
-    <p v-if="loading" class="catalog-status" role="status">{{ word('加载中', 'Loading catalog') }}</p>
+    <p v-if="loading" class="catalog-status catalog-loading" role="status">{{ word('加载中', 'Loading catalog') }}</p>
     <p class="wall-progress" role="status">{{ word('已查找', 'Scanned') }} {{ currentSnapshot ? section?.scanned_count ?? 0 : 0 }} · {{ word('找到', 'Found') }} {{ currentSnapshot ? section?.matched_count ?? 0 : 0 }}</p>
     <div class="poster-wall home-grid"><MediaRow :title="section?.title ?? title" :items="currentSnapshot ? section?.items ?? [] : []" :images="data?.images" :landscape="category === 'sports'" :loading="loading && !currentSnapshot" @open="emit('open', $event)" @image-error="imageError" /></div>
     <div v-if="currentSnapshot && !loading && !error && !failures.length && !section?.items.length" class="catalog-empty"><h2>{{ word('没有找到影片', 'No titles found') }}</h2><p>{{ word('试试减少筛选条件，或选择其他播放源。', 'Remove a filter or choose another playback source.') }}</p><button v-if="Object.keys(filters).length" class="glass-pill" @click="change({})">{{ word('清除全部', 'Clear all') }}</button></div>

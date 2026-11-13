@@ -2768,6 +2768,12 @@ main {
 /* TV5 details reuse the shell palette and the Hero artwork masks. */
 .tv-details { position: relative; display: flow-root; }
 .details-back { display: inline-flex; margin-bottom: 20px; }
+.details-loading-art { min-height: 360px; border-radius: 12px; display: flex; align-items: end; padding: 28px; background: linear-gradient(120deg,var(--surface),var(--tv-bg,var(--surface))); }
+.details-loading-copy { display: grid; gap: 14px; width: min(520px,80%); }
+.details-loading-copy span { height: 14px; border-radius: 6px; background: var(--tv-glass,rgba(128,128,128,.16)); }
+.details-loading-copy span:first-child { width: 65%; height: 34px; }
+.details-loading-copy span:last-child { width: 80%; }
+.details-loading p { color: var(--tv-text-2,var(--muted)); margin: 16px 0; }
 .details-head { position: relative; isolation: isolate; min-height: 360px; overflow: hidden; border-radius: 12px; background: var(--surface); }
 .details-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -3; }
 .details-bottom-mask { position: absolute; inset: 35% 0 0; background: linear-gradient(to top,var(--tv-bg,var(--surface)),transparent); z-index: -1; }

@@ -208,7 +208,10 @@ async function onHashChange() {
   if (!detailsChange || matchMedia('(prefers-reduced-motion: reduce)').matches) { await updateRoute(); return; }
   const poster = target.startsWith('#/details/') ? markTransitionPoster(target) : null;
   const update = async () => {
-    await updateRoute();
+    let showDetails!: () => void;
+    const detailsReady = new Promise<void>(resolve => { showDetails = resolve; });
+    const work = updateRoute(showDetails);
+    await Promise.race([detailsReady, work]);
     if (leaving.startsWith('#/details/') && location.hash === target) markTransitionPoster(leaving);
   };
   try {
@@ -233,18 +236,18 @@ async function onHashChange() {
   } catch (error) { preferenceError.value = String(error); }
   finally { poster?.style.removeProperty('view-transition-name'); document.querySelectorAll<HTMLElement>('.poster-link').forEach(element => element.style.removeProperty('view-transition-name')); }
 }
-async function playEpisode(videoId: string, explicitLine = false, resumePosition?: number) {
+async function playEpisode(videoId: string, explicitLine = false, resumePosition?: number, automaticNext = false) {
   try {
     await flushHistory();
     if (native && appState.settings.playback_service?.enabled) {
       if (resumePosition && resumePosition > 0) wantedResume = { video_id: videoId, position_ms: resumePosition };
       else if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
       if (appState.route.name === 'playback' && appState.details.data) {
-        wantedResume = { video_id: videoId, position_ms: wantedResume?.video_id === videoId ? wantedResume.position_ms : 0 };
+        wantedResume = { video_id: videoId, position_ms: wantedResume?.video_id === videoId ? wantedResume.position_ms : 0, automaticNext };
         location.hash = `#/details/${encodeURIComponent(JSON.stringify(appState.details.data.details.ref))}`;
         return;
       }
-      await appController.startServiceRound(videoId);
+      await appController.startServiceRound(videoId, false, automaticNext ? appController.lastServiceLine() : null);
       return;
     }
     if (native) throw new Error('请先连接播放服务。 / Connect the playback service first.');
@@ -268,7 +271,7 @@ function focusMain() {
   }
   main?.focus({ preventScroll: true });
 }
-async function updateRoute() {
+async function updateRoute(showDetails?: () => void) {
   const current = ++sequence;
   await flushHistory();
   if (current !== sequence) return;
@@ -291,9 +294,14 @@ async function updateRoute() {
       if (!native && !film) throw new Error("Preview title is unavailable");
       const ref: Bridge_MediaRef = next.name === "details" ? JSON.parse(decodeURIComponent(next.id)) : previewRef(next.id);
       appController.navigate({ name: "details", ref });
-      await appController.loadDetails(ref);
+      const loading = appController.loadDetails(ref);
+      if (showDetails && next.name === 'details') {
+        await nextTick();
+        showDetails();
+      }
+      await loading;
       if (current !== sequence || appState.details.phase !== "ready") return;
-      if (wantedResume) void playEpisode(wantedResume.video_id);
+      if (wantedResume) void playEpisode(wantedResume.video_id, false, undefined, wantedResume.automaticNext);
       if (next.name === "watch") {
         const episode = Math.min(next.episode, film!.episodes);
         let saved: HistoryEntry | null = null;
@@ -313,8 +321,10 @@ async function updateRoute() {
     } else {
       const name = ["settings", "history"].includes(next.name) ? next.name as "settings" | "history" : "home";
       appController.navigate({ name });
-      if (name === "home" && !['search', 'local', 'live'].includes(next.name) && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
-        && appState.home.phase !== 'loading' && appState.selected_metadata_source) await loadPageHome();
+      const loading = name === "home" && !['search', 'local', 'live'].includes(next.name) && (!appState.home.data || appController.homeCatalogOnly !== (native && desktopQuery.matches))
+        && appState.home.phase !== 'loading' && appState.selected_metadata_source ? loadPageHome() : null;
+      if (showDetails) { await nextTick(); showDetails(); }
+      if (loading) await loading;
     }
     if (current !== sequence) return;
     const home = route.value.page === "home" ? homeSnapshots.get(homeKey()) : undefined;
@@ -324,7 +334,8 @@ async function updateRoute() {
     // A returning MacCMS wall remounts and fetches its first page before it has
     // enough height to restore scroll. Wait for that existing load to settle.
     if (route.value.page === 'browse' && browseScroll.has(location.hash)) {
-      while (current === sequence && document.querySelector('.browse-catalog .catalog-status')) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      const deadline = performance.now() + 5000;
+      while (current === sequence && performance.now() < deadline && document.querySelector('.browse-catalog .catalog-loading')) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       if (current !== sequence) return;
       await nextTick();
     }
@@ -435,7 +446,7 @@ function discardPendingHistory(id: string | null) {
   if (id === null || latestHistory?.content_id === id) latestHistory = null;
 }
 // Resuming goes back through the source and match checks; the position waits for the confirmed episode.
-let wantedResume: { video_id: string; position_ms: number } | null = null;
+let wantedResume: { video_id: string; position_ms: number; automaticNext?: boolean } | null = null;
 async function continueNativeHistory(record: WatchHistoryRecord) {
   const providers = appState.sources.data?.providers ?? [], identity = record.metadata_identity;
   const ready = (source: AppSource) => source.runtime_status === "ready";

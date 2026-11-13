@@ -57,6 +57,8 @@ test("R22/REQ-T15: an old poster failing while newer details load cannot take ov
     return { ...response, metadata_ref: { ...metadata, content_ref: OTHER }, details: { ...response.details, ref: OTHER, title: "Other" } };
   };
   const newer = f.app.loadDetails(OTHER), before = f.count("get_details");
+  assert.equal(f.state.details.phase, "loading");
+  assert.equal(f.state.details.data, null, "previous title must not appear during the new request");
   await f.app.detailsImageError("a");
   assert.equal(f.count("get_details"), before); assert.equal(f.count("get_resource_status"), 0);
   release(); await newer;

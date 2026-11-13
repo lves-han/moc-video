@@ -8,7 +8,7 @@ import { locale } from "../i18n";
 import Icon from "../components/Icon.vue";
 
 const props = defineProps<{ context: PlaybackContext | null; resume?: ResumeSnapshot | null; autoNext?: boolean; local?: { session: PlaybackViewSession; title: string; position_ms: number } | null }>();
-const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean]; 'service-failed': [context: PlaybackContext]; 'local-close': []; 'local-retry': []; "update:autoNext": [value: boolean]; seek: [] }>();
+const emit = defineEmits<{ ended: [context: PlaybackContext, epoch: number]; play: [video: string, explicitLine?: boolean, resumePosition?: number, automaticNext?: boolean]; 'service-failed': [context: PlaybackContext]; 'local-close': []; 'local-retry': []; "update:autoNext": [value: boolean]; seek: [] }>();
 const playback = createPlaybackController(appState, undefined, onEnded, runtime => {
   if (appState.runtime.engine_epoch === null) appState.runtime = runtime;
   else appController.applyRuntime(runtime);
@@ -92,10 +92,10 @@ const nextVisible = computed(() => Boolean(nextVideo.value && !nextCancelled.val
 function cancelNext() {
   clearInterval(nextTimer); nextTimer = undefined; countdown.value = null; nextCancelled.value = true;
 }
-function playNext() {
+function playNext(automatic = false) {
   const next = nextVideo.value;
   cancelNext(); tray.value = null;
-  if (next && !busy.value) emit("play", next);
+  if (next && !busy.value) emit("play", next, false, undefined, automatic);
 }
 function onEnded(context: PlaybackContext, epoch: number) {
   emit("ended", context, epoch);
@@ -104,7 +104,7 @@ function onEnded(context: PlaybackContext, epoch: number) {
   nextTimer = setInterval(() => {
     if (!mounted || epoch !== state.playback_epoch || state.phase !== "ended" || !props.autoNext) { cancelNext(); return; }
     if (countdown.value !== null && countdown.value > 1) countdown.value--;
-    else playNext();
+    else playNext(true);
   }, 1000);
 }
 watch(() => state.playback_epoch, () => { cancelNext(); nextCancelled.value = false; tray.value = null; });
@@ -319,7 +319,7 @@ defineExpose({ playback });
               <div class="playback-business-controls">
                 <button v-if="ui.autoplayBlocked" data-action="continue" :title="word('继续播放', 'Continue playback')" @click="playback.play()"><Icon name="play" />{{ word('继续播放', 'Continue playback') }}</button>
                 <button data-action="stop" :aria-label="word('停止', 'Stop')" :title="word('停止', 'Stop')" @click="playback.stop()"><Icon name="stop" />{{ word('停止', 'Stop') }}</button>
-                <button data-action="next" :aria-label="word('下一集', 'Next episode')" :title="word('下一集', 'Next episode')" :disabled="!nextVideo || busy" @click="playNext"><Icon name="next" />{{ word('下一集', 'Next episode') }}</button>
+                <button data-action="next" :aria-label="word('下一集', 'Next episode')" :title="word('下一集', 'Next episode')" :disabled="!nextVideo || busy" @click="playNext()"><Icon name="next" />{{ word('下一集', 'Next episode') }}</button>
                 <label><input data-action="auto-next" type="checkbox" :aria-label="word('自动下一集', 'Auto-play next')" :checked="autoNext" @change="emit('update:autoNext', ($event.target as HTMLInputElement).checked)" />{{ word('自动下一集', 'Auto-play next') }}</label>
               </div>
             </div>
@@ -343,7 +343,7 @@ defineExpose({ playback });
         </section>
         <aside v-if="nextVisible && !tray" class="playback-next playback-glass" :aria-label="word('下一集', 'Next episode')" @pointerdown.stop @pointerup.stop @click.stop>
           <img v-if="episodeImage(nextEpisode)" :src="episodeImage(nextEpisode)" alt="" /><div v-else class="playback-next-image" />
-          <div class="playback-next-copy"><span class="playback-next-kicker">{{ word('下一集', 'Next episode') }}</span><h3>{{ nextEpisode?.label }}</h3><div class="playback-next-actions"><button class="playback-primary" :disabled="busy" @click="playNext">{{ word('立即播放', 'Play now') }}</button><button @click="cancelNext">{{ word('取消', 'Cancel') }}</button><span v-if="countdown !== null" class="playback-countdown" role="timer" :style="{ '--countdown': countdown }">{{ countdown }}</span></div></div>
+          <div class="playback-next-copy"><span class="playback-next-kicker">{{ word('下一集', 'Next episode') }}</span><h3>{{ nextEpisode?.label }}</h3><div class="playback-next-actions"><button class="playback-primary" :disabled="busy" @click="playNext()">{{ word('立即播放', 'Play now') }}</button><button @click="cancelNext">{{ word('取消', 'Cancel') }}</button><span v-if="countdown !== null" class="playback-countdown" role="timer" :style="{ '--countdown': countdown }">{{ countdown }}</span></div></div>
         </aside>
         <div v-if="!tray && (state.error && !ui.autoplayBlocked || ui.diagnostic)" class="playback-error-backdrop" @pointerdown.stop @pointerup.stop @click.stop>
           <section class="playback-error playback-glass" role="alert"><h2>{{ word('播放遇到问题', 'Playback failed') }}</h2><p>{{ state.error ? `${state.error.code} · ${state.error.message}` : ui.diagnostic }}</p><div><button class="playback-primary" @click="local ? emit('local-retry') : ui.action === 'reconnect' ? playback.reconnect() : playback.retry()">{{ word('重试', 'Retry') }}</button><button v-if="!local" @click="openTray('streams', $event.currentTarget)">{{ word('换线路', 'Change stream') }}</button><button @click="back">{{ local ? word('返回本地视频', 'Back to local videos') : word('返回影片', 'Back to details') }}</button></div></section>

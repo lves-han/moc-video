@@ -32,3 +32,50 @@ test("connecting the service syncs the service catalog without importing old add
   assert.equal(state.settings.playback_service?.groups.length, 0);
   assert.equal(state.settings.source_configs[0]?.config_id, configId);
 });
+
+test("automatic next episode reuses the uniquely matching available source and line", async t => {
+  const ref = (video: string) => ({ source_id: "metadata", source_revision: "1", data: JSON.stringify(["stremio_video", "tmdb", "series", "show", video]) });
+  const selected = { source_id: "source-a", line_name: "线路一", quality: "1080p" };
+  const line = (id: string, overrides: Record<string, unknown> = {}) => ({ line_id: id, ...selected, probe_status: "ready", ...overrides });
+  const run = async (nextLines: ReturnType<typeof line>[], failPlay = false) => {
+    const state = createAppState();
+    state.settings.playback_service = { enabled: true, groups: [] } as never;
+    state.details.phase = "ready";
+    state.details.data = { metadata_ref: { identity: { config_id: TMDB_CONFIG_ID, type: "series", meta_id: "show" } }, details: { ref: ref("one"), groups: [{ episodes: [{ ref: ref("one") }, { ref: ref("two") }] }] } } as never;
+    const calls: string[] = [];
+    let round = 0;
+    const api = { cancel: async () => {}, call: async (command: string, input: any) => {
+      if (command === "start_line_round") {
+        round++;
+        return { round_id: input.round_id, query_done: true, pending: 0, pending_confirm: 0, lines: round === 1 ? [line("first")] : nextLines, sources: [], candidates: [], error: null };
+      }
+      if (command === "play_line") {
+        calls.push(input.line_id);
+        if (failPlay && input.line_id !== "first") throw new Error("line unavailable");
+        return { context: { match_id: input.line_id }, resolution: { id: input.line_id } };
+      }
+      if (command === "cancel_line_round" || command === "release_resolution") return {};
+      throw new Error(`Unexpected ${command}`);
+    } };
+    const app = new AppController(api as never, {} as never, state, null);
+    await app.startServiceRound("one");
+    await app.chooseServiceLine("first");
+    assert.deepEqual(app.lastServiceLine(), selected);
+    await app.startServiceRound("two", false, app.lastServiceLine());
+    return { app, state, calls };
+  };
+  await t.test("matches source, line and quality", async () => {
+    const { app, calls } = await run([line("other-source", { source_id: "source-b" }), line("other-quality", { quality: "720p" }), line("next")]);
+    assert.deepEqual(calls, ["first", "next"]); assert.equal(app.serviceRound.open, false);
+  });
+  await t.test("leaves selection open when unavailable or ambiguous", async () => {
+    for (const lines of [[line("unavailable", { probe_status: "failed" })], [line("one"), line("two")], [line("different", { line_name: "其他线路" })]]) {
+      const { app, calls } = await run(lines);
+      assert.deepEqual(calls, ["first"]); assert.equal(app.serviceRound.open, true);
+    }
+  });
+  await t.test("leaves selection open if automatic playback fails", async () => {
+    const { app, calls } = await run([line("next")], true);
+    assert.deepEqual(calls, ["first", "next"]); assert.equal(app.serviceRound.open, true); assert.ok(app.serviceRound.error);
+  });
+});

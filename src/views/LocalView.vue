@@ -16,6 +16,7 @@ const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
 const library = ref<Library | null>(null);
 const progress = ref<Record<string, number>>({});
 const loading = ref(false), error = ref("");
+const openingId = ref<string | null>(null);
 const message = (cause: unknown) => cause instanceof ApiFailure ? describeError(cause.error) : String(cause);
 const videoExtensions = ["mp4", "m4v", "mov", "mkv", "webm", "avi", "ts", "flv", "wmv"];
 
@@ -44,7 +45,7 @@ async function pick(directory: boolean) {
   } catch (cause) { error.value = message(cause); }
 }
 async function removeRoot(path: string) {
-  ++playbackRequest;
+  ++playbackRequest; openingId.value = null;
   try {
     await controller.updateSettings(settings => ({ ...settings, local_paths: (settings.local_paths ?? []).filter(row => row !== path) }));
     await load();
@@ -54,7 +55,7 @@ async function removeRoot(path: string) {
 let playbackRequest = 0, mounted = true;
 async function play(id: string) {
   const request = ++playbackRequest;
-  error.value = "";
+  openingId.value = id; error.value = "";
   let opened: Playback | null = null;
   try {
     opened = await api.call("open_local", { id });
@@ -64,7 +65,7 @@ async function play(id: string) {
     emit('play', { ...opened, position_ms: saved && !saved.completed ? saved.position_ms : 0 });
     opened = null;
   } catch (cause) { if (request === playbackRequest) error.value = message(cause); }
-  finally { if (opened) await api.call("close_playback", { session_id: opened.session.session_id }).catch(() => undefined); }
+  finally { if (request === playbackRequest) openingId.value = null; if (opened) await api.call("close_playback", { session_id: opened.session.session_id }).catch(() => undefined); }
 }
 
 const groups = computed(() => (library.value?.roots ?? []).map(root => ({ ...root, items: (library.value?.items ?? []).filter(item => item.root === root.path) })));
@@ -74,7 +75,7 @@ async function playRequested() {
   const id = new URLSearchParams(location.hash.split("?")[1] ?? "").get("play");
   if (id && library.value?.items.some(item => item.id === id)) await play(id);
   else if (id && library.value) {
-    ++playbackRequest;
+    ++playbackRequest; openingId.value = null;
     if (mounted) error.value = word("找不到该视频文件，可能已移动或删除。", "This video file was moved or deleted.");
   }
 }
@@ -96,6 +97,7 @@ onBeforeUnmount(() => { mounted = false; ++playbackRequest; window.removeEventLi
     </div>
     <p v-if="!native" class="local-empty"><Icon name="folder" :size="40" />{{ word('本地视频需要在桌面应用中使用。', 'Local video is available in the desktop app.') }}</p>
     <NAlert v-if="error" type="error" class="local-error" role="alert">{{ error }}</NAlert>
+    <p v-if="openingId" role="status">{{ word('正在打开本地视频…', 'Opening local video…') }}</p>
     <p v-if="loading" role="status">{{ t("Loading…") }}</p>
     <p v-else-if="native && library && !library.roots.length" class="local-empty"><Icon name="folder" :size="40" />{{ word('添加视频文件或文件夹后，会显示在这里。', 'Add video files or folders and they appear here.') }}</p>
     <section v-for="group in groups" :key="group.path" class="local-group">
@@ -103,7 +105,7 @@ onBeforeUnmount(() => { mounted = false; ++playbackRequest; window.removeEventLi
       <p v-if="group.available && !group.items.length" class="local-none">{{ word('没有找到视频文件', 'No video files found') }}</p>
       <ul class="local-items" data-focus-row>
         <li v-for="item in group.items" :key="item.id">
-          <button type="button" :disabled="!item.supported" :title="item.path" @click="play(item.id)">
+          <button type="button" :disabled="!item.supported" :aria-busy="openingId === item.id" :title="item.path" @click="play(item.id)">
             <span class="local-name">{{ item.name }}</span>
             <small>{{ item.supported ? size(item.size) : word('格式不支持', 'Format not supported') }}<template v-if="progress[item.id]"> · {{ word(`已看 ${progress[item.id]}%`, `${progress[item.id]}% watched`) }}</template></small>
           </button>

@@ -30,6 +30,8 @@ const genres = computed(() => [
 const approximate = computed(() => app.search.phase === 'ready' && approximateResults(app.search.query, app.search.items.map(item => item.title)));
 let timer: ReturnType<typeof setTimeout> | undefined, observer:IntersectionObserver | undefined;
 let posterQueue = Promise.resolve();
+const opening = ref(false);
+let mounted = true;
 function search() {
   const provider = providers.value.find(p => p.id === sourceId.value), value = query.value.trim();
   if (provider && value) void app.searchCatalog(value, { source_id:provider.id, source_revision:provider.source_revision });
@@ -51,15 +53,18 @@ watch(() => app.search.items, async items => {
   document.querySelectorAll('.search-results .media-card').forEach(card => observer!.observe(card));
 });
 async function open(ref:Bridge_MediaRef) {
+  if (opening.value) return;
+  opening.value = true;
   try {
     const provider = providers.value.find(p => p.id === ref.source_id);
     await app.selectSource(ref.source_id, provider?.kind === 'maccms' ? 'playback' : 'metadata');
-    emit('open', ref);
+    if (mounted) emit('open', ref);
   } catch (cause) { app.search.error = { code:'UPSTREAM_FAILED', message:String(cause), retryable:true }; }
+  finally { opening.value = false; }
 }
 function focus() { input.value?.focus(); input.value?.select(); }
 defineExpose({ focus });
-onBeforeUnmount(() => { clearTimeout(timer); observer?.disconnect(); app.cancelSearch(); });
+onBeforeUnmount(() => { mounted = false; clearTimeout(timer); observer?.disconnect(); app.cancelSearch(); });
 </script>
 
 <template>
@@ -68,6 +73,7 @@ onBeforeUnmount(() => { clearTimeout(timer); observer?.disconnect(); app.cancelS
     <label class="search-provider">{{ word('搜索来源','Search source') }}<select v-model="sourceId" :aria-label="word('搜索来源','Search source')"><option v-for="provider in providers" :key="provider.id" :value="provider.id">{{ provider.name }}</option></select></label>
     <p v-if="!providers.length" class="catalog-status" role="status">{{ word('请添加支持搜索的来源。','Add a source with search support.') }} <a href="#/sources">{{ t('Source manager') }}</a></p>
     <div v-if="!query.trim()" class="search-genres" data-focus-row><a v-for="genre in genres" :key="genre.kind" class="search-genre" :href="`#/browse/${genre.kind}`"><Icon :name="genre.icon" :size="28" /><span>{{ genre.title }}</span></a></div>
+    <p v-if="opening" role="status">{{ word('正在打开影片…', 'Opening title…') }}</p>
     <p v-if="app.search.error" class="search-error" role="alert">{{ describeError(app.search.error) }} <button class="glass-pill" @click="search">{{ t('Retry') }}</button></p>
     <div v-if="query.trim()" class="search-results" :class="{ pending:app.search.phase === 'loading' }" :aria-busy="app.search.phase === 'loading'">
       <p v-if="app.search.phase === 'loading'" class="search-loading" role="status">{{ t('Loading…') }}</p>
