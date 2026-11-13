@@ -2376,16 +2376,6 @@ impl Host {
             .as_ref()
             .map(|gateway| gateway.address)
     }
-
-    pub(crate) fn font_url(&self, id: &str) -> Result<String, ApiError> {
-        self.committed
-            .lock()
-            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?
-            .gateway
-            .as_ref()
-            .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Font gateway is not ready"))?
-            .font_url(id)
-    }
 }
 
 /// An accepted retry skips the Session: the snapshot already holds its confirmed identity.

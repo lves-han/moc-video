@@ -5,7 +5,6 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 pub mod commands;
 pub mod contracts;
 pub mod details;
-mod fonts;
 pub mod fuzzy;
 pub mod gateway;
 pub mod history;
@@ -71,17 +70,6 @@ fn app_reset_recovery(window: WebviewWindow, action: String) -> Result<(), Strin
             .map_err(|e| e.to_string())?;
     }
     window.app_handle().restart();
-}
-
-#[cfg(not(mobile))]
-#[tauri::command(rename_all = "snake_case")]
-fn app_font_url(
-    window: WebviewWindow,
-    state: tauri::State<'_, std::sync::Arc<host::Host>>,
-    font_id: String,
-) -> Result<String, String> {
-    require_main(&window)?;
-    state.font_url(&font_id).map_err(|e| e.message)
 }
 
 #[cfg(not(mobile))]
@@ -255,7 +243,6 @@ pub fn run() {
         window_bounds_now,
         app_reset,
         app_reset_recovery,
-        app_font_url,
         app_service_import,
         app_service_delete,
         app_playback_sources,
@@ -270,7 +257,6 @@ pub fn run() {
         window_bounds_now,
         app_reset,
         app_reset_recovery,
-        app_font_url,
         app_service_import,
         app_service_delete,
         app_playback_sources

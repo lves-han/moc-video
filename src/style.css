@@ -1,7 +1,8 @@
-@font-face { font-family: "Moc Bootstrap"; src: url("/fonts/bootstrap.woff2") format("woff2"); font-style: normal; font-weight: 100 900; font-display: block; }
+@font-face { font-family: "Moc Sans"; src: url("/fonts/noto-sans-sc.ttf") format("truetype"); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Moc Serif"; src: url("/fonts/noto-serif-sc.ttf") format("truetype"); font-style: normal; font-weight: 200 900; font-display: swap; }
 :root {
   color-scheme: light;
-  font-family: var(--app-font, "Moc Bootstrap");
+  font-family: var(--app-font, system-ui, sans-serif);
   color: var(--text, #1f2225);
   background: var(--background, #f7f8fa);
   font-synthesis: none;
@@ -697,7 +698,7 @@ main {
 }
 .poster-lettering strong {
   color: #fff9e7;
-  font-family: var(--app-font, "Moc Bootstrap");
+  font-family: var(--app-font, system-ui, sans-serif);
   font-size: clamp(18px, 1.7vw, 27px);
   font-weight: 600;
   line-height: 1.25;
@@ -925,7 +926,7 @@ main {
   left: 20px;
   right: 20px;
   text-align: center;
-  font-family: var(--app-font, "Moc Bootstrap");
+  font-family: var(--app-font, system-ui, sans-serif);
   font-size: 27px;
   line-height: 1.4;
   color: #fff9e3;
@@ -1069,7 +1070,7 @@ main {
 .video-frame video::cue {
   color: #fff;
   background: #0008;
-  font-family: var(--app-font, "Moc Bootstrap");
+  font-family: var(--app-font, system-ui, sans-serif);
   font-size: 18px;
 }
 .video-watermark {

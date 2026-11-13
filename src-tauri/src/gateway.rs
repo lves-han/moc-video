@@ -113,8 +113,6 @@ struct Shared {
     records: Mutex<Records>,
     clock: Arc<dyn Clock>,
     token: String,
-    font_cap: String,
-    font_slots: Arc<tokio::sync::Semaphore>,
     stop: AtomicBool,
     idle_ms: AtomicU64,
     http: Http,
@@ -126,13 +124,6 @@ pub struct Gateway {
     worker: Option<JoinHandle<()>>,
 }
 impl Gateway {
-    pub(crate) fn font_url(&self, id: &str) -> Result<String, ApiError> {
-        let font = crate::fonts::get(id)?;
-        Ok(format!(
-            "http://{}/fonts/{}?cap={}",
-            self.address, font.id, self.shared.font_cap
-        ))
-    }
     pub fn start() -> Result<Self, ApiError> {
         Self::with_clock(Arc::new(MonotonicClock::default()))
     }
@@ -166,8 +157,6 @@ impl Gateway {
             records: Mutex::new(Records::default()),
             clock,
             token: capability()?,
-            font_cap: capability()?,
-            font_slots: Arc::new(tokio::sync::Semaphore::new(1)),
             stop: AtomicBool::new(false),
             idle_ms: AtomicU64::new(30_000),
             http,
@@ -821,10 +810,6 @@ async fn serve(
     };
     let origin = req.origin.as_deref();
     let head = req.method == Method::HEAD;
-    if req.path.starts_with("/fonts/") {
-        serve_font(&shared, &req, &mut read, &mut write).await;
-        return;
-    }
     if req.path == "/host-health" {
         let authorized = req
             .headers
@@ -2071,109 +2056,6 @@ async fn write_chunk(
     }
     Ok(())
 }
-async fn serve_font(
-    shared: &Shared,
-    req: &Request,
-    read: &mut OwnedReadHalf,
-    write: &mut OwnedWriteHalf,
-) {
-    let origin = req.origin.as_deref();
-    let head = req.method == Method::HEAD;
-    if req.cap.as_deref() != Some(shared.font_cap.as_str()) {
-        let _ = error_response(
-            write,
-            &ApiError::new("UNAUTHORIZED", "Font capability rejected"),
-            origin,
-            head,
-        )
-        .await;
-        return;
-    }
-    let font = match crate::fonts::get(req.path.strip_prefix("/fonts/").unwrap_or("")) {
-        Ok(font) => font,
-        Err(error) => {
-            let _ = error_response(write, &error, origin, head).await;
-            return;
-        }
-    };
-    if req.method == Method::OPTIONS {
-        let valid = origin.is_some()
-            && req
-                .headers
-                .get("access-control-request-method")
-                .is_some_and(|v| v == "GET" || v == "HEAD")
-            && req
-                .headers
-                .get("access-control-request-headers")
-                .is_none_or(|v| {
-                    v.to_str().is_ok_and(|v| {
-                        v.split(',').all(|name| {
-                            matches!(
-                                name.trim().to_ascii_lowercase().as_str(),
-                                "cache-control" | "pragma"
-                            )
-                        })
-                    })
-                });
-        if valid {
-            let headers = HeaderMap::from_iter([(
-                "access-control-allow-headers".parse().unwrap(),
-                "Cache-Control, Pragma".parse().unwrap(),
-            )]);
-            let _ = respond(write, 204, &headers, &[], origin, true).await;
-        } else {
-            let _ = error_response(
-                write,
-                &ApiError::bad("Font preflight rejected"),
-                origin,
-                true,
-            )
-            .await;
-        }
-        return;
-    }
-    if req.method != Method::GET && !head {
-        let _ = error_response(write, &ApiError::bad("Fonts accept GET/HEAD"), origin, head).await;
-        return;
-    }
-    let headers = HeaderMap::from_iter([
-        ("content-type".parse().unwrap(), "font/ttf".parse().unwrap()),
-        (
-            "cache-control".parse().unwrap(),
-            "no-store".parse().unwrap(),
-        ),
-    ]);
-    if head {
-        let _ = write_head(write, 200, &headers, Some(font.bytes as u64), origin, false).await;
-        return;
-    }
-    let Ok(_slot) = shared.font_slots.clone().try_acquire_owned() else {
-        let _ = error_response(
-            write,
-            &ApiError::new("RESOURCE_LIMIT", "Font download already active"),
-            origin,
-            false,
-        )
-        .await;
-        return;
-    };
-    let mut extra = [0; 1];
-    let result = tokio::select! {
-        result = tokio::time::timeout(Duration::from_secs(180), crate::fonts::download(&shared.http, font)) => {
-            result.unwrap_or_else(|_| Err(ApiError::new("UPSTREAM_TIMEOUT", "Font download timed out")))
-        }
-        _ = read.read(&mut extra) => Err(ApiError::cancelled()),
-    };
-    match result {
-        Ok(bytes) => {
-            let _ = respond(write, 200, &headers, &bytes, origin, false).await;
-        }
-        Err(error) => {
-            let _ = error_response(write, &error, origin, false).await;
-        }
-    }
-}
-
 async fn write_head(
     write: &mut OwnedWriteHalf,
     status: u16,

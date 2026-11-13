@@ -3331,3 +3331,9 @@
 - 核实并统一来源、解析器、T4、Stremio 的传输控制请求头校验；来源配置增加拒绝 `Transfer-Encoding`。服务单元测试 18 项通过、2 项夹具测试忽略：`evidence/runs/20261113T063920698520-review-service-unit/output.log`。
 - 来源回归：MacCMS 3 项、JSON 解析 3 项、T4 Query 4 项、T4 REST 2 项、Stremio 4 项及配置导入 3 项通过，日志分别为 `evidence/runs/20261113T064011152071-review-regression-playback-sources/output.log`、`evidence/runs/20261113T064155246826-review-regression-json-parser/output.log`、`evidence/runs/20261113T064200278786-review-regression-t4-query-adapters/output.log`、`evidence/runs/20261113T064206388889-review-regression-t4-rest-adapter/output.log`、`evidence/runs/20261113T064211546915-review-regression-stremio-stream-adapter/output.log`、`evidence/runs/20261113T064216525929-review-regression-provider-import-integration/output.log`。
 - HTTP 测量：8 次本地请求，当前实现与使用共享客户端的对照均建立 8 条连接，日志 `evidence/runs/20261113T063849897149-review-transport-measure/output.log`；未据此宣称性能改善。固定公共 DNS 及内网访问按 ADR-068/079 保留。同步 SQLite 等待及大文件维护成本属已确认设计风险，个人使用负载下的瓶颈尚无量化证据，留待实际测量后处理。
+
+## 字体随应用打包 2026-11-13
+
+- 按用户要求将 Noto Sans SC 和 Noto Serif SC 完整字体纳入应用资源，移除字体准备页面、运行时下载/IndexedDB 缓存和专用字体网关；启动与字体切换直接使用本地资源，加载期间回退系统字体。
+- 字体文件大小及 SHA-256 校验、字体偏好与缩放 2 项通过：`evidence/runs/20261113T070140396702-bundled-fonts-tests/output.log`；前端 241 项通过：`evidence/runs/20261113T070202196069-bundled-font-all-ui/output.log`；原生库测试 237 项通过、8 项忽略：`evidence/runs/20261113T070210597395-bundled-font-native/output.log`；契约检查通过：`evidence/runs/20261113T070620110349-bundled-font-contracts/output.log`。
+- 浏览器预览观察到主界面直接显示，设置中两款字体均可切换，浏览器字体状态确认两者已加载。最终 macOS arm64 应用构建及 DMG 校验通过：`evidence/runs/20261113T070621759964-bundled-font-release/output.log`、`evidence/runs/20261113T070803697715-bundled-font-dmg-check/output.log`。安装包无 Apple 签名及公证；最终 DMG 未做独立应用资料目录的离线桌面启动。

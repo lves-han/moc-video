@@ -95,7 +95,6 @@ fn main() {
         "window_bounds_now",
         "app_reset",
         "app_reset_recovery",
-        "app_font_url",
         "app_service_import",
         "app_service_delete",
         "app_playback_sources",

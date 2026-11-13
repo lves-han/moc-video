@@ -7,7 +7,7 @@ import type { MediaCacheStatus, Settings } from "../models";
 import Icon from "../components/Icon.vue";
 import SourceSettings from "./SourceSettings.vue";
 import LiveSettings from "./LiveSettings.vue";
-import { fontOptions, fontStatus, prepareFont, setFontScale } from '../ui/fonts';
+import { fontOptions, setAppFont, setFontScale } from '../ui/fonts';
 import sansLicense from '../../licenses/fonts/notosanssc-OFL.txt?raw';
 import serifLicense from '../../licenses/fonts/notoserifsc-OFL.txt?raw';
 import { locale, getStremioLanguage, t } from "../i18n";
@@ -58,14 +58,12 @@ const fontSaving = ref(false), fontError = ref('');
 async function changeFont(event: Event) {
   const value = (event.target as HTMLSelectElement).value;
   fontSaving.value = true; fontError.value = '';
-  const previous = appState.settings.font_family;
   try {
-    await prepareFont(value);
     if (settingsQueue.paused) await appController.restoreSettings();
     await appController.updateSettings(settings => ({ ...settings, font_family: value as 'noto-sans-sc' | 'noto-serif-sc' }));
+    setAppFont(value);
   } catch (error) {
     fontError.value = error instanceof Error ? error.message : String(error);
-    if (fontStatus.active !== (previous ?? 'noto-sans-sc')) await prepareFont(previous).catch(() => {});
   } finally { fontSaving.value = false; }
 }
 async function changeFontSize(event: Event) {
@@ -172,11 +170,10 @@ onMounted(() => { void refreshCache(); });
   <section class="settings-group font-settings">
     <h2>{{ t('Fonts') }}</h2>
     <div class="settings-panel">
-      <div class="setting-row"><div><h3>{{ t('App font') }}</h3><p>{{ t('Free open fonts for Chinese and English. No system font is selected.') }}</p></div>
-        <select class="setting-select" :aria-label="t('App font')" :value="appState.settings.font_family ?? 'noto-sans-sc'" :disabled="fontSaving || fontStatus.busy" @change="changeFont"><option v-for="font in fontOptions" :key="font.id" :value="font.id">{{ font.label }} · {{ (font.bytes / 1048576).toFixed(1) }} MiB</option></select>
+      <div class="setting-row"><div><h3>{{ t('App font') }}</h3><p>{{ t('Choose a font included with the app.') }}</p></div>
+        <select class="setting-select" :aria-label="t('App font')" :value="appState.settings.font_family ?? 'noto-sans-sc'" :disabled="fontSaving" @change="changeFont"><option v-for="font in fontOptions" :key="font.id" :value="font.id">{{ font.label }}</option></select>
       </div>
       <div class="setting-row"><div><h3>{{ t('Text size') }}</h3><p>{{ t('Scale text and controls together to keep layouts readable.') }}</p></div><select class="setting-select" :aria-label="t('Text size')" :value="appState.settings.font_scale ?? 100" :disabled="fontSaving" @change="changeFontSize"><option v-for="size in [90,100,110,120]" :key="size" :value="size">{{ size }}%</option></select></div>
-      <p role="status">{{ fontStatus.busy ? `${t('Downloading font')} · ${Math.round(fontStatus.received / Math.max(1, fontStatus.total) * 100)}%` : t(fontStatus.source === 'download' ? 'Font downloaded and saved on this device.' : 'Font loaded from this device.') }}</p>
       <NAlert v-if="fontError" type="error">{{ fontError }}</NAlert>
       <p class="font-sample">{{ t('A place for good stories.') }} · 字体预览 Aa 0123456789</p>
       <details><summary>{{ t('Font licenses (SIL OFL 1.1)') }}</summary><pre class="font-license">{{ sansLicense }}\n{{ serifLicense }}</pre></details>
@@ -280,13 +277,13 @@ onMounted(() => { void refreshCache(); });
   <section class="settings-group reset-settings" :aria-busy="resetBusy">
     <h2>{{ t('Reset app') }}</h2>
     <div class="settings-panel">
-      <div class="setting-row"><div><h3>{{ t('Clear all data and reset') }}</h3><p>{{ t('Delete settings, added sources, watch history, watchlist and all caches, including downloaded fonts. The app will restart with defaults.') }}</p></div><NButton data-action="app-reset" type="error" secondary :disabled="preview || resetBusy || cacheBusy || fontSaving || fontStatus.busy" @click="resetError = ''; resetConfirm = true">{{ t('Clear all data and reset') }}</NButton></div>
+      <div class="setting-row"><div><h3>{{ t('Clear all data and reset') }}</h3><p>{{ t('Delete settings, added sources, watch history, watchlist and all caches. The app will restart with defaults.') }}</p></div><NButton data-action="app-reset" type="error" secondary :disabled="preview || resetBusy || cacheBusy || fontSaving" @click="resetError = ''; resetConfirm = true">{{ t('Clear all data and reset') }}</NButton></div>
       <p v-if="preview">{{ t('Reset is available in the desktop app.') }}</p>
       <p v-if="resetBusy" role="status">{{ t('Resetting app and restarting…') }}</p>
     </div>
   </section>
   <NModal v-model:show="resetConfirm" preset="dialog" type="warning" :title="t('Reset app?')" :positive-text="t('Clear all data and reset')" :negative-text="t('Cancel')" :loading="resetBusy" :closable="!resetBusy" :mask-closable="!resetBusy" :close-on-esc="!resetBusy" :negative-button-props="{ disabled: resetBusy }" :positive-button-props="{ type: 'error' }" @positive-click="resetApp">
-    <p>{{ t('This permanently deletes all app settings, added sources, watch history, watchlist and cached data. Defaults will be restored and fonts will download again.') }}</p>
+    <p>{{ t('This permanently deletes all app settings, added sources, watch history, watchlist and cached data. Defaults will be restored.') }}</p>
     <NAlert v-if="resetError" type="error" role="alert">{{ resetError }}</NAlert>
   </NModal>
   <section class="settings-group">

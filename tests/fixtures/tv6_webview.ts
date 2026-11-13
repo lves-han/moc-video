@@ -81,7 +81,7 @@ export async function immersiveScenario(command: { action?: string; payload?: un
     const gate = new Promise<void>(resolve => { releaseLoading = resolve; });
     let firstResolve = true;
     window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-      if (['t01_control','player_fullscreen','app_font_url','window_bounds_now','app_close_started','app_close_aborted','app_close_ready'].includes(name)) return original.invoke<T>(name, args);
+      if (['t01_control','player_fullscreen','window_bounds_now','app_close_started','app_close_aborted','app_close_ready'].includes(name)) return original.invoke<T>(name, args);
       calls.push({ command: name, video: args?.input?.video_id, completed: args?.input?.record?.completed });
       if (name === 'resolve_episode' && firstResolve) { firstResolve = false; loadingStarted = performance.now(); await gate; }
       if (name === 'resolve_episode' && failResolve) { failResolve = false; return { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: 'UPSTREAM_FAILED', message: 'TV6 controlled resolver failure', retryable: true } } as T; }
