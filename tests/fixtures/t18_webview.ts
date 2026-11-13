@@ -31,7 +31,7 @@ export async function historyScenario(ready: Ready, prototype: { player: Player;
   };
   const original = window.__TAURI__!.core, calls: { command: string; input: any }[] = [], errors: string[] = [];
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === "t01_control" || (name === "player_fullscreen" || name === "app_font_url")) return original.invoke<T>(name, args);
+    if (name === "t01_control" || (name === "player_fullscreen")) return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     if (["app_close_started", "app_close_aborted", "app_close_ready", "window_bounds_now"].includes(name)) return original.invoke<T>(name, args);
     if (name === "save_settings" && slowSaves > 0) { slowSaves--; await delay(3500); }

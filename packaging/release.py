@@ -103,7 +103,7 @@ def collect():
     lock = tomllib.loads((ROOT / "src-tauri/Cargo.lock").read_text())
     locked_crates = {(p["name"], p["version"], p.get("source")): p for p in lock["package"]}
     for package in sorted(metadata["packages"], key=lambda p: (p["name"], p["version"])):
-        if package["id"] not in reached or package["id"] == metadata["resolve"]["root"]:
+        if package["id"] not in reached or package["source"] is None:
             continue
         locked = locked_crates[(package["name"], package["version"], package["source"])]
         folder = Path(package["manifest_path"]).parent

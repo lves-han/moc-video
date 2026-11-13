@@ -1,0 +1,1959 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moc playback service",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stremio/{token}/{source}/{lang}/manifest.json": {
+      "get": {
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh-CN",
+                "en-US"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stremio metadata response"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid service token or TMDB key"
+          },
+          "502": {
+            "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
+          }
+        }
+      }
+    },
+    "/stremio/{token}/{source}/{lang}/catalog/{type}/{id}.json": {
+      "get": {
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh-CN",
+                "en-US"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stremio metadata response"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid service token or TMDB key"
+          },
+          "502": {
+            "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
+          }
+        }
+      }
+    },
+    "/stremio/{token}/{source}/{lang}/catalog/{type}/{id}/{extra}.json": {
+      "get": {
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh-CN",
+                "en-US"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "extra",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stremio metadata response"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid service token or TMDB key"
+          },
+          "502": {
+            "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
+          }
+        }
+      }
+    },
+    "/stremio/{token}/{source}/{lang}/meta/{type}/{id}.json": {
+      "get": {
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh-CN",
+                "en-US"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stremio metadata response"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid service token or TMDB key"
+          },
+          "502": {
+            "description": "TMDB upstream failure"
+          },
+          "503": {
+            "description": "Home snapshot is being prepared; retry later"
+          },
+          "501": {
+            "description": "The source does not declare this capability"
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List metadata sources"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import addons with per-item results"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources/import": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import addons with per-item results"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metadata-sources/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update a registered addon"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete a registered addon"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/v1/sources": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List playback sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sources"
+                  ],
+                  "properties": {
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PlaybackSource"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Create or reimport a source"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          },
+          "201": {
+            "description": "Source saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSource"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSourceInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sources/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update a source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSourceInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete a source"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          },
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/v1/sources/{id}/check": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Check search and detail"
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/sources/import": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-source and per-parser import results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results",
+                    "parsers"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "parsers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "502": {
+            "description": "Source check failed"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "tvbox",
+                      "zyfun",
+                      "zyfun-legacy",
+                      "legacy"
+                    ],
+                    "default": "legacy"
+                  },
+                  "base_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "sites": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "site": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "parsers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "parses": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "analyze": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mappings": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "metadata_source_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "meta_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching mappings, including revoked entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mappings"
+                  ],
+                  "properties": {
+                    "mappings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Mapping"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid metadata identity"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "lookup_id",
+                  "source_id",
+                  "candidate_id"
+                ],
+                "properties": {
+                  "lookup_id": {
+                    "type": "string"
+                  },
+                  "source_id": {
+                    "type": "string"
+                  },
+                  "candidate_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed line events",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "description": "Newline-delimited LookupEvent JSON objects."
+                },
+                "x-item-schema": {
+                  "$ref": "#/components/schemas/LookupEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "409": {
+            "description": "Lookup was cancelled (CANCELLED)"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
+          }
+        }
+      }
+    },
+    "/v1/mappings/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Mapping revoked"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Mapping not found"
+          }
+        }
+      }
+    },
+    "/v1/lookups": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "metadata_source_id",
+                  "type",
+                  "meta_id",
+                  "video_id",
+                  "lang"
+                ],
+                "properties": {
+                  "metadata_source_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "movie",
+                      "series"
+                    ]
+                  },
+                  "meta_id": {
+                    "type": "string"
+                  },
+                  "video_id": {
+                    "type": "string"
+                  },
+                  "lang": {
+                    "type": "string",
+                    "enum": [
+                      "zh-CN",
+                      "en-US"
+                    ]
+                  },
+                  "sources": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lookup events with server-checked line information; cached for up to one day and without playback addresses.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "description": "Newline-delimited LookupEvent JSON objects."
+                },
+                "x-item-schema": {
+                  "$ref": "#/components/schemas/LookupEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
+          }
+        }
+      }
+    },
+    "/v1/lookups/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Lookup cancelled"
+          },
+          "410": {
+            "description": "Lookup expired"
+          }
+        }
+      }
+    },
+    "/v1/lines/{id}/refresh": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same logical line with refreshed availability; no playback address is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackLine"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Line disappeared, ambiguous, expired or source changed"
+          },
+          "502": {
+            "description": "Upstream failed"
+          }
+        }
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "line_id",
+                  "outcome"
+                ],
+                "properties": {
+                  "line_id": {
+                    "type": "string"
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "playing",
+                      "failed"
+                    ]
+                  },
+                  "latency_ms": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "error_code": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Handle expired or source changed"
+          }
+        }
+      }
+    },
+    "/v1/parsers": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configured parsers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "parsers"
+                  ],
+                  "properties": {
+                    "parsers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Parser"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Parser saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parser"
+          },
+          "401": {
+            "description": "Invalid token"
+          }
+        }
+      }
+    },
+    "/v1/parsers/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parser updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parser"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Parser not found"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "404": {
+            "description": "Parser not found"
+          }
+        }
+      }
+    },
+    "/v1/lines/{id}/play": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selected line playback address and request headers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "line_id",
+                    "source_id",
+                    "source_revision",
+                    "target",
+                    "play",
+                    "expires_at"
+                  ],
+                  "properties": {
+                    "line_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "source_revision": {
+                      "type": "integer"
+                    },
+                    "target": {
+                      "$ref": "#/components/schemas/LineTarget"
+                    },
+                    "play": {
+                      "type": "object",
+                      "required": [
+                        "url",
+                        "headers"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "expires_at": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Line unavailable"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Line expired or changed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "tmdb",
+          "snapshot_at",
+          "sources"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tmdb": {
+            "type": "string"
+          },
+          "snapshot_at": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Unix timestamp of the last successful home snapshot"
+          },
+          "sources": {
+            "type": "integer",
+            "nullable": true
+          },
+          "snapshot_error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "retryable"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "retryable": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "PlaybackSourceInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "api"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "maccms_json",
+              "maccms_xml",
+              "t4_query",
+              "t4_drpyjs0",
+              "t4_rest",
+              "stremio_stream"
+            ]
+          },
+          "api": {
+            "type": "string",
+            "format": "uri"
+          },
+          "client_config_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "ext": {},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "parse_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PlaybackSource": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PlaybackSourceInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "revision",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "configured",
+                  "checking",
+                  "ready",
+                  "failed",
+                  "disabled"
+                ]
+              },
+              "checked_at": {
+                "type": "integer",
+                "nullable": true
+              },
+              "capabilities": {
+                "type": "object",
+                "description": "Cached Stremio stream manifest capabilities for the current source revision."
+              }
+            }
+          }
+        ]
+      },
+      "Mapping": {
+        "type": "object",
+        "required": [
+          "id",
+          "metadata_source_id",
+          "type",
+          "meta_id",
+          "season",
+          "source_id",
+          "source_revision",
+          "content_id",
+          "confirmed_by",
+          "evidence",
+          "updated_at",
+          "revoked"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "metadata_source_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series"
+            ]
+          },
+          "meta_id": {
+            "type": "string"
+          },
+          "season": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Target season of a series mapping; 0 for movies"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source_revision": {
+            "type": "integer"
+          },
+          "content_id": {
+            "type": "string"
+          },
+          "confirmed_by": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "user"
+            ]
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "updated_at": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LineTarget": {
+        "type": "object",
+        "required": [
+          "metadata_source_id",
+          "metadata_revision",
+          "type",
+          "meta_id",
+          "video_id"
+        ],
+        "properties": {
+          "metadata_source_id": {
+            "type": "string"
+          },
+          "metadata_revision": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "series"
+            ]
+          },
+          "meta_id": {
+            "type": "string"
+          },
+          "video_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PlaybackLine": {
+        "type": "object",
+        "required": [
+          "line_id",
+          "source_id",
+          "source_revision",
+          "line_name",
+          "episode_label",
+          "kind",
+          "target",
+          "expires_at",
+          "history",
+          "availability",
+          "latency_ms",
+          "availability_checked_at",
+          "availability_expires_at"
+        ],
+        "properties": {
+          "line_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "source_revision": {
+            "type": "integer"
+          },
+          "line_name": {
+            "type": "string"
+          },
+          "episode_label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "hls",
+              "unsupported"
+            ]
+          },
+          "quality": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "$ref": "#/components/schemas/LineTarget"
+          },
+          "expires_at": {
+            "type": "integer"
+          },
+          "history": {
+            "type": "object"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the line has no play field: needs_sniffing, unsupported_media_format, unsupported_protocol_or_script, a JSON parser failure (parser_request_failed, parser_invalid_response, parser_url_missing, parser_url_invalid, parser_headers_invalid, parser_config_invalid), or an adapter reason such as external_url_unsupported."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "nullable": true,
+            "description": "Video size in bytes when supplied by the source."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true,
+            "description": "Optional source-provided stream description."
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "failed",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "latency_ms": {
+            "type": "integer",
+            "nullable": true
+          },
+          "availability_checked_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "availability_expires_at": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "LookupEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "lookup_id",
+              "lease_expires_at",
+              "sources"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "started"
+                ]
+              },
+              "lookup_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "lease_expires_at": {
+                "type": "integer"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "source_id",
+              "status"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "source"
+                ]
+              },
+              "source_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "searching",
+                  "done",
+                  "needs_confirmation",
+                  "not_found",
+                  "no_episode",
+                  "unsupported",
+                  "failed",
+                  "timeout"
+                ]
+              },
+              "lines": {
+                "type": "integer"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason a source cannot serve this target."
+              },
+              "error": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "source_id",
+              "candidates"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "confirm"
+                ]
+              },
+              "source_id": {
+                "type": "string"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "candidate_id",
+                    "title"
+                  ],
+                  "properties": {
+                    "candidate_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "year": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "mismatch": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "line"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "line"
+                ]
+              },
+              "line": {
+                "$ref": "#/components/schemas/PlaybackLine"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "event"
+            ],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "done"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "lease_expires_at": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ParserInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "api"
+        ],
+        "properties": {
+          "client_config_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "api": {
+            "type": "string",
+            "format": "uri"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty matches all flags; * matches any flag."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Headers sent to the parser API."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "url_param": {
+            "type": "string",
+            "default": "url"
+          },
+          "url_field": {
+            "type": "string",
+            "default": "url",
+            "description": "Dot-separated path to the playback URL in the JSON response."
+          }
+        }
+      },
+      "Parser": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParserInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "revision",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "json"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

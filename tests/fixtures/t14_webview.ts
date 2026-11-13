@@ -32,7 +32,7 @@ export async function homeScenario(prototype: { player: Player; base: string; ca
   // Host caches catalog pages by design, so empty/failed page states use an injected envelope.
   let inject: "empty" | "failed" | null = null;
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === "t01_control" || (name === "player_fullscreen" || name === "app_font_url")) return original.invoke<T>(name, args);
+    if (name === "t01_control" || (name === "player_fullscreen")) return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     if (name === "get_home" && gate) await gate;
     const response = await rpc({ command: name, args });

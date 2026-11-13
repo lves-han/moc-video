@@ -1154,6 +1154,12 @@ def run_command(name, argv, check=None):
     if os.environ.get("AGENT_WORKFLOW_RUN"):
         raise WorkflowError("run.py/verify.py 不可嵌套")
     cfg, cid = config(), current()
+    if cid:
+        item = get_card(cid)
+        # A completed card can remain in the current marker. Unrelated later
+        # checks must not consume its budget or inherit its hard-stop status.
+        if completed(item) and not any(check["id"] == name for check in item["checks"]):
+            cid = None
     if any(item.get("status") == "cleanup_failed" for item in receipts()):
         raise WorkflowError("存在未完成清理的重命令；先核对并 recover")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or not argv:

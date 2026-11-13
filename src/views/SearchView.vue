@@ -10,20 +10,22 @@ import { approximateResults } from '../data/search-match';
 
 const emit = defineEmits<{ open:[ref:Bridge_MediaRef] }>();
 const word = (zh:string, en:string) => locale.value === 'zh-CN' ? zh : en;
+const native = Boolean(window.__TAURI__);
 const input = ref<HTMLInputElement>(), query = ref(app.search.query), sourceId = ref(app.search.source?.source_id ?? '');
-const providers = computed(() => (state.sources.data?.providers ?? []).filter(p => p.runtime_status === 'ready' && p.capabilities.search));
+const providers = computed(() => (state.sources.data?.providers ?? []).filter(p => p.runtime_status === 'ready' && p.capabilities.search && (!native || p.kind === 'stremio')));
 watch(providers, sources => {
   if (!sources.some(p => p.id === sourceId.value)) sourceId.value = sources.find(p => p.id === state.selected_metadata_source?.source_id)?.id ?? sources[0]?.id ?? '';
 }, { immediate:true });
 const groups = computed(() => [
   { key:'movie', title:t('Movies'), kinds:['movie'] },
   { key:'series', title:t('Series'), kinds:['series','anime'] },
-  { key:'other', title:word('综艺短剧','Variety & short dramas'), kinds:['other'] },
+  { key:'other', title:word('其他','Other'), kinds:['other'] },
 ].map(group => ({ ...group, items:app.search.items.filter(card => group.kinds.includes(card.kind)) })).filter(group => group.items.length));
 const genres = computed(() => [
   { kind:'movie', title:t('Movies'), icon:'film' }, { kind:'series', title:t('Series'), icon:'tv' },
   { kind:'anime', title:t('Animation'), icon:'sparkles' }, { kind:'documentary', title:t('Documentary'), icon:'documentary' },
-  { kind:'variety', title:t('Variety'), icon:'variety' }, { kind:'short', title:t('Short dramas'), icon:'short' },
+  ...(native && state.home.data?.page.sections.some(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title)) ? [{ kind:'variety', title:t('Variety'), icon:'variety' }] : []),
+  ...(!native ? [{ kind:'variety', title:t('Variety'), icon:'variety' }, { kind:'short', title:t('Short dramas'), icon:'short' }] : []),
 ]);
 const approximate = computed(() => app.search.phase === 'ready' && approximateResults(app.search.query, app.search.items.map(item => item.title)));
 let timer: ReturnType<typeof setTimeout> | undefined, observer:IntersectionObserver | undefined;

@@ -13,6 +13,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=2.7.4", features = ["codegen"] }
 
 [dependencies]
+moc-core = { path = "../crates/moc-core" }
+percent-encoding = "2"
 tauri = { version = "=2.12.5", features = [] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }

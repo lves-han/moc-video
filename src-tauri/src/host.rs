@@ -2,6 +2,7 @@ use crate::{
     contracts::{ApiError, COMMANDS, Contracts, envelope, wire_size},
     gateway::Gateway,
     history::History,
+    line_round::{self, Round, Rounds},
     matching::{self, MatchStore},
     media_cache::MediaCache,
     requests::{Clock, Job, MonotonicClock, Requests},
@@ -47,6 +48,9 @@ struct Committed {
     history: History,
     resolution_contexts: std::collections::HashMap<String, Value>,
     session_bindings: std::collections::HashMap<String, SessionBinding>,
+    service_resolutions: std::collections::HashMap<String, ServicePlayback>,
+    active_service_session: Option<String>,
+    line_rounds: Rounds,
     // Last fetched channels per live config: (list revision, channels).
     live: std::collections::HashMap<String, (String, Vec<live::Channel>)>,
     // Latest local library scan: file id → path.
@@ -57,6 +61,18 @@ struct Committed {
 struct SessionBinding {
     context: Value,
     playback_epoch: Option<u64>,
+    service: Option<ServicePlayback>,
+}
+
+#[derive(Clone)]
+struct ServicePlayback {
+    source_id: String,
+    source_revision: u64,
+    line_id: String,
+    latency_ms: Option<u64>,
+    config: crate::service::Config,
+    reported: std::collections::HashSet<String>,
+    metadata_snapshot: SourceSnapshot,
 }
 
 pub struct Host {
@@ -98,6 +114,7 @@ impl Host {
         let source_cache_path = path.with_file_name("source-cache");
         let (store, settings) = SettingsFile::load(path)?;
         tmdb_api::configure(&settings);
+        crate::service::configure(&settings);
         let mut sources = SourceDispatch::default();
         sources.replace_configs(&crate::settings::source_configs(&settings));
         Ok(Arc::new(Self {
@@ -121,6 +138,9 @@ impl Host {
                 history: History::new(history_path),
                 resolution_contexts: Default::default(),
                 session_bindings: Default::default(),
+                service_resolutions: Default::default(),
+                active_service_session: None,
+                line_rounds: Rounds::default(),
                 live: Default::default(),
                 local: Default::default(),
                 resolve_sequence: 0,
@@ -217,7 +237,7 @@ impl Host {
         let mut result = self.execute_inner(&call, &mut error_details);
         if matches!(
             call.command.as_str(),
-            "match_playback" | "resolve_episode" | "open_playback"
+            "match_playback" | "resolve_episode" | "open_playback" | "play_line"
         ) {
             let valid = call
                 .job
@@ -250,6 +270,23 @@ impl Host {
                     if call.command == "open_playback" {
                         if let Some(gateway) = &committed.gateway {
                             gateway.close(value["session_id"].as_str().expect("Session ID"));
+                        }
+                        if committed.active_service_session.as_deref()
+                            == value["session_id"].as_str()
+                        {
+                            committed.active_service_session = None;
+                        }
+                        if let Some(id) = value["session_id"].as_str() {
+                            committed.session_bindings.remove(id);
+                        }
+                    } else if call.command == "play_line" {
+                        if let Some(id) = value["resolution"]["id"].as_str() {
+                            committed.resolutions.release(id);
+                            committed.resolution_contexts.remove(id);
+                            committed.service_resolutions.remove(id);
+                            if committed.current_resolution.as_deref() == Some(id) {
+                                committed.current_resolution = None;
+                            }
                         }
                     } else if call.command == "resolve_episode" {
                         if let Some(id) = value["id"].as_str() {
@@ -346,6 +383,36 @@ impl Host {
         // Capture under the commit lock, perform HTTP outside it, then recheck
         // before publication. Settings and cancellation stay responsive to I/O.
         match call.command.as_str() {
+            "start_line_round" => return self.start_line_round(input, job),
+            "get_line_round" => return self.get_line_round(input),
+            "confirm_line_candidate" => return self.confirm_line_candidate(input),
+            "cancel_line_round" => return self.cancel_line_round(input),
+            "play_line" => return self.play_line(input, job),
+            "refresh_line" => return self.refresh_line(input, job),
+            "report_line_playback" => return self.report_line_playback(input, job),
+            "open_playback" => {
+                let service = {
+                    self.committed
+                        .lock()
+                        .expect("Host commit lock")
+                        .service_resolutions
+                        .contains_key(input["resolution_id"].as_str().unwrap_or(""))
+                };
+                if service {
+                    let result = self.open_service_playback(input, job);
+                    if result.is_err() {
+                        let id = input["resolution_id"].as_str().unwrap_or("");
+                        let mut committed = self.committed.lock().expect("Host commit lock");
+                        committed.resolutions.release(id);
+                        committed.resolution_contexts.remove(id);
+                        committed.service_resolutions.remove(id);
+                        if committed.current_resolution.as_deref() == Some(id) {
+                            committed.current_resolution = None;
+                        }
+                    }
+                    return result;
+                }
+            }
             "sync_catalog" => return self.sync_catalog(input, job, error_details),
             "get_home" => return self.route_content(input, job, "home", call.metadata_epoch),
             "search_catalog" => {
@@ -465,6 +532,7 @@ impl Host {
                     );
                 }
                 tmdb_api::configure(input);
+                crate::service::configure(input);
                 // A changed library forgets its scan and stops files it may no longer cover.
                 if input["local_paths"] != committed.settings["local_paths"] {
                     committed.local.clear();
@@ -504,6 +572,9 @@ impl Host {
             )),
             "release_resolution" => {
                 committed
+                    .service_resolutions
+                    .remove(input["resolution_id"].as_str().unwrap_or(""));
+                committed
                     .resolution_contexts
                     .remove(input["resolution_id"].as_str().unwrap_or(""));
                 if committed.current_resolution.as_deref() == input["resolution_id"].as_str() {
@@ -535,6 +606,7 @@ impl Host {
                     gateway.close(view["session_id"].as_str().expect("Session ID"));
                     return Err(error);
                 }
+                committed.active_service_session = None;
                 if let Some(context) = input["resolution_id"]
                     .as_str()
                     .and_then(|id| committed.resolution_contexts.get(id))
@@ -545,6 +617,7 @@ impl Host {
                         SessionBinding {
                             context,
                             playback_epoch: None,
+                            service: None,
                         },
                     );
                 }
@@ -586,9 +659,13 @@ impl Host {
                     gateway.close(view["session_id"].as_str().expect("Session ID"));
                     return Err(error);
                 }
+                committed.active_service_session = None;
                 Ok(view)
             }
             "close_playback" => {
+                if committed.active_service_session.as_deref() == input["session_id"].as_str() {
+                    committed.active_service_session = None;
+                }
                 if let Some(gateway) = &committed.gateway {
                     gateway.close(input["session_id"].as_str().expect("Session ID"));
                 }
@@ -694,12 +771,14 @@ impl Host {
             gateway.close(view["session_id"].as_str().expect("Session ID"));
             return Err(error);
         }
+        committed.active_service_session = None;
         let match_id = format!("local-{}", Uuid::new_v4());
         let identity_value = local::history_identity(id);
         committed.session_bindings.insert(view["session_id"].as_str().expect("Session ID").to_owned(), SessionBinding {
             context: json!({"match_id": match_id, "metadata_ref": {"identity": identity_value}, "metadata_video_id": id,
                 "episode_ref": {"source_id": "local"}}),
             playback_epoch: None,
+            service: None,
         });
         let updated = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1316,6 +1395,9 @@ impl Host {
                         .as_array()
                         .expect("Mapped search cards")
                         .iter()
+                        .filter(|details| {
+                            crate::fuzzy::related(title, details["title"].as_str().unwrap_or(""))
+                        })
                         .take(10)
                         .map(|details| matching::Candidate {
                             details: details.clone(),
@@ -1549,6 +1631,638 @@ impl Host {
         Ok(())
     }
 
+    fn start_line_round(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let round_id = input["round_id"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("Round ID missing"))?;
+        Uuid::parse_str(round_id).map_err(|_| ApiError::bad("Round ID must be UUID"))?;
+        let metadata_source_id = input["metadata_source_id"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("Metadata source missing"))?;
+        let kind = input["type"]
+            .as_str()
+            .filter(|v| matches!(*v, "movie" | "series"))
+            .ok_or_else(|| ApiError::bad("Invalid metadata type"))?;
+        let meta_id = input["meta_id"]
+            .as_str()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ApiError::bad("Metadata ID missing"))?;
+        let video_id = input["video_id"]
+            .as_str()
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| ApiError::bad("Video ID missing"))?;
+        let service = crate::service::current()?;
+        let (snapshot, catalog, reference, language) = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            let settings = &committed.settings;
+            let configured = &settings["playback_service"];
+            if configured["enabled"] != true {
+                return Err(ApiError::new(
+                    "ENGINE_NOT_READY",
+                    "Playback service is not configured",
+                ));
+            }
+            let (config_id, addon_key) = if metadata_source_id == "tmdb" {
+                (
+                    crate::settings::TMDB_CONFIG_ID.to_owned(),
+                    identity("addon", &[crate::settings::TMDB_CONFIG_ID]),
+                )
+            } else {
+                configured["groups"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|group| group["status"] == "ready")
+                    .find_map(|group| {
+                        let addon = group["addons"]
+                            .as_array()?
+                            .iter()
+                            .find(|addon| addon["source_id"] == metadata_source_id)?;
+                        Some((
+                            group["config_id"].as_str()?.to_owned(),
+                            addon["addon_key"].as_str()?.to_owned(),
+                        ))
+                    })
+                    .ok_or_else(|| ApiError::bad("Metadata source is not registered"))?
+            };
+            let language = if crate::settings::metadata_language(settings) == "zh-CN" {
+                "zh-CN"
+            } else {
+                "en-US"
+            };
+            let snapshot = committed
+                .sources
+                .snapshot(&config_id, &self.host_epoch, false)?;
+            if snapshot.config["service_revision"].as_str() != Some(service.fingerprint().as_str())
+            {
+                return Err(ApiError::new(
+                    "REVISION_MISMATCH",
+                    "Playback service configuration changed",
+                ));
+            }
+            let catalog = committed
+                .stremio
+                .get(&snapshot.source_id)
+                .cloned()
+                .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Synchronize metadata first"))?;
+            let reference = json!({"source_id":snapshot.source_id,"source_revision":snapshot.source_revision,"data":json!(["stremio",addon_key,kind,meta_id]).to_string()});
+            (snapshot, catalog, reference, language.to_owned())
+        };
+        job.bind_source(&snapshot.source_id);
+        let detail = catalog.details(&maccms::Http::default(), &reference, &language, job)?;
+        let identity = &detail.value["metadata_ref"]["identity"];
+        if identity["config_id"] != snapshot.config["config_id"]
+            || identity["type"] != kind
+            || identity["meta_id"] != meta_id
+        {
+            return Err(ApiError::bad("Metadata identity is not registered"));
+        }
+        matching::video(&detail.value, video_id)?;
+        let metadata_ref = detail.value["metadata_ref"].clone();
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        job.check()?;
+        committed
+            .sources
+            .check_snapshot(&snapshot, &self.host_epoch, None, false)?;
+        if committed.line_rounds.records.contains_key(round_id) {
+            return Err(ApiError::bad("Round ID already used"));
+        }
+        if let Some(old) = committed
+            .line_rounds
+            .active
+            .take()
+            .and_then(|id| committed.line_rounds.records.remove(&id))
+        {
+            line_round::stop(&old, &self.requests);
+        }
+        let job_id = Uuid::new_v4().to_string();
+        let parent = Arc::new(
+            self.requests
+                .begin(&job_id, "resolve", self.clock.clone())?,
+        );
+        parent.bind_source(&snapshot.source_id);
+        let target = json!({"metadata_source_id":metadata_source_id,"meta_id":meta_id,"type":kind,"video_id":video_id,"lang":language,"sources":null,"refresh":false});
+        let round = Arc::new(Mutex::new(Round {
+            id: round_id.into(),
+            target: target.clone(),
+            metadata_ref,
+            metadata_source_id: metadata_source_id.into(),
+            metadata_snapshot: snapshot,
+            lookup_id: None,
+            sources: Default::default(),
+            candidates: Default::default(),
+            lines: Default::default(),
+            query_done: false,
+            pending: 0,
+            pending_confirm: 0,
+            selected: None,
+            error: None,
+            deadline: std::time::Instant::now() + line_round::BUDGET,
+            stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            job: parent,
+            job_id,
+            service,
+            permits: Arc::new(tokio::sync::Semaphore::new(4)),
+        }));
+        line_round::launch(round.clone(), target, false)?;
+        committed.line_rounds.active = Some(round_id.into());
+        committed
+            .line_rounds
+            .records
+            .insert(round_id.into(), round.clone());
+        let result = round.lock().expect("round state").snapshot();
+        Ok(result)
+    }
+
+    fn get_line_round(&self, input: &Value) -> Result<Value, ApiError> {
+        let round = {
+            self.committed
+                .lock()
+                .expect("Host commit lock")
+                .line_rounds
+                .get(input["round_id"].as_str().unwrap_or(""))?
+        };
+        let value = round
+            .lock()
+            .map_err(|_| ApiError::internal("Round state unavailable"))?
+            .snapshot();
+        Ok(value)
+    }
+
+    fn confirm_line_candidate(&self, input: &Value) -> Result<Value, ApiError> {
+        let round = {
+            self.committed
+                .lock()
+                .expect("Host commit lock")
+                .line_rounds
+                .get(input["round_id"].as_str().unwrap_or(""))?
+        };
+        let body = {
+            let mut state = round
+                .lock()
+                .map_err(|_| ApiError::internal("Round state unavailable"))?;
+            let candidate_id = input["candidate_id"]
+                .as_str()
+                .ok_or_else(|| ApiError::bad("Candidate missing"))?;
+            let source_id = input["source_id"]
+                .as_str()
+                .ok_or_else(|| ApiError::bad("Source missing"))?;
+            if state
+                .candidates
+                .get(candidate_id)
+                .is_none_or(|candidate| candidate["source_id"] != source_id)
+            {
+                return Err(ApiError::bad("Candidate does not belong to round"));
+            }
+            let lookup = state
+                .lookup_id
+                .clone()
+                .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Lookup has not started"))?;
+            if state.pending_confirm >= 16 {
+                return Err(ApiError::new("RESOURCE_LIMIT", "Too many confirmations"));
+            }
+            state.pending_confirm += 1;
+            state.extend();
+            json!({"lookup_id":lookup,"source_id":source_id,"candidate_id":candidate_id})
+        };
+        if let Err(error) = line_round::launch(round.clone(), body, true) {
+            round.lock().expect("round state").pending_confirm -= 1;
+            return Err(error);
+        }
+        let value = round.lock().expect("round state").snapshot();
+        Ok(value)
+    }
+
+    fn cancel_line_round(&self, input: &Value) -> Result<Value, ApiError> {
+        let id = input["round_id"].as_str().unwrap_or("");
+        let round = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            let round = committed.line_rounds.get(id)?;
+            committed.line_rounds.records.remove(id);
+            committed.line_rounds.active = None;
+            round
+        };
+        line_round::stop(&round, &self.requests);
+        Ok(json!({"ok":true}))
+    }
+
+    fn verify_service_source(
+        &self,
+        config: &crate::service::Config,
+        id: &str,
+        revision: u64,
+        job: &Job,
+    ) -> Result<(), ApiError> {
+        let sources = crate::service::blocking_json(
+            config,
+            reqwest::Method::GET,
+            &["v1", "sources"],
+            None,
+            job,
+        )?;
+        if sources["sources"].as_array().is_some_and(|sources| {
+            sources.iter().any(|source| {
+                source["id"] == id && source["revision"] == revision && source["enabled"] == true
+            })
+        }) {
+            Ok(())
+        } else {
+            Err(ApiError::new(
+                "REVISION_MISMATCH",
+                "Playback source changed",
+            ))
+        }
+    }
+
+    fn play_line(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let round_id = input["round_id"].as_str().unwrap_or("");
+        let line_id = input["line_id"].as_str().unwrap_or("");
+        let round = {
+            self.committed
+                .lock()
+                .expect("Host commit lock")
+                .line_rounds
+                .get(round_id)?
+        };
+        // The service reuses a playback address only until `expires_at`. Renew the
+        // chosen line in place; a line the service no longer holds answers 410 and,
+        // like a refreshed line that fails its probe, sends the App back to a new search.
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let stale = round
+            .lock()
+            .expect("round state")
+            .lines
+            .get(line_id)
+            .is_some_and(|line| {
+                line.status == "ready"
+                    && line.raw["expires_at"]
+                        .as_i64()
+                        .is_some_and(|time| time <= now)
+            });
+        if stale {
+            self.refresh_line(input, job)?;
+            let ready = round
+                .lock()
+                .expect("round state")
+                .lines
+                .get(line_id)
+                .is_some_and(|line| line.status == "ready");
+            if !ready {
+                return Err(ApiError::new(
+                    "SESSION_EXPIRED",
+                    "Refreshed line is unavailable; search again",
+                ));
+            }
+        }
+        let (line, service, snapshot, metadata_ref, video_id) = {
+            let state = round.lock().expect("round state");
+            let line = state
+                .lines
+                .get(line_id)
+                .filter(|line| line.status == "ready")
+                .cloned()
+                .ok_or_else(|| ApiError::bad("Line is not ready"))?;
+            if line.raw["expires_at"]
+                .as_i64()
+                .is_some_and(|time| time <= time::OffsetDateTime::now_utc().unix_timestamp())
+            {
+                return Err(ApiError::new("SESSION_EXPIRED", "Line needs refresh"));
+            }
+            (
+                line,
+                state.service.clone(),
+                state.metadata_snapshot.clone(),
+                state.metadata_ref.clone(),
+                state.target["video_id"].clone(),
+            )
+        };
+        let source_id = line.raw["source_id"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("Invalid line source"))?;
+        let revision = line.raw["source_revision"]
+            .as_u64()
+            .ok_or_else(|| ApiError::bad("Invalid line source"))?;
+        self.verify_service_source(&service, source_id, revision, job)?;
+        let selected = crate::service::blocking_json(
+            &service,
+            reqwest::Method::POST,
+            &["v1", "lines", line_id, "play"],
+            Some(json!({})),
+            job,
+        )?;
+        if selected["line_id"] != line_id
+            || selected["source_id"] != source_id
+            || selected["source_revision"] != revision
+            || selected["target"] != line.raw["target"]
+        {
+            return Err(ApiError::bad("Selected line identity changed"));
+        }
+        let url = selected["play"]["url"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("Selected playback URL missing"))?;
+        maccms::http_url(url, false)?;
+        let headers = crate::line_round::header_map(&selected["play"]["headers"])?;
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        job.check()?;
+        committed.line_rounds.get(round_id)?;
+        committed
+            .sources
+            .check_snapshot(&snapshot, &self.host_epoch, None, false)?;
+        if crate::service::current()?.fingerprint() != service.fingerprint() {
+            return Err(ApiError::new(
+                "REVISION_MISMATCH",
+                "Playback service changed",
+            ));
+        }
+        {
+            let mut state = round.lock().expect("round state");
+            if state.lines.get(line_id).is_none_or(|current| {
+                current.status != "ready"
+                    || current.raw != line.raw
+                    || current.raw["source_revision"] != revision
+            }) {
+                return Err(ApiError::cancelled());
+            }
+            state.selected = Some(line_id.into());
+        }
+        let provider = identity("service_source", &[source_id]);
+        let source_revision = identity(
+            "service_revision",
+            &[source_id, &revision.to_string(), &service.fingerprint()],
+        );
+        let reference = json!({"source_id":provider,"source_revision":source_revision,"data":json!(["service_line",round_id,line_id]).to_string()});
+        let link = resolution::Link {
+            original: json!({}),
+            provider: provider.clone(),
+            url: url.to_owned(),
+            headers,
+            referer: String::new(),
+            extractor_data: None,
+            interceptor: None,
+            cookies: None,
+            label: line.raw["line_name"].as_str().unwrap_or("Line").to_owned(),
+            quality: None,
+            quality_label: None,
+            kind: if line.raw["kind"] == "hls" {
+                "hls"
+            } else {
+                "progressive"
+            }
+            .into(),
+            mime_type: None,
+            playable: true,
+            reason: None,
+        };
+        let resolution =
+            committed
+                .resolutions
+                .register(&reference, vec![link], vec![], self.clock.now_ms())?;
+        let context = json!({"metadata_ref":metadata_ref,"metadata_video_id":video_id,"match_id":Uuid::new_v4().to_string(),"content_ref":reference,"group_id":identity("service_group",&[line_id]),"episode_id":identity("service_episode",&[line_id]),"episode_ref":reference,"selected_stream_id":null});
+        Contracts::get().validate("PlaybackContext", &context)?;
+        let id = resolution["id"].as_str().expect("Resolution ID").to_owned();
+        if let Some(old) = committed.current_resolution.replace(id.clone()) {
+            committed.resolutions.release(&old);
+            committed.resolution_contexts.remove(&old);
+            committed.service_resolutions.remove(&old);
+        }
+        committed
+            .resolution_contexts
+            .insert(id.clone(), context.clone());
+        committed.service_resolutions.insert(
+            id,
+            ServicePlayback {
+                source_id: source_id.into(),
+                source_revision: revision,
+                line_id: line_id.into(),
+                latency_ms: line.latency_ms,
+                config: service,
+                reported: Default::default(),
+                metadata_snapshot: snapshot,
+            },
+        );
+        Ok(json!({"resolution":resolution,"context":context}))
+    }
+
+    fn refresh_line(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let round_id = input["round_id"].as_str().unwrap_or("");
+        let line_id = input["line_id"].as_str().unwrap_or("");
+        let round = {
+            self.committed
+                .lock()
+                .expect("Host commit lock")
+                .line_rounds
+                .get(round_id)?
+        };
+        // The service answers 410 once its line handle has expired; the App then searches again.
+        let (service, old) = {
+            let state = round.lock().expect("round state");
+            if state
+                .lines
+                .get(line_id)
+                .is_some_and(|line| line.status == "testing")
+            {
+                return Err(ApiError::new(
+                    "ENGINE_NOT_READY",
+                    "Line probe is still running",
+                ));
+            }
+            (
+                state.service.clone(),
+                state
+                    .lines
+                    .get(line_id)
+                    .cloned()
+                    .ok_or_else(|| ApiError::bad("Line not in round"))?,
+            )
+        };
+        let value = crate::service::blocking_json(
+            &service,
+            reqwest::Method::POST,
+            &["v1", "lines", line_id, "refresh"],
+            Some(json!({})),
+            job,
+        )?;
+        if value["line_id"] != line_id
+            || value["source_id"] != old.raw["source_id"]
+            || value["source_revision"] != old.raw["source_revision"]
+            || value["target"] != old.raw["target"]
+        {
+            return Err(ApiError::bad("Refreshed line identity changed"));
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| ApiError::internal("Probe runtime unavailable"))?;
+        {
+            let mut state = round.lock().expect("round state");
+            state.lines.remove(line_id);
+            state.extend();
+        }
+        let permits = { round.lock().expect("round state").permits.clone() };
+        let refreshed = runtime.block_on(async {
+            line_round::event(&round, json!({"event":"line","line":value}), &permits, true)?;
+            loop {
+                let state = round.lock().expect("round state");
+                if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Err(ApiError::cancelled());
+                }
+                if std::time::Instant::now() >= state.deadline {
+                    return Err(ApiError::new(
+                        "SESSION_EXPIRED",
+                        "Line round expired; search again",
+                    ));
+                }
+                let done = state
+                    .lines
+                    .get(line_id)
+                    .is_none_or(|line| line.status != "testing");
+                drop(state);
+                if done {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            }
+            Ok::<(), ApiError>(())
+        });
+        if let Err(error) = refreshed {
+            round
+                .lock()
+                .expect("round state")
+                .lines
+                .insert(line_id.into(), old);
+            return Err(error);
+        }
+        let value = round.lock().expect("round state").snapshot();
+        Ok(value)
+    }
+
+    fn open_service_playback(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let id = input["resolution_id"].as_str().unwrap_or("");
+        let stream = input["stream_id"].as_str().unwrap_or("");
+        let (binding, context) = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            committed
+                .resolutions
+                .selected(id, stream, self.clock.now_ms())?;
+            (
+                committed
+                    .service_resolutions
+                    .get(id)
+                    .cloned()
+                    .ok_or_else(|| ApiError::new("SESSION_EXPIRED", "Resolution expired"))?,
+                committed
+                    .resolution_contexts
+                    .get(id)
+                    .cloned()
+                    .ok_or_else(|| ApiError::new("SESSION_EXPIRED", "Playback context expired"))?,
+            )
+        };
+        if crate::service::current()?.fingerprint() != binding.config.fingerprint() {
+            return Err(ApiError::new(
+                "REVISION_MISMATCH",
+                "Playback service changed",
+            ));
+        }
+        self.verify_service_source(
+            &binding.config,
+            &binding.source_id,
+            binding.source_revision,
+            job,
+        )?;
+        let mut committed = self.committed.lock().expect("Host commit lock");
+        job.check()?;
+        committed.sources.check_snapshot(
+            &binding.metadata_snapshot,
+            &self.host_epoch,
+            None,
+            false,
+        )?;
+        if committed.service_resolutions.get(id).is_none_or(|current| {
+            current.line_id != binding.line_id || current.source_revision != binding.source_revision
+        }) {
+            return Err(ApiError::cancelled());
+        }
+        let selected = committed
+            .resolutions
+            .selected(id, stream, self.clock.now_ms())?;
+        if committed.gateway.is_none() {
+            committed.gateway = Some(Gateway::with_media_cache(
+                self.clock.clone(),
+                self.media_cache.clone(),
+            )?);
+        }
+        let gateway = committed.gateway.as_ref().expect("Gateway ready");
+        let view = gateway.open(selected)?;
+        if let Err(error) = job.check() {
+            gateway.close(view["session_id"].as_str().expect("Session ID"));
+            return Err(error);
+        }
+        let session = view["session_id"].as_str().expect("Session ID").to_owned();
+        committed.active_service_session = Some(session.clone());
+        committed.session_bindings.insert(
+            session,
+            SessionBinding {
+                context,
+                playback_epoch: None,
+                service: Some(binding),
+            },
+        );
+        Ok(view)
+    }
+
+    fn report_line_playback(&self, input: &Value, job: &Job) -> Result<Value, ApiError> {
+        let session = input["session_id"].as_str().unwrap_or("");
+        let epoch = input["playback_epoch"]
+            .as_u64()
+            .ok_or_else(|| ApiError::bad("Playback epoch missing"))?;
+        let outcome = input["outcome"]
+            .as_str()
+            .filter(|value| matches!(*value, "playing" | "failed"))
+            .ok_or_else(|| ApiError::bad("Invalid playback outcome"))?;
+        let binding = {
+            let mut committed = self.committed.lock().expect("Host commit lock");
+            if committed.active_service_session.as_deref() != Some(session) {
+                return Err(ApiError::cancelled());
+            }
+            let live = committed.gateway.as_ref().is_some_and(|gateway| {
+                gateway
+                    .status("playback", session)
+                    .is_ok_and(|status| status["state"] != "expired")
+            });
+            let binding = committed
+                .session_bindings
+                .get_mut(session)
+                .filter(|_| live)
+                .ok_or_else(|| ApiError::new("SESSION_EXPIRED", "Playback session closed"))?;
+            if binding.playback_epoch.is_some_and(|known| known != epoch) {
+                return Err(ApiError::cancelled());
+            }
+            binding.playback_epoch = Some(epoch);
+            let service = binding
+                .service
+                .as_mut()
+                .ok_or_else(|| ApiError::bad("Session is not a service line"))?;
+            if !service.reported.insert(outcome.to_owned()) {
+                return Ok(json!({"ok":true,"reported":false}));
+            }
+            service.clone()
+        };
+        let payload = json!({"line_id":binding.line_id,"outcome":outcome,"latency_ms":binding.latency_ms,"error_code":input["error_code"]});
+        let result = crate::service::blocking_json(
+            &binding.config,
+            reqwest::Method::POST,
+            &["v1", "reports"],
+            Some(payload),
+            job,
+        );
+        match result {
+            Ok(_) => Ok(json!({"ok":true,"reported":true})),
+            Err(_) => Ok(
+                json!({"ok":true,"reported":false,"diagnostic":"Playback service report failed"}),
+            ),
+        }
+    }
+
     fn resolve(&self, input: &Value, job: &Job, sequence: u64) -> Result<Value, ApiError> {
         let reference = &input["episode_ref"];
         let (record, catalog, previous_resolution) = {
@@ -1623,6 +2337,8 @@ impl Host {
                 .register(reference, vec![link], vec![], self.clock.now_ms())?;
         if let Some(old) = previous_resolution {
             committed.resolutions.release(&old);
+            committed.resolution_contexts.remove(&old);
+            committed.service_resolutions.remove(&old);
         }
         committed.current_resolution = value["id"].as_str().map(str::to_owned);
         if let Some(id) = value["id"].as_str() {
@@ -1676,16 +2392,6 @@ impl Host {
             .gateway
             .as_ref()
             .map(|gateway| gateway.address)
-    }
-
-    pub(crate) fn font_url(&self, id: &str) -> Result<String, ApiError> {
-        self.committed
-            .lock()
-            .map_err(|_| ApiError::internal("Host commit lock poisoned"))?
-            .gateway
-            .as_ref()
-            .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Font gateway is not ready"))?
-            .font_url(id)
     }
 }
 

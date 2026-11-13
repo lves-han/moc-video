@@ -430,7 +430,7 @@ fn http_error(error: reqwest::Error) -> ApiError {
     }
 }
 
-async fn watched<T>(
+pub(crate) async fn watched<T>(
     job: &Job,
     timeout: Duration,
     future: impl Future<Output = Result<T, ApiError>>,
@@ -1068,7 +1068,9 @@ impl Catalog {
             job,
             false,
         )?;
-        self.cards_limit(&response, 1, 10)
+        // The whole first page: matching drops unrelated full-text hits before
+        // keeping ten, so a related title ranked below them is not lost.
+        self.cards(&response, 1)
     }
 
     fn cards(&self, response: &Value, page: u64) -> Result<Mapped, ApiError> {
@@ -1316,20 +1318,14 @@ impl Catalog {
         };
         let names = playback_field("vod_play_from")?;
         let urls = playback_field("vod_play_url")?;
-        if names.is_empty() && urls.is_empty() {
+        let groups = moc_core::maccms::playback(names, urls).map_err(upstream)?;
+        if groups.is_empty() {
             return Ok(vec![]);
-        }
-        let names: Vec<_> = names.split("$$$").collect();
-        let groups: Vec<_> = urls.split("$$$").collect();
-        if names.len() != groups.len()
-            || names.iter().any(|name| name.is_empty())
-            || groups.iter().any(|group| group.is_empty())
-        {
-            return Err(upstream("MacCMS playback groups are ambiguous"));
         }
         let vod_id = identifier(&item["vod_id"])?;
         let mut result = Vec::new();
-        for (group_index, (title, group)) in names.into_iter().zip(groups).enumerate() {
+        for (group_index, group) in groups.into_iter().enumerate() {
+            let title = group.name;
             let group_id = identity(
                 "group",
                 &[
@@ -1344,22 +1340,10 @@ impl Catalog {
             );
             let mut episodes = Vec::new();
             let mut media = Vec::new();
-            for (episode_index, entry) in group.split('#').enumerate() {
-                if entry.is_empty() {
-                    return Err(upstream("MacCMS playback contains a missing episode"));
-                }
-                let (label, url) = if entry.starts_with("http://") || entry.starts_with("https://")
-                {
-                    (String::new(), entry)
-                } else if let Some((label, url)) = entry.split_once('$') {
-                    (label.to_owned(), url)
-                } else {
-                    (String::new(), entry)
-                };
-                if url.is_empty() {
-                    return Err(upstream("MacCMS episode resource is missing"));
-                }
-                let fingerprint = identity("maccms_entry", &[title, entry]);
+            for (episode_index, episode) in group.episodes.into_iter().enumerate() {
+                let label = episode.label;
+                let url = episode.url;
+                let fingerprint = identity("maccms_entry", &[title, episode.raw]);
                 let data = serde_json::to_string(&[
                     "maccms_episode",
                     &vod_id,
@@ -1382,7 +1366,7 @@ impl Catalog {
                 let label = if label.is_empty() {
                     format!("{}", episode_index + 1)
                 } else {
-                    label
+                    label.to_owned()
                 };
                 episodes.push(json!({"id": id, "label": label, "index": episode_index, "ref": reference, "number": null, "season": null}));
                 media.push(url.into());

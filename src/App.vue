@@ -13,15 +13,15 @@ import SearchView from "./views/SearchView.vue";
 import Icon from "./components/Icon.vue";
 import FilmCard from "./components/FilmCard.vue";
 import { appState, appController, metadataVideoId, liveAvailable } from "./state.ts";
-import { finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
-import { historyRefused, historyRepository, historyWriteDue } from "./data/history";
+import { api, finishBeforeClose, nativeWindowBounds, settingsQueue } from "./api";
+import { entryFromRecord, historyRefused, historyRepository, historyWriteDue } from "./data/history";
 import { historyContentId, type HistoryEntry } from "./data/history-model";
 import { films as baseFilms, localizeFilm, sourceText, initialSources, kindLabels, type FilmKind, type Source } from "./data/demo";
 import { previewRef, previewSourceId, previewSourceKey } from "./data/preview";
 import { locale, t, type Message } from "./i18n";
 import { palette, paletteOptions, normalizePalette } from "./ui/theme";
 import { installFocusNavigation } from "./ui/focus";
-import type { AppSource, Bridge_MediaRef, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
+import type { AppSource, Bridge_MediaRef, CommandData, PlaybackContext, ResumeSnapshot, Settings, WatchHistoryRecord } from "./models";
 
 const native = Boolean(window.__TAURI__);
 const desktopQuery = matchMedia("(min-width: 960px)");
@@ -29,7 +29,6 @@ const expandedQuery = matchMedia("(min-width: 1200px)");
 const sidebarCollapsed = ref(!expandedQuery.matches);
 const sidebarToggle = ref<HTMLButtonElement>();
 const shell = ref<HTMLElement>();
-const sidebarSources = ref<HTMLElement>();
 const desktopNavigation = computed(() => [
   { page: "home", href: "#/home", icon: "compass", label: t("Discover") },
   { page: "search", href: "#/search", icon: "search", label: locale.value === 'zh-CN' ? '搜索' : 'Search' },
@@ -37,7 +36,8 @@ const desktopNavigation = computed(() => [
   { page: 'browse', href: '#/browse/series', icon: 'tv', label: t('Series') },
   { page: 'browse', href: '#/browse/anime', icon: 'sparkles', label: t('Animation') },
   { page: 'browse', href: '#/browse/documentary', icon: 'library', label: t('Documentary') },
-  ...(['variety', 'short', 'sports'] as const).filter(category => appState.sources.data?.providers.some(item => item.kind === 'maccms'
+  ...(native && appState.home.data?.page.sections.some(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title)) ? [{ page: 'browse', href: '#/browse/variety', icon: 'tv', label: t('Variety') }] : []),
+  ...(['variety', 'short', 'sports'] as const).filter(category => !native && appState.sources.data?.providers.some(item => item.kind === 'maccms'
     && item.runtime_status === 'ready' && item.id === appState.selected_playback_source?.source_id && item.content_types.includes(category)))
     .map(category => ({ page: 'browse', href: `#/browse/${category}`, icon: category === 'sports' ? 'play' : 'tv', label: t({ variety: 'Variety', short: 'Short dramas', sports: 'Sports' }[category] as Message) })),
   { page: "local", href: "#/local", icon: "folder", label: t("Local video") },
@@ -45,13 +45,7 @@ const desktopNavigation = computed(() => [
   { page: "history", href: "#/history", icon: "library", label: locale.value === 'zh-CN' ? '资料库' : 'Library' },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
 ]);
-const metadataProviders = computed(() => (appState.sources.data?.providers ?? []).filter(item => item.kind === "stremio" && item.runtime_status === "ready" && item.capabilities.home && item.capabilities.details));
 function resetSidebar() { sidebarCollapsed.value = !expandedQuery.matches; }
-async function expandSource(role: "metadata" | "playback") {
-  sidebarCollapsed.value = false;
-  await nextTick();
-  sidebarSources.value?.querySelector<HTMLSelectElement>(`[data-role="${role}"]`)?.focus();
-}
 async function dragWindow(event: MouseEvent) {
   if (event.button !== 0 || (event.target as HTMLElement).closest("a,button,input,select,textarea,[role=button]")) return;
   try { await window.__TAURI__?.core.invoke("plugin:window|start_dragging"); }
@@ -100,7 +94,9 @@ const route = computed<{ page: Page; id: string; kind: FilmKind | "" }>(() => {
 });
 // A rematch that needs the user keeps hash #/playback; its confirmation/result UI lives in CatalogView.
 const matchNeedsUser = computed(() => ["needs_confirmation", "not_found"].includes(appController.matching.result?.status ?? ""));
-const formalPlayback = computed(() => appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value));
+type LocalPlayback = CommandData<'open_local'> & { position_ms: number };
+const localPlayback = ref<LocalPlayback | null>(null);
+const formalPlayback = computed(() => Boolean(localPlayback.value) || appState.route.name === "playback" || (readHash().name === "playback" && !matchNeedsUser.value && !appController.serviceRound.open));
 const playbackContext = computed(() => appState.route.name === "playback" ? appState.route.context : null);
 const playbackView = ref<InstanceType<typeof PlaybackView>>();
 defineExpose({ playbackController: () => playbackView.value?.playback });
@@ -187,10 +183,6 @@ async function selectNativeSource(id: string, role: "metadata" | "playback") {
     }
   } catch (error) { preferenceError.value = String(error); }
 }
-async function changeSource(id: string) {
-  try { await selectNativeSource(native ? id : previewSourceKey(id).source_id, "playback"); }
-  catch (cause) { preferenceError.value = String(cause); }
-}
 function openDetails(ref: Bridge_MediaRef) {
   const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
   if (target === location.hash) return;
@@ -241,12 +233,28 @@ async function onHashChange() {
   } catch (error) { preferenceError.value = String(error); }
   finally { poster?.style.removeProperty('view-transition-name'); document.querySelectorAll<HTMLElement>('.poster-link').forEach(element => element.style.removeProperty('view-transition-name')); }
 }
-async function playEpisode(videoId: string, explicitLine = false) {
+async function playEpisode(videoId: string, explicitLine = false, resumePosition?: number) {
   try {
     await flushHistory();
+    if (native && appState.settings.playback_service?.enabled) {
+      if (resumePosition && resumePosition > 0) wantedResume = { video_id: videoId, position_ms: resumePosition };
+      else if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
+      if (appState.route.name === 'playback' && appState.details.data) {
+        wantedResume = { video_id: videoId, position_ms: wantedResume?.video_id === videoId ? wantedResume.position_ms : 0 };
+        location.hash = `#/details/${encodeURIComponent(JSON.stringify(appState.details.data.details.ref))}`;
+        return;
+      }
+      await appController.startServiceRound(videoId);
+      return;
+    }
+    if (native) throw new Error('请先连接播放服务。 / Connect the playback service first.');
     const result = await appController.match(videoId, null, !explicitLine);
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
+}
+async function switchFailedServiceLine(context: PlaybackContext) {
+  if (appState.playback.context?.match_id !== context.match_id) return;
+  await playEpisode(context.metadata_video_id, true, appState.playback.position_ms);
 }
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;
@@ -268,6 +276,13 @@ async function updateRoute() {
   lastHash = location.hash;
   rememberHome(); hash.value = location.hash;
   const next = readHash();
+  if (localPlayback.value && next.name !== 'local') {
+    const session = localPlayback.value.session;
+    await playbackView.value?.playback.stop();
+    await api.call('close_playback', { session_id: session.session_id }).catch(() => {});
+    localPlayback.value = null;
+    if (current !== sequence) return;
+  }
   if (next.name === "playback") return;
   pendingResume.value = null;
   try {
@@ -320,11 +335,15 @@ let lastWrite = 0;
 let lastHistory: HistoryEntry | null = null;
 function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   const state = appState.playback, context = state.context, data = appState.details.data;
-  if (!context || !data || state.position_ms <= 0 || state.phase === "failed") return null;
+  if (!context || !data || state.position_ms <= 0) return null;
   const episodes = data.details.groups.flatMap(group => group.episodes);
   const index = episodes.findIndex(episode => metadataVideoId(episode.ref) === context.metadata_video_id);
   const provider = appState.sources.data?.providers.find(item => item.id === context.episode_ref.source_id);
-  if (index < 0 || !provider) return null;
+  let serviceLine = '';
+  try { const ref = JSON.parse(context.episode_ref.data); if (ref[0] === 'service_line') serviceLine = ref[2]; } catch { /* legacy reference */ }
+  if (index < 0 || (!provider && !serviceLine)) return null;
+  const sourceId = context.episode_ref.source_id;
+  const sourceName = provider?.name ?? appController.serviceRound.snapshot?.lines.find(line => line.line_id === serviceLine)?.source_name ?? 'Playback service';
   const session = state.session;
   if (!session) return null;
   const kind = data.details.kind === "other" ? "series" : data.details.kind;
@@ -333,14 +352,22 @@ function nativeHistorySnapshot(finished: boolean): HistoryEntry | null {
   const duration_ms = state.duration_ms ? Math.max(1, Math.round(state.duration_ms)) : null;
   const completed = finished || state.phase === "ended", updated_at = Date.now();
   return { content_id: data.details.id, title: data.details.title, poster: poster ?? "/mark.svg", kind,
-    episode: index + 1, episode_total: episodes.length, source_id: provider.id, source_name: provider.name,
+    episode: index + 1, episode_total: episodes.length, source_id: sourceId, source_name: sourceName,
     position_ms, duration_ms, completed, updated_at,
     record: { content_id: data.details.id, metadata_identity: context.metadata_ref.identity, video_id: context.metadata_video_id, season_number: episode.season ?? null,
-      episode_number: episode.number ?? index + 1, title: data.details.title, kind: data.details.kind, poster_cache_key: null, source_id: provider.id, source_name: provider.name,
+      episode_number: episode.number ?? index + 1, title: data.details.title, kind: data.details.kind, poster_cache_key: null, source_id: sourceId, source_name: sourceName,
       position_ms, duration_ms, completed, updated_at },
     capture: { session_id: session.session_id, match_id: context.match_id, playback_epoch: state.playback_epoch } };
 }
 function historySnapshot(finished = false): HistoryEntry | null {
+  if (localPlayback.value) {
+    const local = localPlayback.value, playback = appState.playback, session = playback.session;
+    if (!session || session.session_id !== local.session.session_id || !playback.duration_ms || playback.position_ms <= 0) return null;
+    const completed = finished || playback.phase === 'ended';
+    const record: WatchHistoryRecord = { ...local.record, duration_ms: playback.duration_ms, completed,
+      position_ms: completed ? playback.duration_ms : Math.min(playback.duration_ms, playback.position_ms), updated_at: Date.now() };
+    return { ...entryFromRecord(record), capture: { session_id: session.session_id, match_id: local.match_id, playback_epoch: playback.playback_epoch } };
+  }
   if (native) return nativeHistorySnapshot(finished);
   const state = appState.playback, context = state.context;
   const film = baseFilms.find(film => film.id === context?.metadata_ref.identity.meta_id);
@@ -367,6 +394,40 @@ async function flushHistory(finished = false) {
   const snapshot = historySnapshot(finished);
   if (snapshot) { lastWrite = Date.now(); lastHistory = snapshot; await persistHistory(snapshot); }
 }
+function openLocalPlayback(value: LocalPlayback) { localPlayback.value = value; }
+async function closeLocalPlayback() {
+  const current = localPlayback.value;
+  const session = current?.session;
+  await flushHistory();
+  latestHistory = null;
+  await playbackView.value?.playback.stop();
+  if (session) await api.call('close_playback', { session_id: session.session_id }).catch(() => {});
+  if (localPlayback.value === current) {
+    localPlayback.value = null;
+    if (location.hash.startsWith('#/local?')) location.hash = '#/local';
+  }
+}
+async function retryLocalPlayback() {
+  const current = localPlayback.value;
+  if (!current?.record.video_id) return;
+  const position = appState.playback.position_ms;
+  await flushHistory(); latestHistory = null;
+  await playbackView.value?.playback.stop();
+  await api.call('close_playback', { session_id: current.session.session_id }).catch(() => {});
+  if (localPlayback.value !== current) return;
+  try {
+    const opened = await api.call('open_local', { id: current.record.video_id });
+    if (localPlayback.value !== current) {
+      await api.call('close_playback', { session_id: opened.session.session_id }).catch(() => {});
+      return;
+    }
+    localPlayback.value = { ...opened, position_ms: position };
+  } catch (cause) {
+    if (localPlayback.value !== current) return;
+    appState.playback.phase = 'failed';
+    appState.playback.error = { code: 'UPSTREAM_FAILED', message: cause instanceof Error ? cause.message : String(cause), retryable: true };
+  }
+}
 function retryHistorySave() { const snapshot = failedHistory ?? lastHistory; if (snapshot) void persistHistory(snapshot); }
 function discardPendingHistory(id: string | null) {
   if (id === null || lastHistory?.content_id === id) lastHistory = null;
@@ -381,12 +442,13 @@ async function continueNativeHistory(record: WatchHistoryRecord) {
   const direct = identity.namespace === 'maccms';
   const metadata = providers.find(source => source.kind === (direct ? 'maccms' : 'stremio') && ready(source) && source.origin.config_id === identity.config_id);
   if (!metadata) { messages.error(t("This title is unavailable in the current catalog.")); return; }
+  const service = appState.settings.playback_service?.enabled === true;
   const playback = providers.find(source => source.id === record.source_id && ready(source));
-  if (!playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
+  if (!service && !playback) { messages.error(t("The saved playback source is unavailable. Enable it in Sources before continuing.")); return; }
   try {
     if (!direct) await appController.selectSource(metadata.id, "metadata");
-    await appController.selectSource(playback.id, "playback");
-    if (direct && metadata.id !== playback.id) throw new Error(t('This title is unavailable in the current catalog.'));
+    if (!service && playback) await appController.selectSource(playback.id, "playback");
+    if (direct && metadata.id !== playback?.id) throw new Error(t('This title is unavailable in the current catalog.'));
     const ref: Bridge_MediaRef = { source_id: metadata.id, source_revision: metadata.source_revision, data: JSON.stringify(direct ? ['maccms', identity.meta_id] : ["stremio", identity.addon_key, identity.type, identity.meta_id]) };
     wantedResume = record.video_id ? { video_id: record.video_id, position_ms: record.completed ? 0 : record.position_ms } : null;
     const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
@@ -494,12 +556,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PlaybackView v-if="formalPlayback" ref="playbackView" :context="playbackContext" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @seek="flushHistory()" @update:auto-next="autoNext = $event">
+  <PlaybackView v-if="formalPlayback" :key="localPlayback?.session.session_id ?? 'service'" ref="playbackView" :context="localPlayback ? null : playbackContext" :local="localPlayback ? { session: localPlayback.session, title: localPlayback.record.title, position_ms: localPlayback.position_ms } : null" :resume="pendingResume" :auto-next="appState.settings.auto_next" @ended="onEnded" @play="playEpisode" @service-failed="switchFailedServiceLine" @local-close="closeLocalPlayback" @local-retry="retryLocalPlayback" @seek="flushHistory()" @update:auto-next="autoNext = $event">
   <template #preferences><div class="playback-preferences">
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
     <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
-    <select class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
   </div></template>
   </PlaybackView>
   <template v-else>
@@ -513,16 +574,6 @@ onBeforeUnmount(() => {
       <nav class="tv-navigation" data-focus-row>
         <a v-for="item in desktopNavigation" :key="item.href" :href="item.href" :aria-label="item.label" :title="item.label" :aria-current="item.page === 'browse' ? hash.split('?')[0] === item.href ? 'page' : undefined : route.page === item.page ? 'page' : undefined"><Icon :name="item.icon" /><span>{{ item.label }}</span></a>
       </nav>
-      <div ref="sidebarSources" class="tv-sidebar-sources" data-focus-row>
-        <template v-if="sidebarCollapsed">
-          <button :aria-label="t('Choose a metadata source')" :title="t('Choose a metadata source')" @click="expandSource('metadata')"><Icon name="library" /></button>
-          <button :aria-label="t('Choose a video source')" :title="t('Choose a video source')" @click="expandSource('playback')"><Icon name="layers" /></button>
-        </template>
-        <template v-else>
-          <label :title="t('Metadata provider')"><Icon name="library" :size="16" /><select data-role="metadata" :aria-label="t('Choose a metadata source')" :value="appState.selected_metadata_source?.source_id ?? ''" @change="selectNativeSource(($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="item in metadataProviders" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-          <label :title="t('Playback source')"><Icon name="layers" :size="16" /><select data-role="playback" :aria-label="t('Choose a video source')" :value="sourceId" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select></label>
-        </template>
-      </div>
     </aside>
     <aside class="sidebar legacy-sidebar" :aria-label="t('Main navigation')">
       <a class="brand" href="#/home" :aria-label="t('Moc Video home')"
@@ -625,22 +676,6 @@ onBeforeUnmount(() => {
               {{ item.label }}
             </option>
           </select>
-          <label class="source-select"
-            ><span class="status-dot" /><select
-              class="compact-select"
-              :value="sourceId"
-              :aria-label="t('Choose a video source')"
-              @change="changeSource(($event.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="item in sources.filter((item) => item.enabled && item.kind !== 'stremio')"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ sourceText(item).name }}
-              </option>
-            </select></label
-          >
           <a
             class="icon-button settings-shortcut"
             href="#/settings"
@@ -652,12 +687,12 @@ onBeforeUnmount(() => {
 
       <main id="main-content" tabindex="-1" :class="{ 'tv-manage-main': route.page === 'settings', 'tv-library-main':['history','local','live'].includes(route.page), 'tv-search-main':route.page === 'search' }">
         <SearchView v-if="route.page === 'search'" ref="searchView" @open="openDetails" />
-        <LocalView v-else-if="route.page === 'local'" />
+        <LocalView v-else-if="route.page === 'local'" @play="openLocalPlayback" />
         <LiveView v-else-if="route.page === 'live'" />
         <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
-          <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
+          <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @cancel-playback="wantedResume = null" @back="backFromDetails" />
           <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
         </div>
         <template v-else-if="route.page === 'home'">

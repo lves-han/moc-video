@@ -3038,3 +3038,315 @@
 ## 体验安装包 2026-11-11T07:35:00Z
 - 用户要求构建 macOS 安装包体验。`packaging/release.py --build` 经 run.py（diag-experience-release-build）完成生产前端、`cargo tauri build`、ad-hoc 签名、发货文件检查与 dmg 生成，`hdiutil verify` 通过；脚本最后一步「Real build 1 predecessor required」（旧升级生命周期对比）失败，发生在 dmg 生成与校验之后，属 ADR-064 移除旧版兼容后的遗留检查，未改动。
 - 安装包：`evidence/releases/T23-20261111T072826-91036f4c/MocVideo-0.1.0-build2-macos-arm64-personal.dmg`（SHA256 ae8b0f375b117ba818948b79357973cba52c77c6cfa848d2ee1f3ae549ac3129，14.9 MB），副本 `/Users/eason/jp/deliverables/moc-video/`。挂载核对：Frameworks 含四个 FFmpeg dylib，`codesign --verify --deep --strict` 通过，rpath 仅 `@executable_path/../Frameworks`，可执行文件无本机路径。个人使用 ad-hoc 签名，未公证。
+
+## T0.46 元数据解耦与多源自动选线 阶段门 2026-11-11T09:00:00Z
+- 结果：AUTHORIZED
+- 授权：用户在 2026-11-11 聊天中对 ADR-069 的 D7 答复「按建议处理」（侧栏综艺改用 TMDB 真人秀/脱口秀类型，短剧、体育入口移除），并在前一条指示中要求「一起做优化」（见 ADR-069 及其补充）。
+- 备注：同日用户指示「只更新文档，不做代码实现」。T0.46 未开始开发；试做的按语言查询、第二级筛选与电影自动确认代码已撤回，实现要点记入方案文档 8.1、8.4 节。此前完成的第一级片名过滤（`fuzzy::related`）保留，未提交。
+
+## T0.46 取代记录 2026-11-11
+- 用户对 `docs/FOLLOWUP-PLAYBACK-SERVICE.md` Q1–Q8 答复「按建议批准」（ADR-070）。T0.46 未开发，按 Q6 从 TASKS 删除，由 T0.47–T0.49 取代；上方 T0.46 阶段门授权记录作为历史保留。T0.47–T0.49 已规划，尚未开始开发。
+
+## 播放服务方案修订与复审 2026-11-11T15:33:23Z
+
+- 来源：用户要求按九项审查意见修订方案、任务卡和 ADR，再复审；并明确「先不开始开发」，按娱乐应用放宽验收。
+- 文档：更新 `FOLLOWUP-PLAYBACK-SERVICE.md` 第 2 版、T0.47–T0.49 及需求覆盖、架构补充，追加 ADR-071 和第四期 BACKLOG；补齐配置端点访问、逻辑身份/当前记录、自动确认、测速等待、候选/线路有效期、自定义 Stremio 元数据、ID 转换、首次快照、持久令牌与日志脱敏。
+- 验收收敛：以相关自动检查和一次本机关键操作为主；长播、压力、多平台和完整故障矩阵按需安排，参数作为可调初值。保留当前数据、基本安全及关键播放流程检查，既有完成证据保持。
+- 文档检查：原 `task.py check` 通过（54 张卡）；方案 8 个 JSON/NDJSON 示例对象解析成功；`git diff --check` 通过。三张服务卡均未完成，T0.47 `authorized=False`，阶段门等待用户新的开发指令。
+- 独立只读复审：`docs/reviews/doc-review/round-57.md`，`DOC-REVIEW-VERDICT: CLEAR`；受审 `protected` 为 `a405a44974ee2af44cf49322defe304c1d85e635deb475597894083f745085b0`，ADR-071 摘要为 `68a4b8391923141b78ab222abaff596835c33d0e8317aba422f4dd103f01dd19`。复审发现的后两卡依赖文件范围缺口已补齐并复核。
+- 实现状态：业务开发、构建和播放验收 NOT RUN。本次没有启动开发驱动或服务。
+
+## 播放服务文档与远端 main 合并复核 2026-11-11
+
+- 授权：用户随后要求「review完成之后拉取最新代码并合并，然后再推送到main里」。本次仍仅文档同步，服务开发阶段门保持关闭。
+- 基线：取远端 main `bca68af7f5a36f24f4cbee64c641cc38da22c305` 的最新源码和文档，在临时克隆内集成；原工作区未提交应用改动与原暂存状态保留。原开发工作区与远端各自具有独立 Git 历史，本次采用远端 main 为父提交追加文档，保留远端已有提交。
+- 编号：远端 ADR-068–ADR-074 完整保留；本地播放服务原 ADR-068/069/070/071 依次顺延为 ADR-075/076/077/078。上方合并前记录及 round-57 的旧编号、摘要仍指其当时基线，最终引用以本条和 round-58 为准。
+- 网络：按远端已批准 ADR-068 接受内网、回环与 Fake-IP，保留固定 DNS、TLS、协议与凭据处理；App 的服务令牌限定到配置端点，局域网服务域名可用系统 DNS。方案、任务卡、架构和新 ADR 已同步。
+- 独立复审：`docs/reviews/doc-review/round-58.md`，`DOC-REVIEW-VERDICT: CLEAR`。受审 protected 为 `f0cb326abf5b9501c976263fcb8983cdae8429a23dbc75d2d96e847982d54d07`，ADR-078 摘要为 `ac35750afc3ba7a4b28ba185458d8ee5dd360ed9e4af3dc1941cdfafc6920f8d`。
+- 检查：路线结构 54 卡、ADR 编号唯一、远端决定前缀完整、文档差异检查通过；提交范围限定为本次方案、相关规划与复审记录。业务实现和播放验收仍为 NOT RUN。
+
+## 本地与远端代码合并 2026-11-12
+
+- 来源：用户要求「合并本地与远端的代码」。本次在原目录 `/Users/eason/jp/application` 完成实际代码合并。
+- 基线：本地原 HEAD 为 `7a70e34`，远端 main 为 `aaee8b0`；两边独立提交历史，以此前共同代码快照 `f311339` 做三方内容合并。合并前本地 473 个可见源码文件、原暂存/未暂存补丁、原 index 及 Git bundle 保存在 `evidence/merge-backups/20261112T012111Z/`；恢复分支为 `backup/local-before-merge-20261112t012111z`，本地完整快照提交为 `f66948f88507a7fabe2167664f2cdfde2c319955`。
+- 内容：接入远端字体下载/选择、完整重置/恢复、IP 放宽、播放线路优先级与错误页修复、Windows/Linux FFmpeg 和构建配置。保留本地跨源搜索片名过滤、过滤后取前十条及两处对应测试夹具调整；对比远端的应用代码差异仅上述五个文件。三方合并未产生内容冲突，原依赖、FFmpeg 动态库、缓存与本机证据保留。
+- 验证（当前 macOS arm64，经原 run.py 执行）：
+  - 原生库：237 PASS、0 FAIL、7 ignored；`evidence/runs/20261112T012239063313-diag-merge-native/output.log`。部分环境门控场景的返回沿原测试设计记录，未据此宣称真机 GUI 或其他平台通过。
+  - 前端：240 PASS；`evidence/runs/20261112T012449586139-diag-merge-frontend-tests/output.log`。类型检查与生产构建通过；`evidence/runs/20261112T012457757721-diag-merge-frontend-build/output.log`，保留既有包体积与动态导入提示。
+  - 集成：T05 16 PASS、T25 delivery 3 PASS；`evidence/runs/20261112T012502711485-diag-merge-integration/output.log`。
+  - 契约：31 命令、248 结构、89 语义、6 生命周期向量通过；`evidence/runs/20261112T012521253213-diag-merge-contracts/output.log`。
+  - 格式：初次检查发现本地新增过滤测试的排版差异（exit1，`evidence/runs/20261112T012522782730-diag-merge-format/output.log`），仅修正该测试排版后通过；`evidence/runs/20261112T012543236049-diag-merge-format-final/output.log`。修正后过滤测试再跑 2 PASS；`evidence/runs/20261112T012544640200-diag-merge-filter-final/output.log`。
+- 交付：生成保留本地快照与远端提交为双亲的本地 main 合并提交，使原工作目录接入远端提交历史。新播放服务 T0.47–T0.49 继续等待开发指令。
+- 未运行：GUI 实际播放、打包安装与 Windows/Linux 实机检查。
+
+## 播放服务任务细分与编号调整：规划审查预算 2026-11-12
+
+- 来源：用户要求播放服务使用 T1 系列、移动阶段顺延为 T2，随后指出仅三张阶段卡粒度过大，并明确借用 moc-init 拆分 `FOLLOWUP-PLAYBACK-SERVICE.md`。
+- 本轮目标：复用原项目与脚本，将已批准的三期服务方案拆成可独立交付/验收的 T1 功能卡，保留 T2 的六张移动卡、当前个人娱乐应用验收原则和各自启动授权门；仅规划。
+- 审查预算：最多两轮完整独立只读审查，共享 15 分钟；基础角度为需求覆盖、依赖可执行性、跨卡接口/状态衔接、编号和验收匹配。数据身份、凭据与短期句柄按已有要求核对；原平台及资源约束沿用。用量或费用不可获得时记录 NOT AVAILABLE。
+- 本次使用现有 `/Users/eason/jp/application/.venv/bin/python` 与原控制脚本，不重新初始化项目、替换 SPEC、升级控制器或启动开发/定时监管。历史完成卡、ADR 和证据保留。
+
+## 播放服务任务细分与 T1/T2 编号调整完成 2026-11-12
+
+- 规划：按用户指定的 moc-init 拆卡方法，原 T0.47 的范围细分为 T1.1–T1.5，原 T0.48 为 T1.6–T1.10，原 T0.49 为 T1.11–T1.15；原移动 T1.1–T1.6 顺延为 T2.1–T2.6。共 66 张卡：45 T0、15 T1、6 T2。
+- 每卡有上下文、输入、不变量、未决项、范围、验收范围、回归、交付消费者与唯一 suite/报告路径。三期 App 操作由 T1.5、T1.10、T1.15 承接，普通卡只验本卡；沿用个人娱乐应用规模。同步方案、架构、README、ADR-079、覆盖表、移动清单及其编号校验。
+- 保护：逐卡比对 HEAD，45 张原 T0 的定义摘要完全一致，六张移动卡正文仅预期编号变更；既有 ADR/进度/审查记录保留。当前 T1/T2 均无已执行状态，T1.1 和 T2.1 授权门关闭。
+- 实际检查：`task.py check` 通过（66 卡）；移动清单相关 `test_t25.py` 4 项通过（`evidence/runs/20261112T014311561677-diag-series-mobile-references/output.log`）。原 `scripts/validate.py` 经执行器运行，145 项中 137 通过、8 项平台相关跳过、0 失败，报告 `evidence/plan-split-20261112/script-validation.json`，日志 `evidence/runs/20261112T020155829131-diag-service-plan-controls/output.log`。这些为规划引用与控制检查，业务实现验收 NOT RUN。
+- 独立审查两轮：round-59 发现 D001（首卡缺契约文件修改范围）；作者另确认 D002（IPC 注册、权限和相关断言文件范围不足）。修订后 round-60 完整终审 CLEAR，未决 0；原始报告均保存于 `docs/reviews/doc-review/`。两轮约 4 分钟的已记录时钟采样，处于共享 15 分钟预算内，token/费用 NOT AVAILABLE。
+- 终审基线：`protected=43fdd084706396b2662856a0d56852d23cccbd6445b4e318d970b2c851f9f08f`；ADR-079 摘要 `d97712523f23bee44aa48aceb17fb2e5822e734c09ba11057dcc4cb8e52f8e2d`。旧版控制器没有 `doc-review` 子命令，按原流程核对报告真实 JSON 基线与末行；CLI 配置继续沿用 `workflow.json`，未启动开发或监管。
+
+## 项目磁盘清理 2026-11-12
+
+- 来源：用户要求任务卡完成后清理项目，只保留核心内容、减少磁盘占用。任务终审通过后执行，未改动已审规划或业务源码。
+- 清理范围：原目录内的两处 Rust target、实验 target、node_modules、dist、旧 Android 引擎下载工具、可重新取得的干净 FFmpeg 源码，以及重复的临时验收 App 包和非当前发行副本；共删除 459 项。另清理本会话创建且无未提交改动的临时同步副本。
+- 保护：删除前逐项核对属于忽略目录、没有被 Git 跟踪的文件，检查目标路径下的运行程序；502 个核心文件清理前后 SHA256 一致。保留原 Git 历史、venv、FFmpeg dist、本轮/历史报告日志、状态与原合并备份。
+- 交付材料：保留 `T23-current.json` 指向的 `T23-20261111T012916-b6916370`、最近体验包 `T23-20261111T072826-91036f4c` 和已有 clean-macos 历史材料；旧临时 App/发行副本已移除，其报告、manifest 和原结果继续保留，原二进制再次使用时需按记录重新构建。
+- 占用：项目从 31,913,906,176 字节降到 2,249,478,144 字节，减少 29,664,428,032 字节（约 27.63 GiB）。清单及结果在 `evidence/cleanup-20261112/inventory.json`、`result.json`，核心校验清单为 `core-files-before.json`；删除错误 0 项。
+- 后续构建：使用项目 venv 与原流程重新执行 `npm ci` 和需要的 Rust 构建；FFmpeg 二进制及头文件保留，需要源码时由原准备脚本按固定提交重新取得。清理后继续做任务结构、报告基线和 Git 完整性检查，避免通过重新构建恢复已清理的缓存。
+
+## T1 系列再次只读审查：范围与预算 2026-11-12
+
+- 来源：用户要求再次 review T1 系列，核对问题遗漏。本轮审查完整 15 卡及方案，重点检查实际代码到未来接口的接线、身份/观看记录与短期线路生命周期、需求与验收覆盖；沿用个人娱乐应用规模。
+- 预算：一轮新的独立完整审查，连同作者证据核对及问题对齐共 15 分钟；先独立读需求和当前工件，再参考既有报告。仅追加审查记录，不修改任务卡、业务代码或启动开发；不恢复已清理的依赖/构建缓存。
+
+## T1 系列再次只读审查结果 2026-11-12
+
+- 原始独立报告：`docs/reviews/doc-review/round-61.md`，结论 `DOC-REVIEW-VERDICT: BLOCKING`。新增 D003–D007 共 5 项 P2 规划/验收缺口：客户端实际播放结果上报、新服务播放可信会话及新历史写回、本地/直播在服务断连时的实际播放、同配置多 manifest 迁移、刷新时的逻辑线路身份保持。旧 D001、D002 仍为 FIXED。
+- 建议均复用现有任务与代表性场景，未增加长播/压力/平台矩阵或新业务功能。当前只记录审查意见，任务卡、方案、ADR 和业务代码均未修改，问题状态 OPEN。
+- 实际检查：`task.py check` 通过（66 卡，15 张 T1，18 项验收路径与 suite 唯一），DAG 和阶段门核对通过；当前 JSON Schema 实验接受同一配置的两个 manifest，与现有原生身份逻辑一致。读取了原生会话/进度保存、前端播放事件及 Stremio 官方流响应文档，未运行构建或业务验收。
+- 基线仍为 `protected=43fdd084706396b2662856a0d56852d23cccbd6445b4e318d970b2c851f9f08f`；任务卡和方案 SHA256 与 HEAD `d2dc781` 一致。两个开发授权门关闭，依赖和编译缓存仍保持清理状态。
+- 独立审查最终时钟采样 UTC 02:52:48，距声明起点约 547 秒，处于 15 分钟预算内。运行时模型标识、调用统计、token/费用 NOT AVAILABLE。
+
+## T1 审查缺口修订：范围与预算 2026-11-12
+
+- 来源：用户对 round-61 的五项遗漏回复「修复」。本轮修订方案、T1 对应任务与验收、架构和 ADR，继续使用现有 15 卡及 18 个 suite；业务代码和启动授权保持原范围。
+- 修订后的独立完整复审最多两轮，共享 15 分钟；逐项核对 D003–D007 的规则、输入输出与可观察断言，再检查完整 T1 的依赖和跨卡衔接。已有报告按其原基线保留。
+- 本轮仅文档修订与相关结构检查，保留已清理的依赖/构建缓存状态；开发仍等待用户另行指令。
+
+## T1 审查缺口修订完成 2026-11-12
+
+- 修订：方案更新为第 4 版，同步 T1 对应任务、架构、历史方案指针并追加 ADR-080。D003–D007 分别补齐实际播放结果上报、可信会话及新进度写回、服务断连时本地/直播实际播放、多 manifest 分组身份迁入，以及刷新时的唯一逻辑线路定位；复用原任务和短时代表性样本。
+- 独立复审：round-62 确认上述五项 FIXED，发现 D008（一期 App 搜索验收改写遗漏）；恢复搜索、分页、连接校验、配置变更失效和待测等待等原有要求后，round-63 完整终审 CLEAR，未决 0 项。两份报告原样保存在 `docs/reviews/doc-review/`；最终采样 UTC 04:12:55，距共享预算起点约 719 秒，处于两轮/15 分钟预算内；模型、token/费用 NOT AVAILABLE。
+- 终审基线：`protected=d42362df5dbf561f7c8dffa3c471ab90c3040b0939bc2748ac0fc0b2c9fca418`；ADR-080 摘要 `0fac3bd17d9141865a363e14865cc26f3ac0103eeb07148488f0c3cb23654bbe`。使用原控制器重新计算 protected/完整 ADR 映射，与 round-63 JSON 精确一致，报告末行为 CLEAR。
+- 实际检查：`task.py check` 退出码 0，共 66 卡、15 张 T1、18 项 T1 验收；原验收 argv、报告路径、kind、超时及全部旧 cases 保留，51 张 T0/T2 定义摘要与 HEAD 一致，既有 ADR 前缀保留。受审文件摘要、开发门、改动清单和 `git diff --check` 核对通过。
+- 实现状态：T1 全部待开发，T1.1/T2.1 授权门关闭；业务实现、构建、服务运行、第三方接口及 App 实际播放验收 NOT RUN。本轮仅变更 9 份文档/审查记录；控制脚本与业务源码未修改，已清理的 node_modules 和 Rust target 继续保持清理状态。
+
+## T1.1 阶段授权 2026-11-12T04:24:43+00:00
+
+- 结果：AUTHORIZED
+- 授权：用户在当前聊天明确指示「开始进行T1系列任务的实现」。
+- 范围：T1 系列；T2 的独立阶段门继续按原要求处理。
+
+## T1.1 服务骨架、共享代码与持久鉴权 2026-11-12T04:35:21+00:00
+
+- 结果：DONE
+- 来源：用户指示「开始进行T1系列任务的实现」并允许在当前聊天逐卡开发和跟进验收。
+- 实现：建立 Rust workspace、服务与共享 crate，提供配置、SQLite 初始化、Bearer 鉴权、health、私有持久令牌、Docker 与关闭访问日志的反向代理示例，并记录 OpenAPI 契约。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T043453088555-A1/output.log`；容器验收 3 项通过，覆盖健康响应、缺失/错误令牌、令牌重启复用、环境变量优先、数据库初始化、日志脱敏与资源清理。服务容器硬限制 512 MiB、构建硬限制 2048 MiB，宿主采样峰值和限制之和见 `evidence/acceptance/T1.1-A1.json`；实际构建容器曾核对硬限制 2147483648 字节。
+- 补充检查：稳定源码 `cargo check --locked --workspace` 通过，日志 `evidence/runs/20261112T042850924072-diag-t11-cargo-stable/output.log`；共享 App 代码未迁移。
+
+## T1.2 TMDB 元数据、语言与稳定内容身份 2026-11-12T04:54:12+00:00
+
+- 结果：DONE
+- 实现：服务提供按令牌和语言隔离的 TMDB manifest、catalog、搜索与详情；补齐首页所需目录，保持电影/剧集、`tmdb:` 及 IMDb/季集身份。上游使用固定公共 DNS、有限响应及超时，不输出密钥；共享 TMDB 展示映射供 App 与服务复用。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T045124693912-A1/output.log`；受控上游容器检查三项通过，覆盖目录和搜索分页、语言、别名、IMDb/无 IMDb 季集、身份冲突、无效密钥及脱敏；按容器硬上限与宿主采样合计核对资源。
+- 相关回归：原桌面 App TMDB Host 与身份两项测试通过，日志 `evidence/runs/20261112T044736891405-diag-t12-app-tmdb/output.log`；服务鉴权三项通过，日志 `evidence/runs/20261112T045257946854-diag-t12-core-regression-final/output.log`。桌面编译、前端构建及 Compose 配置检查通过。
+- 发布兼容：为共享 crate 调整现有第三方清单处理并同步桌面锁摘要；Docker 运行时提供 TLS 所需证书及库。任务范围补录上述实际涉及文件。真实 TMDB 网络和密钥验证 NOT RUN，使用受控样本。
+
+## T1.2 最终验收 2026-11-12T04:54:57+00:00
+
+- 结果：DONE
+- 更正：上条 DONE 记录写入后，原控制器发现 Compose 配置晚于验收而拒绝完成登记；已对最终文件重新运行验收，旧记录及结果保留。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T045433887799-A1/output.log`；3 项通过，涵盖最终版本的 TMDB 路由、身份、密钥及容器资源检查。
+- 原桌面 App 两项 TMDB/身份回归及服务鉴权回归此前均通过；真实 TMDB 网络及完整发布流程 NOT RUN。
+
+## T1.3 元数据缓存与首次、每日首页快照 2026-11-12T05:05:02+00:00
+
+- 结果：DONE
+- 实现：新增按来源、版本、类型、语言和请求筛选隔离的 SQLite 元数据缓存，按目录/搜索/详情及连载状态设置有效期。首页首次缺失时后台生成，准备中返回 ENGINE_NOT_READY；按配置时区 04:00 刷新，成功原子保存，重启加载，失败保留上次快照并在 health 显示原因。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T050239814459-A1/output.log`；3 项容器场景通过，覆盖准备中搜索/详情、缓存命中与过期、身份隔离、重启和失败保留；受控时间单元检查每日时区切点。资源限制和宿主峰值见 `evidence/acceptance/T1.3-A1.json`。
+- 相关回归：T1.2 元数据目录、详情及鉴权三项通过，日志 `evidence/runs/20261112T050426796115-diag-t13-tmdb-regression-final/output.log`。真实 TMDB 网络请求 NOT RUN；按计划使用受控上游。
+- 范围：补充 `server/README.md`，说明更新时区和检查间隔。
+
+## T1.4 Stremio 元数据登记、代理与配置导入 2026-11-12T05:20:33+00:00
+
+- 结果：DONE
+- 实现：服务提供鉴权来源列表、逐扩展导入、更新和删除，持久保存原配置、扩展键、命名空间规则及顺序；重复导入复用来源 ID。按 manifest 声明代理目录、搜索、分页和详情，保留路径编码、缓存、CORS 与语言状态。已识别的 TMDB 扩展沿原语言路径规则处理。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T051739614776-A1/output.log`；4 项通过，覆盖两个扩展同 ID 隔离、部分失败、重复导入、重启回读、所需 extra、能力状态和含斜杠 ID；单元检查跨地址凭据及已知语言路径。
+- 相关回归：TMDB 三项通过 `evidence/runs/20261112T051927877800-diag-t14-tmdb-regression-verified/output.log`；首页缓存三项通过 `evidence/runs/20261112T051952285136-diag-t14-home-regression-verified/output.log`。容器硬限制与宿主峰值见 `evidence/acceptance/T1.4-A1.json`；外部扩展实网 NOT RUN。
+
+## T1.5 App 接入服务与当前历史、收藏衔接 2026-11-12T05:59:47+00:00
+
+- 结果：DONE
+- 实现：App 增加服务连接、受限原生传输及来源导入；同配置的扩展在全部成功并回读后启用代理，部分失败保留原配置并可重试。原 addon key 和命名空间规则保持，令牌留在设置及宿主内；服务地址、令牌变更使传输重新同步。补齐新命令权限、设置契约和类型。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T055809947330-A1/output.log`；4 项通过，覆盖真实宿主与受控 Docker 服务的鉴权、跨 origin 跳转拒绝、两个扩展的部分失败/重试、搜索、历史收藏、服务重启和凭据脱敏。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T055842845648-A2/output.log`；隔离 macOS App 窗口人工操作及受控服务记录在 `evidence/manual/T1.5-service-window.json`。实际核对两个扩展同 ID 的详情、历史和收藏，中英文 TMDB 目录/搜索，原记录从 7 秒续播并推进到 10 秒，服务断连提示及重试，未配置服务时原 TMDB，以及变更测试地址和令牌后的两条收藏。窗口资源为一次宿主 RSS 与容器硬上限合并采样，非连续峰值。
+- 相关回归：状态与重连 26 项通过 `evidence/runs/20261112T055244987966-diag-t15-state-regression/output.log`；Stremio 扩展 4 项通过 `evidence/runs/20261112T055855069573-diag-t15-stremio-regression/output.log`；契约检查、前端类型及构建通过。窗口发现字体命令参数命名不一致并修复；实际重启后字体正常加载。
+- 环境：使用独立测试应用标识和资料目录，测试结束清理自建容器、卷、镜像及隔离资料；未使用真实服务密钥，真实第三方网络和其他平台 NOT RUN。因共享依赖与验收需要，恢复了 npm 依赖和本机编译产物。
+
+## T1.6 播放源管理与 MacCMS JSON/XML 适配 2026-11-12T06:17:34+00:00
+
+- 结果：DONE
+- 实现：增加鉴权播放源增删改、启停、版本、检查与逐项导入；支持 App 原 MacCMS 配置及 TVBox/zyfun 的 JSON/XML 格式，暂未接入类型标为跳过。适配器搜索/详情生成分组、剧集及可唯一验证的逻辑定位信息，保留配置头、ext、解析器引用及原始地址。共享分组拆分供原 App 复用，跨 origin 仅保留公开协商头。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T061700610507-A1/output.log`；3 项通过，覆盖 JSON/XML 的实际搜索详情及签名 URL、分组、可验证定位、检查/启停/版本、错误、幂等导入和跳过未支持类型。受控服务与上游容器硬上限及宿主采样见 `evidence/acceptance/T1.6-A1.json`。
+- 相关回归：原 App 分组顺序、URL 保真和歧义两项通过 `evidence/runs/20261112T061230375626-diag-t16-app-maccms-regression/output.log`；Stremio 四项与 TMDB 三项通过，分别记录于 `evidence/runs/20261112T061250301016-diag-t16-stremio-regression/output.log`、`evidence/runs/20261112T061315887203-diag-t16-tmdb-regression/output.log`。服务 OpenAPI 验证通过；外部来源实网 NOT RUN。
+- 范围：补入 `src-tauri/src/maccms.rs` 和 `server/src/metadata/http.rs`，用于共享拆分与受影响的通用传输；相关回归如上。
+
+## T1.7 跨源匹配、对应关系与撤销 2026-11-12T06:31:02+00:00
+
+- 结果：DONE
+- 实现：共享原 App 的片名规范化与过滤，提供双查询、整页先过滤、类型/年份/目标集筛选和自动或人工候选；持久对应关系按元数据来源、类型、影片及播放源隔离，保留确认方式和证据，用户撤销单独记账。复用前重新核对内容身份和目标集，正常增集保留对应关系。提供列表与撤销接口；查找生命周期及 POST 确认由 T1.8 接入。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T062846543925-A1/output.log`；4 项通过，覆盖无关全文结果、尾年冲突、衍生内容、未知类型、重复/缺失目标集、同名候选、用户撤销、来源/类型隔离、增集与身份冲突。容器硬上限和宿主峰值见 `evidence/acceptance/T1.7-A1.json`。
+- 相关回归：原 App 片名规范化及搜索 3 项通过 `evidence/runs/20261112T062651203824-diag-t17-app-fuzzy-regression/output.log`；季集规则 13 项通过 `evidence/runs/20261112T062712979916-diag-t17-episode-regression/output.log`。服务 OpenAPI 已验证；外部来源实网 NOT RUN。
+
+## T1.7 日志路径更正 2026-11-12
+
+- 上条季集规则回归日志的正确路径为 `evidence/runs/20261112T062712979917-diag-t17-episode-regression/output.log`，结果 13 项通过。
+
+## T1.8 线路查找流、确认与短期生命周期 2026-11-12T07:09:54+00:00
+
+- 结果：DONE
+- 实现：提供鉴权 NDJSON 查找、候选确认、取消、线路刷新和播放结果上报。查找/候选与已签发线路分别持有短期记录，地址只留内存；按来源版本和目标身份校验，确认提交前再次核对取消、来源及元数据版本。刷新以可验证线路定位信息唯一匹配，消失/歧义时废止旧句柄；统计持久键为不含地址的摘要。新增记录数量和字节上限、查找结束后的有效期续期及独立失败状态。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T070659724903-A1/output.log`；5 项通过，覆盖多来源与失败、候选串用、延迟确认、取消与确认并发、来源/元数据变更、短期缓存、过期与重启、线路重排/消失/歧义、断流终止及统计隔离。容器硬上限和宿主峰值见 `evidence/acceptance/T1.8-A1.json`。
+- 相关回归：T1.7 匹配/撤销四项通过 `evidence/runs/20261112T070607359698-diag-t18-matching-regression-latest/output.log`；Stremio 登记/代理四项通过 `evidence/runs/20261112T065936538801-diag-t18-stremio-regression/output.log`。OpenAPI 已补充查找事件与线路结构并通过验证。
+- 范围：补入 `server/src/matching.rs`，向查找核心交付确认所需的内部详情与缺集状态。外部来源实网 NOT RUN。
+
+## T1.9 App 原生查找轮次、测速与播放接线 2026-11-12
+
+- 结果：DONE
+- 实现：接入七个宿主命令，原生保存线路地址和请求头，核对元数据目标及来源版本；并发探测文件和 HLS，支持人工选择、候选确认、刷新、取消及过期重查。选定线路登记独立播放上下文，播放会话绑定历史与结果上报；重复和迟到上报被拦截，上报失败保留诊断并继续保存进度。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T073706088534-A1/output.log`；5 项通过。覆盖探测等待与手动优先、候选确认、取消后打开已选线路、会话历史校验、来源变更及 410 重查、结果去重和上报失败后的保存。受控服务和上游容器及资源采样见 `evidence/acceptance/T1.9-A1.json`。
+- 相关回归：宿主契约、权限和网关 16 项通过，`evidence/runs/20261112T073517488795-T19-host-regression-fixed/output.log`；前端接口和播放器 58 项通过，`evidence/runs/20261112T073529632082-T19-api-regression/output.log`；类型检查和契约检查通过。回归中发现旧测试将命令数固定为 31，已更新为包含新增七项的 38 并复验。外部来源实网及其他平台实机 NOT RUN。
+
+## T1.10 App 多源选线界面、迁移与播放闭环 2026-11-12
+
+- 结果：DONE
+- 实现：详情页展示来源、探测状态和待确认候选；支持自动选线、手动换线、过期重查和继续播放。实际画面推进及媒体失败通过宿主上报；来源配置支持服务端管理及逐项迁入，成功项移除本地副本，失败或服务配置变化时保留。服务播放历史按会话记录并可重启续播；旧全局播放源入口及原生旧匹配权限已移除，浏览器预览保留原有演示契约。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T081732442289-A1/output.log`；4 项通过，覆盖自动和手动选择、候选确认、取消和过期重查、迁入失败保留、元数据来源独立以及播放推进/失败上报。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T081740740214-A2/output.log`；4 项窗口观察记录通过。隔离 Mac 窗口观察到 HLS 和文件播放、人工确认、失败后换线、服务成功/失败统计、SQLite 进度与重启续播，以及服务停用时本地与直播画面推进。完整窗口场景在最终移除旧线路记忆初始化前执行；该一行变更后的最终构建复验了来源迁入和服务播放，区别记录在 `evidence/manual/T1.10-service-window.json`。
+- 相关回归：T1.9 线路查询/会话 5 项通过 `evidence/runs/20261112T081519612889-T110-t19-regression/output.log`；T1.5 元数据及原记录 4 项通过 `evidence/runs/20261112T081556174454-T110-t15-regression/output.log`；宿主接口与权限 16 项通过 `evidence/runs/20261112T081713247217-T110-host-regression-fixed/output.log`；播放器和接口 59 项、类型检查及契约检查通过。测试容器、隔离资料和临时媒体已清理。其他平台及外部真实来源 NOT RUN。
+
+## T1.10 复核补充 2026-11-12
+
+- 结果：REOPENED
+- 在接续 T1.11 时对照方案 D4、D7 发现：失败后目前提供手动换线，仍需自动尝试其他可用线路；综艺入口仍需改由服务元数据提供。此前完成记录保留，先补齐这两处再重新验收。
+
+## T1.10 自动换线与综艺分类补充 2026-11-12
+
+- 结果：DONE
+- 实现：媒体失败后按当前查找结果依次尝试尚未使用的可用线路，保留目标和进度；手动提前选线时会等待其他在途测速。综艺入口使用当前元数据来源提供的综艺目录，短剧及体育入口保持移除。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T082850257764-A1/output.log`；4 项通过，包含失败自动换线、已测线路去重、提前选择后等待测速和失败事件触发恢复。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T082900129281-A2/output.log`；4 项窗口观察记录通过。补充构建的真实窗口展示了服务综艺目录；受控故障触发自动切换，原进度约 11 秒得以保留，服务记录该线路失败。窗口观察后补加的在途测速等待由自动测试验证，版本差异已写入 `evidence/manual/T1.10-service-window.json`。
+- 相关回归：目录、接口及播放器 61 项通过 `evidence/runs/20261112T082829294303-T110-followup-regression/output.log`，类型检查通过 `evidence/runs/20261112T082837763654-T110-followup-types2/output.log`。受控测试容器和隔离应用资料已清理。
+
+## T1.11 T4 查询式与 DRPYJS0 接口适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `t4_query` 和 `t4_drpyjs0` 来源，接入搜索、详情、播放、来源检查与查找/刷新。保留配置扩展和请求头，按清晰度名称形成可验证的子线路身份；重排保持身份，重复或消失返回 410。解析标记保留为待嗅探状态，接口声明 HLS 时支持无后缀地址，DASH 和网络 MKV 显示不支持。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T084750379936-A1/output.log`；4 项通过，覆盖两类参数、TVBox type 4 导入、扩展参数、字符串和数组播放地址、头部、空头回退、HLS 提示、解析标记、异常响应及线路重排/歧义。
+- 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T084723945336-T111-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T084616551471-T111-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T084824983962-T111-openapi/output.log`。
+- 兼容范围：按 [zyfun 查询式适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Drpys.ts)、[DRPYJS0 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4DrpyJs0.ts)和 [drpy-node T4 文档](https://github.com/zourjke/drpy-node/blob/main/docs/t4api.md) 的 GET 查询及 JSON 响应实现；同名服务的其他私有参数仍需对应样本。外部来源实网 NOT RUN。
+- 范围：补入匹配、对应关系和短期线路状态模块以接入统一分发；任务开始后为补齐 T1.10 恢复/综艺而先完成的六个界面文件列入范围，仅用于覆盖已提交的基线变化。
+
+## T1.12 T4 REST（CatVod）接口适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `t4_rest` 来源，按来源版本初始化并调用 POST `/search`、`/detail`、`/play`；初始化扩展和返回的可选上下文随来源隔离。未返回独立上下文的服务按接口地址串行初始化和请求，避免共享状态串用；配置变更重新初始化，错误来源单独失败。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T085803711205-A1/output.log`；2 项通过，覆盖初始化和请求体、播放地址及头、两个独立上下文、同地址共享状态隔离、配置变更及单来源初始化失败。
+- 相关回归：T1.6 JSON/XML 来源管理 3 项通过 `evidence/runs/20261112T085830194469-T112-t16-regression/output.log`；T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T085901982739-T112-t18-regression/output.log`；服务 OpenAPI 通过 `evidence/runs/20261112T085947629379-T112-openapi/output.log`。
+- 兼容范围：路由和基础请求体按 [zyfun CatVod 适配器](https://github.com/Hiram-Wong/zyfun/blob/main/src/main/services/FastifyService/routes/v1/film/cms/adapter/t4Catvod.ts) 实现；`init.ext` 和返回 `context` 是本次受控样本验证的可选约定。POST 重定向限同源 307/308。外部服务实网 NOT RUN。
+- 范围：补入共享 HTTP 传输模块以支持 POST，延续现有 TLS、响应上限及跨源保护。
+
+## T1.13 Stremio 播放扩展与电影、剧集 ID 适配 2026-11-12
+
+- 结果：DONE
+- 实现：新增 `stremio_stream` 来源，读取并缓存实际 manifest 能力；按资源、类型、前缀和已核实的 IMDb/登记命名空间选择电影或剧集 ID。仅将 HTTP(S) 流交给播放器，传递扩展声明的播放头；BT 忽略，外链及不支持格式返回原因。刷新按视频哈希或不含查询参数的稳定地址定位，缺少特征、重复或消失时返回 410。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T091652923511-A1/output.log`；4 项通过，覆盖电影/剧集 ID、不同元数据来源同名 ID、manifest 能力和资源前缀覆盖、缺 IMDb、类型/格式限制、播放头、持久能力及重排/重复/消失的刷新身份。
+- 相关回归：T1.8 查找生命周期 5 项通过 `evidence/runs/20261112T091506435382-T113-t18-regression/output.log`；该回归后对资源级前缀继承作了小幅修正，最终 A1 已覆盖修正后的 TMDB 和第三方元数据；服务 OpenAPI 验证通过 `evidence/runs/20261112T091606127511-T113-openapi/output.log`。
+- 兼容依据：[Stremio manifest](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md)、[stream](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md) 与 [stream 请求](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/requests/defineStreamHandler.md)。带未知查询参数且没有视频哈希的流保守要求重查；外部真实扩展和其他平台实机 NOT RUN。
+- 范围：补入短期线路状态模块，用于保留扩展不支持原因；来源能力保存在现有元数据缓存中，来源检查会主动刷新。
+
+## 本地视频沉浸式播放页 2026-11-12
+
+- 按用户补充要求，本地文件改用与其他来源共用的沉浸式播放器，保留返回、进度、倍速、字幕、错误重试和文件会话释放；本地观看历史沿现有会话绑定保存。
+- 验证：隔离 Mac 窗口中 MP4 播放、返回列表、退出后从约 20 秒续播，以及 MKV/HLS 内嵌字幕实际显示；观察记录见 `evidence/manual/local-immersive-player.json`。补充的迟到会话清理和重试身份保护已通过类型检查；隔离应用和资料已清理。
+- 回归：本地会话及播放器、历史和目录共 71 项通过 `evidence/runs/20261112T092930635019-local-player-regression/output.log`；服务选线 13 项通过 `evidence/runs/20261112T093026759938-local-player-service-regression/output.log`；最终类型检查通过 `evidence/runs/20261112T093208459035-local-player-check-final/output.log`。
+
+## T1.14 JSON 解析接口管理与按 flag 解析 2026-11-12
+
+- 结果：DONE
+- 实现：新增解析器配置、启停与删除；按来源关联和 flag 选择解析器，保留原线路定位，分别处理解析请求头和播放请求头。配置变更清除短期缓存并保护在途查询；已有线路刷新读取新配置。网页、缺失字段和接口失败返回明确原因。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T094211963782-A1/output.log`；3 项通过，覆盖 parse/jx、地址编码、签名参数、字段及请求头、错误响应、配置变更和刷新。
+- 相关回归：线路生命周期 5 项通过 `evidence/runs/20261112T094416085704-T1.14-regression-lookup-lifecycle/output.log`；T4 查询和 DRPYJS0 4 项通过 `evidence/runs/20261112T094502247282-T1.14-regression-t4-query-adapters/output.log`；T4 REST 2 项通过 `evidence/runs/20261112T094520123974-T1.14-regression-t4-rest-adapter/output.log`；OpenAPI 格式校验通过。
+- 兼容范围：JSON 字段路径和页面 URL 参数可配置，实网解析接口 NOT RUN。补入短期线路状态模块，用于识别配置更新期间的在途结果。
+
+## T1.15 多类型配置导入与三期 App 联调 2026-11-12
+
+- 结果：DONE
+- 实现：按 TVBox、zyfun 3.4.1+ 和旧版分别识别来源/解析器类型，解析相对 URL 与关联项，逐项报告导入、跳过或失败，重复导入沿用身份。应用支持各已实现来源、粘贴导入、逐项结果与手动刷新线路；线路失效时清除来源缓存，重查保留目标集及续播进度。
+- 验收 A1：PASS；日志：`evidence/runs/20261112T100412113248-A1/output.log`；3 项通过，覆盖两类配置、两代 zyfun 解析器编号、地址/关联、幂等、失败保留和线路 410 后的缓存清理。
+- 验收 A2：PASS；日志：`evidence/runs/20261112T100446209599-A2/output.log`；2 项窗口记录通过。受控桌面应用中，导入的 T4、Stremio 线路均播放；T4 解析请求头生效。移除 Stremio Primary 后刷新触发重查，旧线路消失，选择 T4 后同一集从约 20 秒续播。窗口观察与限制见 `evidence/manual/T1.15-provider-window.json`。
+- 相关回归：线路生命周期 5 项 `evidence/runs/20261112T100332691317-T1.15-final-lookup-lifecycle/output.log`，MacCMS 来源管理 3 项 `evidence/runs/20261112T100405661602-T1.15-final-playback-sources/output.log`，选线界面 4 项 `evidence/runs/20261112T100408416977-T1.15-final-app-source-selection/output.log`，播放器与选线 17 项 `evidence/runs/20261112T100424696621-T1.15-final-ui-regression/output.log`；OpenAPI 校验通过 `evidence/runs/20261112T100427577108-T1.15-final-openapi/output.log`。
+- 环境与范围：macOS arm64 隔离 App、Docker 服务及受控上游；外部真实来源、其他平台实机 NOT RUN。类型与版本依据 [zyfun 数据结构](https://github.com/Hiram-Wong/zyfun#-数据结构)；脚本、jar、网页嗅探按配置结果列为跳过。使用说明见 `server/README.md`。本卡补入详情页、App 和线路生命周期文件以实现手动刷新及续播恢复；测试资源已清理。
+
+## T1 审查修复：季集匹配、确认后线路与对应关系语言 2026-11-12
+
+- 来源：用户要求审核 T1 系列实现后选择「Fix first three」，修复审查报告的三项高优先级问题；规则变化见 ADR-081，方案 6.4、6.5 已同步。
+- 季集匹配：不带季号的集标签按来源片名季标「第X季」「Season X」「SX」定季，TMDB 第 0 季特别篇不再使单季剧集无法对应；多季剧集的无季标条目按第一季提供候选并附 `season_unverified`，须人工确认；剧集片名去掉季标后也参与一致比较。对应关系键加入目标季，电影为 0，服务启动时迁移已有记录并保留确认方式。修改 `server/src/matching.rs`、`server/src/mappings.rs`、`server/src/db.rs`、`protocol/service.openapi.json`。
+- 确认后线路：App 选线等待预算改为初次查找、确认候选、刷新线路各 45 秒；测速结果只计入仍在测试中的线路。修复前，整轮开始 45 秒后经人工确认到达的线路直接标为超时，`play_line` 拒绝播放；`refresh_line` 也在 45 秒后一律要求重查。修改 `src-tauri/src/line_round.rs`、`src-tauri/src/host.rs`。
+- 对应关系语言：复用时只核对来源片名、来源类型、来源年份及元数据类型、年份；切换应用语言后，用户确认过的对应关系继续复用。
+- 验证：服务端与共享 crate 单元测试 13 项通过（新增季标识别、特别篇与多季对应、语言无关复用、对应关系迁移与按季保存 4 项），2 项需 Docker 夹具的保持忽略；OpenAPI 校验通过；格式检查通过，改动文件无新增 clippy 警告。App crate 单元测试 239 项中 238 项通过，新增「预算过后确认的线路仍被测速并自动选中」测试；去掉每段预算后该测试复现原问题（线路状态为 timeout）。失败的 1 项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets` 仅在全量并发运行时出现，单独运行 4 次均通过，修改前的基线代码全量运行同样失败，与本次修改无关。t05 契约 16 项、前端测试 244 项、服务选线夹具 14 项通过。
+- 未运行：Docker 验收套件（T1.7、T1.8、T1.9、T1.10 等）及真实 App 窗口检查 NOT RUN；多季剧集与特别篇的实际来源样本 NOT RUN。
+
+## T1 审查修复：片名尾部数字与过期线路 2026-11-12
+
+- 来源：用户选择「修第1、2项」；规则见 ADR-081 补充，方案 6.4 与第 8 节 `play_line` 说明已同步。
+- 片名尾部数字：元数据片名本身以同一四位数结尾时，候选标题末尾的该数字属于片名，不作年份核对；修复前《银翼杀手2049》《1917》《2046》等会因「尾年」与元数据年份冲突被整条排除。修改 `server/src/matching.rs`。
+- 过期线路：`play_line` 发现所选线路已过服务的 `expires_at`（默认 60 秒）时先原地刷新并测速再播放；刷新返回 410 或测速未通过时返回 `SESSION_EXPIRED`，App 照旧重查。修复前，浏览列表超过 60 秒再选线、或播放中自动换线，都会直接丢弃整轮结果重新查找。修改 `src-tauri/src/host.rs`。
+- 测试调整：T1.9 宿主测试 `t19_native_service_round_and_session` 末尾新增过期线路刷新段，其 Docker 服务的地址缓存期设为 5 秒，用例 3 核对 `T19:expired-line-refresh`；T1.7 验收种子数据改为按列名写入 `mappings`，以适配新增的 `season` 列。修改 `src-tauri/src/service.rs`、`tests/acceptance/playback_service.py`。
+- 验证：服务端与共享 crate 单元测试 14 项通过（新增片名尾部数字 1 项）。App crate 单元测试 238 项通过，失败的仍是基线即存在的并发偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets`。Docker 验收（报告写入临时目录，副本见 `evidence/acceptance/T1-review-fix/`）：T1.9 原生选线 5 项通过，T1.8 查找生命周期 5 项通过，T1.7 匹配 4 项通过；这三套同时覆盖上一条记录的季集、对应关系与 45 秒预算修复。T1.7 首次运行因种子 SQL 按旧列数写入而失败，修正种子后重跑通过，首次失败日志一并保留。反证：临时关闭 `play_line` 的刷新分支后，T1.9 新增段以原错误 `SESSION_EXPIRED "Line needs refresh"` 失败，其余各段通过；随后已还原。
+- 未运行：真实 App 窗口检查、T1.10 及以后的 Docker 验收套件、外部真实来源 NOT RUN。
+
+## T1 审查修复：其余问题 2026-11-13
+
+- 来源：用户指示「修复剩余项」；决定见 ADR-082，方案 5.8、5.9、6.6 已同步。
+- 解析器导入：读取 TVBox/FongMi 的 `ext.flag`、`ext.header` 与 zyfun 的 `ext.flag`、顶层 `header`，顶层 `flags`/`headers` 写法保留。修改 `server/src/main.rs`。
+- 线路统计：统计键去掉来源版本，来源改名、启停后统计保留；无可验证定位信息的线路不写统计行。修改 `server/src/line_cache.rs`、`server/src/reports.rs`。
+- 服务错误：App 沿用服务错误码（契约已有者）并显示服务的错误说明，例如新增来源时的「invalid source URL」。修改 `src-tauri/src/service.rs`。
+- 取消后确认：DELETE 取消查找后，进行中或之后的确认返回 409 `CANCELLED`，取消记录保留到原查找有效期结束。修改 `server/src/lookups.rs`、`server/src/state.rs`，OpenAPI 增加 409。
+- 缓存清理：服务每小时删除已过期的元数据缓存行。修改 `server/src/metadata/cache.rs`、`server/src/metadata/home.rs`。
+- 解析失败原因：区分 `parser_request_failed`、`parser_invalid_response`、`parser_url_missing`、`parser_url_invalid`、`parser_headers_invalid`、`parser_config_invalid`。修改 `server/src/adapters/json_parse.rs`，OpenAPI 说明同步。
+- 验收调整：T1.8 两处「取消后确认」断言由 410 改为 409 `CANCELLED`，并补测取消之后再次确认；T1.14 失败原因断言改为按网页、缺字段分别核对。修改 `tests/acceptance/playback_service.py`。
+- 验证：服务端与共享 crate 单元测试 18 项通过（新增解析器字段、统计跨版本、缓存清理、解析失败原因 4 项）；改动文件 clippy 警告数与修改前相同，OpenAPI 校验通过。App crate 单元测试 239 项通过（新增服务错误映射 1 项），失败的仍是基线即存在的并发偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets`；t05 契约 16 项、前端 244 项、服务选线夹具 14 项通过。Docker 验收（副本见 `evidence/acceptance/T1-review-fix-2/`）：T1.8 5 项、T1.9 5 项、T1.11 4 项、T1.13 4 项、T1.14 3 项、T1.15 3 项通过；T1.8 首次运行因第二处旧 410 断言失败，修正后重跑通过，首次日志保留。
+- 未执行：T1.10 遗留移除（内置 TMDB 直连、旧匹配/线路记忆、MacCMS 元数据代码）。移除内置 TMDB 直连会使 X1、X4、X8、N01、TV2 等已验收卡片的功能及直连测试下线，旧匹配代码是浏览器预览演示模式的依赖，待用户确认范围。真实 App 窗口检查 NOT RUN。
+
+## T1.10 内置 TMDB 去留修订 2026-11-13
+
+- 结果：DECISION（ADR-083）。用户选择保留 App 内置 TMDB 作为无服务时的后备；方案 Q5、第 8 节元数据说明及 T1.5、T1.10 卡片表述已同步，代码无改动。
+- 遗留：旧匹配/线路记忆与 MacCMS 元数据代码维持原生端拦截、浏览器预览使用的现状。已知偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets` 属保留的 X4 功能，仅在全量并发运行时失败，尚未处理。
+
+## Review 2026-11-13 — 执行器与来源请求头
+
+- 完成已授权的执行器调整：已完成任务遗留在 current 标记中时，后续非该卡验收命令独立记录，不继承其硬停止或消耗额度；该卡的原验收命令仍遵循硬停止。原失败记录及额度保持不变。相关反例 2 项通过：`evidence/runs/20261113T063916818219-review-workflow-tests/output.log`。
+- 核实并统一来源、解析器、T4、Stremio 的传输控制请求头校验；来源配置增加拒绝 `Transfer-Encoding`。服务单元测试 18 项通过、2 项夹具测试忽略：`evidence/runs/20261113T063920698520-review-service-unit/output.log`。
+- 来源回归：MacCMS 3 项、JSON 解析 3 项、T4 Query 4 项、T4 REST 2 项、Stremio 4 项及配置导入 3 项通过，日志分别为 `evidence/runs/20261113T064011152071-review-regression-playback-sources/output.log`、`evidence/runs/20261113T064155246826-review-regression-json-parser/output.log`、`evidence/runs/20261113T064200278786-review-regression-t4-query-adapters/output.log`、`evidence/runs/20261113T064206388889-review-regression-t4-rest-adapter/output.log`、`evidence/runs/20261113T064211546915-review-regression-stremio-stream-adapter/output.log`、`evidence/runs/20261113T064216525929-review-regression-provider-import-integration/output.log`。
+- HTTP 测量：8 次本地请求，当前实现与使用共享客户端的对照均建立 8 条连接，日志 `evidence/runs/20261113T063849897149-review-transport-measure/output.log`；未据此宣称性能改善。固定公共 DNS 及内网访问按 ADR-068/079 保留。同步 SQLite 等待及大文件维护成本属已确认设计风险，个人使用负载下的瓶颈尚无量化证据，留待实际测量后处理。
+
+## 字体随应用打包 2026-11-13
+
+- 按用户要求将 Noto Sans SC 和 Noto Serif SC 完整字体纳入应用资源，移除字体准备页面、运行时下载/IndexedDB 缓存和专用字体网关；启动与字体切换直接使用本地资源，加载期间回退系统字体。
+- 字体文件大小及 SHA-256 校验、字体偏好与缩放 2 项通过：`evidence/runs/20261113T070140396702-bundled-fonts-tests/output.log`；前端 241 项通过：`evidence/runs/20261113T070202196069-bundled-font-all-ui/output.log`；原生库测试 237 项通过、8 项忽略：`evidence/runs/20261113T070210597395-bundled-font-native/output.log`；契约检查通过：`evidence/runs/20261113T070620110349-bundled-font-contracts/output.log`。
+- 浏览器预览观察到主界面直接显示，设置中两款字体均可切换，浏览器字体状态确认两者已加载。最终 macOS arm64 应用构建及 DMG 校验通过：`evidence/runs/20261113T070621759964-bundled-font-release/output.log`、`evidence/runs/20261113T070803697715-bundled-font-dmg-check/output.log`。安装包无 Apple 签名及公证；最终 DMG 未做独立应用资料目录的离线桌面启动。
+
+## 服务端来源缓存与手动选线 2026-11-13
+
+- 用户要求来源信息由服务端访问、在数据库缓存一天，选中后下发播放地址；App 展示各来源状态及可用的清晰度、描述和大小，由用户手动选择。App 设置仅保留服务连接与日常使用项，原本地来源配置数据保留。
+- 服务端按影片、目标集、来源及解析配置缓存线路信息，稳定定位的结果跨重启复用；地址和请求头只保存在短期内存，缓存线路在选择后按需重新解析。缺少稳定定位的线路保留单项检测缓存，重查时访问来源。手动刷新、过期及配置变更触发重查或失效。
+- 服务端受控验收 5 项通过，覆盖线路状态、大小、24 小时有效期、数据库重启及过期、Stremio 描述、配置修订、失败刷新和选线后取址：`evidence/runs/20261113T081146313898-unified-source-final-cache/output.log`。原生端服务状态消费测试通过：`evidence/runs/20261113T081154246323-unified-source-final-host/output.log`；手动选线与恢复 13 项通过：`evidence/runs/20261113T081206389039-unified-source-final-ui/output.log`；前端全量 241 项通过：`evidence/runs/20261113T075321766794-unified-source-ui2/output.log`。
+- 隔离 macOS 桌面窗口中，T4 与 Stremio 两组来源显示可用性、大小及描述，点击其中一条后影片从约 7 秒播放至 10 秒；设置页仅显示服务连接、外观、字体、语言、播放及折叠的存储管理。独立测试应用和容器已清理；本次窗口观察先于最后的禁用来源状态和缓存失效修正，这些变更由自动化检查覆盖。
+
+## TMDB 地区筛选 2026-11-13
+
+- 服务端从 TMDB 国家和地区配置获取 ISO 代码，电影与剧集查询使用 `with_origin_country`；App 展示本地化地区名称，支持与类型、年份和语言组合，并保留适用的热门、最新排序。综艺分类的地区组合保持分类约束；选择地区后隐藏无法组合的趋势排序。
+- 受控服务验收 3 项通过：`evidence/runs/20261113T085233168068-tmdb-region-api-final/output.log`；原生端地区组合及分页、综艺分类、旧服务能力兼容分别通过 `evidence/runs/20261113T084901152715-tmdb-region-sort-test/output.log`、`evidence/runs/20261113T085227848840-tmdb-region-host-special/output.log`、`evidence/runs/20261113T085230509207-tmdb-region-host-legacy/output.log`。原类型/语言/排序相关回归 4 项通过，前端全量 241 项通过：`evidence/runs/20261113T085944680847-tmdb-region-final-frontend-tests/output.log`；契约与 OpenAPI 校验通过。
+- 隔离 macOS 窗口验证电影“香港”和剧集“日本”筛选及地区下的排序，受控上游分别记录 `HK` 和 `JP`；测试应用与容器已清理。地区含义为 TMDB 作品来源地，旧服务未声明该能力时选项不可用。

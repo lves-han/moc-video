@@ -1,0 +1,15 @@
+services:
+  playback-service:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      MOC_TMDB_KEY: ${MOC_TMDB_KEY:-}
+    volumes:
+      - playback-data:/data
+    restart: unless-stopped
+
+volumes:
+  playback-data:

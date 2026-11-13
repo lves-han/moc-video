@@ -1,6 +1,6 @@
 import { reactive } from "vue";
 import { api, Api, ApiFailure, settingsQueue, SettingsQueue } from "./api.ts";
-import { createPlayer, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
+import { createPlayer, nativeInvoke, sessionSource, UnsupportedMedia, type Player } from "./player.ts";
 import { t } from "./i18n.ts";
 import { captureLine, correspondingEpisode, createLinePreferences, preferredContent, preferredSelection, type LinePreference } from './line-preference.ts';
 import { sourceChecks } from './source-health.ts';
@@ -38,6 +38,10 @@ export function navigatePlayback(context: PlaybackContext) {
 }
 
 const sameRef = (a: Bridge_MediaRef, b: Bridge_MediaRef) => a.source_id === b.source_id && a.source_revision === b.source_revision && a.data === b.data;
+const serviceContext = (context: PlaybackContext | null) => {
+  try { return Boolean(context && JSON.parse(context.episode_ref.data)[0] === "service_line"); }
+  catch { return false; }
+};
 const failure = (cause: unknown): Bridge_ApiError => cause instanceof ApiFailure ? cause.error : {
   code: cause instanceof UnsupportedMedia ? "MEDIA_UNSUPPORTED" : "UPSTREAM_FAILED",
   message: cause instanceof Error ? cause.message : String(cause), retryable: !(cause instanceof UnsupportedMedia),
@@ -46,13 +50,17 @@ const failure = (cause: unknown): Bridge_ApiError => cause instanceof ApiFailure
 export function createPlaybackController(root: AppState = appState, client: Pick<Api, "call"> = api,
   ended: (context: PlaybackContext, epoch: number) => void = () => {},
   runtimeChanged: (runtime: RuntimeStatus) => void = runtime => { root.runtime = runtime; },
-  advanced: (context: PlaybackContext, epoch: number, session: string) => void = () => {}) {
+  advanced: (context: PlaybackContext, epoch: number, session: string) => void = () => {},
+  recoverService: (context: PlaybackContext, reason: 'expired' | 'failed') => void = () => {}) {
   const state = root.playback;
   const ui = reactive({ autoplayBlocked: false, diagnostic: "", action: "" as "" | "retry" | "reconnect", imageError: "" });
   let player: Player | undefined;
   let video: HTMLVideoElement | undefined;
   let tail: Promise<void> = Promise.resolve();
   let pendingResume: ResumeSnapshot | null = null;
+  let pendingLocalResume: number | null = null;
+  let pendingLocalSession: PlaybackViewSession | null = null;
+  let localMode = false;
   let wantsPlaying = false;
   let recovered = false;
   let reconnected = false;
@@ -67,9 +75,9 @@ export function createPlaybackController(root: AppState = appState, client: Pick
 
   function current(epoch: number, session?: PlaybackViewSession) {
     return epoch === state.playback_epoch && (guestEpoch === undefined || guestEpoch === root.runtime.cloudstream.engine_epoch)
-      && (!root.selected_playback_source || !state.context || sameSource(root.selected_playback_source, state.context.episode_ref))
+      && (localMode || serviceContext(state.context) || !root.selected_playback_source || !state.context || sameSource(root.selected_playback_source, state.context.episode_ref))
       && (!session || state.session?.session_id === session.session_id
-      && state.engine_epoch === root.runtime.engine_epoch && state.context !== null && sameRef(state.context.episode_ref, session.episode_ref));
+      && state.engine_epoch === root.runtime.engine_epoch && (localMode || state.context !== null && sameRef(state.context.episode_ref, session.episode_ref)));
   }
 
   async function request<C extends Command>(command: C, input: CommandInput<C>, host?: string) {
@@ -99,6 +107,11 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     state.error = error;
     ui.action = error.code === "UNAUTHORIZED" ? "reconnect" : error.retryable || ["SESSION_EXPIRED", "UPSTREAM_FAILED", "UPSTREAM_TIMEOUT"].includes(error.code) ? "retry" : "";
   }
+  function reportService(session: string, epoch: number, outcome: 'playing' | 'failed', errorCode?: string) {
+    void request('report_line_playback', { session_id: session, playback_epoch: epoch, outcome, ...(errorCode ? { error_code: errorCode } : {}) })
+      .then(result => { if (!result.reported && result.diagnostic && current(epoch)) ui.diagnostic = result.diagnostic; })
+      .catch(cause => { if (current(epoch)) ui.diagnostic = failure(cause).message; });
+  }
 
   function snapshot(): ResumeSnapshot | null {
     return state.context ? { context: structuredCloneContext(state.context), position_ms: state.position_ms, was_playing: wantsPlaying } : null;
@@ -118,20 +131,22 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     state.engine_epoch = runtime.engine_epoch;
   }
 
-  function load(context: PlaybackContext, options: { stream?: string; resume?: ResumeSnapshot | null; recovery?: boolean } = {}): Promise<void> {
+  function load(context: PlaybackContext, options: { stream?: string; resume?: ResumeSnapshot | null; recovery?: boolean; resolution?: Bridge_Resolution } = {}): Promise<void> {
     context = structuredCloneContext(context);
     if (options.resume && !sameContext(options.resume.context, context)) return Promise.reject(new Error("Resume context differs from playback context"));
     const epoch = ++state.playback_epoch;
+    localMode = false; pendingLocalResume = null;
     guestEpoch = root.sources.data?.providers.find(source => source.id === context.episode_ref.source_id)?.kind === "cloudstream"
       ? root.runtime.cloudstream.engine_epoch : undefined;
     player?.stop();
-    const keep = options.stream ? state.resolution : null;
+    const keep = options.resolution ?? (options.stream ? state.resolution : null);
     // Stream handles belong to one Resolution; a fresh resolve signs new IDs.
     if (!keep) {
       context.selected_stream_id = null;
       if (root.route.name === "playback" && root.route.context.match_id === context.match_id) root.route.context.selected_stream_id = null;
     }
-    retiring.push({ session: state.session, resolution: keep ? null : state.resolution });
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: keep && state.resolution?.id === keep.id ? null : state.resolution });
+    pendingLocalSession = null;
     state.session = null;
     state.resolution = keep;
     state.context = structuredCloneContext(context);
@@ -198,6 +213,37 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     return tail;
   }
 
+  function loadLocal(session: PlaybackViewSession, positionMs = 0): Promise<void> {
+    if (session.source_id !== "local" || session.episode_ref.source_id !== "local") return Promise.reject(new Error("Local session identity differs"));
+    const epoch = ++state.playback_epoch;
+    localMode = true; guestEpoch = undefined; pendingResume = null;
+    player?.stop();
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: state.resolution });
+    pendingLocalSession = session;
+    state.session = null; state.resolution = null; state.context = null;
+    state.phase = "preparing"; state.error = null; state.position_ms = Math.max(0, positionMs);
+    state.duration_ms = null; state.buffered = [];
+    pendingLocalResume = state.position_ms; wantsPlaying = true; recovered = false; reconnected = false;
+    ui.autoplayBlocked = false; ui.diagnostic = ""; ui.action = ""; queried.clear();
+    for (const id of pendingRequests) void client.call("cancel_request", { target_request_id: id }).catch(() => {});
+    tail = tail.then(async () => {
+      await drainRetired();
+      if (!current(epoch) || pendingLocalSession?.session_id !== session.session_id) return;
+      if (!player) throw new Error("Playback view is not mounted");
+      if (root.runtime.phase !== "ready" || !root.runtime.engine_epoch) await connect();
+      if (!current(epoch) || pendingLocalSession?.session_id !== session.session_id) return;
+      state.engine_epoch = root.runtime.engine_epoch;
+      state.session = session; pendingLocalSession = null;
+      player.open(sessionSource(session), { playback_epoch: epoch, engine_epoch: state.engine_epoch, session_id: session.session_id });
+      player.setVolume(state.volume); player.setSpeed(state.speed); video!.muted = state.muted;
+      player.selectSubtitle(session.subtitles.length ? 0 : null);
+      state.subtitle_id = session.subtitles[0]?.id ?? null;
+    }).catch(cause => {
+      if (current(epoch)) fail(failure(cause));
+    });
+    return tail;
+  }
+
   async function diagnose(original: Bridge_ApiError, epoch: number, session: PlaybackViewSession) {
     const key = String(original.details?.resource_key ?? "video");
     if (!current(epoch, session)) return;
@@ -222,11 +268,15 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       if (error.code === "SESSION_EXPIRED" && !recovered) {
         recovered = true;
         const resume = snapshot();
-        if (resume) await load(resume.context, { resume, recovery: true });
+        if (resume && serviceContext(resume.context)) recoverService(resume.context, 'expired');
+        else if (resume) await load(resume.context, { resume, recovery: true });
       } else if (error.code === "UNAUTHORIZED" && !reconnected) {
         reconnected = true;
         await reconnect(epoch);
-      } else fail({ ...error, details: { ...error.details, original_error: original } });
+      } else {
+        fail({ ...error, details: { ...error.details, original_error: original } });
+        if (state.context && serviceContext(state.context)) recoverService(structuredCloneContext(state.context), 'failed');
+      }
     } catch (cause) {
       if (current(epoch, session)) {
         const query = failure(cause);
@@ -248,22 +298,24 @@ export function createPlaybackController(root: AppState = appState, client: Pick
       state.duration_ms = event.duration_ms;
       if (video) state.position_ms = Math.max(0, Math.round(video.currentTime * 1000));
       if (!["playing", "paused", "buffering"].includes(state.phase)) state.phase = "ready";
-      if (pendingResume && event.duration_ms === null && pendingResume.position_ms > 0) ui.diagnostic = "恢复播放位置正在等待媒体时长";
-      if (pendingResume && (event.duration_ms !== null || pendingResume.position_ms === 0)) {
-        const resume = pendingResume;
-        pendingResume = null;
+      const positionMs = pendingResume?.position_ms ?? pendingLocalResume;
+      if (positionMs !== null && event.duration_ms === null && positionMs > 0) ui.diagnostic = "恢复播放位置正在等待媒体时长";
+      if (positionMs !== null && (event.duration_ms !== null || positionMs === 0)) {
+        const wasPlaying = pendingResume?.was_playing ?? true;
+        pendingResume = null; pendingLocalResume = null;
         if (ui.diagnostic === "恢复播放位置正在等待媒体时长") ui.diagnostic = "";
         if (event.duration_ms !== null) {
-          const position = Math.min(event.duration_ms, resume.position_ms);
+          const position = localMode && positionMs >= event.duration_ms - 5000 ? 0 : Math.min(event.duration_ms, positionMs);
           if (video!.currentTime !== position / 1000) player!.seek(position / 1000);
           state.position_ms = position;
         }
-        if (resume.was_playing) void play();
+        if (wasPlaying) void play();
       }
     } else if (event.type === "failed") {
+      if (serviceContext(state.context)) reportService(state.session.session_id, event.playback_epoch, 'failed', event.error.code);
       if (event.error.details?.reason === "AUTOPLAY_BLOCKED") { fail(event.error); ui.autoplayBlocked = true; ui.action = ""; }
       else if (event.error.details?.resource_kind) void diagnose(event.error, event.playback_epoch, state.session!);
-      else fail(event.error);
+      else { fail(event.error); if (state.context && serviceContext(state.context)) recoverService(structuredCloneContext(state.context), 'failed'); }
     } else if (event.type === "stopped") state.phase = "idle";
     else {
       state.phase = event.type;
@@ -288,9 +340,10 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   async function stop() {
     ++state.playback_epoch;
     player?.stop();
-    pendingResume = null;
+    pendingResume = null; pendingLocalResume = null; localMode = false;
     wantsPlaying = false;
-    retiring.push({ session: state.session, resolution: state.resolution });
+    retiring.push({ session: state.session ?? pendingLocalSession, resolution: state.resolution });
+    pendingLocalSession = null;
     state.session = null; state.resolution = null; state.context = null;
     state.phase = "idle"; state.position_ms = 0; state.duration_ms = null; state.buffered = [];
     state.error = null; ui.action = ""; ui.autoplayBlocked = false;
@@ -357,17 +410,20 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   }
 
   return {
-    state, ui, load, stop, play, pause, seek, reconnect, imageError, retryImages, receive,
+    state, ui, load, loadLocal, stop, play, pause, seek, reconnect, imageError, retryImages, receive,
     attach(element: HTMLVideoElement) {
       if (player) throw new Error("Playback controller already owns a video");
       video = element;
       player = createPlayer(element, () => {}, receive, binding => {
         const session = state.session;
         if (session && state.context && current(binding.playback_epoch, session) && binding.session_id === session.session_id
-          && binding.engine_epoch === state.engine_epoch && state.phase === 'playing') advanced(structuredCloneContext(state.context), binding.playback_epoch, session.session_id);
+          && binding.engine_epoch === state.engine_epoch && state.phase === 'playing') {
+          if (serviceContext(state.context)) reportService(session.session_id, binding.playback_epoch, 'playing');
+          advanced(structuredCloneContext(state.context), binding.playback_epoch, session.session_id);
+        }
       });
     },
-    retry() { const resume = snapshot(); return resume ? load(resume.context, { resume }) : retiring.length ? stop() : Promise.resolve(); },
+    retry() { const resume = snapshot(); if (resume && serviceContext(resume.context)) { recoverService(resume.context, 'expired'); return Promise.resolve(); } return resume ? load(resume.context, { resume }) : retiring.length ? stop() : Promise.resolve(); },
     selectStream(id: string) { const resume = snapshot(); return resume ? load(resume.context, { stream: id, resume }) : Promise.resolve(); },
     setVolume(value: number) { player?.setVolume(value); state.volume = value; },
     setMuted(value: boolean) { state.muted = value; if (video) video.muted = value; },
@@ -547,6 +603,10 @@ export function mergeHome(current: HomeViewData | null, incoming: HomeViewData, 
 
 
 type Ticket = { id: string; source: SourceKey | null; host: string | null; guest: string | null | undefined; locale: string; epoch: number };
+type ServiceLine = { line_id: string; source_id: string; source_name: string | null; line_name: string; episode_label: string; kind: string; quality: string | null; description: string | null; size_bytes: number | null; availability_checked_at: number | null; availability_expires_at: number | null; reason: string | null; probe_status: string; latency_ms: number | null };
+type ServiceCandidate = { candidate_id: string; source_id: string; title: string; year: string | number | null; kind: string | null };
+type ServiceRoundView = { round_id: string; lookup_id: string | null; query_done: boolean; pending: number; pending_confirm: number; selected_line_id: string | null; lines: ServiceLine[]; sources: { source_id: string; name: string; status: string }[]; candidates: ServiceCandidate[]; error: string | null };
+export type ServiceSource = { id: string; client_config_id: string | null; name: string; kind: string; api: string; ext: unknown; headers: Record<string, string>; enabled: boolean; parse_ids: string[]; revision: number; status: string };
 type LocalRequest = { request_id: string | null; phase: "loading" | "ready" | "failed"; error: Bridge_ApiError | null };
 export type HomeFilter = NonNullable<Bridge_HomeRequest["filter"]>;
 export type CatalogRow = { phase: "pending" | "loading" | "ready" | "failed"; data: HomeViewData | null; error: Bridge_ApiError | null };
@@ -569,6 +629,11 @@ export class AppController {
   readonly detailsImage = reactive({ error: "" });
   readonly matching = reactive({ result: null as PlaybackMatchResult | null, details: null as DetailsViewData | null,
     loading: false, pending: null as string | null, error: null as Bridge_ApiError | null });
+  readonly serviceRound = reactive({ open: false, busy: false, videoId: '', snapshot: null as ServiceRoundView | null, error: '' });
+  readonly serviceSources = reactive({ items: [] as ServiceSource[], error: '' });
+  private serviceRoundId: string | null = null;
+  private serviceGeneration = 0;
+  private preparedService: { match: string; resolution: Bridge_Resolution } | null = null;
   private requests = new Map<string, Ticket>();
   private imageAttempts = { home: { data: null as object | null, queried: new Set<string>(), refreshed: false },
     details: { data: null as object | null, queried: new Set<string>(), refreshed: false } };
@@ -597,7 +662,7 @@ export class AppController {
   private linePreferences: ReturnType<typeof createLinePreferences> | null;
   readonly lineMemory = reactive({ error: '', saved: false });
   constructor(client: Api = api, settings: SettingsQueue = settingsQueue, initial: AppState = appState,
-    linePreferences: ReturnType<typeof createLinePreferences> | null = typeof window !== 'undefined' && window.__TAURI__ ? createLinePreferences() : null) {
+    linePreferences: ReturnType<typeof createLinePreferences> | null = null) {
     this.api = client; this.state = initial; this.settings = settings;
     this.linePreferences = linePreferences;
   }
@@ -850,6 +915,13 @@ export class AppController {
     target.request_id = ticket.id; target.error = null;
     try {
       let response = await this.api.call("get_sources", {}, ticket.id, ticket.host ?? undefined);
+      const serviceOnly = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+      const visibleProviders = (providers: typeof response.providers) => serviceOnly
+        ? this.state.settings.playback_service?.enabled
+          ? providers.filter(source => source.kind === 'stremio' && (source.origin.config_id === TMDB_CONFIG_ID || this.state.settings.playback_service?.groups.some(group => group.config_id === source.origin.config_id && group.status === 'ready')))
+          : []
+        : providers;
+      response = { ...response, providers: visibleProviders(response.providers) };
       // Configurations are persisted, while published catalogs belong to this host session.
       const pending = response.providers.filter(source => source.runtime_status === "configured" && source.kind !== "cloudstream");
       for (const source of pending) {
@@ -859,7 +931,10 @@ export class AppController {
         try { await this.syncConfig(source.kind, source.origin.config_id, false); }
         catch (cause) { this.diagnostics.push(failure(cause)); this.sourceCheckTimes.mark(source.origin.config_id, Date.now(), true); }
       }
-      if (pending.length) response = await this.api.call("get_sources", {}, crypto.randomUUID(), ticket.host ?? undefined);
+      if (pending.length) {
+        response = await this.api.call("get_sources", {}, crypto.randomUUID(), ticket.host ?? undefined);
+        response = { ...response, providers: visibleProviders(response.providers) };
+      }
       if (sequence !== this.sourceSequence || !this.current("sources", ticket)) return;
       const oldMetadata = this.state.selected_metadata_source, oldPlayback = this.state.selected_playback_source;
       target.data = clone(response);
@@ -869,8 +944,10 @@ export class AppController {
       const ready = response.providers.filter(source => source.runtime_status === "ready");
       const metadataReady = ready.filter(source => source.kind === "stremio" && source.capabilities.home && source.capabilities.details);
       const playbackReady = ready.filter(source => source.kind !== "stremio" && source.capabilities.resolve);
-      const metadata = metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === this.state.settings.last_metadata_config_id)
-        ?? metadataReady.find(source => source.id === oldMetadata?.source_id) ?? metadataReady[0];
+      const metadata = this.state.settings.playback_service?.enabled
+        ? metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === TMDB_CONFIG_ID)
+        : metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === this.state.settings.last_metadata_config_id)
+          ?? metadataReady.find(source => source.id === oldMetadata?.source_id) ?? metadataReady[0];
       const playback = playbackReady.find(source => source.id === this.state.settings.last_playback_source_key)
         ?? playbackReady.find(source => source.id === oldPlayback?.source_id) ?? playbackReady[0];
       this.state.selected_metadata_source = metadata ? { source_id: metadata.id, source_revision: metadata.source_revision } : null;
@@ -1084,6 +1161,11 @@ export class AppController {
       return { ...settings, source_configs: draft.config_id
         ? settings.source_configs.map(row => row.config_id === id ? config : row) : [...settings.source_configs, config] };
     });
+    const service = this.state.settings.playback_service;
+    if (config.kind === "stremio" && service?.enabled) {
+      await this.connectPlaybackService(service.url, service.token);
+      return;
+    }
     try { if (config.enabled) await this.syncConfig(config.kind, id); }
     finally { await this.loadSources(); }
   }
@@ -1092,15 +1174,78 @@ export class AppController {
     try { if (tmdb.enabled) await this.syncConfig("stremio", TMDB_CONFIG_ID); }
     finally { await this.loadSources(); }
   }
+  async connectPlaybackService(url: string, token: string) {
+    const result = await nativeInvoke<{ groups: NonNullable<Settings["playback_service"]>["groups"] }>(
+      "app_service_import", { url, token, configs: [] });
+    await this.updateSettings(settings => ({
+      ...settings,
+      last_metadata_config_id: TMDB_CONFIG_ID,
+      tmdb: { ...(settings.tmdb ?? { instance_url: TMDB_DEFAULT_INSTANCE, language: 'follow' as const }), enabled: true },
+      playback_service: { enabled: true, url, token, groups: settings.playback_service?.url === url && settings.playback_service.token === token ? settings.playback_service.groups : result.groups },
+    }));
+    this.sourceCheckTimes.mark(TMDB_CONFIG_ID);
+    await this.loadSources();
+  }
+  async refreshServiceSources() {
+    try {
+      const result = await nativeInvoke<{ sources: ServiceSource[] }>('app_playback_sources', { action: 'list', id: null, payload: null });
+      this.serviceSources.items = result.sources; this.serviceSources.error = '';
+    } catch (cause) { this.serviceSources.error = failure(cause).message; throw cause; }
+  }
+  async migratePlaybackSources() {
+    const local = clone(this.state.settings.source_configs.filter(config => config.kind === 'maccms'));
+    const service = clone(this.state.settings.playback_service);
+    let warning = '';
+    if (local.length) {
+      try {
+        const result = await nativeInvoke<{ results: { status: string }[] }>('app_playback_sources', { action: 'import', id: null, payload: { sources: local } });
+        const migrated = new Set(local.filter((_, index) => result.results[index]?.status === 'ok').map(config => config.config_id));
+        await this.updateSettings(settings => {
+          if (settings.playback_service?.url !== service?.url || settings.playback_service?.token !== service?.token || !settings.playback_service?.enabled) throw new Error('Playback service changed during import; retry. / 播放服务已变化，请重试迁入。');
+          return { ...settings, source_configs: settings.source_configs.filter(config => !migrated.has(config.config_id) || !local.some(original => JSON.stringify(original) === JSON.stringify(config))) };
+        });
+        if (migrated.size !== local.length) warning = 'Some sources are waiting to be imported. / 部分来源待重试迁入。';
+      } catch (cause) { warning = failure(cause).message; }
+    }
+    await this.refreshServiceSources();
+    if (warning) this.serviceSources.error = warning;
+  }
+  async importServiceSources(payload: Record<string, unknown>) {
+    const result = await nativeInvoke<{ results: Array<{ name?: string; status: string; reason?: string; error?: string }>; parsers?: Array<{ name?: string; status: string; reason?: string; error?: string }> }>('app_playback_sources', { action: 'import', id: null, payload: clone(payload) });
+    await this.refreshServiceSources();
+    return result;
+  }
+  async changeServiceSource(action: 'create' | 'update' | 'delete', source: Partial<ServiceSource>, id: string | null = null) {
+    await nativeInvoke('app_playback_sources', { action, id, payload: action === 'delete' ? null : clone(source) });
+    await this.refreshServiceSources();
+  }
+  async disconnectPlaybackService() {
+    await this.updateSettings(settings => {
+      const { playback_service: _service, ...remaining } = settings;
+      return remaining;
+    });
+    await this.loadSources();
+  }
   async setSourceEnabled(id: string, enabled: boolean) {
     const config = this.state.settings.source_configs.find(row => row.config_id === id);
     requireBinding(config, "Source configuration is missing");
     await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.map(row => row.config_id === id ? { ...row, enabled } : row) }));
+    const service = this.state.settings.playback_service;
+    if (config.kind === "stremio" && enabled && service?.enabled && service.groups.find(group => group.config_id === id)?.status !== "ready") {
+      await this.connectPlaybackService(service.url, service.token);
+      return;
+    }
     try { if (enabled) await this.syncConfig(config.kind, id); }
     finally { await this.loadSources(); }
   }
   async removeSourceConfig(id: string) {
+    const service = this.state.settings.playback_service;
+    const group = service?.groups.find(row => row.config_id === id);
+    if (service?.enabled && group?.addons.length) {
+      await nativeInvoke("app_service_delete", { url: service.url, token: service.token, ids: group.addons.map(addon => addon.source_id) });
+    }
     await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.filter(row => row.config_id !== id),
+      ...(settings.playback_service ? { playback_service: { ...settings.playback_service, groups: settings.playback_service.groups.filter(group => group.config_id !== id) } } : {}),
       last_metadata_config_id: settings.last_metadata_config_id === id ? null : settings.last_metadata_config_id }));
     await this.loadSources();
   }
@@ -1172,6 +1317,14 @@ export class AppController {
     finally { if (this.requests.get("details") === ticket) { this.requests.delete("details"); target.request_id = null; this.backgroundDetail = false; } }
   }
   invalidatePlayback() {
+    ++this.serviceGeneration;
+    const serviceRoundId = this.serviceRoundId;
+    this.serviceRoundId = null;
+    this.serviceRound.open = false; this.serviceRound.snapshot = null; this.serviceRound.error = ''; this.serviceRound.busy = false;
+    if (serviceRoundId) void this.api.call('cancel_line_round', { round_id: serviceRoundId }).catch(() => {});
+    const prepared = this.preparedService;
+    this.preparedService = null;
+    if (prepared) void this.api.call('release_resolution', { resolution_id: prepared.resolution.id }).catch(() => {});
     ++this.lineGeneration;
     this.playedLine = null;
     this.lineMemory.saved = false;
@@ -1198,6 +1351,96 @@ export class AppController {
     void this.cleanup.catch(error => this.diagnostics.push(failure(error)));
     if (this.state.route.name === "playback") this.state.route = this.state.details.data
       ? { name: "details", ref: clone(this.state.details.data.details.ref) } : { name: "home" };
+  }
+  takeServiceResolution(context: PlaybackContext) {
+    if (this.preparedService?.match !== context.match_id) return undefined;
+    const resolution = this.preparedService.resolution;
+    this.preparedService = null;
+    return resolution;
+  }
+  async startServiceRound(videoId: string, retried = false) {
+    const metadata = this.state.details.data?.metadata_ref;
+    requireBinding(metadata && this.state.details.phase === 'ready' && this.state.settings.playback_service?.enabled, 'Playback service and metadata are required');
+    requireBinding(this.state.details.data!.details.groups.some(group => group.episodes.some(episode => metadataVideoId(episode.ref) === videoId)), 'Episode is absent from current details');
+    const service = this.state.settings.playback_service!;
+    const metadataSource = metadata.identity.config_id === TMDB_CONFIG_ID ? 'tmdb' : service.groups.find(group => group.config_id === metadata.identity.config_id && group.status === 'ready')?.addons.find(addon => addon.addon_key === metadata.identity.addon_key)?.source_id;
+    requireBinding(metadataSource, 'Metadata source is unavailable in the playback service');
+    this.invalidatePlayback();
+    const generation = this.serviceGeneration, round = crypto.randomUUID();
+    this.serviceRoundId = round; this.serviceRound.snapshot = null; this.serviceRound.open = true; this.serviceRound.videoId = videoId; this.serviceRound.error = '';
+    await this.cleanup;
+    if (generation !== this.serviceGeneration) return;
+    try {
+      const input = { round_id: round, metadata_source_id: metadataSource, type: metadata.identity.type as 'movie' | 'series', meta_id: metadata.identity.meta_id, video_id: videoId };
+      let snapshot = await this.api.call('start_line_round', input) as ServiceRoundView;
+      if (generation !== this.serviceGeneration || this.serviceRoundId !== round) {
+        await this.api.call('cancel_line_round', { round_id: round }).catch(() => {});
+        return;
+      }
+      while (generation === this.serviceGeneration && this.serviceRoundId === round) {
+        this.serviceRound.snapshot = snapshot;
+        if (snapshot.error) { this.serviceRound.error = snapshot.error; return; }
+        if (snapshot.query_done && snapshot.pending === 0 && snapshot.pending_confirm === 0) {
+          if (!snapshot.candidates.length) return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 150));
+        snapshot = await this.api.call('get_line_round', { round_id: round }) as ServiceRoundView;
+      }
+    } catch (cause) {
+      if (generation === this.serviceGeneration && !retried && failure(cause).code === 'SESSION_EXPIRED') {
+        const video = this.serviceRound.videoId;
+        this.serviceRound.busy = false;
+        await this.startServiceRound(video, true);
+      } else if (generation === this.serviceGeneration) this.serviceRound.error = failure(cause).message;
+    }
+  }
+  async refreshServiceLine(lineId: string) {
+    const round = this.serviceRoundId, generation = this.serviceGeneration;
+    if (!round || this.serviceRound.busy) return;
+    this.serviceRound.busy = true;
+    try {
+      const snapshot = await this.api.call('refresh_line', { round_id: round, line_id: lineId }) as ServiceRoundView;
+      if (generation === this.serviceGeneration && round === this.serviceRoundId) this.serviceRound.snapshot = snapshot;
+    } catch (cause) {
+      if (generation === this.serviceGeneration && failure(cause).code === 'SESSION_EXPIRED') {
+        const video = this.serviceRound.videoId;
+        this.serviceRound.busy = false;
+        await this.startServiceRound(video, false);
+      } else if (generation === this.serviceGeneration) this.serviceRound.error = failure(cause).message;
+    } finally { if (generation === this.serviceGeneration) this.serviceRound.busy = false; }
+  }
+  async chooseServiceLine(lineId: string, retried = false) {
+    const round = this.serviceRoundId, generation = this.serviceGeneration;
+    if (!round || this.serviceRound.busy) return;
+    this.serviceRound.busy = true;
+    try {
+      const result = await this.api.call('play_line', { round_id: round, line_id: lineId });
+      if (generation !== this.serviceGeneration || round !== this.serviceRoundId) {
+        await this.api.call('release_resolution', { resolution_id: result.resolution.id });
+        return;
+      }
+      this.preparedService = { match: result.context.match_id, resolution: result.resolution };
+      this.serviceRound.open = false;
+      this.state.selected_playback_source = null;
+      this.state.playback.context = clone(result.context); this.state.playback.phase = 'resolving';
+      this.state.route = { name: 'playback', context: clone(result.context) };
+      if (typeof window !== 'undefined') window.location.hash = '/playback';
+    } catch (cause) {
+      if (generation === this.serviceGeneration && !retried && failure(cause).code === 'SESSION_EXPIRED') {
+        const video = this.serviceRound.videoId;
+        this.serviceRound.busy = false;
+        await this.startServiceRound(video, true);
+      } else if (generation === this.serviceGeneration) this.serviceRound.error = failure(cause).message;
+    }
+    finally { if (generation === this.serviceGeneration) this.serviceRound.busy = false; }
+  }
+  async confirmServiceCandidate(candidate: ServiceCandidate) {
+    const round = this.serviceRoundId;
+    if (!round || this.serviceRound.busy) return;
+    this.serviceRound.busy = true;
+    try { this.serviceRound.snapshot = await this.api.call('confirm_line_candidate', { round_id: round, source_id: candidate.source_id, candidate_id: candidate.candidate_id }) as ServiceRoundView; }
+    catch (cause) { this.serviceRound.error = failure(cause).message; }
+    finally { this.serviceRound.busy = false; }
   }
   rememberLine(context: PlaybackContext, epoch: number, session: string) {
     const choice = this.playedLine, state = this.state.playback;

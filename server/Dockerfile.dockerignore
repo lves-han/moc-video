@@ -1,0 +1,12 @@
+**
+!Cargo.toml
+!Cargo.lock
+!crates/
+!crates/moc-core/
+!crates/moc-core/Cargo.toml
+!crates/moc-core/src/
+!crates/moc-core/src/**
+!server/
+!server/Cargo.toml
+!server/src/
+!server/src/**

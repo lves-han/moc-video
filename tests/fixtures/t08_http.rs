@@ -361,7 +361,7 @@ fn t08_maccms_http_english_alias_two_queries_ten_each_and_partial_error() {
                 }
                 let mut items: Vec<_> = (0..15)
                     .map(|index| {
-                        json!({"vod_id":format!("{query}/{index}"), "vod_name":"Same title remake", "vod_year":if index == 0 {Value::Null} else {json!(1990+index)}})
+                        json!({"vod_id":format!("{query}/{index}"), "vod_name":format!("{query} remake"), "vod_year":if index == 0 {Value::Null} else {json!(1990+index)}})
                     })
                     .collect();
                 if response_kind == "invalid_item" && query == "已有别名" {

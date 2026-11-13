@@ -16,9 +16,11 @@ const props = withDefaults(defineProps<{ category?: string; query?: string }>(),
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; resume: [entry: HistoryEntry] }>();
 const zh = computed(() => locale.value === 'zh-CN');
 const word = (cn: string, en: string) => zh.value ? cn : en;
-const categoryTitle = computed(() => ({ movie: word('电影', 'Movies'), series: word('电视剧', 'Series'), anime: word('动画', 'Animation'), documentary: word('纪录片', 'Documentaries') }[props.category] ?? ''));
+const categoryTitle = computed(() => ({ movie: word('电影', 'Movies'), series: word('电视剧', 'Series'), anime: word('动画', 'Animation'), documentary: word('纪录片', 'Documentaries'), variety: word('综艺', 'Variety') }[props.category] ?? ''));
 const sections = computed(() => state.home.phase === 'loading' ? [] : state.home.data?.page.sections ?? []);
-const base = computed(() => sections.value.find(section => section.kind === (props.category === 'series' ? 'series' : 'movie')) ?? sections.value[0]);
+const base = computed(() => props.category === 'variety'
+  ? sections.value.find(section => section.kind === 'series' && /^(variety|综艺)$/i.test(section.title))
+  : sections.value.find(section => section.kind === (props.category === 'series' ? 'series' : 'movie')) ?? sections.value[0]);
 const lockedGenre = computed(() => props.category === 'anime' ? base.value?.filters?.genre.options.find(item => /^(Animation|动画)$/i.test(item.value))?.value : props.category === 'documentary' ? base.value?.filters?.genre.options.find(item => /^(Documentary|纪录)$/i.test(item.value))?.value : undefined);
 const selected = computed<HomeFilter>(() => {
   const params = new URLSearchParams(props.query), value: HomeFilter = {};
@@ -45,6 +47,7 @@ const rows = computed<Row[]>(() => {
   const movie = sections.value.find(item => item.kind === 'movie'), series = sections.value.find(item => item.kind === 'series');
   if (props.category) {
     const section = base.value, categoryFilter = lockedGenre.value ? { genre: lockedGenre.value } : {};
+    if (props.category === 'variety') { add(section, word('综艺', 'Variety'), {}); return result; }
     if (['anime', 'documentary'].includes(props.category) && !lockedGenre.value) return [];
     add(section, word('本周趋势', 'Trending this week'), { ...categoryFilter, sort: 'trending_week' });
     add(section, word('最新上线', 'New releases'), { ...categoryFilter, sort: 'latest' });
@@ -95,6 +98,7 @@ onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => 
 <template>
   <div ref="root" class="home-catalog" :class="{ 'browse-catalog': category }" :data-category="category" :data-query="query">
     <div class="hero-observer"><CatalogHero :items="heroData?.page.sections[0]?.items ?? []" :images="heroData?.images ?? {}" :category="categoryTitle" :compact="wall" @open="emit('open', $event)" @image-error="heroRow && imageError(heroRow.section.section_ref, heroRow.filter, $event)" /></div>
+    <p v-if="!state.settings.playback_service?.enabled" class="catalog-status" role="status">{{ word('请先连接服务。', 'Connect the service to browse.') }} <a href="#/settings">{{ word('打开设置', 'Open settings') }}</a></p>
     <p v-if="state.home.phase === 'loading'" class="catalog-status" role="status">{{ t('Loading catalog') }}</p>
     <p v-if="state.home.error" class="home-failed" role="alert">{{ state.home.error.message }} <button class="home-retry glass-pill" @click="app.loadCatalog()">{{ t('Retry') }}</button></p>
     <p v-if="state.home.phase === 'empty'" class="home-empty">{{ word('该来源暂无栏目', 'No catalogs from this source') }}</p>

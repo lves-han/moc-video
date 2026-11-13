@@ -10,49 +10,6 @@ mod t22;
 mod t24_cache;
 use super::*;
 
-#[test]
-fn font_gateway_accepts_only_fixed_ids_own_capability_and_packaged_origins() {
-    let gateway = Gateway::start().unwrap();
-    assert!(gateway.font_url("../settings.json").is_err());
-    let url = gateway.font_url("noto-sans-sc").unwrap();
-    let response = fetch(&url, "HEAD", &[("Origin", "http://tauri.localhost")]);
-    assert_eq!(response.status, 200);
-    assert_eq!(response.headers["content-length"], "17772300");
-    assert_eq!(
-        response.headers["access-control-allow-origin"],
-        "http://tauri.localhost"
-    );
-    assert_eq!(response.headers["cache-control"], "no-store");
-    assert_eq!(
-        fetch(
-            &url,
-            "OPTIONS",
-            &[
-                ("Origin", "http://tauri.localhost"),
-                ("Access-Control-Request-Method", "GET"),
-                ("Access-Control-Request-Headers", "cache-control, pragma")
-            ]
-        )
-        .status,
-        204
-    );
-    assert_eq!(
-        fetch(&url, "HEAD", &[("Origin", "https://example.com")]).status,
-        401
-    );
-    assert_eq!(
-        fetch(url.split('?').next().unwrap(), "HEAD", &[]).status,
-        401
-    );
-    assert_eq!(
-        fetch(&format!("{url}&url=https://example.com"), "HEAD", &[]).status,
-        401
-    );
-    assert_eq!(
-        fetch(&url.replace("noto-sans-sc", "unregistered"), "HEAD", &[]).status,
-        400
-    );
-}
 use crate::resolution::{Link, ResolutionStore, Subtitle};
 use sha2::{Digest, Sha256};
 use std::{

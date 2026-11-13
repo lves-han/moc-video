@@ -3,45 +3,7 @@
 //! by closeness to what the user typed.
 use serde_json::Value;
 
-fn halfwidth(c: char) -> char {
-    match c {
-        '\u{3000}' => ' ',
-        '\u{FF01}'..='\u{FF5E}' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
-        _ => c,
-    }
-}
-
-fn separator(c: char) -> bool {
-    c.is_whitespace()
-        || c.is_ascii_punctuation()
-        || "、。，！？：；“”‘’《》〈〉【】（）「」『』·・—–…～".contains(c)
-}
-
-/// Full-width folded, punctuation removed, lowercase; ASCII words keep one space between them,
-/// spaces next to CJK characters are dropped.
-pub fn normalize(text: &str) -> String {
-    let words: Vec<String> = text
-        .chars()
-        .map(halfwidth)
-        .collect::<String>()
-        .split(separator)
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect();
-    let mut out = String::new();
-    for word in words {
-        let joins = out
-            .chars()
-            .last()
-            .is_some_and(|c| c.is_ascii_alphanumeric())
-            && word.starts_with(|c: char| c.is_ascii_alphanumeric());
-        if joins {
-            out.push(' ');
-        }
-        out.push_str(&word);
-    }
-    out
-}
+pub use moc_core::matching::{normalize, related};
 
 const NUMERALS: &str = "0123456789一二三四五六七八九十百零";
 const ROMAN: [&str; 9] = ["ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
@@ -143,6 +105,10 @@ pub fn score(query: &str, title: &str) -> f64 {
     3.0 + 1.0 - common(&qc, &tc) as f64 / qc.len() as f64
 }
 
+/// Whether a search result title names the queried title at all. Some MacCMS
+/// sites answer `wd` with full-text relevance (descriptions, cast), so an
+/// unrelated title can come back first; matching keeps only containment.
+
 /// Stable sort of search cards by closeness of their titles to the typed query.
 pub fn rank(query: &str, items: &mut [Value]) {
     items.sort_by(|a, b| {
@@ -199,5 +165,27 @@ mod tests {
             order,
             vec!["流浪地球", "流浪地球2", "我的流浪地球日记", "地球脉动"]
         );
+    }
+
+    #[test]
+    fn related_titles_only() {
+        // Full-text results seen from a real source for "The Odyssey" / "奥德赛".
+        for title in [
+            "荷马史诗：神话背后第一季",
+            "西游降魔篇",
+            "海上医疗队",
+            "2001太空漫游",
+        ] {
+            assert!(
+                !related("The Odyssey", title) && !related("奥德赛", title),
+                "{title}"
+            );
+        }
+        for title in ["奥德赛", "奥德赛2026", "尤利西斯：黑暗的奥德赛"] {
+            assert!(related("奥德赛", title), "{title}");
+        }
+        assert!(related("The Odyssey", "the odyssey"));
+        assert!(related("奥德赛 2026", "奥德赛"));
+        assert!(!related("奥德赛", "") && !related("", "奥德赛") && !related("奥德赛", "赛"));
     }
 }

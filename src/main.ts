@@ -1,10 +1,10 @@
 import { createApp, h } from "vue";
 import App from "./App.vue";
 import UiProvider from "./ui/UiProvider.vue";
-import FontGate from "./components/FontGate.vue";
 import "./style.css";
 import "./videojs";
-import { appController } from "./state";
+import { appController, appState } from "./state";
+import { setAppFont, setFontScale } from "./ui/fonts";
 import { locale } from "./i18n";
 import { palette, normalizePalette } from "./ui/theme";
 import type { EngineStateChanged } from "./models";
@@ -64,7 +64,10 @@ if (!recovery && location.hash !== "#/prototype") {
 const View = recovery ? (await import('./views/ResetRecoveryView.vue')).default : location.hash === "#/prototype"
   ? (await import("./views/PrototypeView.vue")).default
   : App;
+if (!recovery) {
+  setFontScale(appState.settings.font_scale);
+  setAppFont(appState.settings.font_family);
+}
 createApp({
-  render: () => recovery ? h(UiProvider, null, { default: () => h(View) })
-    : h(FontGate, null, { default: () => h(UiProvider, null, { default: () => h(View) }) }),
+  render: () => h(UiProvider, null, { default: () => h(View) }),
 }).mount("#app");

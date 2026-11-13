@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HISTORY = {'list_history', 'save_history', 'remove_history', 'clear_history'}
 CACHE = {'get_media_cache', 'clear_media_cache'}
 WATCHLIST = {'list_watchlist', 'add_watchlist', 'remove_watchlist'}
+LINE_ROUND = {'confirm_line_candidate', 'play_line', 'cancel_line_round', 'start_line_round', 'get_line_round', 'refresh_line', 'report_line_playback'}
 
 
 def check(directory):
@@ -58,6 +59,9 @@ def check(directory):
     for name, definition in baseline_app['$defs'].items():
         actual = json.loads(json.dumps(app['$defs'][name]))
         if name == 'Settings':
+            assert 'playback_service' not in actual['required'], 'Playback service setting must remain optional'
+            service = actual['properties'].pop('playback_service', {})
+            assert set(service.get('required', [])) == {'enabled', 'url', 'token', 'groups'}, 'Playback service contract changed'
             # ADR-065: the built-in TMDB setting replaces the removed preset marker; old cases stay valid.
             assert 'tmdb' not in actual['required'], 'TMDB setting must remain optional'
             assert set(actual['properties'].pop('tmdb', {}).get('required', [])) == {'enabled', 'instance_url', 'language'}, 'TMDB setting contract changed'
@@ -76,7 +80,7 @@ def check(directory):
             assert app[key][name] == definition, f'Existing {key} changed: {name}'
     commands = app['x-command-contracts']
     additions = set(commands) - set(baseline_app['x-command-contracts'])
-    assert additions == HISTORY | CACHE | WATCHLIST | {'search_catalog', 'get_live_channels', 'open_live', 'list_local_videos', 'open_local'}, 'History, media cache and watchlist commands must have their complete contracts'
+    assert additions == HISTORY | CACHE | WATCHLIST | LINE_ROUND | {'search_catalog', 'get_live_channels', 'open_live', 'list_local_videos', 'open_local'}, 'History, media cache and watchlist commands must have their complete contracts'
     if (ROOT / 'src-tauri/src/history.rs').exists():
         assert HISTORY <= additions, 'Native history requires all four IPC contracts'
     for command in CACHE:

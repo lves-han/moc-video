@@ -2,9 +2,7 @@
 
 Noto Sans SC and Noto Serif SC are distributed under SIL OFL 1.1. Copyright notices and complete license texts are stored alongside this file and are accessible in the application font settings.
 
-The exact upstream commits, sizes and SHA256 checksums are pinned in `src/data/fontCatalog.json`. Full variable TTF files are downloaded from Google Fonts' repository through the native fixed-DNS HTTP gateway on first use, checked before saving into the local WebView IndexedDB database `moc-video-fonts`, and subsequently read without network requests. The database belongs to the application's local WebView profile on Windows, macOS and Linux. Deleting that profile also removes the fonts; a missing or damaged entry is downloaded again.
-
-`public/fonts/bootstrap.woff2` is a UI-text subset of the pinned Noto Sans SC variable font (194704 bytes). It is provided for the first-download/retry screen and uncovered UI punctuation; complete fonts remain downloaded on demand. It retains upstream font names, copyright and licensing metadata. The upstream OFL reserves the name “Source”; this subset does not use that reserved name. Generation uses fonttools subset with `--flavor=woff2 --name-IDs=* --name-languages=*` and the UI source text plus ASCII as its character set. Fonttools/Brotli are development utilities, not application runtime dependencies.
+The exact sizes and SHA256 checksums are recorded in `src/data/fontCatalog.json`. The full variable TTF files are included in `public/fonts` and packaged with the application. They load from local application assets and work offline. The interface uses the system font until the chosen bundled font is ready; reset recovery uses the system font.
 
 Original sources:
 

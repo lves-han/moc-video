@@ -15,7 +15,13 @@
     "allow-sync-catalog",
     "allow-get-home",
     "allow-get-details",
-    "allow-resolve-episode",
+    "allow-start-line-round",
+    "allow-get-line-round",
+    "allow-confirm-line-candidate",
+    "allow-cancel-line-round",
+    "allow-play-line",
+    "allow-refresh-line",
+    "allow-report-line-playback",
     "allow-open-playback",
     "allow-close-playback",
     "allow-cancel-request",
@@ -25,7 +31,6 @@
     "allow-save-settings",
     "allow-get-resource-status",
     "allow-release-resolution",
-    "allow-match-playback",
     "allow-list-history",
     "allow-save-history",
     "allow-remove-history",
@@ -47,6 +52,8 @@
     "allow-window-bounds-now",
     "allow-app-reset",
     "allow-app-reset-recovery",
-    "allow-app-font-url"
+    "allow-app-service-import",
+    "allow-app-service-delete",
+    "allow-app-playback-sources"
   ]
 }

@@ -51,10 +51,75 @@ pub fn source_configs(settings: &Value) -> Vec<Value> {
         .as_array()
         .expect("Validated configs")
         .clone();
+    let service = &settings["playback_service"];
+    let service_revision = if service["enabled"] == true {
+        use sha2::{Digest, Sha256};
+        Some(format!(
+            "{:x}",
+            Sha256::digest(format!(
+                "{}\0{}",
+                service["url"].as_str().unwrap_or(""),
+                service["token"].as_str().unwrap_or("")
+            ))
+        ))
+    } else {
+        None
+    };
+    if service["enabled"] == true {
+        configs.retain_mut(|config| {
+            if config["kind"] != "stremio" {
+                return true;
+            }
+            let group = service["groups"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|group| group["config_id"] == config["config_id"]);
+            let Some(group) = group else {
+                return false;
+            };
+            let Some(addons) = group["addons"].as_array() else {
+                return false;
+            };
+            let Some(originals) = config["manifest_urls"].as_array() else {
+                return false;
+            };
+            if group["status"] != "ready"
+                || addons.len() != originals.len()
+                || !addons
+                    .iter()
+                    .zip(originals)
+                    .all(|(addon, url)| addon["original_url"] == *url)
+            {
+                return false;
+            }
+            let urls: Vec<String> = addons
+                .iter()
+                .filter_map(|addon| {
+                    addon["source_id"].as_str().map(|id| {
+                        format!("https://{}/{id}/en-US/manifest.json", crate::service::HOST)
+                    })
+                })
+                .collect();
+            if urls.len() != originals.len() {
+                return false;
+            }
+            config["manifest_urls"] = json!(urls);
+            config["service_addons"] = json!(addons);
+            config["service_revision"] = json!(service_revision);
+            true
+        });
+    }
     let mut config = json!({"kind": "stremio", "config_id": TMDB_CONFIG_ID, "name": "TMDB",
         "enabled": tmdb["enabled"] == true, "manifest_urls": [format!("{instance}/en-US/manifest.json")], "tmdb": true});
     // API mode answers through a virtual addon; the fingerprint re-syncs on key/endpoint changes.
-    if let Some(fingerprint) = crate::host::tmdb_api::fingerprint(settings) {
+    if service["enabled"] == true {
+        config["manifest_urls"] = json!([format!(
+            "https://{}/tmdb/en-US/manifest.json",
+            crate::service::HOST
+        )]);
+        config["service_revision"] = json!(service_revision);
+    } else if let Some(fingerprint) = crate::host::tmdb_api::fingerprint(settings) {
         config["manifest_urls"] = json!([crate::host::tmdb_api::manifest_url()]);
         config["api"] = json!(fingerprint);
     }
@@ -72,6 +137,18 @@ fn initial_defaults() -> Value {
 
 pub fn validate(settings: &Value) -> Result<(), ApiError> {
     Contracts::get().validate("Settings", settings)?;
+    if let Some(service) = settings.get("playback_service") {
+        crate::service::Config::parse(
+            service["url"].as_str().expect("Validated service URL"),
+            service["token"].as_str().expect("Validated token"),
+        )?;
+        let mut groups = HashSet::new();
+        for group in service["groups"].as_array().expect("Validated groups") {
+            if !groups.insert(group["config_id"].as_str().expect("Validated group ID")) {
+                return Err(ApiError::bad("Duplicate service group"));
+            }
+        }
+    }
     for field in ["instance_url", "api_url", "image_url"] {
         if let Some(url) = settings["tmdb"][field].as_str() {
             validate_url(url)?;

@@ -116,7 +116,7 @@ export function resolveTheme(id: PaletteId, dark: boolean, desktop = false) {
       } : {}),
       placeholderColor: dark ? "#a3a8b0" : "#65707c",
       fontFamily:
-        'var(--app-font, "Moc Bootstrap")',
+        'var(--app-font, system-ui, sans-serif)',
     },
     Button: {
       textColorPrimary: ink,

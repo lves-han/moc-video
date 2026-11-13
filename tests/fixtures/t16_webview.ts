@@ -42,7 +42,7 @@ export async function playbackUiScenario(payload: Bootstrap, prototype: { player
   let confirmed = true, failSettings = false;
   const inputs = payload.match_inputs.slice(1, 5), videos = inputs.map(input => input.video_id);
   window.__TAURI__!.core = { ...original, invoke: async <T>(name: string, args?: Record<string, any>): Promise<T> => {
-    if (name === "t01_control" || (name === "player_fullscreen" || name === "app_font_url")) return original.invoke<T>(name, args);
+    if (name === "t01_control" || (name === "player_fullscreen")) return original.invoke<T>(name, args);
     calls.push({ command: name, input: args?.input });
     if (name === "save_settings" && failSettings) return { request_id: args?.request_id, engine_epoch: appState.runtime.engine_epoch, error: { code: "INTERNAL_ERROR", message: "Injected settings failure", retryable: true } } as T;
     const input = name === "match_playback" && confirmed && !args?.input?.selection ? { ...args, input: inputs.find(row => row.video_id === args?.input?.video_id) ?? args?.input } : args;

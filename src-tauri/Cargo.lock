@@ -2335,6 +2335,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moc-core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "moc-video"
 version = "0.1.0"
 dependencies = [
@@ -2346,6 +2353,8 @@ dependencies = [
  "image",
  "jsonschema",
  "libc",
+ "moc-core",
+ "percent-encoding",
  "reqwest",
  "rusqlite",
  "serde",
