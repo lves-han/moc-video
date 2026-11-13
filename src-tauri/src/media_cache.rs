@@ -166,6 +166,10 @@ struct Metadata {
     created: u64,
     expires: u64,
     headers: BTreeMap<String, String>,
+    #[serde(default)]
+    episode: Option<String>,
+    #[serde(default)]
+    resource: Option<String>,
 }
 impl Metadata {
     fn headers(&self) -> Option<HeaderMap> {
@@ -197,6 +201,8 @@ struct Reservation {
 }
 struct State {
     limit: u64,
+    episode_mode: bool,
+    episode_order: Vec<String>,
     generation: u64,
     sequence: u64,
     initialized: bool,
@@ -237,16 +243,21 @@ pub struct MediaCache {
 }
 impl MediaCache {
     pub fn new(root: PathBuf, limit: u64) -> Arc<Self> {
-        Self::build(Some(root), limit)
+        Self::build(Some(root), limit, false)
+    }
+    pub fn for_episodes(root: PathBuf) -> Arc<Self> {
+        Self::build(Some(root), 9_007_199_254_740_991, true)
     }
     pub fn disabled() -> Arc<Self> {
-        Self::build(None, 0)
+        Self::build(None, 0, false)
     }
-    fn build(root: Option<PathBuf>, limit: u64) -> Arc<Self> {
+    fn build(root: Option<PathBuf>, limit: u64, episode_mode: bool) -> Arc<Self> {
         Arc::new(Self {
             root,
             state: Mutex::new(State {
                 limit,
+                episode_mode,
+                episode_order: Vec::new(),
                 generation: 0,
                 sequence: 0,
                 initialized: false,
@@ -257,6 +268,48 @@ impl MediaCache {
                 last_error: None,
             }),
         })
+    }
+    fn image_database(&self) -> Result<Option<rusqlite::Connection>, ApiError> {
+        let Some(root) = &self.root else { return Ok(None); };
+        let parent = root.parent().ok_or_else(|| ApiError::internal("Image cache directory missing"))?;
+        fs::create_dir_all(parent).map_err(|e| io_error("image directory", &e))?;
+        let path = parent.join("detail-images.sqlite3");
+        let mut options = fs::OpenOptions::new(); options.write(true).create(true);
+        #[cfg(unix)] { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+        drop(options.open(&path).map_err(|e| io_error("image database", &e))?);
+        let db = rusqlite::Connection::open(path).map_err(|_| ApiError::internal("Image cache database unavailable"))?;
+        db.busy_timeout(std::time::Duration::from_secs(3)).map_err(|_| ApiError::internal("Image cache unavailable"))?;
+        db.execute_batch("CREATE TABLE IF NOT EXISTS owners(id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT UNIQUE NOT NULL); CREATE TABLE IF NOT EXISTS images(image_key TEXT PRIMARY KEY, body BLOB, mime TEXT); CREATE TABLE IF NOT EXISTS image_owners(owner TEXT NOT NULL, image_key TEXT NOT NULL, PRIMARY KEY(owner,image_key));").map_err(|_| ApiError::internal("Image cache initialization failed"))?;
+        Ok(Some(db))
+    }
+    pub fn register_images(&self, owner: &str, keys: &[String]) -> Result<(), ApiError> {
+        let Some(mut db) = self.image_database()? else { return Ok(()); };
+        let tx = db.transaction().map_err(|_| ApiError::internal("Image cache transaction failed"))?;
+        tx.execute("INSERT OR REPLACE INTO owners(owner) VALUES(?1)", [owner]).map_err(|_| ApiError::internal("Image cache update failed"))?;
+        for key in keys {
+            tx.execute("INSERT OR IGNORE INTO images(image_key) VALUES(?1)", [key]).map_err(|_| ApiError::internal("Image cache update failed"))?;
+            tx.execute("INSERT OR IGNORE INTO image_owners(owner,image_key) VALUES(?1,?2)", rusqlite::params![owner,key]).map_err(|_| ApiError::internal("Image cache update failed"))?;
+        }
+        tx.execute("DELETE FROM image_owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 100)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
+        tx.execute("DELETE FROM owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 100)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
+        tx.execute("DELETE FROM images WHERE image_key NOT IN (SELECT image_key FROM image_owners)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
+        tx.commit().map_err(|_| ApiError::internal("Image cache commit failed"))
+    }
+    pub fn touch_image_owner(&self, owner: &str) -> Result<(), ApiError> {
+        let Some(db) = self.image_database()? else { return Ok(()); };
+        db.execute("UPDATE owners SET id=(SELECT COALESCE(MAX(id),0)+1 FROM owners) WHERE owner=?1", [owner])
+            .map_err(|_| ApiError::internal("Image cache recency update failed"))?;
+        Ok(())
+    }
+    pub fn cached_image(&self, key: &str) -> Result<Option<(Vec<u8>, String)>, ApiError> {
+        use rusqlite::OptionalExtension;
+        let Some(db) = self.image_database()? else { return Ok(None); };
+        db.query_row("SELECT body,mime FROM images WHERE image_key=?1 AND body IS NOT NULL AND mime IS NOT NULL", [key], |row| Ok((row.get(0)?,row.get(1)?))).optional().map_err(|_| ApiError::internal("Image cache read failed"))
+    }
+    pub fn save_image(&self, key: &str, body: &[u8], mime: &str) -> Result<(), ApiError> {
+        let Some(db) = self.image_database()? else { return Ok(()); };
+        db.execute("UPDATE images SET body=?2,mime=?3 WHERE image_key=?1", rusqlite::params![key,body,mime]).map_err(|_| ApiError::internal("Image cache write failed"))?;
+        Ok(())
     }
     fn path(&self, key: &str) -> PathBuf {
         self.root
@@ -272,6 +325,7 @@ impl MediaCache {
         state.last_error = None;
         state.directory_lock = None;
         state.entries.clear();
+        state.episode_order.clear();
         let Some(root) = &self.root else {
             return false;
         };
@@ -325,7 +379,12 @@ impl MediaCache {
                 }
             }
             files.sort_by_key(|row| row.0);
-            for (_, key, metadata, size) in files {
+            for (_, key, mut metadata, size) in files {
+                if state.episode_mode {
+                    let owner = metadata.episode.get_or_insert_with(|| "legacy".to_owned()).clone();
+                    state.episode_order.retain(|existing| existing != &owner);
+                    state.episode_order.push(owner);
+                }
                 state.sequence += 1;
                 state.entries.insert(
                     key,
@@ -375,6 +434,7 @@ impl MediaCache {
         }
     }
     fn make_room(&self, state: &mut State, extra: u64) -> bool {
+        if state.episode_mode { return true; }
         let mut attempted: Vec<String> = Vec::new();
         while state
             .used()
@@ -415,6 +475,7 @@ impl MediaCache {
     }
     pub fn configure(&self, limit: u64) {
         let mut state = self.state.lock().expect("cache lock");
+        if state.episode_mode { return; }
         if limit < state.limit {
             state.generation += 1;
         }
@@ -544,6 +605,59 @@ impl MediaCache {
             remaining: metadata.body_len,
         })
     }
+    /// Assemble a requested byte interval only from complete, consistently validated chunks.
+    pub fn cached_sequence(self: &Arc<Self>, resource: &str, requested: Option<&str>) -> Option<CachedSequence> {
+        #[derive(Clone)]
+        struct Piece { key: String, start: u64, end: u64, total: u64, validator: Option<String> }
+        let pieces: Vec<Piece> = {
+            let mut state = self.state.lock().ok()?;
+            if !self.prepare(&mut state) { return None; }
+            state.entries.iter().filter_map(|(key, entry)| {
+                let m = &entry.metadata;
+                if entry.retired || m.resource.as_deref() != Some(resource) || m.expires <= now() { return None; }
+                let (start, end, total) = if m.status == 200 { (0, m.body_len, m.body_len) } else {
+                    let value = m.headers.get("content-range")?.strip_prefix("bytes ")?;
+                    let (bounds, total) = value.split_once('/')?; let (start, end) = bounds.split_once('-')?;
+                    let start = start.parse::<u64>().ok()?; let end = end.parse::<u64>().ok()?.checked_add(1)?;
+                    let total = total.parse::<u64>().ok()?;
+                    if end.checked_sub(start)? != m.body_len || end > total { return None; }
+                    (start,end,total)
+                };
+                let validator = m.headers.get("etag").filter(|v| !v.starts_with("W/")).map(|v| format!("etag:{v}"))
+                    .or_else(|| m.headers.get("last-modified").map(|v| format!("modified:{v}")));
+                Some(Piece { key: key.clone(), start, end, total, validator })
+            }).collect()
+        };
+        let total = pieces.first()?.total;
+        let (start,end) = match requested {
+            None => (0,total),
+            Some(value) => {
+                let (from,to) = value.strip_prefix("bytes=")?.split_once('-')?;
+                if from.is_empty() { let suffix = to.parse::<u64>().ok()?; (total.saturating_sub(suffix),total) }
+                else { let start = from.parse::<u64>().ok()?; let end = if to.is_empty() { total } else { to.parse::<u64>().ok()?.saturating_add(1).min(total) }; (start,end) }
+            }
+        };
+        if start >= end || end > total { return None; }
+        let mut position = start; let mut selected = Vec::new(); let mut validator: Option<String> = None;
+        while position < end {
+            let part = pieces.iter().filter(|part| part.total == total && part.start <= position && part.end > position)
+                .filter(|part| validator.as_ref().is_none_or(|current| part.validator.as_ref() == Some(current)))
+                .max_by_key(|part| part.end)?.clone();
+            if !selected.is_empty() && (validator.is_none() || part.validator.is_none()) { return None; }
+            if selected.is_empty() { validator = part.validator.clone(); }
+            let stop = part.end.min(end);
+            selected.push((part.clone(), position - part.start, stop - position)); position = stop;
+        }
+        let mut readers = Vec::new();
+        for (part, offset, length) in selected {
+            let mut reader = self.get(&part.key)?;
+            reader.slice(offset, length).ok()?; readers.push(reader);
+        }
+        let mut headers = readers.first()?.headers.clone();
+        headers.remove("content-range"); headers.insert("accept-ranges", "bytes".parse().ok()?);
+        if requested.is_some() { headers.insert("content-range", format!("bytes {start}-{}/{total}",end-1).parse().ok()?); }
+        Some(CachedSequence { status: if requested.is_some() { 206 } else { 200 }, headers, length: end - start, readers })
+    }
     #[cfg(test)]
     pub fn begin(
         self: &Arc<Self>,
@@ -555,24 +669,53 @@ impl MediaCache {
     ) -> Option<CacheWrite> {
         self.begin_at(key, status, upstream, headers, length, self.generation())
     }
+    pub fn register_episode(&self, owner: &str) -> Result<(), ApiError> {
+        let mut state = self.state.lock().expect("cache lock");
+        if !state.episode_mode { return Ok(()); }
+        if !self.prepare(&mut state) { return Err(state.last_error.clone().unwrap_or_else(|| ApiError::internal("Media cache is unavailable"))); }
+        state.episode_order.retain(|item| item != owner);
+        state.episode_order.push(owner.to_owned());
+        let existing: Vec<_> = state.entries.iter().filter(|(_, entry)| entry.metadata.episode.as_deref() == Some(owner)).map(|(key, _)| key.clone()).collect();
+        for key in existing {
+            if let Ok(file) = fs::OpenOptions::new().write(true).open(self.path(&key)) {
+                let _ = file.set_times(fs::FileTimes::new().set_modified(SystemTime::now()));
+            }
+        }
+        while state.episode_order.len() > 15 {
+            let oldest = state.episode_order.remove(0);
+            let keys: Vec<_> = state.entries.iter().filter(|(_, entry)| entry.metadata.episode.as_deref() == Some(oldest.as_str())).map(|(key, _)| key.clone()).collect();
+            for key in keys {
+                if let Some(entry) = state.entries.get_mut(&key) { entry.retired = true; }
+                self.remove(&mut state, &key);
+            }
+        }
+        Ok(())
+    }
     pub fn generation(&self) -> u64 {
         self.state.lock().expect("cache lock").generation
     }
     pub fn begin_at(
-        self: &Arc<Self>,
-        key: String,
-        status: u16,
-        upstream: &HeaderMap,
-        headers: &HeaderMap,
-        length: Option<u64>,
-        expected_generation: u64,
+        self: &Arc<Self>, key: String, status: u16, upstream: &HeaderMap, headers: &HeaderMap,
+        length: Option<u64>, expected_generation: u64,
+    ) -> Option<CacheWrite> {
+        self.begin_episode_at(key, status, upstream, headers, length, expected_generation, None)
+    }
+    pub fn begin_episode_at(
+        self: &Arc<Self>, key: String, status: u16, upstream: &HeaderMap, headers: &HeaderMap,
+        length: Option<u64>, expected_generation: u64, episode: Option<&str>,
     ) -> Option<CacheWrite> {
         owned_key(&format!("{key}.cache"))?;
         if !matches!(status, 200 | 206) {
             return None;
         }
         let at = now();
-        let ttl = freshness(upstream, at)?;
+        // Explicit episode caching retains media until the episode is evicted.
+        // Preserve upstream no-store/no-cache and wildcard Vary protections.
+        let ttl = if episode.is_some() {
+            if directives(upstream).iter().any(|part| matches!(part.split('=').next().map(str::trim), Some("no-store" | "no-cache")))
+                || upstream.get_all("vary").iter().any(|value| value.to_str().is_ok_and(|v| v.split(',').any(|part| part.trim() == "*"))) { return None; }
+            u64::MAX.saturating_sub(at)
+        } else { freshness(upstream, at)? };
         let stored: BTreeMap<String, String> = HEADERS
             .iter()
             .filter_map(|name| {
@@ -588,12 +731,14 @@ impl MediaCache {
             created: at,
             expires: at.saturating_add(ttl),
             headers: stored,
+            episode: episode.map(str::to_owned),
+            resource: None,
         };
         if serde_json::to_vec(&metadata).ok()?.len() > HEADER as usize - 4 {
             return None;
         }
         let mut state = self.state.lock().expect("cache lock");
-        if state.generation != expected_generation {
+        if state.generation != expected_generation || (state.episode_mode && episode.is_none_or(|owner| !state.episode_order.iter().any(|item| item == owner))) {
             return None;
         }
         if state.limit <= HEADER
@@ -661,6 +806,7 @@ fn read_metadata(path: &Path) -> std::io::Result<(Metadata, u64)> {
     Ok((metadata, size))
 }
 
+pub struct CachedSequence { pub status: u16, pub headers: HeaderMap, pub length: u64, pub readers: Vec<CachedRead> }
 pub struct CachedRead {
     cache: Arc<MediaCache>,
     key: String,
@@ -669,6 +815,13 @@ pub struct CachedRead {
     pub headers: HeaderMap,
     pub length: u64,
     remaining: u64,
+}
+impl CachedRead {
+    fn slice(&mut self, offset: u64, length: u64) -> std::io::Result<()> {
+        if offset.checked_add(length).is_none_or(|end| end > self.length) { return Err(std::io::Error::other("invalid cached interval")); }
+        self.file.as_mut().expect("cache reader").seek(SeekFrom::Start(HEADER + offset))?;
+        self.length = length; self.remaining = length; Ok(())
+    }
 }
 impl Read for CachedRead {
     fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
@@ -727,6 +880,7 @@ pub struct CacheWrite {
     written: u64,
 }
 impl CacheWrite {
+    pub fn set_resource(&mut self, key: String) { self.metadata.resource = Some(key); }
     pub fn append(&mut self, bytes: &[u8]) -> bool {
         let mut state = self.cache.state.lock().expect("cache lock");
         let valid = state
@@ -782,7 +936,8 @@ impl CacheWrite {
         let Some(reservation) = state.pending.get(&self.id) else {
             return;
         };
-        if reservation.generation != state.generation || state.entries.contains_key(&self.key) {
+        if reservation.generation != state.generation || state.entries.contains_key(&self.key)
+            || (state.episode_mode && self.metadata.episode.as_ref().is_none_or(|owner| !state.episode_order.contains(owner))) {
             return;
         }
         let size = reservation.bytes;
@@ -872,6 +1027,74 @@ mod tests {
         entry.read_to_end(&mut body).unwrap();
         Some(body)
     }
+    #[test]
+    fn cached_episode_byte_ranges_are_assembled_only_with_matching_validators() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::for_episodes(root.path().join("media-cache"));
+        cache.register_episode("episode").unwrap();
+        let put = |key: &str, range: &str, etag: &str, data: &[u8]| {
+            let mut headers = headers();
+            headers.insert("content-range", range.parse().unwrap()); headers.insert("etag", etag.parse().unwrap());
+            let mut writer = cache.begin_episode_at(id(key), 206, &headers, &headers, Some(data.len() as u64), cache.generation(), Some("episode")).unwrap();
+            writer.set_resource("resource".into()); assert!(writer.append(data)); writer.finish();
+        };
+        put("part-a", "bytes 0-3/8", "\"version\"", b"abcd");
+        assert!(cache.cached_sequence("resource", Some("bytes=2-")).is_none());
+        put("part-b", "bytes 4-7/8", "\"version\"", b"efgh");
+        let mut sequence = cache.cached_sequence("resource", Some("bytes=2-6")).unwrap();
+        assert_eq!(sequence.status, 206); assert_eq!(sequence.headers["content-range"], "bytes 2-6/8");
+        let mut bytes = Vec::new(); for reader in &mut sequence.readers { reader.read_to_end(&mut bytes).unwrap(); }
+        assert_eq!(bytes, b"cdefg");
+        let mut full = cache.cached_sequence("resource", None).unwrap();
+        let mut bytes = Vec::new(); for reader in &mut full.readers { reader.read_to_end(&mut bytes).unwrap(); }
+        assert_eq!(bytes, b"abcdefgh");
+        drop(sequence); drop(full); cache.clear().unwrap();
+        put("part-a", "bytes 0-3/8", "\"old\"", b"abcd");
+        put("part-b", "bytes 4-7/8", "\"new\"", b"efgh");
+        assert!(cache.cached_sequence("resource", None).is_none());
+    }
+
+    #[test]
+    fn media_cache_retains_last_fifteen_episodes_across_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::for_episodes(root.path().join("media-cache"));
+        let headers = headers();
+        let put = |owner: &str| {
+            cache.register_episode(owner).unwrap();
+            let key = id(owner);
+            let mut writer = cache.begin_episode_at(key, 200, &headers, &headers, Some(8), cache.generation(), Some(owner)).unwrap();
+            assert!(writer.append(&[7; 8])); writer.finish();
+        };
+        for n in 0..15 { put(&format!("episode-{n}")); }
+        cache.register_episode("episode-0").unwrap();
+        put("episode-15");
+        assert!(cache.get(&id("episode-0")).is_some());
+        assert!(cache.get(&id("episode-1")).is_none());
+        assert!(cache.get(&id("episode-15")).is_some());
+        drop(cache);
+        let cache = MediaCache::for_episodes(root.path().join("media-cache"));
+        cache.register_episode("episode-16").unwrap();
+        assert!(cache.get(&id("episode-0")).is_some());
+        assert!(cache.get(&id("episode-2")).is_none());
+    }
+
+    #[test]
+    fn detail_images_retain_the_most_recent_100_titles_across_restart() {
+        let (root, cache) = cache(0);
+        for id in 0..100 {
+            let image = format!("image-{id}");
+            cache.register_images(&format!("title-{id}"), std::slice::from_ref(&image)).unwrap();
+            cache.save_image(&image, &[id as u8; 8], "image/png").unwrap();
+        }
+        cache.touch_image_owner("title-0").unwrap();
+        cache.register_images("title-100", &["image-100".into()]).unwrap();
+        assert!(cache.cached_image("image-0").unwrap().is_some());
+        assert!(cache.cached_image("image-1").unwrap().is_none());
+        drop(cache);
+        let restarted = MediaCache::new(root.path().join("media-cache"), 0);
+        assert_eq!(restarted.cached_image("image-0").unwrap().unwrap().0, vec![0; 8]);
+    }
+
     #[test]
     fn t24_media_cache_complete_range_keys_and_restart() {
         let (root, cache) = cache(1024 * 1024);

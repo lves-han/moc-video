@@ -247,6 +247,7 @@ async function playEpisode(videoId: string, explicitLine = false, resumePosition
         location.hash = `#/details/${encodeURIComponent(JSON.stringify(appState.details.data.details.ref))}`;
         return;
       }
+      if (!automaticNext && appController.openPreparedServiceRound(videoId)) return;
       await appController.startServiceRound(videoId, false, automaticNext ? appController.lastServiceLine() : null);
       return;
     }

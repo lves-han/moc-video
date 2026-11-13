@@ -92,13 +92,7 @@ async function changeFontSize(event: Event) {
   finally { fontSaving.value = false; }
 }
 const cacheBusy = ref(false), cacheError = ref(''), cacheNotice = ref('');
-const cacheMaxMiB = ref<number | null>((appState.settings.media_cache_max_bytes ?? 268435456) / 1048576);
-watch(() => appState.settings.media_cache_max_bytes, value => { cacheMaxMiB.value = (value ?? 268435456) / 1048576; });
 const cacheSize = (bytes: number) => `${(bytes / 1048576).toLocaleString(locale.value, { maximumFractionDigits: 2 })} MiB`;
-function editCacheLimit(event: Event) {
-  const value = (event.target as HTMLInputElement).valueAsNumber;
-  cacheMaxMiB.value = Number.isFinite(value) ? value : null;
-}
 function cacheFailure(error: unknown) { return error instanceof ApiFailure ? describeError(error.error) : String(error); }
 async function readCache() {
   cache.value = await api.call('get_media_cache', {});
@@ -108,20 +102,6 @@ async function refreshCache() {
   if (props.preview) return;
   cacheBusy.value = true; cacheError.value = '';
   try { await readCache(); } catch (error) { cacheError.value = cacheFailure(error); }
-  finally { cacheBusy.value = false; }
-}
-async function saveCacheLimit() {
-  cacheNotice.value = '';
-  if (cacheMaxMiB.value === null || !Number.isFinite(cacheMaxMiB.value) || cacheMaxMiB.value < 0 || !Number.isSafeInteger(cacheMaxMiB.value * 1048576)) {
-    cacheError.value = t('Enter a valid non-negative cache size.'); return;
-  }
-  const bytes = cacheMaxMiB.value * 1048576;
-  cacheBusy.value = true; cacheError.value = ''; cacheNotice.value = '';
-  try {
-    if (settingsQueue.paused) await appController.restoreSettings();
-    await appController.updateSettings(settings => ({ ...settings, media_cache_max_bytes: bytes }));
-    await readCache(); cacheNotice.value = t('Cache limit saved.');
-  } catch (error) { cacheError.value = cacheFailure(error); }
   finally { cacheBusy.value = false; }
 }
 async function clearCache() {
@@ -255,13 +235,9 @@ onMounted(() => { void refreshCache(); });
   <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
     <h2>{{ t('Media cache') }}</h2>
     <div class="settings-panel">
-    <p>{{ t('Played media is cached on this device. Older cache is removed automatically when the limit is reached.') }}</p>
+    <p>{{ word('播放数据保留最近 15 集，较早的缓存会自动清理。', 'Playback data is kept for the 15 most recent episodes.') }}</p>
     <p v-if="preview">{{ t('Manage media cache in the desktop app.') }}</p>
-    <div class="setting-row">
-      <div><h3><label for="media-cache-max">{{ t('Maximum cache size') }}</label></h3><p>{{ t('Set to 0 to turn off caching.') }}</p></div>
-      <div class="cache-limit-controls"><input id="media-cache-max" class="setting-select compact-select" type="number" min="0" step="1" :aria-label="t('Maximum cache size (MiB)')" :value="cacheMaxMiB ?? ''" :disabled="preview || cacheBusy" @input="editCacheLimit" /><span>MiB</span><NButton data-action="cache-save" :disabled="preview || cacheBusy" @click="saveCacheLimit">{{ t('Save') }}</NButton></div>
-    </div>
-    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }} / {{ cacheSize(cache.max_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ t('Clear media cache') }}</NButton></div></div>
+    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ t('Clear media cache') }}</NButton></div></div>
     <NAlert v-if="cacheError" type="error" class="media-cache-error">{{ cacheError }}</NAlert>
     <p v-if="cacheNotice" role="status" class="media-cache-notice">{{ cacheNotice }}</p>
       </div>

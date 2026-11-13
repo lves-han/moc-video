@@ -803,11 +803,15 @@ export class AppController {
     const descriptor = this.state.home.data?.page.sections.find(section => section.section_ref === sectionRef);
     const locale = metadataLocale(this.state.settings), host = this.state.runtime.engine_epoch;
     if (!background && pageNumber === 1 && row.phase === 'pending' && descriptor) {
-      const saved = this.catalog.get(source, descriptor.id, normalizedFilter(filter), locale, host);
+      row.phase = 'loading'; row.error = null;
+      let saved: Awaited<ReturnType<typeof this.catalog.getPersistent>> = null;
+      try { saved = await this.catalog.getPersistent(source, descriptor.id, normalizedFilter(filter), locale, host); }
+      catch (cause) { this.diagnostics.push(failure(cause)); }
+      if (key !== this.rowKey(sectionRef, filter)) return;
       if (saved) {
-        const currentHandle = saved.sectionRef === sectionRef;
+        const currentHandle = saved.sectionRef === null || saved.sectionRef === sectionRef;
         row.data = { page: { source_id: source.source_id, source_revision: source.source_revision,
-          sections: [{ ...clone(descriptor), items: saved.items, has_next: currentHandle && saved.hasNext, next_page: currentHandle ? saved.nextPage : null, page: 1 }], failed_sections: [] }, images: saved.images };
+          sections: [{ ...clone(descriptor), items: saved.items, has_next: currentHandle && saved.hasNext, next_page: currentHandle ? saved.nextPage : null, page: 'page' in saved ? saved.page ?? 1 : 1 }], failed_sections: [] }, images: saved.images };
         row.phase = 'ready'; row.error = null;
         if (!saved.stale && saved.imagesReady && currentHandle) return;
         this.background.enqueue(key, async () => {
@@ -832,9 +836,19 @@ export class AppController {
       // A row owns only its own images and continuation, even when another row
       // uses the same opaque section reference with a different filter.
       const section = merged.page.sections.find(section => section.section_ref === sectionRef)!;
+      const cached = background && pageNumber === 1 ? row.data?.page.sections[0] : null;
+      if (cached && cached.page > 1) {
+        const seen = new Set(section.items.map(item => item.id));
+        section.items.push(...cached.items.filter(item => !seen.has(item.id)));
+        merged.images = { ...row.data!.images, ...merged.images };
+        section.page = cached.page; section.has_next = cached.has_next; section.next_page = cached.next_page;
+      }
       row.data = { page: { ...merged.page, sections: [section], failed_sections: [] }, images: merged.images };
       row.phase = "ready";
-      if (pageNumber === 1 && descriptor) this.catalog.put(source, descriptor.id, normalizedFilter(filter), locale, host, section, merged.images);
+      if (descriptor) {
+        try { await this.catalog.putPersistent(source, descriptor.id, normalizedFilter(filter), locale, host, section, merged.images); }
+        catch (cause) { this.diagnostics.push(failure(cause)); }
+      }
     } catch (cause) { if (valid()) {
       if (background && row.data) this.diagnostics.push(failure(cause));
       else { row.phase = "failed"; row.error = failure(cause); }
@@ -1130,7 +1144,8 @@ export class AppController {
   async refreshOneMetadataIfDue(idle: () => boolean = () => true) {
     if (!idle() || this.requests.size || this.state.route.name === 'playback' || this.matching.pending) return;
     const locale = metadataLocale(this.state.settings), now = Date.now();
-    const ref = this.metadata.due(locale, now).find(candidate => {
+    const due = await this.metadata.duePersistent(locale, now);
+    const ref = due.find(candidate => {
       const provider = this.state.sources.data?.providers.find(row => row.id === candidate.source_id && row.source_revision === candidate.source_revision);
       return provider?.runtime_status === 'ready' && (this.metadataRetry.get(JSON.stringify(candidate)) ?? 0) <= now;
     });
@@ -1144,7 +1159,7 @@ export class AppController {
         && response.details.groups.every(group => group.episodes.every(episode => sameSource(episode.ref, ref)))
         && provider && provider.kind !== 'cloudstream' && provider.origin.config_id === response.metadata_ref.identity.config_id,
       'Background details response identity differs');
-      this.metadata.put(ref, locale, ticket.host ?? '', response);
+      await this.metadata.putPersistent(ref, locale, ticket.host ?? '', response);
       this.metadataRetry.delete(JSON.stringify(ref));
     } catch (cause) {
       if (this.current('background-metadata', ticket)) {
@@ -1266,8 +1281,13 @@ export class AppController {
     const ticket = this.ticket("details", ref, ++target.request_epoch);
     clearTimeout(this.detailRefresh);
     this.backgroundDetail = false;
-    const cached = force ? null : this.metadata.get(ref, ticket.locale, ticket.host ?? '');
     target.request_id = ticket.id; target.error = null;
+    if (target.data && !sameRef(target.data.details.ref, ref)) target.data = null;
+    target.phase = 'loading';
+    let cached: Awaited<ReturnType<typeof this.metadata.getPersistent>> = null;
+    try { cached = force ? null : await this.metadata.getPersistent(ref, ticket.locale, ticket.host ?? ''); }
+    catch (cause) { this.diagnostics.push(failure(cause)); }
+    if (!this.current('details', ticket)) return;
     if (cached) {
       target.data = cached.value; target.phase = 'ready';
       if (!cached.stale && cached.imagesReady) {
@@ -1313,7 +1333,8 @@ export class AppController {
         next.details.related = [...related.values()].slice(0, 12);
       }
       target.data = next; target.phase = "ready";
-      this.metadata.put(ref, ticket.locale, ticket.host ?? '', next);
+      try { await this.metadata.putPersistent(ref, ticket.locale, ticket.host ?? '', next); }
+      catch (cause) { this.diagnostics.push(failure(cause)); }
     } catch (error) { if (this.current("details", ticket)) {
       if (background && target.data) this.diagnostics.push(failure(error));
       else { target.phase = "failed"; target.error = failure(error); }
@@ -1362,7 +1383,13 @@ export class AppController {
     this.preparedService = null;
     return resolution;
   }
-  async startServiceRound(videoId: string, retried = false, preferred: ServiceLinePreference | null = null) {
+  hasServiceRound(videoId: string) { return Boolean(this.serviceRoundId && this.serviceRound.videoId === videoId); }
+  openPreparedServiceRound(videoId: string) {
+    if (!this.hasServiceRound(videoId)) return false;
+    this.serviceRound.open = true;
+    return true;
+  }
+  async startServiceRound(videoId: string, retried = false, preferred: ServiceLinePreference | null = null, background = false) {
     const metadata = this.state.details.data?.metadata_ref;
     requireBinding(metadata && this.state.details.phase === 'ready' && this.state.settings.playback_service?.enabled, 'Playback service and metadata are required');
     requireBinding(this.state.details.data!.details.groups.some(group => group.episodes.some(episode => metadataVideoId(episode.ref) === videoId)), 'Episode is absent from current details');
@@ -1371,7 +1398,7 @@ export class AppController {
     requireBinding(metadataSource, 'Metadata source is unavailable in the playback service');
     this.invalidatePlayback();
     const generation = this.serviceGeneration, round = crypto.randomUUID();
-    this.serviceRoundId = round; this.serviceRound.snapshot = null; this.serviceRound.open = true; this.serviceRound.autoSelecting = Boolean(preferred); this.serviceRound.videoId = videoId; this.serviceRound.error = '';
+    this.serviceRoundId = round; this.serviceRound.snapshot = null; this.serviceRound.open = !background; this.serviceRound.autoSelecting = Boolean(preferred); this.serviceRound.videoId = videoId; this.serviceRound.error = '';
     await this.cleanup;
     if (generation !== this.serviceGeneration) return;
     try {
@@ -1405,7 +1432,7 @@ export class AppController {
       if (generation === this.serviceGeneration && !retried && failure(cause).code === 'SESSION_EXPIRED') {
         const video = this.serviceRound.videoId;
         this.serviceRound.busy = false;
-        await this.startServiceRound(video, true, preferred);
+        await this.startServiceRound(video, true, preferred, !this.serviceRound.open);
       } else if (generation === this.serviceGeneration) { this.serviceRound.autoSelecting = false; this.serviceRound.error = failure(cause).message; }
     }
   }

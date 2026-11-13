@@ -77,6 +77,43 @@ watch(() => state.session?.session_id, syncCaptionTrack, { flush: "post" });
 const mediaReady = ref(false);
 const loading = computed(() => !state.error && (busy.value || state.phase === "resolving" || state.phase === "preparing" ||
   Boolean((props.context || props.local) && !mediaReady.value && state.phase !== "ended" && state.phase !== "failed")));
+type CacheProgress = { status: string; unit: string; total_ms: number; ranges: { start_ms: number; end_ms: number }[]; error: string | null };
+const cacheProgress = ref<CacheProgress | null>(null);
+const cacheRanges = computed(() => {
+  const duration = cacheProgress.value?.unit === "bytes" ? cacheProgress.value.total_ms : state.duration_ms || cacheProgress.value?.total_ms || 0;
+  if (!duration) return [];
+  return (cacheProgress.value?.ranges ?? []).map(range => {
+    const start = Math.max(0, Math.min(100, range.start_ms / duration * 100));
+    const end = Math.max(start, Math.min(100, range.end_ms / duration * 100));
+    return { start, width: end - start };
+  });
+});
+const cachePercent = computed(() => {
+  const duration = cacheProgress.value?.total_ms || 0;
+  if (!duration) return 0;
+  return Math.min(100, Math.round((cacheProgress.value?.ranges ?? []).reduce((sum, range) => sum + Math.max(0, range.end_ms - range.start_ms), 0) / duration * 100));
+});
+watch(() => state.session?.session_id, (_id, _previous, onCleanup) => {
+  cacheProgress.value = null;
+  const session = state.session;
+  if (!native || props.local || !session) return;
+  let url: URL;
+  try { url = new URL(session.media_url); url.pathname = `/cache/${session.session_id}`; }
+  catch { return; }
+  const controller = new AbortController(); let busy = false;
+  const poll = async () => {
+    if (busy) return; busy = true;
+    try {
+      const response = await fetch(url, { headers: { 'X-Moc-Position-Ms': String(Math.max(0, Math.floor(state.position_ms))), 'X-Moc-Duration-Ms': String(Math.max(0, Math.floor(state.duration_ms ?? 0))), 'X-Moc-Playback-State': state.phase }, signal: controller.signal });
+      if (!response.ok) return;
+      const value = await response.json() as CacheProgress;
+      if (!controller.signal.aborted && state.session?.session_id === session.session_id && Array.isArray(value.ranges)) cacheProgress.value = value;
+    } catch { /* Playback remains available when cache progress cannot be read. */ }
+    finally { busy = false; }
+  };
+  void poll(); const timer = setInterval(poll, 1000);
+  onCleanup(() => { clearInterval(timer); controller.abort(); });
+}, { immediate: true });
 const longLoading = ref(false);
 let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 watch(loading, active => {
@@ -275,12 +312,13 @@ defineExpose({ playback });
               <div class="playback-timeline">
                 <component :is="'media-time'" type="current" />
                 <component :is="'media-time-slider'" class="playback-seek" :step.prop="10" :disabled.prop="state.duration_ms === null || !state.session">
-                  <component :is="'media-slider-track'" class="playback-track"><component :is="'media-slider-buffer'" /><component :is="'media-slider-fill'" /></component>
+                  <component :is="'media-slider-track'" class="playback-track"><component :is="'media-slider-buffer'" /><span v-for="(range, index) in cacheRanges" :key="index" class="playback-cached-range" :style="{ left: `${range.start}%`, width: `${range.width}%` }" /><component :is="'media-slider-fill'" /></component>
                   <component :is="'media-slider-thumb'" />
                   <component :is="'media-slider-preview'" class="playback-preview playback-glass"><component :is="'media-slider-value'" type="pointer" /></component>
                 </component>
                 <component :is="'media-time'" type="remaining" />
               </div>
+              <p v-if="cacheProgress?.status === 'loading' || cacheProgress?.status === 'retrying' || cacheProgress?.status === 'complete' || cacheProgress?.status === 'failed'" class="playback-cache-status" role="status">{{ cacheProgress.status === 'failed' ? (cacheProgress.error || word('缓存失败', 'Cache failed')) : cacheProgress.status === 'retrying' ? word('网络暂不可用，正在重试缓存…', 'Network unavailable, retrying cache…') : word(`${cacheProgress.unit === 'bytes' ? '约已缓存' : '已缓存'} ${cachePercent}%`, `${cacheProgress.unit === 'bytes' ? 'Approximately cached' : 'Cached'} ${cachePercent}%`) }}</p>
               <div class="playback-buttons">
                 <div class="playback-left">
                   <component :is="'media-seek-button'" class="playback-button playback-seek-back" :seconds.prop="-10" :title="word('后退10秒', 'Back 10 seconds')"><Icon name="history" :size="24" /><span class="playback-ten">10</span></component>

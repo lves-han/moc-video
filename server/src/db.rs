@@ -89,7 +89,11 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = rusqlite::Connection::open(path)?;
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
         CREATE TABLE IF NOT EXISTS metadata_cache (cache_key TEXT PRIMARY KEY, payload TEXT NOT NULL, expires_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS home_snapshots (revision TEXT PRIMARY KEY, built_at INTEGER NOT NULL, payload TEXT NOT NULL);")?;
+        CREATE TABLE IF NOT EXISTS home_snapshots (revision TEXT PRIMARY KEY, built_at INTEGER NOT NULL, payload TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS detail_cache_access (id INTEGER PRIMARY KEY AUTOINCREMENT, title_key TEXT NOT NULL UNIQUE);
+        CREATE TABLE IF NOT EXISTS detail_cache_entries (cache_key TEXT PRIMARY KEY, title_key TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS detail_media_assets (image_key TEXT PRIMARY KEY, url TEXT NOT NULL, body BLOB, mime TEXT);
+        CREATE TABLE IF NOT EXISTS detail_media_owners (title_key TEXT NOT NULL, image_key TEXT NOT NULL, PRIMARY KEY(title_key,image_key));")?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS metadata_sources (
         id TEXT PRIMARY KEY, origin_config_id TEXT NOT NULL, origin_addon_key TEXT NOT NULL,

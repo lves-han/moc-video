@@ -49,6 +49,11 @@ watch([() => details.value?.id, () => state.details.request_epoch, () => state.r
 const resumeEpisode = computed(() => history.value && !history.value.completed && history.value.position_ms > 0
   ? episodes.value.find(episode => videoId(episode.ref) === history.value!.video_id) : undefined);
 const primary = computed(() => resumeEpisode.value ?? single.value ?? group.value?.episodes[0]);
+watch([() => primary.value && videoId(primary.value.ref), () => state.details.phase, () => state.route.name,
+  () => state.settings.playback_service?.enabled], ([id, phase, route, enabled]) => {
+  if (!native || !id || phase !== 'ready' || route !== 'details' || !enabled || app.serviceRound.open || app.hasServiceRound(id)) return;
+  void app.startServiceRound(id, false, null, true).catch(cause => { app.serviceRound.error = String(cause); });
+}, { immediate: true });
 const primaryLabel = computed(() => {
   const saved = history.value;
   if (!resumeEpisode.value || !saved) return t('Play');
@@ -104,13 +109,11 @@ function updateServiceModal(show: boolean) {
 function retryServiceRound() { void app.startServiceRound(app.serviceRound.videoId); }
 const sourceGroups = computed(() => (app.serviceRound.snapshot?.sources ?? []).map(source => ({
   ...source,
-  lines: (app.serviceRound.snapshot?.lines ?? []).filter(line => line.source_id === source.source_id),
-  candidates: (app.serviceRound.snapshot?.candidates ?? []).filter(candidate => candidate.source_id === source.source_id),
-})));
+  lines: (app.serviceRound.snapshot?.lines ?? []).filter(line => line.source_id === source.source_id && line.probe_status === 'ready'),
+})).filter(source => source.lines.length));
 function sourceStatus(source: (typeof sourceGroups.value)[number]) {
   if (source.lines.some(line => line.probe_status === 'ready')) return word('可播放', 'Available');
   if (source.lines.some(line => line.probe_status === 'testing') || ['pending', 'searching'].includes(source.status)) return word('检测中', 'Checking');
-  if (source.candidates.length || source.status === 'needs_confirmation') return word('需要确认影片', 'Confirm title');
   if (source.status === 'disabled') return word('已停用', 'Disabled');
   if (source.status === 'no_episode') return word('无此集', 'Episode unavailable');
   if (source.status === 'not_found') return word('未找到影片', 'Not found');
@@ -201,9 +204,12 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
         </button>
         <NButton v-if="line.kind !== 'unsupported'" size="small" :disabled="app.serviceRound.busy" :aria-label="word('刷新线路', 'Refresh line') + ' ' + line.line_name" @click="app.refreshServiceLine(line.line_id)">{{ word('刷新', 'Refresh') }}</NButton>
       </div>
-      <NButton v-for="candidate in source.candidates" :key="candidate.candidate_id" class="details-candidate" :disabled="app.serviceRound.busy" @click="app.confirmServiceCandidate(candidate)">{{ word('确认', 'Confirm') }} · {{ candidate.title }}<template v-if="candidate.year"> ({{ candidate.year }})</template></NButton>
     </section>
-    <p v-if="app.serviceRound.snapshot?.query_done && !app.serviceRound.snapshot.pending && !app.serviceRound.snapshot.lines.length && !app.serviceRound.snapshot.candidates.length">{{ word('没有找到可用线路', 'No lines found') }}</p>
+    <p v-if="app.serviceRound.snapshot?.query_done && !app.serviceRound.snapshot.pending && !app.serviceRound.snapshot.pending_confirm && !sourceGroups.length">{{ word('没有找到可播放线路', 'No playable lines found') }}</p>
+    <details v-if="app.serviceRound.snapshot?.candidates.length" class="details-candidates">
+      <summary>{{ word('确认匹配影片后继续检测', 'Confirm a matching title to check more lines') }}</summary>
+      <NButton v-for="candidate in app.serviceRound.snapshot.candidates" :key="candidate.candidate_id" class="details-candidate" :disabled="app.serviceRound.busy" @click="app.confirmServiceCandidate(candidate)">{{ candidate.title }}<template v-if="candidate.year"> ({{ candidate.year }})</template></NButton>
+    </details>
     </template>
     <NButton class="details-confirm-cancel" @click="updateServiceModal(false)">{{ t('Cancel') }}</NButton>
   </NModal>

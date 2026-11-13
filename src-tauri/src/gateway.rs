@@ -12,7 +12,7 @@ use reqwest::{Method, header::HeaderMap};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     io::{Cursor, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
@@ -73,12 +73,25 @@ struct Resource {
     url: String,
     headers: HeaderMap,
     kind: &'static str,
+    cached_key: Option<Vec<u8>>,
+    parent_playlists: HashSet<String>,
     diagnostic: Diagnostic,
 }
+#[derive(Clone)]
+struct PrefetchPlan { playlist: String, segments: Vec<crate::prefetch::Segment>, total: u64, progress: Arc<crate::prefetch::Prefetch> }
 struct Session {
     selected: Arc<LinkRecord>,
     // Live channels bypass the media cache and drop old segment registrations.
     live: bool,
+    episode: Option<String>,
+    prefetch: Arc<crate::prefetch::Prefetch>,
+    audio_prefetch: Arc<crate::prefetch::Prefetch>,
+    audio_playlists: HashMap<String, String>,
+    video_audio_groups: HashMap<String, Option<String>>,
+    active_audio_group: Option<String>,
+    prefetch_plans: HashMap<String, PrefetchPlan>,
+    last_video_plan: Option<String>,
+    last_audio_plan: Option<String>,
     // Local MKV sessions generate playlist, init and segments from this plan on request.
     remux: Option<Arc<crate::remux::Plan>>,
     local_file: Option<Arc<std::fs::File>>,
@@ -96,6 +109,8 @@ impl Session {
 }
 struct RegisteredImage {
     image: Image,
+    cache_key: Option<String>,
+    cache_owner: Option<String>,
     source: String,
     cancelled: Arc<AtomicBool>,
     expires: u64,
@@ -117,6 +132,7 @@ struct Shared {
     idle_ms: AtomicU64,
     http: Http,
     media_cache: Arc<MediaCache>,
+    runtime: Mutex<Option<tokio::runtime::Handle>>,
 }
 pub struct Gateway {
     pub address: SocketAddr,
@@ -161,10 +177,12 @@ impl Gateway {
             idle_ms: AtomicU64::new(30_000),
             http,
             media_cache: cache,
+            runtime: Mutex::new(None),
         });
         let running = shared.clone();
         let worker = thread::Builder::new().name("host-gateway".into()).spawn(move || {
             let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_all().build() else { return; };
+            *running.runtime.lock().expect("gateway runtime") = Some(runtime.handle().clone());
             runtime.block_on(async move {
                 let Ok(listener) = tokio::net::TcpListener::from_std(listener) else { return; };
                 let slots = Arc::new(tokio::sync::Semaphore::new(RESOURCE_REQUESTS));
@@ -226,6 +244,30 @@ impl Gateway {
     pub fn open(&self, selected: Arc<LinkRecord>) -> Result<Value, ApiError> {
         self.open_session(selected, false, None)
     }
+    pub fn open_episode(&self, selected: Arc<LinkRecord>, owner: String) -> Result<Value, ApiError> {
+        let original = selected.clone();
+        let view = self.open_session(selected, false, None)?;
+        if self.shared.media_cache.register_episode(&owner).is_ok() {
+            let session_prefetch = {
+                let mut records = self.shared.records.lock().expect("resource registry");
+                records.sessions.get_mut(view["session_id"].as_str().expect("Session ID")).map(|session| {
+                    session.episode = Some(owner.clone()); (session.prefetch.clone(), session.cancelled.clone())
+                })
+            };
+            if original.link.kind == "progressive" && original.link.interceptor.is_none() && original.link.cookies.is_none() {
+                if let Some((prefetch, cancelled)) = session_prefetch {
+                    let mut headers = original.link.headers.clone();
+                    if !original.link.referer.is_empty() { if let Ok(value) = original.link.referer.parse() { headers.insert("referer", value); } }
+                    if let Some(handle) = self.shared.runtime.lock().expect("gateway runtime").clone() {
+                        let _entered = handle.enter();
+                        prefetch.start_progressive(view["media_url"].as_str().expect("media URL").to_owned(), original.link.url.clone(), original.link.provider.clone(),
+                            original.source_revision.clone(), owner, headers, self.shared.media_cache.clone(), cancelled);
+                    } else { prefetch.fail("缓存服务尚未就绪"); }
+                }
+            }
+        } else { eprintln!("Episode cache unavailable"); }
+        Ok(view)
+    }
     pub fn open_live(&self, selected: Arc<LinkRecord>) -> Result<Value, ApiError> {
         self.open_session(selected, true, None)
     }
@@ -284,6 +326,8 @@ impl Gateway {
                 } else {
                     "media"
                 },
+                cached_key: None,
+                parent_playlists: HashSet::new(),
                 diagnostic: Diagnostic::default(),
             },
         )]);
@@ -294,7 +338,9 @@ impl Gateway {
                     url: subtitle.subtitle.url.clone(),
                     headers: subtitle.subtitle.headers.clone(),
                     kind: "subtitle",
-                    diagnostic: Diagnostic::default(),
+                    cached_key: None,
+                parent_playlists: HashSet::new(),
+                diagnostic: Diagnostic::default(),
                 },
             );
         }
@@ -304,6 +350,15 @@ impl Gateway {
                 resources,
                 selected,
                 live,
+                episode: None,
+                prefetch: Arc::new(crate::prefetch::Prefetch::default()),
+                audio_prefetch: Arc::new(crate::prefetch::Prefetch::default()),
+                audio_playlists: HashMap::new(),
+                video_audio_groups: HashMap::new(),
+                active_audio_group: None,
+                prefetch_plans: HashMap::new(),
+                last_video_plan: None,
+                last_audio_plan: None,
                 remux: None,
                 local_file,
                 cap,
@@ -339,6 +394,8 @@ impl Gateway {
             url: selected.link.url.clone(),
             headers: HeaderMap::new(),
             kind,
+            cached_key: None,
+            parent_playlists: HashSet::new(),
             diagnostic: Diagnostic::default(),
         };
         let mut resources = HashMap::from([
@@ -363,6 +420,15 @@ impl Gateway {
                 resources,
                 selected,
                 live: false,
+                episode: None,
+                prefetch: Arc::new(crate::prefetch::Prefetch::default()),
+                audio_prefetch: Arc::new(crate::prefetch::Prefetch::default()),
+                audio_playlists: HashMap::new(),
+                video_audio_groups: HashMap::new(),
+                active_audio_group: None,
+                prefetch_plans: HashMap::new(),
+                last_video_plan: None,
+                last_audio_plan: None,
                 remux: Some(plan),
                 local_file: None,
                 cap,
@@ -405,6 +471,9 @@ impl Gateway {
     /// Only outgoing DTO references register/renew images. Credentials and request
     /// fields originate in the adapter, never in a resource HTTP request.
     pub fn image(&self, source: &str, image: Image) -> Result<Value, ApiError> {
+        self.image_cached(source, image, None, None)
+    }
+    pub fn image_cached(&self, source: &str, image: Image, cache_key: Option<String>, cache_owner: Option<String>) -> Result<Value, ApiError> {
         let id = image.reference["resource_id"]
             .as_str()
             .ok_or_else(|| ApiError::internal("Missing image ID"))?
@@ -437,6 +506,7 @@ impl Gateway {
                     "Image ID was rebound to a different resource",
                 ));
             }
+            if cache_key.is_some() { old.cache_key = cache_key.clone(); old.cache_owner = cache_owner.clone(); }
             old.expires = now.saturating_add(IMAGE_IDLE_MS);
             old.used = sequence;
             canonical_cap = old.image.reference["capability"]
@@ -459,6 +529,8 @@ impl Gateway {
                 id.clone(),
                 RegisteredImage {
                     image: image.clone(),
+                    cache_key,
+                    cache_owner,
                     source: source.into(),
                     cancelled: Arc::new(AtomicBool::new(false)),
                     expires: now.saturating_add(IMAGE_IDLE_MS),
@@ -638,6 +710,11 @@ struct RequestLease {
     resource: String,
     sequence: u64,
     selected: Option<Arc<LinkRecord>>,
+    image_cache_key: Option<String>,
+    image_cache_owner: Option<String>,
+    episode: Option<String>,
+    prefetch: Option<Arc<crate::prefetch::Prefetch>>,
+    parent_playlist: Option<String>,
     cancelled: Arc<AtomicBool>,
     url: String,
     headers: HeaderMap,
@@ -672,6 +749,9 @@ impl Shared {
                     "Resource capability rejected",
                 ));
             }
+            if let Some(group) = s.video_audio_groups.get(*resource) { s.active_audio_group = group.clone(); }
+            if let Some(group) = s.audio_playlists.get(*resource) { s.active_audio_group = Some(group.clone()); }
+            let is_audio = s.audio_playlists.contains_key(*resource);
             let r = s.resources.get(*resource).ok_or_else(expired)?;
             s.active += 1;
             s.last_activity = now;
@@ -681,6 +761,11 @@ impl Shared {
                 resource: (*resource).into(),
                 sequence,
                 selected: Some(s.selected.clone()),
+                image_cache_key: None,
+                image_cache_owner: None,
+                episode: s.episode.clone(),
+                prefetch: Some(if is_audio { s.audio_prefetch.clone() } else { s.prefetch.clone() }),
+                parent_playlist: if r.parent_playlists.len() == 1 { r.parent_playlists.iter().next().cloned() } else { None },
                 cancelled: s.cancelled.clone(),
                 url: r.url.clone(),
                 headers: r.headers.clone(),
@@ -707,6 +792,11 @@ impl Shared {
                 resource: (*id).into(),
                 sequence,
                 selected: None,
+                image_cache_key: i.cache_key.clone(),
+                image_cache_owner: i.cache_owner.clone(),
+                episode: None,
+                prefetch: None,
+                parent_playlist: None,
                 cancelled: i.cancelled.clone(),
                 url: i.image.url.clone(),
                 headers: i.image.headers.clone(),
@@ -843,7 +933,7 @@ async fn serve(
     }
     if req.method == Method::OPTIONS {
         let valid = origin.is_some()
-            && (req.path.starts_with("/media/") || req.path.starts_with("/images/"))
+            && (req.path.starts_with("/media/") || req.path.starts_with("/images/") || req.path.starts_with("/cache/"))
             && req
                 .headers
                 .get("access-control-request-method")
@@ -856,7 +946,7 @@ async fn serve(
                         v.split(',').all(|s| {
                             matches!(
                                 s.trim().to_ascii_lowercase().as_str(),
-                                "range" | "if-range" | "if-none-match" | "if-modified-since"
+                                "range" | "if-range" | "if-none-match" | "if-modified-since" | "x-moc-position-ms" | "x-moc-duration-ms" | "x-moc-playback-state"
                             )
                         })
                     })
@@ -894,6 +984,34 @@ async fn serve(
         .await;
         return;
     };
+    if let ["", "cache", session_id] = req.path.split('/').collect::<Vec<_>>().as_slice() {
+        let result = {
+            let mut records = shared.records.lock().expect("resource registry");
+            records.sweep(shared.clock.now_ms());
+            records.sessions.get_mut(*session_id).filter(|session| req.cap.as_deref() == Some(session.cap.as_str())).map(|session| {
+                session.last_activity = shared.clock.now_ms();
+                let video_plan = session.last_video_plan.as_ref().and_then(|id| session.prefetch_plans.get(id)).cloned();
+                let audio_plan = session.last_audio_plan.as_ref().filter(|id| session.audio_playlists.get(*id) == session.active_audio_group.as_ref()).and_then(|id| session.prefetch_plans.get(id)).cloned();
+                (session.prefetch.clone(), session.audio_prefetch.clone(), session.active_audio_group.is_some(), video_plan, audio_plan, session.cancelled.clone())
+            })
+        };
+        if let Some((progress, audio, audio_expected, video_plan, audio_plan, cancelled)) = result {
+            if req.headers.get("x-moc-playback-state").is_some_and(|value| value == "paused") {
+                if progress.snapshot()["status"] == "" { if let Some(plan) = video_plan { plan.progress.start(plan.playlist, plan.segments, plan.total, shared.media_cache.clone(), cancelled.clone()); } }
+                if audio_expected && audio.snapshot()["status"] == "" { if let Some(plan) = audio_plan { plan.progress.start(plan.playlist, plan.segments, plan.total, shared.media_cache.clone(), cancelled.clone()); } }
+            }
+            if let Some(ms) = req.headers.get("x-moc-position-ms").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()) {
+                let duration = req.headers.get("x-moc-duration-ms").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok());
+                progress.position(ms, duration); audio.position(ms, duration);
+            }
+            let mut snapshot = progress.snapshot();
+            if audio_expected { crate::prefetch::include_audio(&mut snapshot, &audio.snapshot()); }
+            let body = snapshot.to_string();
+            let headers = HeaderMap::from_iter([("content-type".parse().expect("name"), "application/json".parse().expect("value")), ("cache-control".parse().expect("name"), "no-store".parse().expect("value"))]);
+            let _ = respond(&mut write, 200, &headers, body.as_bytes(), origin, head).await;
+        } else { let _ = error_response(&mut write, &ApiError::new("UNAUTHORIZED", "Resource capability rejected"), origin, head).await; }
+        return;
+    }
     let mut lease = match shared.acquire(&req) {
         Ok(l) => l,
         Err(e) => {
@@ -903,6 +1021,13 @@ async fn serve(
     };
     let mut sent = false;
     let result = transfer(&req, &lease, &mut read, &mut write, &mut sent).await;
+    if result.is_ok() && req.method == Method::GET && lease.kind == "media" && !req.headers.get("x-moc-prefetch").is_some_and(|value| value == "1") {
+        if let Some(parent) = &lease.parent_playlist {
+            let plan = shared.records.lock().expect("resource registry").sessions.get(&lease.target)
+                .and_then(|session| session.prefetch_plans.get(parent)).cloned();
+            if let Some(plan) = plan { plan.progress.start(plan.playlist, plan.segments, plan.total, shared.media_cache.clone(), lease.cancelled.clone()); }
+        }
+    }
     if let Err(e) = &result
         && !sent
         && e.code != "CANCELLED"
@@ -923,6 +1048,29 @@ async fn transfer(
     }
     if lease.kind.starts_with("remux-") {
         return transfer_remux(req, lease, write, sent).await;
+    }
+    if lease.kind == "key" && lease.episode.is_some() {
+        let cached = lease.shared.records.lock().expect("resource registry").sessions.get(&lease.target)
+            .and_then(|session| session.resources.get(&lease.resource)).and_then(|resource| resource.cached_key.clone());
+        if let Some(body) = cached {
+            let headers = HeaderMap::from_iter([("content-type".parse().expect("name"), "application/octet-stream".parse().expect("value")), ("cache-control".parse().expect("name"), "no-store".parse().expect("value"))]);
+            *sent = true;
+            return watched(lease, read, respond(write, 200, &headers, &body, req.origin.as_deref(), req.method == Method::HEAD)).await;
+        }
+    }
+    if let Some(key) = &lease.image_cache_key {
+        if let Some(owner) = &lease.image_cache_owner { let _ = lease.shared.media_cache.touch_image_owner(owner); }
+        match lease.shared.media_cache.cached_image(key) {
+            Ok(Some((body, mime))) if validate_image(&body).is_ok() => {
+                let mut headers = HeaderMap::new();
+                headers.insert("content-type", mime.parse().map_err(|_| ApiError::internal("Invalid cached image MIME"))?);
+                headers.insert("cache-control", "private, max-age=60".parse().expect("static header"));
+                *sent = true;
+                return watched(lease, read, respond(write, 200, &headers, &body, req.origin.as_deref(), req.method == Method::HEAD)).await;
+            }
+            Err(_) => eprintln!("Image cache read failed; requesting the image again"),
+            _ => {}
+        }
     }
     let url = http_url(&lease.url, false)?;
     let mut headers = lease.headers.clone();
@@ -1011,7 +1159,7 @@ async fn transfer(
         }
     }
     // A transformed HEAD describes the local representation, so fetch its body.
-    let method = if req.method == Method::HEAD && lease.kind != "image" && !transformed {
+    let method = if req.method == Method::HEAD && lease.kind != "image" && lease.kind != "key" && !transformed {
         Method::HEAD
     } else {
         Method::GET
@@ -1022,13 +1170,13 @@ async fn transfer(
         && !transformed
         && !media_cache::request_bypasses(&req.headers)
         && !media_cache::request_bypasses(&headers)
-        && !["if-range", "if-none-match", "if-modified-since"]
-            .iter()
-            .any(|name| req.headers.contains_key(*name))
+        && (!req.headers.contains_key("if-range") || req.headers.get("x-moc-prefetch").is_some_and(|value| value == "1"))
+        && !["if-none-match", "if-modified-since"].iter().any(|name| req.headers.contains_key(*name))
     {
         lease.selected.as_ref().map(|selected| {
+            let source = lease.episode.as_ref().map(|owner| format!("{}:{owner}", selected.link.provider));
             media_cache::key(
-                &selected.link.provider,
+                source.as_deref().unwrap_or(&selected.link.provider),
                 &selected.source_revision,
                 url.as_str(),
                 &headers,
@@ -1037,6 +1185,13 @@ async fn transfer(
     } else {
         None
     };
+    let cache_resource = if cache_key.is_some() && lease.episode.is_some() {
+        lease.selected.as_ref().map(|selected| {
+            let mut base_headers = headers.clone(); base_headers.remove("range"); base_headers.remove("if-range");
+            let source = format!("{}:{}", selected.link.provider, lease.episode.as_deref().unwrap_or(""));
+            media_cache::key(&source, &selected.source_revision, url.as_str(), &base_headers)
+        })
+    } else { None };
     if let Some(key) = &cache_key
         && let Some(mut cached) = lease.shared.media_cache.get(key)
     {
@@ -1086,6 +1241,25 @@ async fn transfer(
                 write_chunk(lease, read, write, &bytes[..count], false).await?;
             }
             return Ok(());
+        }
+    }
+    if !req.headers.contains_key("if-range") {
+        if let Some(resource) = &cache_resource {
+            let range = req.headers.get("range").and_then(|v| v.to_str().ok());
+            if let Some(mut sequence) = lease.shared.media_cache.cached_sequence(resource, range) {
+                sequence.headers.insert("cache-control", "no-store".parse().expect("cache header"));
+                *sent = true;
+                watched(lease, read, write_head(write, sequence.status, &sequence.headers, Some(sequence.length), req.origin.as_deref(), false)).await?;
+                let mut bytes = vec![0; STREAM_BUFFER];
+                for reader in &mut sequence.readers {
+                    loop {
+                        let count = reader.read(&mut bytes).map_err(|_| upstream("Cached media read failed; retry playback"))?;
+                        if count == 0 { break; }
+                        write_chunk(lease, read, write, &bytes[..count], false).await?;
+                    }
+                }
+                return Ok(());
+            }
         }
     }
     let mut response = watched(
@@ -1214,6 +1388,21 @@ async fn transfer(
     if content_type.contains("text/html") || content_type.contains("application/xhtml") {
         return Err(upstream("Resource server returned HTML"));
     }
+    if lease.kind == "key" && lease.episode.is_some() {
+        let mut body = Vec::new();
+        while let Some(chunk) = watched(lease, read, async { response.chunk().await.map_err(resource_error) }).await? {
+            if body.len().saturating_add(chunk.len()) > 16 { return Err(upstream("Invalid HLS key length")); }
+            body.extend_from_slice(&chunk);
+        }
+        if body.len() != 16 { return Err(upstream("Invalid HLS key length")); }
+        if let Some(resource) = lease.shared.records.lock().expect("resource registry").sessions.get_mut(&lease.target).and_then(|session| session.resources.get_mut(&lease.resource)) {
+            resource.cached_key = Some(body.clone());
+        }
+        output.insert("content-type", "application/octet-stream".parse().expect("static header"));
+        output.insert("cache-control", "no-store".parse().expect("static header"));
+        *sent = true;
+        return watched(lease, read, respond(write, 200, &output, &body, req.origin.as_deref(), req.method == Method::HEAD)).await;
+    }
     if lease.kind == "image" {
         if known_length.is_some_and(|n| n > IMAGE_BYTES as u64) {
             return Err(ApiError::new("RESOURCE_LIMIT", "Image exceeds 8 MiB"));
@@ -1230,6 +1419,9 @@ async fn transfer(
             body.extend_from_slice(&chunk);
         }
         let mime = validate_image(&body)?;
+        if let Some(key) = &lease.image_cache_key {
+            if lease.shared.media_cache.save_image(key, &body, mime).is_err() { eprintln!("Image cache write failed"); }
+        }
         output.insert(
             "etag",
             format!("\"{:x}\"", Sha256::digest(&body))
@@ -1311,15 +1503,17 @@ async fn transfer(
     }
     let length = known_length;
     let mut cache_write = cache_key.and_then(|key| {
-        lease.shared.media_cache.begin_at(
+        lease.shared.media_cache.begin_episode_at(
             key,
             status,
             response.headers(),
             &output,
             length,
             lease.cache_generation,
+            lease.episode.as_deref(),
         )
     });
+    if let (Some(writer), Some(resource)) = (&mut cache_write, &cache_resource) { writer.set_resource(resource.clone()); }
     *sent = true;
     watched(
         lease,
@@ -1547,6 +1741,9 @@ async fn transfer_manifest(
     }
     let text = std::str::from_utf8(&body).map_err(|_| upstream("HLS manifest is not UTF-8"))?;
     let body = rewrite_manifest(lease, &base, text)?;
+    if lease.episode.is_some() && !lease.live && text.lines().any(|line| line.starts_with("#EXTINF:")) {
+        schedule_hls_prefetch(lease, &body);
+    }
     let mut output = response_headers(&headers);
     for name in ["content-range", "accept-ranges", "last-modified"] {
         output.remove(name);
@@ -1598,6 +1795,43 @@ async fn transfer_manifest(
     }
 }
 
+fn schedule_hls_prefetch(lease: &RequestLease, body: &[u8]) {
+    let Some(prefetch) = &lease.prefetch else { return; };
+    let Some(owner) = &lease.episode else { return; };
+    let Some(selected) = &lease.selected else { return; };
+    if selected.link.interceptor.is_some() || selected.link.cookies.is_some() { prefetch.fail("当前播放源的网络上下文不支持预缓存"); return; }
+    let Ok(text) = std::str::from_utf8(body) else { prefetch.fail("播放列表编码无效"); return; };
+    let planned = match crate::prefetch::segments(text) { Ok(value) => value, Err(error) => { prefetch.fail(error); return; } };
+    let mut records = lease.shared.records.lock().expect("resource registry");
+    let Some(session) = records.sessions.get_mut(&lease.target) else { return; };
+    let mut segments = Vec::new();
+    for (url, start_ms, end_ms, range) in planned {
+        let Ok(parsed) = url::Url::parse(&url) else { prefetch.fail("缓存分片地址无效"); return; };
+        let Some(resource_id) = parsed.path_segments().and_then(|mut parts| parts.next_back()) else { prefetch.fail("缓存分片地址无效"); return; };
+        let Some(resource) = session.resources.get(resource_id) else { prefetch.fail("缓存分片已经失效"); return; };
+        if resource.kind != "media" && resource.kind != "key" { prefetch.fail("当前播放列表包含无法缓存的分片"); return; }
+        let mut headers = resource.headers.clone();
+        headers.insert("accept-encoding", "identity".parse().expect("static header"));
+        if let Some(range) = &range { match range.parse() { Ok(value) => { headers.insert("range", value); }, Err(_) => { prefetch.fail("缓存分片范围无效"); return; } } }
+        if !selected.link.referer.is_empty() && http_url(&selected.link.url, false).ok().zip(http_url(&resource.url, false).ok()).is_some_and(|(a,b)| a.origin() == b.origin()) {
+            if let Ok(referer) = selected.link.referer.parse() { headers.insert("referer", referer); }
+        }
+        let scope = format!("{}:{owner}", selected.link.provider);
+        let cache_key = media_cache::key(&scope, &selected.source_revision, &resource.url, &headers);
+        segments.push(crate::prefetch::Segment { url, start_ms, end_ms, range, if_range: None, memory_only: resource.kind == "key", cache_key });
+    }
+    let total = segments.iter().map(|item| item.end_ms).max().unwrap_or(0);
+    for (id, resource) in &session.resources {
+        if resource.kind != "key" { continue; }
+        let url = format!("http://{}/media/{}/{id}?cap={}", lease.shared.address, lease.target, session.cap);
+        if segments.iter().any(|item| item.url == url) { continue; }
+        segments.push(crate::prefetch::Segment { url, start_ms: 0, end_ms: 0, range: None, if_range: None, memory_only: true, cache_key: String::new() });
+    }
+    if Arc::ptr_eq(prefetch, &session.audio_prefetch) { session.last_audio_plan = Some(lease.resource.clone()); }
+    else { session.last_video_plan = Some(lease.resource.clone()); }
+    session.prefetch_plans.insert(lease.resource.clone(), PrefetchPlan { playlist: lease.url.clone(), segments, total, progress: prefetch.clone() });
+}
+
 fn rewrite_manifest(
     lease: &RequestLease,
     base: &url::Url,
@@ -1621,7 +1855,7 @@ fn rewrite_manifest(
     if session.live && session.resources.len() > LIVE_RESOURCE_WINDOW {
         session.resources.retain(|_, r| r.kind == "manifest");
     }
-    let mut pending = HashMap::new();
+    let mut pending: HashMap<String, Resource> = HashMap::new();
     let mut output = String::with_capacity(text.len());
     let mut previous = 0;
     let mut state_bytes = session
@@ -1642,10 +1876,14 @@ fn rewrite_manifest(
         http_url(url.as_str(), false)?;
         let mut headers = inherited.clone();
         redirect_headers(base, &url, &mut headers)?;
+        let prefix = &text[..reference.span.start];
+        let source_line = prefix.rsplit('\n').next().unwrap_or("");
         let kind = if reference.playlist || url.path().to_ascii_lowercase().ends_with(".m3u8") {
             "manifest"
         } else if reference.cacheable {
             "media"
+        } else if source_line.starts_with("#EXT-X-KEY:") || source_line.starts_with("#EXT-X-SESSION-KEY:") {
+            "key"
         } else {
             "auxiliary"
         };
@@ -1664,6 +1902,16 @@ fn rewrite_manifest(
             digest.update(value.as_bytes());
         }
         let id = format!("hls-{:x}", digest.finalize());
+        let line = source_line;
+        let quoted = |line: &str, name: &str| -> Option<String> {
+            line.split(&format!("{name}=\"")).nth(1)?.split('"').next().map(str::to_owned)
+        };
+        if line.starts_with("#EXT-X-MEDIA:") && line.split(',').any(|part| part.ends_with("TYPE=AUDIO")) {
+            if let Some(group) = quoted(line, "GROUP-ID") { session.audio_playlists.insert(id.clone(), group); }
+        } else if reference.playlist && line.is_empty() {
+            let previous = prefix.trim_end_matches(['\r','\n']).rsplit('\n').next().unwrap_or("");
+            if previous.starts_with("#EXT-X-STREAM-INF:") { session.video_audio_groups.insert(id.clone(), quoted(previous, "AUDIO")); }
+        }
         if !session.resources.contains_key(&id) && !pending.contains_key(&id) {
             state_bytes = state_bytes.saturating_add(
                 url.as_str().len()
@@ -1684,9 +1932,14 @@ fn rewrite_manifest(
                     url: url.to_string(),
                     headers,
                     kind,
+                    cached_key: None,
+                    parent_playlists: HashSet::from([lease.resource.clone()]),
                     diagnostic: Diagnostic::default(),
                 },
             );
+        }
+        if let Some(resource) = session.resources.get_mut(&id).or_else(|| pending.get_mut(&id)) {
+            resource.parent_playlists.insert(lease.resource.clone());
         }
         output.push_str(&text[previous..reference.span.start]);
         output.push_str(&format!(
@@ -2074,7 +2327,7 @@ async fn write_head(
     if let Some(origin) = origin {
         head.push_str(&format!("Access-Control-Allow-Origin: {origin}\r\nAccess-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length, ETag\r\n"));
         if !headers.contains_key("access-control-allow-headers") {
-            head.push_str("Access-Control-Allow-Headers: Range, If-Range, If-None-Match, If-Modified-Since\r\n");
+            head.push_str("Access-Control-Allow-Headers: Range, If-Range, If-None-Match, If-Modified-Since, X-Moc-Position-Ms, X-Moc-Duration-Ms, X-Moc-Playback-State\r\n");
         }
     }
     for (name, value) in headers {

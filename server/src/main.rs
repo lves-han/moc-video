@@ -122,7 +122,16 @@ async fn meta(
     {
         return Ok(value);
     }
-    let value = state.tmdb.meta(lang, kind, id).await?;
+    let value = match state.tmdb.meta(lang, kind, id).await {
+        Ok(value) => value,
+        Err(error) => {
+            if let Some(value) = state.cache.stale_detail(&key).map_err(|_| "metadata cache read failed")? {
+                eprintln!("TMDB detail refresh failed; serving cached detail");
+                return Ok(value);
+            }
+            return Err(error);
+        }
+    };
     let airing = kind == "series"
         && value["meta"]["releaseInfo"]
             .as_str()
@@ -233,7 +242,20 @@ async fn stremio(
         })
     };
     let mut response = match result {
-        Ok(value) => Json(value).into_response(),
+        Ok(mut value) => {
+            if let [resource, kind, id] = decoded.as_slice() {
+                if resource == "meta" {
+                    if let Some(id) = id.strip_suffix(".json") {
+                        let title = metadata::cache::title_key(&json!(source), &json!(kind), &json!(id));
+                        let base = if source == "tmdb" { None } else { state.sources.get(&source).ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
+                        if metadata::media::rewrite(&state.cache, &title, &token, base.as_ref(), &mut value).is_err() {
+                            return api_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL", "Image cache registration failed");
+                        }
+                    }
+                }
+            }
+            Json(value).into_response()
+        },
         Err((status, code, message)) => (status, Json(json!({"error":{"code":code,"message":message,"retryable":status == StatusCode::BAD_GATEWAY || status == StatusCode::SERVICE_UNAVAILABLE}}))).into_response(),
     };
     response.headers_mut().insert(
@@ -934,6 +956,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = Arc::<str>::from(config.token);
     let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env()?);
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
+    cache.prepare_details()?;
     let sources = metadata::sources::Store::new(&config.data_dir);
     let playback_sources = sources::Store::new(&config.data_dir);
     let parsers = parsers::Store::new(&config.data_dir);
@@ -985,6 +1008,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::put(update_source).delete(delete_source),
         )
         .route_layer(middleware::from_fn_with_state(token.clone(), authorize))
+        .route("/stremio/{token}/image/{key}", get(metadata::media::image))
         .route(
             "/stremio/{token}/{source}/{lang}/{*resource}",
             get(stremio).options(stremio_options),
