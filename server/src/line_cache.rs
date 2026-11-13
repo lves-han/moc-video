@@ -6,6 +6,9 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
 
+/// Logical line identity shared by refresh checks and persistent statistics. The
+/// source revision stays out of it so renaming or toggling a source keeps its
+/// history; revision checks elsewhere still retire old handles and cache entries.
 pub fn key(target: &Value, source: &Value, content_id: &str, locator: &Option<Value>) -> String {
     let unique = locator
         .clone()
@@ -19,7 +22,6 @@ pub fn key(target: &Value, source: &Value, content_id: &str, locator: &Option<Va
                 target["meta_id"],
                 target["video_id"],
                 source["id"],
-                source["revision"],
                 content_id,
                 unique
             ])
@@ -156,4 +158,56 @@ pub fn issue(
         registry.lines.insert(id, line);
     }
     Ok(output_lines)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn statistics_follow_the_line_across_source_revisions() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let reports = reports::Store::new(dir.path());
+        let runtime = Runtime {
+            registry: Arc::new(Mutex::new(Registry::default())),
+            handle_ttl: 900,
+            cache_ttl: 60,
+        };
+        let target =
+            json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:1","video_id":"tt1"});
+        let template = |revision: u64| Template {
+            source: json!({"id":"source","revision":revision,"headers":{}}),
+            content_id: "content".into(),
+            lines: vec![
+                json!({"flag":"hls","episode":{"label":"正片","url":"https://media.test/a.m3u8","locator":{"flag":"hls","episode":"正片"}}}),
+                json!({"flag":"dup","episode":{"label":"正片","url":"https://media.test/b.m3u8","locator":null}}),
+            ],
+        };
+        let mut registry = Registry::default();
+        // A rename or enable toggle bumps the revision between these rounds.
+        for revision in [1, 2] {
+            let issued = issue(
+                &mut registry,
+                &runtime,
+                &target,
+                &template(revision),
+                &reports,
+            )
+            .unwrap();
+            for value in issued {
+                let line = &registry.lines[value["line_id"].as_str().unwrap()];
+                reports.record(line, "playing", Some(10)).unwrap();
+            }
+        }
+        let issued = issue(&mut registry, &runtime, &target, &template(3), &reports).unwrap();
+        assert_eq!(issued[0]["history"]["ok"], 2);
+        assert_eq!(issued[1]["history"]["ok"], 0);
+        let rows: i64 = rusqlite::Connection::open(dir.path().join("service.sqlite3"))
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM line_stats", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "lines without a locator leave no statistics rows");
+    }
 }

@@ -67,7 +67,15 @@ pub fn initialize(cache: &Cache) -> Result<Home, rusqlite::Error> {
 
 pub fn start(cache: Cache, tmdb: Arc<Tmdb>, home: Arc<RwLock<Home>>, zone: Tz, poll: u64) {
     tokio::spawn(async move {
+        let mut pruned_at = i64::MIN;
         loop {
+            let now = cache::now();
+            if now.saturating_sub(pruned_at) >= 3600 {
+                pruned_at = now;
+                if cache.prune(now).is_err() {
+                    eprintln!("Metadata cache cleanup failed; retrying within an hour");
+                }
+            }
             let due = last_daily(cache::now(), zone)
                 .map(|cutoff| {
                     home.try_read()

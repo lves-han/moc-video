@@ -652,14 +652,41 @@ pub async fn cancel(State(state): State<AppState>, Path(id): Path<String>) -> Re
         .registry
         .lock()
         .expect("lookup registry");
-    registry.prune(crate::metadata::cache::now());
+    let now = crate::metadata::cache::now();
+    registry.prune(now);
     match registry.lookups.remove(&id) {
         Some(lookup) => {
             let _ = lookup.cancelled.send(true);
+            // Bounded like the lookups themselves; beyond it a late confirmation gets 410.
+            if registry.cancelled.len() < 1024 {
+                registry
+                    .cancelled
+                    .insert(id, lookup.expires_at.max(now + 1));
+            }
             StatusCode::NO_CONTENT.into_response()
         }
         None => expired("lookup_not_found"),
     }
+}
+
+/// A confirmation for a lookup that is gone: CANCELLED after DELETE, otherwise expired.
+fn lookup_gone(cancelled: bool) -> Response {
+    if cancelled {
+        error(StatusCode::CONFLICT, "CANCELLED", "Lookup was cancelled")
+    } else {
+        expired("lookup_not_found")
+    }
+}
+
+fn lookup_gone_now(state: &AppState, id: &str) -> Response {
+    let cancelled = state
+        .lookup_runtime
+        .registry
+        .lock()
+        .expect("lookup registry")
+        .cancelled
+        .contains_key(id);
+    lookup_gone(cancelled)
 }
 
 pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) -> Response {
@@ -682,7 +709,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             .expect("lookup registry");
         reg.prune(crate::metadata::cache::now());
         let Some(lookup) = reg.lookups.get(lookup_id) else {
-            return expired("lookup_not_found");
+            return lookup_gone(reg.cancelled.contains_key(lookup_id));
         };
         let Some(candidate) = lookup.candidates.get(candidate_id) else {
             return error(
@@ -710,7 +737,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
         return expired("source_changed");
     }
     let detail = match tokio::select! {
-        _=cancellation.changed()=>return expired("lookup_not_found"),
+        _=cancellation.changed()=>return lookup_gone_now(&state, lookup_id),
         result=crate::adapters::detail(&candidate.source, &candidate.content_id)=>result,
     } {
         Ok(value) => value,
@@ -724,14 +751,14 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
         return expired("target_missing");
     }
     let lines = match tokio::select! {
-        _=cancellation.changed()=>return expired("lookup_not_found"),
+        _=cancellation.changed()=>return lookup_gone_now(&state, lookup_id),
         result=crate::adapters::resolve(&candidate.source, &lines)=>result,
     } {
         Ok(value) => value,
         Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
     };
     let lines = match tokio::select! {
-        _=cancellation.changed()=>return expired("lookup_not_found"),
+        _=cancellation.changed()=>return lookup_gone_now(&state, lookup_id),
         result=crate::adapters::json_parse::resolve(&state.parsers, &candidate.source, &lines)=>result,
     } {
         Ok(value) => value,
@@ -752,7 +779,7 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             return expired("mapping_changed");
         }
         let Some(lookup) = reg.lookups.get(lookup_id) else {
-            return expired("lookup_not_found");
+            return lookup_gone(reg.cancelled.contains_key(lookup_id));
         };
         if lookup.candidates.get(candidate_id).is_none_or(|item| {
             item.source["id"] != source_id || item.content_id != candidate.content_id

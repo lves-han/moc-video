@@ -1758,7 +1758,7 @@ impl Host {
             selected: None,
             manual: false,
             error: None,
-            started: std::time::Instant::now(),
+            deadline: std::time::Instant::now() + line_round::BUDGET,
             stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             job: parent,
             job_id,
@@ -1823,6 +1823,7 @@ impl Host {
                 return Err(ApiError::new("RESOURCE_LIMIT", "Too many confirmations"));
             }
             state.pending_confirm += 1;
+            state.extend();
             json!({"lookup_id":lookup,"source_id":source_id,"candidate_id":candidate_id})
         };
         if let Err(error) = line_round::launch(round.clone(), body, true) {
@@ -1884,6 +1885,36 @@ impl Host {
                 .line_rounds
                 .get(round_id)?
         };
+        // The service reuses a playback address only until `expires_at`. Renew the
+        // chosen line in place; a line the service no longer holds answers 410 and,
+        // like a refreshed line that fails its probe, sends the App back to a new search.
+        let now = time::OffsetDateTime::now_utc().unix_timestamp();
+        let stale = round
+            .lock()
+            .expect("round state")
+            .lines
+            .get(line_id)
+            .is_some_and(|line| {
+                line.status == "ready"
+                    && line.raw["expires_at"]
+                        .as_i64()
+                        .is_some_and(|time| time <= now)
+            });
+        if stale {
+            self.refresh_line(input, job)?;
+            let ready = round
+                .lock()
+                .expect("round state")
+                .lines
+                .get(line_id)
+                .is_some_and(|line| line.status == "ready");
+            if !ready {
+                return Err(ApiError::new(
+                    "SESSION_EXPIRED",
+                    "Refreshed line is unavailable; search again",
+                ));
+            }
+        }
         let (line, service, snapshot, metadata_ref, video_id) = {
             let state = round.lock().expect("round state");
             let line = state
@@ -2005,14 +2036,9 @@ impl Host {
                 .line_rounds
                 .get(round_id)?
         };
+        // The service answers 410 once its line handle has expired; the App then searches again.
         let (service, old) = {
             let state = round.lock().expect("round state");
-            if state.started.elapsed() >= std::time::Duration::from_secs(45) {
-                return Err(ApiError::new(
-                    "SESSION_EXPIRED",
-                    "Line round expired; search again",
-                ));
-            }
             if state
                 .lines
                 .get(line_id)
@@ -2053,6 +2079,7 @@ impl Host {
         {
             let mut state = round.lock().expect("round state");
             state.lines.remove(line_id);
+            state.extend();
         }
         let permits = { round.lock().expect("round state").permits.clone() };
         let refreshed = runtime.block_on(async {
@@ -2062,7 +2089,7 @@ impl Host {
                 if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
                     return Err(ApiError::cancelled());
                 }
-                if state.started.elapsed() >= std::time::Duration::from_secs(45) {
+                if std::time::Instant::now() >= state.deadline {
                     return Err(ApiError::new(
                         "SESSION_EXPIRED",
                         "Line round expired; search again",

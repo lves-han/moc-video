@@ -61,6 +61,11 @@ impl Cache {
         )?;
         Ok(())
     }
+    /// Expired rows are never read again (`get` filters them), so drop them.
+    pub fn prune(&self, now: i64) -> rusqlite::Result<usize> {
+        self.connection()?
+            .execute("DELETE FROM metadata_cache WHERE expires_at<=?1", [now])
+    }
     pub fn snapshot(&self) -> rusqlite::Result<Option<(i64, Value)>> {
         let conn = self.connection()?;
         let row: Option<(i64, String)> = conn
@@ -102,5 +107,22 @@ mod tests {
         assert_ne!(one, cache.key("second", "movie", "en-US", "same"));
         assert_ne!(one, cache.key("first", "series", "en-US", "same"));
         assert_ne!(one, cache.key("first", "movie", "zh-CN", "same"));
+    }
+
+    #[test]
+    fn prune_drops_only_expired_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let cache = Cache::new(dir.path(), "v1".into());
+        cache.put("old", &serde_json::json!(1), -10).unwrap();
+        cache.put("fresh", &serde_json::json!(2), 600).unwrap();
+        assert_eq!(cache.prune(now()).unwrap(), 1);
+        assert_eq!(cache.get("fresh").unwrap(), Some(serde_json::json!(2)));
+        let rows: i64 = cache
+            .connection()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM metadata_cache", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1);
     }
 }

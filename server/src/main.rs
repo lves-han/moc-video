@@ -544,6 +544,26 @@ fn import_url(value: &serde_json::Value, base: Option<&url::Url>) -> Option<Stri
     Some(parsed.to_string())
 }
 
+/// TVBox/FongMi keep a parser's flags and headers under `ext`; zyfun keeps
+/// `ext.flag` with a top-level `header`.
+fn parser_flags_headers(item: &serde_json::Value) -> (serde_json::Value, serde_json::Value) {
+    let field = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|name| {
+                [item.get(*name), item["ext"].get(*name)]
+                    .into_iter()
+                    .flatten()
+                    .find(|value| !value.is_null())
+            })
+            .cloned()
+    };
+    (
+        field(&["flags", "flag"]).unwrap_or(json!([])),
+        field(&["headers", "header"]).unwrap_or(json!({})),
+    )
+}
+
 async fn playback_import(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
@@ -654,7 +674,8 @@ async fn playback_import(
                 })
             })
             .unwrap_or_else(|| "url".to_owned());
-        let candidate = json!({"client_config_id":identity(item,"parser"),"name":item["name"],"api":api,"flags":item.get("flags").or_else(||item.get("flag")).cloned().unwrap_or(json!([])),"headers":item.get("headers").filter(|v| !v.is_null()).cloned().unwrap_or(json!({})),"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"url_param":url_param,"url_field":item.get("url_field").cloned().unwrap_or(json!("url"))});
+        let (flags, headers) = parser_flags_headers(item);
+        let candidate = json!({"client_config_id":identity(item,"parser"),"name":item["name"],"api":api,"flags":flags,"headers":headers,"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"url_param":url_param,"url_field":item.get("url_field").cloned().unwrap_or(json!("url"))});
         let mut registry = state
             .lookup_runtime
             .registry
@@ -987,4 +1008,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_import_reads_tvbox_and_zyfun_fields() {
+        let tvbox = json!({"name":"P","type":1,"url":"https://jx.test/?url=","ext":{"flag":["qq"],"header":{"Referer":"https://jx.test/"}}});
+        assert_eq!(
+            parser_flags_headers(&tvbox),
+            (json!(["qq"]), json!({"Referer":"https://jx.test/"}))
+        );
+        let zyfun = json!({"name":"P","type":2,"url":"https://jx.test/?url=","header":{"User-Agent":"x"},"ext":{"flag":["iqiyi"]}});
+        assert_eq!(
+            parser_flags_headers(&zyfun),
+            (json!(["iqiyi"]), json!({"User-Agent":"x"}))
+        );
+        let plain = json!({"flags":["a"],"headers":{"X":"1"},"ext":{"flag":["b"]}});
+        assert_eq!(
+            parser_flags_headers(&plain),
+            (json!(["a"]), json!({"X":"1"}))
+        );
+        assert_eq!(
+            parser_flags_headers(&json!({"flags":null,"ext":{"flag":["c"]}})),
+            (json!(["c"]), json!({}))
+        );
+    }
 }

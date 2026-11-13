@@ -28,7 +28,7 @@ impl Store {
         meta_id: &str,
     ) -> rusqlite::Result<Vec<Value>> {
         let conn = self.conn()?;
-        let mut statement=conn.prepare("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 ORDER BY updated_at DESC")?;
+        let mut statement=conn.prepare("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 ORDER BY updated_at DESC")?;
         let rows = statement.query_map(params![metadata_source, kind, meta_id], row)?;
         rows.collect()
     }
@@ -81,6 +81,7 @@ impl Store {
         let kind = required(metadata, "type")?;
         let meta_id = required(metadata, "meta_id")?;
         let source_id = required(source, "id")?;
+        let season = season(metadata)?;
         if !matches!(kind, "movie" | "series")
             || content_id.is_empty()
             || !matches!(confirmed_by, "auto" | "user")
@@ -119,7 +120,7 @@ impl Store {
                 }
             }
         }
-        let existing:Option<Value>=tx.query_row("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4",params![metadata_source,kind,meta_id,source_id],row).optional().map_err(|_|"mapping database failed")?;
+        let existing:Option<Value>=tx.query_row("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND season=?4 AND source_id=?5",params![metadata_source,kind,meta_id,season,source_id],row).optional().map_err(|_|"mapping database failed")?;
         if confirmed_by == "auto" {
             let revoked:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM mapping_revocations WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4 AND content_id=?5)",params![metadata_source,kind,meta_id,source_id,content_id],|r|r.get(0)).map_err(|_|"mapping database failed")?;
             if revoked {
@@ -139,7 +140,7 @@ impl Store {
             .and_then(|v| v["id"].as_str())
             .map(str::to_owned)
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        tx.execute("INSERT INTO mappings(id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0) ON CONFLICT(metadata_source_id,media_type,meta_id,source_id) DO UPDATE SET source_revision=excluded.source_revision,content_id=excluded.content_id,confirmed_by=excluded.confirmed_by,evidence=excluded.evidence,updated_at=excluded.updated_at,revoked=0",params![id,metadata_source,kind,meta_id,source_id,revision,content_id,confirmed_by,evidence.to_string(),crate::metadata::cache::now()]).map_err(|_|"mapping database failed")?;
+        tx.execute("INSERT INTO mappings(id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11) ON CONFLICT(metadata_source_id,media_type,meta_id,season,source_id) DO UPDATE SET source_revision=excluded.source_revision,content_id=excluded.content_id,confirmed_by=excluded.confirmed_by,evidence=excluded.evidence,updated_at=excluded.updated_at,revoked=0",params![id,metadata_source,kind,meta_id,source_id,revision,content_id,confirmed_by,evidence.to_string(),crate::metadata::cache::now(),season]).map_err(|_|"mapping database failed")?;
         tx.commit().map_err(|_| "mapping database failed")?;
         self.list(metadata_source, kind, meta_id)
             .map_err(|_| "mapping database failed")?
@@ -172,11 +173,14 @@ impl Store {
         let kind = required(metadata, "type")?;
         let meta_id = required(metadata, "meta_id")?;
         let source_id = required(source, "id")?;
+        let season = season(metadata)?;
         let row = self
             .list(metadata_source, kind, meta_id)
             .map_err(|_| "mapping database failed")?
             .into_iter()
-            .find(|row| row["source_id"] == source_id && row["revoked"] == false);
+            .find(|row| {
+                row["source_id"] == source_id && row["season"] == season && row["revoked"] == false
+            });
         let Some(row) = row else { return Ok(None) };
         let content = row["content_id"].as_str().ok_or("invalid stored mapping")?;
         let detail = match crate::adapters::detail(source, content).await {
@@ -184,7 +188,10 @@ impl Store {
             Err("MacCMS content identity is missing or ambiguous") => return Ok(None),
             Err(error) => return Err(error),
         };
-        if crate::matching::evidence(metadata, &detail) != row["evidence"] {
+        if !crate::matching::same_identity(
+            &row["evidence"],
+            &crate::matching::evidence(metadata, &detail),
+        ) {
             return Ok(None);
         }
         let lines = crate::matching::lines_for(metadata, &detail);
@@ -203,6 +210,18 @@ impl Store {
     }
 }
 
+/// Sources usually list each season as its own entry, so a series mapping belongs
+/// to the target season; movies use season 0.
+fn season(metadata: &Value) -> Result<u32, &'static str> {
+    match metadata["type"].as_str() {
+        Some("series") => metadata["episode"]["season"]
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or("invalid mapping season"),
+        _ => Ok(0),
+    }
+}
+
 fn required<'a>(value: &'a Value, key: &str) -> Result<&'a str, &'static str> {
     value[key]
         .as_str()
@@ -216,6 +235,6 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))
     })?;
     Ok(
-        json!({"id":row.get::<_,String>(0)?,"metadata_source_id":row.get::<_,String>(1)?,"type":row.get::<_,String>(2)?,"meta_id":row.get::<_,String>(3)?,"source_id":row.get::<_,String>(4)?,"source_revision":row.get::<_,u64>(5)?,"content_id":row.get::<_,String>(6)?,"confirmed_by":row.get::<_,String>(7)?,"evidence":evidence,"updated_at":row.get::<_,i64>(9)?,"revoked":row.get::<_,bool>(10)?}),
+        json!({"id":row.get::<_,String>(0)?,"metadata_source_id":row.get::<_,String>(1)?,"type":row.get::<_,String>(2)?,"meta_id":row.get::<_,String>(3)?,"source_id":row.get::<_,String>(4)?,"source_revision":row.get::<_,u64>(5)?,"content_id":row.get::<_,String>(6)?,"confirmed_by":row.get::<_,String>(7)?,"evidence":evidence,"updated_at":row.get::<_,i64>(9)?,"revoked":row.get::<_,bool>(10)?,"season":row.get::<_,u32>(11)?}),
     )
 }

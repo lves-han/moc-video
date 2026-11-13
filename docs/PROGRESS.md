@@ -3288,3 +3288,39 @@
 - 验收 A2：PASS；日志：`evidence/runs/20261112T100446209599-A2/output.log`；2 项窗口记录通过。受控桌面应用中，导入的 T4、Stremio 线路均播放；T4 解析请求头生效。移除 Stremio Primary 后刷新触发重查，旧线路消失，选择 T4 后同一集从约 20 秒续播。窗口观察与限制见 `evidence/manual/T1.15-provider-window.json`。
 - 相关回归：线路生命周期 5 项 `evidence/runs/20261112T100332691317-T1.15-final-lookup-lifecycle/output.log`，MacCMS 来源管理 3 项 `evidence/runs/20261112T100405661602-T1.15-final-playback-sources/output.log`，选线界面 4 项 `evidence/runs/20261112T100408416977-T1.15-final-app-source-selection/output.log`，播放器与选线 17 项 `evidence/runs/20261112T100424696621-T1.15-final-ui-regression/output.log`；OpenAPI 校验通过 `evidence/runs/20261112T100427577108-T1.15-final-openapi/output.log`。
 - 环境与范围：macOS arm64 隔离 App、Docker 服务及受控上游；外部真实来源、其他平台实机 NOT RUN。类型与版本依据 [zyfun 数据结构](https://github.com/Hiram-Wong/zyfun#-数据结构)；脚本、jar、网页嗅探按配置结果列为跳过。使用说明见 `server/README.md`。本卡补入详情页、App 和线路生命周期文件以实现手动刷新及续播恢复；测试资源已清理。
+
+## T1 审查修复：季集匹配、确认后线路与对应关系语言 2026-11-12
+
+- 来源：用户要求审核 T1 系列实现后选择「Fix first three」，修复审查报告的三项高优先级问题；规则变化见 ADR-081，方案 6.4、6.5 已同步。
+- 季集匹配：不带季号的集标签按来源片名季标「第X季」「Season X」「SX」定季，TMDB 第 0 季特别篇不再使单季剧集无法对应；多季剧集的无季标条目按第一季提供候选并附 `season_unverified`，须人工确认；剧集片名去掉季标后也参与一致比较。对应关系键加入目标季，电影为 0，服务启动时迁移已有记录并保留确认方式。修改 `server/src/matching.rs`、`server/src/mappings.rs`、`server/src/db.rs`、`protocol/service.openapi.json`。
+- 确认后线路：App 选线等待预算改为初次查找、确认候选、刷新线路各 45 秒；测速结果只计入仍在测试中的线路。修复前，整轮开始 45 秒后经人工确认到达的线路直接标为超时，`play_line` 拒绝播放；`refresh_line` 也在 45 秒后一律要求重查。修改 `src-tauri/src/line_round.rs`、`src-tauri/src/host.rs`。
+- 对应关系语言：复用时只核对来源片名、来源类型、来源年份及元数据类型、年份；切换应用语言后，用户确认过的对应关系继续复用。
+- 验证：服务端与共享 crate 单元测试 13 项通过（新增季标识别、特别篇与多季对应、语言无关复用、对应关系迁移与按季保存 4 项），2 项需 Docker 夹具的保持忽略；OpenAPI 校验通过；格式检查通过，改动文件无新增 clippy 警告。App crate 单元测试 239 项中 238 项通过，新增「预算过后确认的线路仍被测速并自动选中」测试；去掉每段预算后该测试复现原问题（线路状态为 timeout）。失败的 1 项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets` 仅在全量并发运行时出现，单独运行 4 次均通过，修改前的基线代码全量运行同样失败，与本次修改无关。t05 契约 16 项、前端测试 244 项、服务选线夹具 14 项通过。
+- 未运行：Docker 验收套件（T1.7、T1.8、T1.9、T1.10 等）及真实 App 窗口检查 NOT RUN；多季剧集与特别篇的实际来源样本 NOT RUN。
+
+## T1 审查修复：片名尾部数字与过期线路 2026-11-12
+
+- 来源：用户选择「修第1、2项」；规则见 ADR-081 补充，方案 6.4 与第 8 节 `play_line` 说明已同步。
+- 片名尾部数字：元数据片名本身以同一四位数结尾时，候选标题末尾的该数字属于片名，不作年份核对；修复前《银翼杀手2049》《1917》《2046》等会因「尾年」与元数据年份冲突被整条排除。修改 `server/src/matching.rs`。
+- 过期线路：`play_line` 发现所选线路已过服务的 `expires_at`（默认 60 秒）时先原地刷新并测速再播放；刷新返回 410 或测速未通过时返回 `SESSION_EXPIRED`，App 照旧重查。修复前，浏览列表超过 60 秒再选线、或播放中自动换线，都会直接丢弃整轮结果重新查找。修改 `src-tauri/src/host.rs`。
+- 测试调整：T1.9 宿主测试 `t19_native_service_round_and_session` 末尾新增过期线路刷新段，其 Docker 服务的地址缓存期设为 5 秒，用例 3 核对 `T19:expired-line-refresh`；T1.7 验收种子数据改为按列名写入 `mappings`，以适配新增的 `season` 列。修改 `src-tauri/src/service.rs`、`tests/acceptance/playback_service.py`。
+- 验证：服务端与共享 crate 单元测试 14 项通过（新增片名尾部数字 1 项）。App crate 单元测试 238 项通过，失败的仍是基线即存在的并发偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets`。Docker 验收（报告写入临时目录，副本见 `evidence/acceptance/T1-review-fix/`）：T1.9 原生选线 5 项通过，T1.8 查找生命周期 5 项通过，T1.7 匹配 4 项通过；这三套同时覆盖上一条记录的季集、对应关系与 45 秒预算修复。T1.7 首次运行因种子 SQL 按旧列数写入而失败，修正种子后重跑通过，首次失败日志一并保留。反证：临时关闭 `play_line` 的刷新分支后，T1.9 新增段以原错误 `SESSION_EXPIRED "Line needs refresh"` 失败，其余各段通过；随后已还原。
+- 未运行：真实 App 窗口检查、T1.10 及以后的 Docker 验收套件、外部真实来源 NOT RUN。
+
+## T1 审查修复：其余问题 2026-11-13
+
+- 来源：用户指示「修复剩余项」；决定见 ADR-082，方案 5.8、5.9、6.6 已同步。
+- 解析器导入：读取 TVBox/FongMi 的 `ext.flag`、`ext.header` 与 zyfun 的 `ext.flag`、顶层 `header`，顶层 `flags`/`headers` 写法保留。修改 `server/src/main.rs`。
+- 线路统计：统计键去掉来源版本，来源改名、启停后统计保留；无可验证定位信息的线路不写统计行。修改 `server/src/line_cache.rs`、`server/src/reports.rs`。
+- 服务错误：App 沿用服务错误码（契约已有者）并显示服务的错误说明，例如新增来源时的「invalid source URL」。修改 `src-tauri/src/service.rs`。
+- 取消后确认：DELETE 取消查找后，进行中或之后的确认返回 409 `CANCELLED`，取消记录保留到原查找有效期结束。修改 `server/src/lookups.rs`、`server/src/state.rs`，OpenAPI 增加 409。
+- 缓存清理：服务每小时删除已过期的元数据缓存行。修改 `server/src/metadata/cache.rs`、`server/src/metadata/home.rs`。
+- 解析失败原因：区分 `parser_request_failed`、`parser_invalid_response`、`parser_url_missing`、`parser_url_invalid`、`parser_headers_invalid`、`parser_config_invalid`。修改 `server/src/adapters/json_parse.rs`，OpenAPI 说明同步。
+- 验收调整：T1.8 两处「取消后确认」断言由 410 改为 409 `CANCELLED`，并补测取消之后再次确认；T1.14 失败原因断言改为按网页、缺字段分别核对。修改 `tests/acceptance/playback_service.py`。
+- 验证：服务端与共享 crate 单元测试 18 项通过（新增解析器字段、统计跨版本、缓存清理、解析失败原因 4 项）；改动文件 clippy 警告数与修改前相同，OpenAPI 校验通过。App crate 单元测试 239 项通过（新增服务错误映射 1 项），失败的仍是基线即存在的并发偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets`；t05 契约 16 项、前端 244 项、服务选线夹具 14 项通过。Docker 验收（副本见 `evidence/acceptance/T1-review-fix-2/`）：T1.8 5 项、T1.9 5 项、T1.11 4 项、T1.13 4 项、T1.14 3 项、T1.15 3 项通过；T1.8 首次运行因第二处旧 410 断言失败，修正后重跑通过，首次日志保留。
+- 未执行：T1.10 遗留移除（内置 TMDB 直连、旧匹配/线路记忆、MacCMS 元数据代码）。移除内置 TMDB 直连会使 X1、X4、X8、N01、TV2 等已验收卡片的功能及直连测试下线，旧匹配代码是浏览器预览演示模式的依赖，待用户确认范围。真实 App 窗口检查 NOT RUN。
+
+## T1.10 内置 TMDB 去留修订 2026-11-13
+
+- 结果：DECISION（ADR-083）。用户选择保留 App 内置 TMDB 作为无服务时的后备；方案 Q5、第 8 节元数据说明及 T1.5、T1.10 卡片表述已同步，代码无改动。
+- 遗留：旧匹配/线路记忆与 MacCMS 元数据代码维持原生端拦截、浏览器预览使用的现状。已知偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets` 属保留的 X4 功能，仅在全量并发运行时失败，尚未处理。

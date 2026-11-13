@@ -2751,7 +2751,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 验收范围：`src/views/SettingsView.vue`, `src/views/SourceSettings.vue`, `src/state.ts`, `src/App.vue`, `src-tauri/src/settings.rs`, `src-tauri/src/stremio.rs`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：受接入影响的既有设置/历史相关检查；不重复桌面长播。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：新增服务设置及连接检查，令牌绑定配置 origin/基础路径，本地服务域名可用系统 DNS；接通元数据来源选择、语言及管理。按原 config_id 保持多 manifest 分组，有序登记代理 URL，并从已登记映射恢复原 addon key/命名空间规则。组内部分失败保留完整本地配置，重试幂等；全部成功并回读后切换。TMDB 固定身份及现有历史/收藏保留，未配置服务时原 TMDB 继续到 T1.10；首次准备、错误、重试和脱敏接入 App，同步相关协议、类型、权限及检查。
+- 交付物：新增服务设置及连接检查，令牌绑定配置 origin/基础路径，本地服务域名可用系统 DNS；接通元数据来源选择、语言及管理。按原 config_id 保持多 manifest 分组，有序登记代理 URL，并从已登记映射恢复原 addon key/命名空间规则。组内部分失败保留完整本地配置，重试幂等；全部成功并回读后切换。TMDB 固定身份及现有历史/收藏保留，未配置服务时原 TMDB 继续可用（ADR-083）；首次准备、错误、重试和脱敏接入 App，同步相关协议、类型、权限及检查。
 - 验收：
 ```json
 [
@@ -2990,7 +2990,7 @@ T0.2的MP4/HLS耐久及窗口开关移交T0.35/A1，按ADR-044为各600秒及5�
 - 验收范围：`src/views/DetailsView.vue`, `src/views/PlaybackView.vue`, `src/views/SourceSettings.vue`, `src/state.ts`, `src/App.vue`, `src-tauri/src/host.rs`, `protocol/app.schema.json`, `tests/acceptance/playback_service.py`, `tests/fixtures/service/`
 - 回归：T1.5 的当前记录与元数据选择、T1.9 的轮次/网关相关检查。
 - 环境：按 T1 共同环境，当前 macOS arm64；服务/上游夹具以本机 Docker 运行；其他平台实机记录为 NOT RUN。
-- 交付物：接通多源查询、自动/手动选线、确认、换线、过期重查与续播。将实际媒体时间推进/失败事件接到 report_line_playback，ready/seek/登记不触发 playing，上报失败只记录诊断。新服务播放保存实际进度到 SQLite，重启后通过新轮次恢复。来源上传成功后移除本地副本；移除全局播放源、MacCMS 元数据/同源直通、旧 App 匹配/线路记忆、短剧/体育和内置 TMDB 直连，同时保留 Session 历史校验及元数据选择。同步旧入口的权限/契约；服务断连时本地文件与受控直播实际播放。
+- 交付物：接通多源查询、自动/手动选线、确认、换线、过期重查与续播。将实际媒体时间推进/失败事件接到 report_line_playback，ready/seek/登记不触发 playing，上报失败只记录诊断。新服务播放保存实际进度到 SQLite，重启后通过新轮次恢复。来源上传成功后移除本地副本；移除全局播放源、MacCMS 元数据/同源直通、旧 App 匹配/线路记忆、短剧/体育；内置 TMDB 直连作为无服务时的后备保留（ADR-083），同时保留 Session 历史校验及元数据选择。同步旧入口的权限/契约；服务断连时本地文件与受控直播实际播放。
 - 验收：
 ```json
 [

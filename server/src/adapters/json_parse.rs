@@ -36,26 +36,37 @@ pub async fn resolve(
                     })
             })
             .collect();
+        let mut reason = None;
         for parser in &matching {
-            if let Some((url, headers)) = parse(parser, &item).await {
-                item["episode"]["url"] = json!(url);
-                item["episode"]["headers"] = headers;
-                item["episode"]["requires_parse"] = json!(false);
-                item["episode"]["unsupported_reason"] = Value::Null;
-                break;
+            match parse(parser, &item).await {
+                Ok((url, headers)) => {
+                    item["episode"]["url"] = json!(url);
+                    item["episode"]["headers"] = headers;
+                    item["episode"]["requires_parse"] = json!(false);
+                    item["episode"]["unsupported_reason"] = Value::Null;
+                    reason = None;
+                    break;
+                }
+                Err(failure) => reason = Some(failure),
             }
         }
-        if !matching.is_empty() && item["episode"]["requires_parse"] == true {
-            item["episode"]["unsupported_reason"] = json!("parser_failed");
+        if let Some(reason) = reason {
+            item["episode"]["unsupported_reason"] = json!(reason);
         }
         output.push(item);
     }
     Ok(output)
 }
 
-async fn parse(parser: &Value, item: &Value) -> Option<(String, Value)> {
-    let mut api = Url::parse(parser["api"].as_str()?).ok()?;
-    let parameter = parser["url_param"].as_str()?;
+/// Why the last tried parser produced no playable address.
+async fn parse(parser: &Value, item: &Value) -> Result<(String, Value), &'static str> {
+    const CONFIG: &str = "parser_config_invalid";
+    const HEADERS: &str = "parser_headers_invalid";
+    let mut api = parser["api"]
+        .as_str()
+        .and_then(|api| Url::parse(api).ok())
+        .ok_or(CONFIG)?;
+    let parameter = parser["url_param"].as_str().ok_or(CONFIG)?;
     let existing = api
         .query()
         .unwrap_or("")
@@ -68,47 +79,135 @@ async fn parse(parser: &Value, item: &Value) -> Option<(String, Value)> {
         .collect::<Vec<_>>()
         .join("&");
     api.set_query((!existing.is_empty()).then_some(existing.as_str()));
-    api.query_pairs_mut()
-        .append_pair(parameter, item["episode"]["url"].as_str()?);
-    let headers = super::maccms::headers(parser).ok()?;
-    let response = crate::metadata::http::json(api, headers).await.ok()?;
+    api.query_pairs_mut().append_pair(
+        parameter,
+        item["episode"]["url"]
+            .as_str()
+            .ok_or("parser_page_missing")?,
+    );
+    let headers = super::maccms::headers(parser).map_err(|_| CONFIG)?;
+    let body = crate::metadata::http::bytes(api, headers)
+        .await
+        .map_err(|_| "parser_request_failed")?;
+    // A web page or malformed body instead of the configured JSON answer.
+    let response: Value = serde_json::from_slice(&body).map_err(|_| "parser_invalid_response")?;
     let value = parser["url_field"]
-        .as_str()?
+        .as_str()
+        .ok_or(CONFIG)?
         .split('.')
-        .try_fold(&response, |v, k| v.get(k))?
-        .as_str()?;
-    let parsed = Url::parse(value).ok()?;
+        .try_fold(&response, |v, k| v.get(k))
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or("parser_url_missing")?;
+    let parsed = Url::parse(value).map_err(|_| "parser_url_invalid")?;
     if !crate::metadata::http::valid(&parsed) {
-        return None;
+        return Err("parser_url_invalid");
     }
-    let mut headers =
-        super::maccms::headers(&json!({"headers":item["episode"]["headers"]})).ok()?;
+    let mut headers = super::maccms::headers(&json!({"headers":item["episode"]["headers"]}))
+        .map_err(|_| HEADERS)?;
     let raw = response
         .get("header")
         .or_else(|| response.get("headers"))
         .cloned()
         .unwrap_or_else(|| json!({}));
     let raw = if let Value::String(s) = raw {
-        serde_json::from_str(&s).ok()?
+        serde_json::from_str(&s).map_err(|_| HEADERS)?
     } else {
         raw
     };
-    let response_headers = super::maccms::headers(&json!({"headers":raw})).ok()?;
+    let response_headers = super::maccms::headers(&json!({"headers":raw})).map_err(|_| HEADERS)?;
     if response_headers.len() > 32 {
-        return None;
+        return Err(HEADERS);
     }
     for (name, value) in response_headers.iter() {
         if matches!(
             name.as_str(),
             "host" | "content-length" | "connection" | "transfer-encoding" | "proxy-authorization"
         ) {
-            return None;
+            return Err(HEADERS);
         }
         headers.insert(name.clone(), value.clone());
     }
     let mut result = serde_json::Map::new();
     for (name, value) in headers.iter() {
-        result.insert(name.as_str().into(), json!(value.to_str().ok()?));
+        result.insert(
+            name.as_str().into(),
+            json!(value.to_str().map_err(|_| HEADERS)?),
+        );
     }
-    Some((value.to_owned(), Value::Object(result)))
+    Ok((value.to_owned(), Value::Object(result)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_failures_report_their_reason() {
+        use std::io::{Read, Write};
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = server.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in server.incoming() {
+                let mut stream = stream.unwrap();
+                let mut request = [0; 4096];
+                let size = stream.read(&mut request).unwrap_or(0);
+                let request = String::from_utf8_lossy(&request[..size]);
+                let body = if request.contains("page-html") {
+                    "<html>error</html>"
+                } else if request.contains("page-missing") {
+                    r#"{"data":{}}"#
+                } else if request.contains("page-bad") {
+                    r#"{"url":"javascript:alert(1)"}"#
+                } else {
+                    r#"{"url":"https://media.test/v.m3u8"}"#
+                };
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let store = crate::parsers::Store::new(dir.path());
+        store
+            .save(
+                &json!({"name":"P","api":format!("http://{address}/?url="),"flags":["vip"]}),
+                None,
+            )
+            .unwrap();
+        let line = |page: &str| json!({"flag":"vip","episode":{"label":"1","url":format!("https://page.test/{page}"),"requires_parse":true,"headers":{}}});
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let lines = runtime
+            .block_on(resolve(
+                &store,
+                &json!({"parse_ids":[]}),
+                &[
+                    line("page-ok"),
+                    line("page-html"),
+                    line("page-missing"),
+                    line("page-bad"),
+                ],
+            ))
+            .unwrap();
+        assert_eq!(lines[0]["episode"]["url"], "https://media.test/v.m3u8");
+        assert_eq!(lines[0]["episode"]["requires_parse"], false);
+        let reasons: Vec<_> = lines[1..]
+            .iter()
+            .map(|line| line["episode"]["unsupported_reason"].clone())
+            .collect();
+        assert_eq!(
+            reasons,
+            vec![
+                json!("parser_invalid_response"),
+                json!("parser_url_missing"),
+                json!("parser_url_invalid")
+            ]
+        );
+    }
 }

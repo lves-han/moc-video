@@ -121,10 +121,7 @@ impl Config {
             return Err(error);
         }
         if !response.status().is_success() {
-            return Err(ApiError::new(
-                "UPSTREAM_FAILED",
-                "Playback service request failed",
-            ));
+            return Err(service_error(response, "Playback service request failed").await);
         }
         let headers = response.headers().clone();
         let mut bytes = Vec::new();
@@ -199,10 +196,7 @@ impl Config {
             ));
         }
         if !response.status().is_success() {
-            return Err(ApiError::new(
-                "UPSTREAM_FAILED",
-                "Playback service lookup failed",
-            ));
+            return Err(service_error(response, "Playback service lookup failed").await);
         }
         let mut buffer = Vec::new();
         let mut total = 0_usize;
@@ -254,6 +248,48 @@ impl Config {
         }
         Ok(())
     }
+}
+
+/// The service answers failures as `{"error":{"code","message","retryable"}}` with
+/// fixed, credential-free messages. Keep its code when the App contract has one and
+/// append its message, so a rejected source or parser says what was wrong.
+async fn service_error(mut response: reqwest::Response, fallback: &str) -> ApiError {
+    let mut body = Vec::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if body.len() + chunk.len() > 64 * 1024 {
+            body.clear();
+            break;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    error_from_body(&body, fallback)
+}
+
+fn error_from_body(body: &[u8], fallback: &str) -> ApiError {
+    let body: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    let error = &body["error"];
+    let code = match error["code"].as_str() {
+        Some(
+            code @ ("BAD_REQUEST"
+            | "SOURCE_NOT_FOUND"
+            | "REVISION_MISMATCH"
+            | "RESOURCE_LIMIT"
+            | "CAPABILITY_UNAVAILABLE"
+            | "CANCELLED"),
+        ) => code,
+        Some("NOT_FOUND") => "SOURCE_NOT_FOUND",
+        _ => "UPSTREAM_FAILED",
+    };
+    let message = match error["message"]
+        .as_str()
+        .filter(|text| !text.is_empty() && text.len() <= 256 && !text.chars().any(char::is_control))
+    {
+        Some(detail) => format!("{fallback}: {detail}"),
+        None => fallback.to_owned(),
+    };
+    let mut result = ApiError::new(code, &message);
+    result.retryable = error["retryable"] == true;
+    result
 }
 
 pub fn current() -> Result<Config, ApiError> {
@@ -482,6 +518,40 @@ mod tests {
         );
         assert!(result.get("error").is_none(), "{command}: {result}");
         result["data"].clone()
+    }
+
+    #[test]
+    fn service_errors_keep_code_and_reason() {
+        let rejected = error_from_body(
+            br#"{"error":{"code":"BAD_REQUEST","message":"invalid source URL","retryable":false}}"#,
+            "Playback service request failed",
+        );
+        assert_eq!(rejected.code, "BAD_REQUEST");
+        assert_eq!(
+            rejected.message,
+            "Playback service request failed: invalid source URL"
+        );
+        let missing = error_from_body(
+            br#"{"error":{"code":"NOT_FOUND","message":"Parser not found"}}"#,
+            "x",
+        );
+        assert_eq!(missing.code, "SOURCE_NOT_FOUND");
+        let busy = error_from_body(
+            br#"{"error":{"code":"UPSTREAM_FAILED","message":"source request failed","retryable":true}}"#,
+            "x",
+        );
+        assert_eq!(
+            (busy.code.as_str(), busy.retryable),
+            ("UPSTREAM_FAILED", true)
+        );
+        let opaque = error_from_body(
+            b"<html>proxy error</html>",
+            "Playback service request failed",
+        );
+        assert_eq!(
+            (opaque.code.as_str(), opaque.message.as_str()),
+            ("UPSTREAM_FAILED", "Playback service request failed")
+        );
     }
 
     #[test]
@@ -1052,5 +1122,43 @@ mod tests {
             "release_resolution",
             json!({"resolution_id":resolution["id"]}),
         );
+        // A ready line whose short-lived address expired (the harness sets
+        // MOC_LINE_CACHE_SECONDS=5) is refreshed in place by play_line.
+        let renew_round = uuid::Uuid::new_v4().to_string();
+        call(
+            &host,
+            "start_line_round",
+            json!({"round_id":renew_round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"}),
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        let renew_line =
+            loop {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "renew round timed out"
+                );
+                let state = call(&host, "get_line_round", json!({"round_id":renew_round}));
+                assert!(state["error"].is_null(), "{state}");
+                if let Some(line) = state["lines"].as_array().unwrap().iter().find(|line| {
+                    line["source_id"] != chosen_source && line["probe_status"] == "ready"
+                }) {
+                    break line["line_id"].as_str().unwrap().to_owned();
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            };
+        std::thread::sleep(Duration::from_secs(6));
+        let renewed = call(
+            &host,
+            "play_line",
+            json!({"round_id":renew_round,"line_id":renew_line}),
+        );
+        assert!(renewed["resolution"]["id"].is_string(), "{renewed}");
+        call(
+            &host,
+            "release_resolution",
+            json!({"resolution_id":renewed["resolution"]["id"]}),
+        );
+        call(&host, "cancel_line_round", json!({"round_id":renew_round}));
+        println!("T19:expired-line-refresh");
     }
 }

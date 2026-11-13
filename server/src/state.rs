@@ -54,6 +54,9 @@ pub struct Registry {
     pub lookups: HashMap<String, Lookup>,
     pub lines: HashMap<String, Line>,
     pub cache: HashMap<String, CacheEntry>,
+    /// Lookups cancelled through DELETE, kept until their lease ends so a late
+    /// confirmation is answered CANCELLED instead of "expired".
+    pub cancelled: HashMap<String, i64>,
     pub mapping_generation: u64,
     pub parser_generation: u64,
 }
@@ -110,6 +113,7 @@ impl Registry {
         });
         self.lines.retain(|_, value| value.expires_at > now);
         self.cache.retain(|_, value| value.expires_at > now);
+        self.cancelled.retain(|_, expires_at| *expires_at > now);
     }
     pub fn changed(&mut self, source_id: &str) {
         self.cache

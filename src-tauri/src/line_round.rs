@@ -23,7 +23,13 @@ pub struct NativeLine {
     pub url: String,
     pub status: String,
     pub latency_ms: Option<u64>,
+    /// Identifies the probe whose result may settle this entry; a refresh replaces it.
+    pub probe: u64,
 }
+
+/// Waiting budget for one stage of work: the initial lookup, a confirmation or a refresh.
+pub const BUDGET: Duration = Duration::from_secs(45);
+
 pub struct Round {
     pub id: String,
     pub target: Value,
@@ -40,7 +46,7 @@ pub struct Round {
     pub selected: Option<String>,
     pub manual: bool,
     pub error: Option<String>,
-    pub started: Instant,
+    pub deadline: Instant,
     pub stop: Arc<AtomicBool>,
     pub job: Arc<Job>,
     pub job_id: String,
@@ -182,8 +188,13 @@ pub fn launch(round: Arc<Mutex<Round>>, body: Value, confirmation: bool) -> Resu
 }
 
 impl Round {
+    /// New work (a confirmation or a refresh) gets its own budget, so lines that
+    /// arrive after the initial lookup budget are still probed.
+    pub fn extend(&mut self) {
+        self.deadline = Instant::now() + BUDGET;
+    }
     fn settle(&mut self) {
-        if self.started.elapsed() >= Duration::from_secs(45) {
+        if Instant::now() >= self.deadline {
             for line in self
                 .lines
                 .values_mut()
@@ -362,6 +373,7 @@ pub fn event(
                         url: String::new(),
                         status: "unsupported".into(),
                         latency_ms: None,
+                        probe: 0,
                     },
                 );
             } else {
@@ -374,12 +386,15 @@ pub fn event(
                 if !matches!(line["kind"].as_str(), Some("file" | "hls")) {
                     return Err(ApiError::bad("Unsupported line kind"));
                 }
+                static PROBES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                let probe_id = PROBES.fetch_add(1, Ordering::Relaxed);
                 let native = NativeLine {
                     raw: line.clone(),
                     headers,
                     url,
                     status: "testing".into(),
                     latency_ms: None,
+                    probe: probe_id,
                 };
                 state.lines.insert(id.into(), native.clone());
                 state.pending += 1;
@@ -403,25 +418,30 @@ pub fn event(
                         Err(error) => Err(error),
                     };
                     let mut round = round.lock().expect("round state");
-                    if round.stop.load(Ordering::SeqCst)
-                        || round.started.elapsed() >= Duration::from_secs(45)
-                    {
+                    if round.stop.load(Ordering::SeqCst) {
                         return;
                     }
-                    if let Some(line) = round.lines.get_mut(&id) {
-                        match measured {
-                            Ok(ms) => {
-                                line.status = "ready".into();
-                                line.latency_ms = Some(ms);
+                    // Only a line still waiting on this probe counts toward `pending`;
+                    // a budget timeout or a refresh has already settled the others.
+                    let Some(line) = round
+                        .lines
+                        .get_mut(&id)
+                        .filter(|line| line.probe == probe_id && line.status == "testing")
+                    else {
+                        return;
+                    };
+                    match measured {
+                        Ok(ms) => {
+                            line.status = "ready".into();
+                            line.latency_ms = Some(ms);
+                        }
+                        Err(error) => {
+                            line.status = if error.code == "UPSTREAM_TIMEOUT" {
+                                "timeout"
+                            } else {
+                                "failed"
                             }
-                            Err(error) => {
-                                line.status = if error.code == "UPSTREAM_TIMEOUT" {
-                                    "timeout"
-                                } else {
-                                    "failed"
-                                }
-                                .into();
-                            }
+                            .into();
                         }
                     }
                     round.pending = round.pending.saturating_sub(1);
@@ -487,4 +507,113 @@ fn probe(line: &NativeLine, job: &Job) -> Result<u64, ApiError> {
         return Err(ApiError::new("UPSTREAM_FAILED", "Empty media probe"));
     }
     Ok(start.elapsed().as_millis() as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::requests::{MonotonicClock, Requests};
+
+    fn round(deadline: Instant) -> Arc<Mutex<Round>> {
+        let requests = Arc::new(Requests::default());
+        let job = requests
+            .begin(
+                &uuid::Uuid::new_v4().to_string(),
+                "resolve",
+                Arc::new(MonotonicClock::default()),
+            )
+            .unwrap();
+        Arc::new(Mutex::new(Round {
+            id: "round".into(),
+            target: json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:1","video_id":"tt1"}),
+            metadata_ref: json!({}),
+            metadata_source_id: "tmdb".into(),
+            metadata_snapshot: crate::source_dispatch::SourceSnapshot {
+                host_epoch: "host".into(),
+                guest_epoch: None,
+                config: json!({}),
+                generation: 0,
+                sync_sequence: 0,
+                source_id: "metadata".into(),
+                source_revision: "1".into(),
+            },
+            lookup_id: Some(uuid::Uuid::new_v4().to_string()),
+            sources: HashMap::from([("source-a".into(), json!({"source_id":"source-a"}))]),
+            candidates: HashMap::new(),
+            lines: HashMap::new(),
+            query_done: true,
+            pending: 0,
+            pending_confirm: 0,
+            selected: None,
+            manual: false,
+            error: None,
+            deadline,
+            stop: Arc::new(AtomicBool::new(false)),
+            job: Arc::new(job),
+            job_id: uuid::Uuid::new_v4().to_string(),
+            service: service::Config::parse("http://127.0.0.1:9/", "token").unwrap(),
+            permits: Arc::new(tokio::sync::Semaphore::new(4)),
+        }))
+    }
+
+    #[test]
+    fn confirmed_lines_after_initial_budget_are_probed_and_selected() {
+        use std::io::{Read, Write};
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = server.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in server.incoming().take(4) {
+                let mut stream = stream.unwrap();
+                let mut request = [0; 4096];
+                let _ = stream.read(&mut request);
+                // A probe that is still running while the App polls the round.
+                std::thread::sleep(Duration::from_millis(300));
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: 5\r\nConnection: close\r\n\r\nmedia");
+            }
+        });
+        // The initial lookup finished and its budget is spent before the user confirms.
+        let round = round(Instant::now() - Duration::from_secs(1));
+        round.lock().unwrap().snapshot();
+        {
+            let mut state = round.lock().unwrap();
+            state.pending_confirm += 1;
+            state.extend();
+        }
+        let line_id = uuid::Uuid::new_v4().to_string();
+        let line = json!({"line_id":line_id,"source_id":"source-a","source_revision":1,"kind":"file",
+            "expires_at":time::OffsetDateTime::now_utc().unix_timestamp()+60,
+            "target":round.lock().unwrap().target.clone(),
+            "play":{"url":format!("http://{address}/video.mp4"),"headers":{}}});
+        let permits = round.lock().unwrap().permits.clone();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            event(&round, json!({"event":"line","line":line}), &permits, true).unwrap();
+            round.lock().unwrap().pending_confirm -= 1;
+            for _ in 0..200 {
+                // Polls like the App does while the probe is still running.
+                let probing = {
+                    let mut state = round.lock().unwrap();
+                    state.snapshot();
+                    state.lines[&line_id].status == "testing"
+                };
+                if !probing {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        });
+        let snapshot = round.lock().unwrap().snapshot();
+        assert_eq!(round.lock().unwrap().lines[&line_id].status, "ready");
+        assert_eq!(snapshot["selected_line_id"], line_id.as_str());
+        assert_eq!(
+            (
+                snapshot["pending"].clone(),
+                snapshot["pending_confirm"].clone()
+            ),
+            (json!(0), json!(0))
+        );
+    }
 }

@@ -560,7 +560,7 @@ class SourceMatching(StremioMetadata):
         seed="""import sqlite3,json
 c=sqlite3.connect('/service-data/service.sqlite3')
 rows=[('11111111-1111-4111-8111-111111111111','tmdb','movie','tmdb:42','source-a',1,'101','user','{}',1,0),('22222222-2222-4222-8222-222222222222','other','movie','tmdb:42','source-a',1,'101','user','{}',1,0)]
-c.executemany('INSERT INTO mappings VALUES (?,?,?,?,?,?,?,?,?,?,?)',rows);c.commit()
+c.executemany('INSERT INTO mappings(id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked) VALUES (?,?,?,?,?,?,?,?,?,?,?)',rows);c.commit()
 """
         docker("exec",self.fixture,"python","-c",seed)
         status,body=self.native("GET","/v1/mappings?metadata_source_id=tmdb&type=movie&meta_id=tmdb%3A42")
@@ -634,7 +634,7 @@ class LookupLifecycle(StremioMetadata):
         self.assertEqual(self.ndjson("/v1/mappings",{"lookup_id":another_id,"source_id":owner,"candidate_id":candidate})[0],400)
         self.assertEqual(self.native("DELETE","/v1/lookups/"+another_id)[0],204)
         self.assertEqual(self.native("DELETE","/v1/lookups/"+lookup)[0],204)
-        body["source_id"]=owner;self.assertEqual(self.ndjson("/v1/mappings",body)[0],410)
+        body["source_id"]=owner;status,cancelled=self.ndjson("/v1/mappings",body);self.assertEqual((status,cancelled["error"]["code"]),(409,"CANCELLED"))
         status,events=self.ndjson("/v1/lookups",self.input([ids[1]],"movie",True));lookup=events[0]["lookup_id"]
         candidate=next(event for event in events if event["event"]=="confirm")["candidates"][0]["candidate_id"]
         time.sleep(.2)
@@ -661,8 +661,10 @@ class LookupLifecycle(StremioMetadata):
         else:self.fail("confirmation did not reach the controlled upstream")
         stopped=time.monotonic()
         self.assertEqual(self.native("DELETE","/v1/lookups/"+lookup)[0],204)
-        worker.join(timeout=1.5);self.assertFalse(worker.is_alive());self.assertEqual(outcome[0][0],410)
+        worker.join(timeout=1.5);self.assertFalse(worker.is_alive());self.assertEqual((outcome[0][0],outcome[0][1]["error"]["code"]),(409,"CANCELLED"))
         self.assertLess(time.monotonic()-stopped,1.5)
+        # A confirmation sent after the cancellation is answered the same way (plan 5.8).
+        self.assertEqual(self.ndjson("/v1/mappings",{"lookup_id":lookup,"source_id":race["id"],"candidate_id":candidate})[0],409)
         rows=self.native("GET","/v1/mappings?metadata_source_id=tmdb&type=movie&meta_id=tmdb%3A45")[1]["mappings"]
         self.assertFalse(any(row["source_id"]==race["id"] for row in rows))
         self.fixture_request("/control?detail_delay=0")
@@ -765,7 +767,8 @@ class NativeLineRound(LookupLifecycle):
     test_5_disconnect_stops_work = None
 
     def test_1_waits_probes(self):
-        self.start("app-token", self.fixture_env)
+        # A short address lifetime lets the host test reach an expired, still-held line.
+        self.start("app-token", {**self.fixture_env, "MOC_LINE_CACHE_SECONDS": "5"})
         self.fixture_request("/control?media_url=" + urllib.parse.quote(self.fixture_control, safe=""))
         base = self.fixture_env["MOC_TMDB_API_URL"].removesuffix("/3")
         for flavor in ("fast", "slow", "hls"):
@@ -783,6 +786,7 @@ class NativeLineRound(LookupLifecycle):
 
     def test_3_probe_open(self):
         self.assertIn("T19:probe-open", getattr(type(self), "host_output", ""))
+        self.assertIn("T19:expired-line-refresh", getattr(type(self), "host_output", ""))
         counts = self.fixture_request("/stats")["counts"]
         for path in ("/probe-fast.mp4", "/probe-slow.mp4", "/hls/master.m3u8", "/hls/variant.m3u8", "/hls/segment.ts"):
             self.assertGreater(counts.get(path, 0), 0, path)
@@ -1141,10 +1145,10 @@ class JsonParser(LookupLifecycle):
         self.assertEqual(line['line_id'],self.line['line_id']);self.assertEqual(line['play']['url'],'https://media.test/parsed.m3u8?generation=2')
         _,events=self.ndjson('/v1/lookups',self.input([self.source['id']]))
         self.assertTrue(all(e['line']['play']['url'].endswith('generation=2') for e in events if e['event']=='line'))
-        for mode in ('html','missing'):
+        for mode,reason in (('html','parser_invalid_response'),('missing','parser_url_missing')):
             self.fixture_request('/control?parser_mode='+mode)
             _,events=self.ndjson('/v1/lookups',self.input([self.source['id']],refresh=True))
-            lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['reason']=='parser_failed' for x in lines))
+            lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['reason']==reason for x in lines),lines)
         updated['enabled']=False;self.assertEqual(self.native('PUT','/v1/parsers/'+updated['id'],updated)[0],200)
         _,events=self.ndjson('/v1/lookups',self.input([self.source['id']],refresh=True))
         lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),2,events);self.assertTrue(all(x['reason']=='needs_sniffing' for x in lines))

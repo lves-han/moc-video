@@ -873,6 +873,9 @@
           "401": {
             "description": "Invalid token"
           },
+          "409": {
+            "description": "Lookup was cancelled (CANCELLED)"
+          },
           "410": {
             "description": "Handle expired or source changed"
           }
@@ -1434,6 +1437,7 @@
           "metadata_source_id",
           "type",
           "meta_id",
+          "season",
           "source_id",
           "source_revision",
           "content_id",
@@ -1459,6 +1463,11 @@
           },
           "meta_id": {
             "type": "string"
+          },
+          "season": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Target season of a series mapping; 0 for movies"
           },
           "source_id": {
             "type": "string"
@@ -1589,7 +1598,8 @@
             }
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "description": "Why the line has no play field: needs_sniffing, unsupported_media_format, unsupported_protocol_or_script, a JSON parser failure (parser_request_failed, parser_invalid_response, parser_url_missing, parser_url_invalid, parser_headers_invalid, parser_config_invalid), or an adapter reason such as external_url_unsupported."
           }
         }
       },

@@ -28,6 +28,11 @@ impl Store {
         outcome: &str,
         latency: Option<u64>,
     ) -> rusqlite::Result<()> {
+        // A line without a verifiable locator has a one-off key that no later lookup
+        // can read back, so its result is not stored.
+        if line.locator.is_none() {
+            return Ok(());
+        }
         let ok = u8::from(outcome == "playing");
         let failed = u8::from(outcome == "failed");
         let last = (outcome == "playing").then(crate::metadata::cache::now);
