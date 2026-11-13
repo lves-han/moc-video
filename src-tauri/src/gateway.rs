@@ -254,14 +254,11 @@ impl Gateway {
                     session.episode = Some(owner.clone()); (session.prefetch.clone(), session.cancelled.clone())
                 })
             };
-            if original.link.kind == "progressive" && original.link.interceptor.is_none() && original.link.cookies.is_none() {
+            if original.link.kind == "progressive" {
                 if let Some((prefetch, cancelled)) = session_prefetch {
-                    let mut headers = original.link.headers.clone();
-                    if !original.link.referer.is_empty() { if let Ok(value) = original.link.referer.parse() { headers.insert("referer", value); } }
                     if let Some(handle) = self.shared.runtime.lock().expect("gateway runtime").clone() {
                         let _entered = handle.enter();
-                        prefetch.start_progressive(view["media_url"].as_str().expect("media URL").to_owned(), original.link.url.clone(), original.link.provider.clone(),
-                            original.source_revision.clone(), owner, headers, self.shared.media_cache.clone(), cancelled);
+                        prefetch.start_progressive(view["media_url"].as_str().expect("media URL").to_owned(), self.shared.media_cache.clone(), cancelled);
                     } else { prefetch.fail("缓存服务尚未就绪"); }
                 }
             }
@@ -1168,8 +1165,8 @@ async fn transfer(
         && lease.kind == "media"
         && !lease.live
         && !transformed
-        && !media_cache::request_bypasses(&req.headers)
-        && !media_cache::request_bypasses(&headers)
+        && (lease.episode.is_some() || (!media_cache::request_bypasses(&req.headers)
+            && !media_cache::request_bypasses(&headers)))
         && (!req.headers.contains_key("if-range") || req.headers.get("x-moc-prefetch").is_some_and(|value| value == "1"))
         && !["if-none-match", "if-modified-since"].iter().any(|name| req.headers.contains_key(*name))
     {
@@ -1216,6 +1213,9 @@ async fn transfer(
             cached
                 .headers
                 .insert("cache-control", "no-store".parse().expect("cache header"));
+            if req.headers.get("x-moc-prefetch").is_some_and(|v| v == "1") {
+                cached.headers.insert("x-moc-cache-key", key.parse().expect("cache key"));
+            }
             *sent = true;
             watched(
                 lease,
@@ -1243,7 +1243,7 @@ async fn transfer(
             return Ok(());
         }
     }
-    if !req.headers.contains_key("if-range") {
+    if !req.headers.contains_key("if-range") && !req.headers.contains_key("x-moc-prefetch") {
         if let Some(resource) = &cache_resource {
             let range = req.headers.get("range").and_then(|v| v.to_str().ok());
             if let Some(mut sequence) = lease.shared.media_cache.cached_sequence(resource, range) {
@@ -1502,6 +1502,9 @@ async fn transfer(
         return transfer_manifest(req, lease, read, write, sent, response, first).await;
     }
     let length = known_length;
+    if req.headers.get("x-moc-prefetch").is_some_and(|v| v == "1") {
+        if let Some(key) = &cache_key { output.insert("x-moc-cache-key", key.parse().expect("cache key")); }
+    }
     let mut cache_write = cache_key.and_then(|key| {
         lease.shared.media_cache.begin_episode_at(
             key,
@@ -1797,9 +1800,7 @@ async fn transfer_manifest(
 
 fn schedule_hls_prefetch(lease: &RequestLease, body: &[u8]) {
     let Some(prefetch) = &lease.prefetch else { return; };
-    let Some(owner) = &lease.episode else { return; };
-    let Some(selected) = &lease.selected else { return; };
-    if selected.link.interceptor.is_some() || selected.link.cookies.is_some() { prefetch.fail("当前播放源的网络上下文不支持预缓存"); return; }
+    if lease.episode.is_none() || lease.selected.is_none() { return; }
     let Ok(text) = std::str::from_utf8(body) else { prefetch.fail("播放列表编码无效"); return; };
     let planned = match crate::prefetch::segments(text) { Ok(value) => value, Err(error) => { prefetch.fail(error); return; } };
     let mut records = lease.shared.records.lock().expect("resource registry");
@@ -1810,22 +1811,14 @@ fn schedule_hls_prefetch(lease: &RequestLease, body: &[u8]) {
         let Some(resource_id) = parsed.path_segments().and_then(|mut parts| parts.next_back()) else { prefetch.fail("缓存分片地址无效"); return; };
         let Some(resource) = session.resources.get(resource_id) else { prefetch.fail("缓存分片已经失效"); return; };
         if resource.kind != "media" && resource.kind != "key" { prefetch.fail("当前播放列表包含无法缓存的分片"); return; }
-        let mut headers = resource.headers.clone();
-        headers.insert("accept-encoding", "identity".parse().expect("static header"));
-        if let Some(range) = &range { match range.parse() { Ok(value) => { headers.insert("range", value); }, Err(_) => { prefetch.fail("缓存分片范围无效"); return; } } }
-        if !selected.link.referer.is_empty() && http_url(&selected.link.url, false).ok().zip(http_url(&resource.url, false).ok()).is_some_and(|(a,b)| a.origin() == b.origin()) {
-            if let Ok(referer) = selected.link.referer.parse() { headers.insert("referer", referer); }
-        }
-        let scope = format!("{}:{owner}", selected.link.provider);
-        let cache_key = media_cache::key(&scope, &selected.source_revision, &resource.url, &headers);
-        segments.push(crate::prefetch::Segment { url, start_ms, end_ms, range, if_range: None, memory_only: resource.kind == "key", cache_key });
+        segments.push(crate::prefetch::Segment { url, start_ms, end_ms, range, if_range: None, memory_only: resource.kind == "key" });
     }
     let total = segments.iter().map(|item| item.end_ms).max().unwrap_or(0);
     for (id, resource) in &session.resources {
         if resource.kind != "key" { continue; }
         let url = format!("http://{}/media/{}/{id}?cap={}", lease.shared.address, lease.target, session.cap);
         if segments.iter().any(|item| item.url == url) { continue; }
-        segments.push(crate::prefetch::Segment { url, start_ms: 0, end_ms: 0, range: None, if_range: None, memory_only: true, cache_key: String::new() });
+        segments.push(crate::prefetch::Segment { url, start_ms: 0, end_ms: 0, range: None, if_range: None, memory_only: true });
     }
     if Arc::ptr_eq(prefetch, &session.audio_prefetch) { session.last_audio_plan = Some(lease.resource.clone()); }
     else { session.last_video_plan = Some(lease.resource.clone()); }

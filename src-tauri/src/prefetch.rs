@@ -10,7 +10,6 @@ pub struct Segment {
     pub range: Option<String>,
     pub if_range: Option<String>,
     pub memory_only: bool,
-    pub cache_key: String,
 }
 #[derive(Default)]
 struct State { playlist: String, status: &'static str, unit: &'static str, total_ms: u64, ranges: Vec<(u64,u64)>, error: Option<String> }
@@ -35,8 +34,8 @@ impl Prefetch {
         let mut state = self.state.lock().expect("prefetch state");
         if self.generation.load(Ordering::SeqCst) == generation { state.status = "failed"; state.error = Some(message.into()); }
     }
-    pub fn start_progressive(self: &Arc<Self>, local_url: String, origin_url: String, provider: String, revision: String,
-        owner: String, source_headers: reqwest::header::HeaderMap, cache: Arc<crate::media_cache::MediaCache>, cancelled: Arc<AtomicBool>) {
+    pub fn start_progressive(self: &Arc<Self>, local_url: String,
+        cache: Arc<crate::media_cache::MediaCache>, cancelled: Arc<AtomicBool>) {
         let generation = {
             let mut state = self.state.lock().expect("prefetch state");
             let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
@@ -49,18 +48,9 @@ impl Prefetch {
             let client = match reqwest::Client::builder().no_proxy().connect_timeout(std::time::Duration::from_secs(15)).build() {
                 Ok(value) => value, Err(_) => { this.fail_generation(generation, "缓存连接初始化失败"); return; }
             };
-            let cache_key = |range: &str, validator: Option<&str>| {
-                let mut headers = source_headers.clone();
-                for name in ["host", "content-length", "connection", "transfer-encoding", "origin"] { headers.remove(name); }
-                headers.insert("accept-encoding", "identity".parse().expect("static header"));
-                headers.insert("range", range.parse().expect("generated range"));
-                if let Some(value) = validator { if let Ok(value) = value.parse() { headers.insert("if-range", value); } }
-                crate::media_cache::key(&format!("{provider}:{owner}"), &revision, &origin_url, &headers)
-            };
             let first_range = format!("bytes=0-{}", CHUNK - 1);
-            let first_key = cache_key(&first_range, None);
             let mut attempt = 0u32;
-            while cache.get(&first_key).is_none() {
+            let first_key = loop {
                 let request = client.get(&local_url).header("x-moc-prefetch", "1").header(reqwest::header::RANGE, &first_range);
                 let response = tokio::select! {
                     value = tokio::time::timeout(std::time::Duration::from_secs(30), request.send()) => value,
@@ -71,14 +61,17 @@ impl Prefetch {
                     Ok(Ok(value)) if !value.status().is_server_error() && value.status() != reqwest::StatusCode::TOO_MANY_REQUESTS => { this.fail_generation(generation, "播放源不支持分段缓存"); return; }
                     _ => { if !this.retry_wait(&cancelled, generation, &mut attempt).await { return; } continue; }
                 };
+                let key = response.headers().get("x-moc-cache-key").and_then(|v| v.to_str().ok()).map(str::to_owned);
                 let mut interrupted = false;
                 loop {
                     let chunk = tokio::select! { value = tokio::time::timeout(std::time::Duration::from_secs(30), response.chunk()) => value, _ = wait_cancel(&cancelled, &this.generation, generation) => return };
                     match chunk { Ok(Ok(Some(_))) => {}, Ok(Ok(None)) => break, _ => { interrupted = true; break; } }
                 }
                 if interrupted { if !this.retry_wait(&cancelled, generation, &mut attempt).await { return; } continue; }
-                if cache.get(&first_key).is_none() { this.fail_generation(generation, "播放源或本机存储不允许缓存该内容"); return; }
-            }
+                let Some(key) = key else { this.fail_generation(generation, "缓存服务未返回分片信息"); return; };
+                if cache.get(&key).is_none() { this.fail_generation(generation, "视频缓存写入失败，请检查本机存储"); return; }
+                break key;
+            };
             let Some(first) = cache.get(&first_key) else { this.fail_generation(generation, "播放源或本机存储不允许缓存该内容"); return; };
             let content_range = first.headers.get("content-range").and_then(|v| v.to_str().ok()).unwrap_or("");
             let parsed = content_range.strip_prefix("bytes 0-").and_then(|v| v.split_once('/')).and_then(|(end,total)| Some((end.parse::<u64>().ok()?, total.parse::<u64>().ok()?)));
@@ -87,7 +80,6 @@ impl Prefetch {
             };
             let validator = first.headers.get("etag").and_then(|v| v.to_str().ok()).filter(|v| !v.starts_with("W/"))
                 .or_else(|| first.headers.get("last-modified").and_then(|v| v.to_str().ok())).map(str::to_owned);
-            if total > CHUNK && validator.is_none() { this.fail_generation(generation, "播放源缺少文件校验信息，无法安全缓存"); return; }
             drop(first);
             if cancelled.load(Ordering::SeqCst) || this.generation.load(Ordering::SeqCst) != generation { return; }
             {
@@ -107,9 +99,8 @@ impl Prefetch {
                 let start = index * CHUNK; let end = start.saturating_add(CHUNK).min(total);
                 let range = format!("bytes={start}-{}", end - 1);
                 let if_range = if start == 0 { None } else { validator.clone() };
-                let key = if start == 0 { first_key.clone() } else { cache_key(&range, if_range.as_deref()) };
                 let segment = Segment { url: local_url.clone(), start_ms: start, end_ms: end,
-                    range: Some(if start == 0 { first_range.clone() } else { range }), if_range, memory_only: false, cache_key: key };
+                    range: Some(if start == 0 { first_range.clone() } else { range }), if_range, memory_only: false };
                 match this.retry_segment(&client, &cache, &cancelled, generation, &segment, "bytes", total).await {
                     Ok(true) => {}, Ok(false) => return, Err(message) => { this.fail_generation(generation, message); return; }
                 }
@@ -164,7 +155,7 @@ impl Prefetch {
     }
     async fn ensure_segment(&self, client: &reqwest::Client, cache: &Arc<crate::media_cache::MediaCache>, cancelled: &AtomicBool,
         generation: u64, segment: &Segment, unit: &str, total_ms: u64) -> Result<bool, &'static str> {
-        if segment.memory_only || cache.get(&segment.cache_key).is_none() {
+        let key = {
             let mut request = client.get(&segment.url).header("x-moc-prefetch", "1");
             if let Some(range) = &segment.range { request = request.header(reqwest::header::RANGE, range); }
             if let Some(value) = &segment.if_range { request = request.header(reqwest::header::IF_RANGE, value); }
@@ -174,6 +165,7 @@ impl Prefetch {
             };
             if response.status().is_server_error() || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS { return Err("缓存下载失败，请检查网络"); }
             if !response.status().is_success() || (segment.range.is_some() && response.status() != reqwest::StatusCode::PARTIAL_CONTENT) { return Err("播放源未按请求返回可缓存的分片"); }
+            let key = response.headers().get("x-moc-cache-key").and_then(|v| v.to_str().ok()).map(str::to_owned);
             let mut response = response;
             loop {
                 let chunk = tokio::select! {
@@ -182,9 +174,10 @@ impl Prefetch {
                 };
                 if chunk.is_none() { break; }
             }
-        }
+            key
+        };
         if segment.memory_only { return Ok(true); }
-        let Some(cached) = cache.get(&segment.cache_key) else { return Err("播放源或本机存储不允许缓存该内容"); };
+        let Some(cached) = key.as_deref().and_then(|key| cache.get(key)) else { return Err("视频缓存写入失败，请检查本机存储"); };
         if let Some(range) = &segment.range {
             let expected = range.strip_prefix("bytes=").and_then(|value| value.split_once('-')).and_then(|(a,b)| Some((a.parse::<u64>().ok()?,b.parse::<u64>().ok()?)));
             let actual = cached.headers.get("content-range").and_then(|value| value.to_str().ok()).and_then(|value| value.strip_prefix("bytes ")).and_then(|value| value.split_once('/')).and_then(|(bounds,total)| {

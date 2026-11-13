@@ -28,6 +28,27 @@ fn image_mime(body: &[u8]) -> Option<&'static str> {
     else if body.len() >= 12 && &body[..4] == b"RIFF" && &body[8..12] == b"WEBP" { Some("image/webp") }
     else { None }
 }
+pub async fn warm(cache: &Cache, value: &Value) {
+    fn collect(value: &Value, keys: &mut std::collections::HashSet<String>) {
+        match value {
+            Value::String(path) if path.contains("/image/") => {
+                if let Some(key) = path.rsplit('/').next().filter(|key| key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())) { keys.insert(key.to_owned()); }
+            }
+            Value::Object(map) => for child in map.values() { collect(child, keys); },
+            Value::Array(items) => for child in items { collect(child, keys); },
+            _ => {}
+        }
+    }
+    let mut keys = std::collections::HashSet::new(); collect(value, &mut keys);
+    for key in keys {
+        let Ok(Some((url, body, _))) = cache.image(&key) else { continue; };
+        if body.is_some() { continue; }
+        let Ok(url) = Url::parse(&url) else { continue; };
+        if let Ok(body) = http::bytes(url, Default::default()).await {
+            if let Some(mime) = image_mime(&body) { let _ = cache.save_image(&key, &body, mime); }
+        }
+    }
+}
 pub async fn image(State(state): State<crate::AppState>, Path((token, key)): Path<(String, String)>) -> Response {
     if !bool::from(token.as_bytes().ct_eq(state.token.as_bytes())) { return StatusCode::UNAUTHORIZED.into_response(); }
     if key.len() != 64 || !key.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) { return StatusCode::BAD_REQUEST.into_response(); }

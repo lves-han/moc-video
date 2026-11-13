@@ -143,6 +143,40 @@ async fn meta(
     Ok(value)
 }
 
+fn warm_catalog(state: &AppState, source: &str, lang: &str, default_kind: &str, token: &str, value: &mut serde_json::Value) -> rusqlite::Result<()> {
+    let Some(items) = value.get_mut("metas").and_then(serde_json::Value::as_array_mut) else { return Ok(()); };
+    let base = if source == "tmdb" { None } else { state.sources.get(source).ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
+    let mut titles = Vec::new();
+    for item in items.iter_mut() {
+        let Some(id) = item["id"].as_str().map(str::to_owned) else { continue; };
+        let kind = item["type"].as_str().unwrap_or(default_kind).to_owned();
+        let title = metadata::cache::title_key(&json!(source), &json!(kind), &json!(id));
+        state.cache.touch_title(&title)?;
+        metadata::media::rewrite(&state.cache, &title, token, base.as_ref(), item)?;
+        titles.push((kind, id, title, item.clone()));
+    }
+    let state = state.clone(); let source = source.to_owned(); let lang = lang.to_owned(); let token = token.to_owned();
+    tokio::spawn(async move {
+        static GATE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+        let Ok(_permit) = GATE.acquire().await else { return; };
+        for (kind, id, title, item) in titles {
+            metadata::media::warm(&state.cache, &item).await;
+            let result = if source == "tmdb" { meta(&state, &lang, &kind, &id).await } else {
+                match state.sources.get(&source) {
+                    Ok(Some(entry)) => metadata::stremio::response(&entry, &state.cache, &lang, &["meta".into(), kind.clone(), format!("{id}.json")]).await,
+                    _ => continue,
+                }
+            };
+            if let Ok(mut detail) = result {
+                if metadata::media::rewrite(&state.cache, &title, &token, base.as_ref(), &mut detail).is_ok() {
+                    metadata::media::warm(&state.cache, &detail).await;
+                }
+            }
+        }
+    });
+    Ok(())
+}
+
 async fn stremio(
     State(state): State<AppState>,
     Path((token, source, lang, _resource)): Path<(String, String, String, String)>,
@@ -243,6 +277,13 @@ async fn stremio(
     };
     let mut response = match result {
         Ok(mut value) => {
+            if decoded.first().is_some_and(|part| part == "catalog") {
+                if let Some(kind) = decoded.get(1) {
+                    if warm_catalog(&state, &source, &lang, kind, &token, &mut value).is_err() {
+                        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL", "Catalog cache registration failed");
+                    }
+                }
+            }
             if let [resource, kind, id] = decoded.as_slice() {
                 if resource == "meta" {
                     if let Some(id) = id.strip_suffix(".json") {

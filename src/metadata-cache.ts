@@ -5,7 +5,7 @@ export const METADATA_TTL = 7 * 24 * 60 * 60 * 1000;
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const KEY = 'moc-video.metadata.v1';
-const MAX_ENTRIES = 100;
+const MAX_ENTRIES = 200;
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 type Entry = { key: string; savedAt: number; value: DetailsViewData };
 const sameRef = (a: Bridge_MediaRef | undefined, b: Bridge_MediaRef) => Boolean(a && a.source_id === b.source_id

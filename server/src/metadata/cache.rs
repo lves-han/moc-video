@@ -41,6 +41,13 @@ fn trim_details(tx: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
 }
 
 impl Cache {
+    pub fn touch_title(&self, title: &str) -> rusqlite::Result<()> {
+        let mut conn = self.connection()?;
+        let tx = conn.transaction()?;
+        tx.execute("INSERT OR REPLACE INTO detail_cache_access(title_key) VALUES(?1)", [title])?;
+        trim_details(&tx)?;
+        tx.commit()
+    }
     pub fn new(dir: &Path, revision: String) -> Self {
         Self {
             path: dir.join("service.sqlite3"),
@@ -214,6 +221,19 @@ mod tests {
         assert!(cache.get(&detail(0, "zh-CN")).unwrap().is_some());
         assert!(cache.get(&detail(2, "en-US")).unwrap().is_none());
         assert!(cache.get(&catalog).unwrap().is_some());
+    }
+
+    #[test]
+    fn catalog_titles_and_images_share_the_thousand_title_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let cache = Cache::new(dir.path(), "v1".into());
+        for id in 0..1000 { cache.touch_title(&format!("title-{id}")).unwrap(); }
+        let old = cache.register_image("title-0", "https://example.test/old.jpg").unwrap();
+        let retained = cache.register_image("title-1", "https://example.test/retained.jpg").unwrap();
+        cache.touch_title("title-1000").unwrap();
+        assert!(cache.image(&old).unwrap().is_none());
+        assert!(cache.image(&retained).unwrap().is_some());
     }
 
     #[test]

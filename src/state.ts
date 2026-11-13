@@ -795,6 +795,30 @@ export class AppController {
     this.rows[key] ??= { phase: "pending", data: null, error: null };
     return this.rows[key]!;
   }
+  private warmHomeDetails(cards: Bridge_MediaCard[], source: SourceKey, host: string, locale: string) {
+    const unique = [...new Map(cards.filter(card => sameSource(card.ref, source)).map(card => [JSON.stringify(card.ref), clone(card.ref)])).values()];
+    if (!unique.length) return;
+    const generation = this.catalogGeneration;
+    this.background.enqueue(`home-details:${JSON.stringify(unique)}`, async () => {
+      for (const ref of unique) {
+        if (this.state.route.name !== 'home' || this.catalogGeneration !== generation || this.state.runtime.engine_epoch !== host
+            || metadataLocale(this.state.settings) !== locale || !sameSource(this.state.selected_metadata_source, source)) return;
+        try {
+          const cached = await this.metadata.getPersistent(ref, locale, host);
+          if (cached && !cached.stale && cached.imagesReady) continue;
+          const response = await this.api.call('get_details', { ref }, crypto.randomUUID(), host);
+          if (this.state.runtime.engine_epoch !== host || !sameSource(this.state.selected_metadata_source, source)) return;
+          requireBinding(sameRef(response.details.ref, ref) && response.metadata_ref && sameRef(response.metadata_ref.content_ref, ref)
+            && response.details.groups.every(group => group.episodes.every(episode => sameSource(episode.ref, ref))), 'Home detail identity differs');
+          await this.metadata.putPersistent(ref, locale, host, response);
+          for (const image of Object.values(response.images)) {
+            if (this.state.route.name !== 'home' || this.state.runtime.engine_epoch !== host) return;
+            await fetch(image.url).then(response => response.arrayBuffer()).catch(() => undefined);
+          }
+        } catch (cause) { this.diagnostics.push(failure(cause)); }
+      }
+    });
+  }
   async loadRow(sectionRef: string, filter: HomeFilter = {}, pageNumber = 1, background = false) {
     const source = this.state.selected_metadata_source;
     requireBinding(source && this.state.runtime.engine_epoch, "Row requires a metadata source and host epoch");
@@ -845,6 +869,7 @@ export class AppController {
       }
       row.data = { page: { ...merged.page, sections: [section], failed_sections: [] }, images: merged.images };
       row.phase = "ready";
+      this.warmHomeDetails(response.page.sections.flatMap(item => item.items), source, host, locale);
       if (descriptor) {
         try { await this.catalog.putPersistent(source, descriptor.id, normalizedFilter(filter), locale, host, section, merged.images); }
         catch (cause) { this.diagnostics.push(failure(cause)); }
@@ -1060,6 +1085,7 @@ export class AppController {
       if (!valid()) return;
       const next = mergeHome(this.state.home.data, response, input);
       this.state.home.data = next;
+      this.warmHomeDetails(response.page.sections.flatMap(section => section.items), source, ticket.host ?? '', ticket.locale);
       if (full) this.homeFilters.clear();
       for (const section of response.page.sections) this.homeFilters.set(section.section_ref, clone(selectedFilter));
       if (full) {

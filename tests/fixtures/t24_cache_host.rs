@@ -1,6 +1,27 @@
 //! Real Host/Settings IPC compatibility and cache-control permissions.
 use super::*;
 #[test]
+fn home_card_images_are_registered_for_persistent_cache() {
+    let temp = TempDir::new().unwrap();
+    let host = Host::open(temp.path().join("settings.json")).unwrap();
+    let image = crate::host::maccms::Image {
+        reference: json!({"resource_id":"poster", "path":"/images/poster", "capability":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "expires_at":"2099-01-01T00:00:00Z"}),
+        url: "https://example.test/poster.jpg".into(),
+        headers: Default::default(),
+    };
+    let reference = json!({"source_id":"source", "source_revision":"revision", "data":"title"});
+    let mut value = json!({"page":{"sections":[{"items":[{"ref":reference,"poster":image.reference}]}]},"images":{}});
+    let key = crate::media_cache::key("source", "image", &image.url, &image.headers);
+    {
+        let mut committed = host.committed.lock().unwrap();
+        host.image_access(&mut committed, "source", &mut value, |id| (id == "poster").then(|| image.clone())).unwrap();
+    }
+    host.media_cache.save_image(&key, b"cached poster", "image/jpeg").unwrap();
+    assert_eq!(host.media_cache.cached_image(&key).unwrap().unwrap().0, b"cached poster");
+    assert!(value["images"]["poster"]["url"].as_str().unwrap().starts_with("http://127.0.0.1:"));
+}
+
+#[test]
 fn t24_cache_host_settings_permissions_and_restart() {
     let temp = TempDir::new().unwrap();
     let path = temp.path().join("settings.json");
