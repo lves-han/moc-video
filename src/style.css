@@ -2879,3 +2879,6 @@ main {
 .line-choice-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px; }
 .details-confirm .n-card__content { max-height: min(65vh, 640px); overflow-y: auto; }
 .line-choice-description { display: block; margin-top: 5px; color: var(--text-muted, #999); font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
+
+.region-panel .filter-option-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.region-panel .filter-option-grid button { min-height: 36px; height: auto; white-space: normal; overflow-wrap: anywhere; }

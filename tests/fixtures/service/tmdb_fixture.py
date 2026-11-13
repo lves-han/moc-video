@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": [], "probe_fail": False}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": [], "probe_fail": False, "tmdb_requests": []}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -25,6 +25,7 @@ class Handler(BaseHTTPRequestHandler):
             if "reset_parser" in query: STATE["parser_requests"].clear()
             if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
             if "reset" in query: STATE["counts"].clear()
+            if "reset_tmdb" in query: STATE["tmdb_requests"].clear()
             if "reset_t4" in query: STATE["t4_requests"].clear()
             if "reset_rest" in query: STATE["rest_requests"].clear(); STATE["rest_contexts"].clear()
             if "stream_mode" in query: STATE["stream_mode"] = query["stream_mode"][0]
@@ -141,7 +142,12 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         lang = query.get("language", ["en-US"])[0]
-        if url.path == "/3/configuration/languages":
+        if url.path.startswith('/3/discover/'):
+            allowed = ('with_origin_country','with_original_language','with_genres','primary_release_year','first_air_date_year','page','language','sort_by')
+            STATE['tmdb_requests'].append({'path':url.path,'query':{key:query[key] for key in allowed if key in query}})
+        if url.path == "/3/configuration/countries":
+            data = [{"iso_3166_1":code,"english_name":name} for code,name in [('CN','China'),('HK','Hong Kong'),('TW','Taiwan'),('JP','Japan'),('US','United States')]]
+        elif url.path == "/3/configuration/languages":
             data = [{"iso_639_1":"en", "english_name":"English"}]
         elif url.path.startswith("/3/genre/"):
             data = {"genres":[{"id":18, "name":"剧情" if lang == "zh-CN" else "Drama"}]}

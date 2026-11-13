@@ -1343,15 +1343,58 @@ class ServerAvailability(LookupLifecycle):
         self.assertEqual(status,200,selected);self.assertEqual(selected['play']['url'],self.media)
 
 
+class TmdbRegion(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_regions_are_declared(self):
+        self.start('app-token',self.fixture_env)
+        status,manifest=self.resource('zh-CN/manifest.json');self.assertEqual(status,200,manifest)
+        for kind in ('movie','series'):
+            for id in ('tmdb.top','tmdb.latest','tmdb.year','tmdb.language'):
+                catalog=next(c for c in manifest['catalogs'] if c['type']==kind and c['id']==id)
+                region=next(e for e in catalog['extra'] if e['name']=='region')
+                self.assertEqual(region['options'][:3],['CN','HK','TW'])
+                self.assertIn('JP',region['options']);self.assertIn('US',region['options'])
+
+    def test_2_region_queries_and_combinations(self):
+        self.fixture_request('/control?reset_tmdb=1')
+        for route in ('en-US/catalog/movie/tmdb.top/genre=Drama&region=HK&skip=20.json',
+                      'en-US/catalog/series/tmdb.year/genre=2024&region=JP&skip=20.json',
+                      'en-US/catalog/series/tmdb.language/genre=English&region=US.json',
+                      'zh-CN/catalog/movie/tmdb.latest/region=CN.json'):
+            status,data=self.resource(route);self.assertEqual(status,200,data)
+        rows=self.fixture_request('/stats')['tmdb_requests']
+        self.assertTrue(any(r['path']=='/3/discover/movie' and r['query'].get('with_origin_country')==['HK'] and r['query'].get('with_genres')==['18'] and r['query'].get('page')==['2'] for r in rows),rows)
+        self.assertTrue(any(r['path']=='/3/discover/tv' and r['query'].get('with_origin_country')==['JP'] and r['query'].get('first_air_date_year')==['2024'] and r['query'].get('page')==['2'] for r in rows),rows)
+        self.assertTrue(any(r['path']=='/3/discover/tv' and r['query'].get('with_origin_country')==['US'] and r['query'].get('with_original_language')==['en'] for r in rows),rows)
+        self.assertTrue(any(r['path']=='/3/discover/movie' and r['query'].get('with_origin_country')==['CN'] and r['query'].get('language')==['zh-CN'] and r['query'].get('sort_by')==['primary_release_date.desc'] for r in rows),rows)
+        status,error=self.resource('en-US/catalog/movie/tmdb.top/region=invalid.json')
+        self.assertGreaterEqual(status,400,error)
+
+    def test_3_region_preserves_special_category(self):
+        self.fixture_request('/control?reset_tmdb=1')
+        status,data=self.resource('en-US/catalog/series/tmdb.year/genre=2024&region=JP&category=variety.json')
+        self.assertEqual(status,200,data)
+        rows=self.fixture_request('/stats')['tmdb_requests']
+        self.assertTrue(any(r['query'].get('with_origin_country')==['JP'] and r['query'].get('with_genres')==['10764|10767'] and r['query'].get('first_air_date_year')==['2024'] for r in rows),rows)
+        status,data=self.resource('en-US/catalog/series/tmdb.variety/region=HK.json')
+        self.assertEqual(status,200,data)
+        self.assert_budget(fixture=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app", "server-availability"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app", "server-availability", "tmdb-region"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp, "server-availability":ServerAvailability}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp, "server-availability":ServerAvailability, "tmdb-region":TmdbRegion}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"tmdb-region":["tmdb-region-options", "tmdb-region-query", "tmdb-region-category"],"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1368,7 +1411,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"tmdb-region":("test_1_regions_are_declared", "test_2_region_queries_and_combinations", "test_3_region_preserves_special_category"),"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

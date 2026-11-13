@@ -12,12 +12,26 @@ const open = ref<Dimension | null>(null), root = ref<HTMLElement>(), notice = re
 const zh = computed(() => locale.value === 'zh-CN');
 const disabled = (key: Dimension) => !props.facets?.[key].available || key === 'genre' && !!props.lockedGenre || key === 'sort' && !!(props.modelValue.year || props.modelValue.language);
 const reason = (key: Dimension) => key === 'sort' && (props.modelValue.year || props.modelValue.language) ? (zh.value ? '清除年份和语言后可排序' : 'Clear year and language to sort') : key === 'genre' && props.lockedGenre ? (zh.value ? '由当前分类确定' : 'Set by this category') : (zh.value ? '当前来源未提供此筛选' : 'Unavailable from this source');
+function optionsFor(key: Dimension) {
+  const options = props.facets?.[key].options ?? [];
+  return key === 'sort' && props.modelValue.region
+    ? options.filter(option => !['trending_day', 'trending_week'].includes(option.value))
+    : options;
+}
+function optionName(key: Dimension, value: string, fallback: string) {
+  if (key !== 'region' || !/^[A-Z]{2}$/.test(value)) return fallback;
+  if (zh.value && value === 'CN') return '中国大陆';
+  if (zh.value && value === 'HK') return '中国香港';
+  if (zh.value && value === 'TW') return '中国台湾';
+  try { return new Intl.DisplayNames([locale.value], { type: 'region' }).of(value) ?? fallback; }
+  catch { return fallback; }
+}
 function choose(key: Dimension, value?: string) {
   const next = { ...props.modelValue };
   if (value === next[key]) delete next[key];
   else if (value) Object.assign(next, { [key]: value });
   else delete next[key];
-  if ((key === 'year' || key === 'language') && value && next.sort) { delete next.sort; notice.value = zh.value ? '已清除排序，以应用年份或语言筛选' : 'Sort cleared to apply year or language'; }
+  if (value && next.sort && ((key === 'year' || key === 'language') || (key === 'region' && ['trending_day', 'trending_week'].includes(next.sort)))) { delete next.sort; notice.value = zh.value ? '已清除排序，以应用筛选条件' : 'Sort cleared to apply filters'; }
   emit('update:modelValue', next); open.value = null;
   void nextTick(() => root.value?.querySelector<HTMLButtonElement>(`[data-dimension="${key}"]`)?.focus());
 }
@@ -36,9 +50,9 @@ onMounted(() => document.addEventListener('pointerdown', outside)); onBeforeUnmo
 <template>
   <div ref="root" class="filter-bar">
     <div class="filter-capsules" data-focus-row><div v-for="(key, i) in dimensions" :key="key" class="filter-dimension">
-      <button class="filter-pill" :class="{ selected: modelValue[key] }" :data-dimension="key" :disabled="disabled(key)" :title="disabled(key) ? reason(key) : labels[i]" :aria-expanded="open === key" @click="toggle(key)">{{ facets?.[key].options.find(item => item.value === modelValue[key])?.name ?? modelValue[key] ?? labels[i] }}<span v-if="modelValue[key]" aria-hidden="true">×</span></button>
+      <button class="filter-pill" :class="{ selected: modelValue[key] }" :data-dimension="key" :disabled="disabled(key)" :title="disabled(key) ? reason(key) : labels[i]" :aria-expanded="open === key" @click="toggle(key)">{{ modelValue[key] ? optionName(key, modelValue[key]!, facets?.[key].options.find(item => item.value === modelValue[key])?.name ?? modelValue[key]!) : labels[i] }}<span v-if="modelValue[key]" aria-hidden="true">×</span></button>
       <span v-if="disabled(key)" class="filter-unavailable">{{ reason(key) }}</span>
-      <div v-if="open === key" class="filter-panel" role="dialog" :aria-label="labels[i]" @keydown="keyboard"><div class="filter-option-grid"><button @click="choose(key)">{{ zh ? '全部' : 'All' }}</button><button v-for="option in facets?.[key].options" :key="option.value" :aria-pressed="modelValue[key] === option.value" @click="choose(key, option.value)">{{ option.name }}<span v-if="modelValue[key] === option.value" class="filter-check">✓</span></button></div></div>
+      <div v-if="open === key" class="filter-panel" :class="{ 'region-panel': key === 'region' }" role="dialog" :aria-label="labels[i]" @keydown="keyboard"><div class="filter-option-grid"><button @click="choose(key)">{{ zh ? '全部' : 'All' }}</button><button v-for="option in optionsFor(key)" :key="option.value" :aria-pressed="modelValue[key] === option.value" @click="choose(key, option.value)">{{ optionName(key, option.value, option.name) }}<span v-if="modelValue[key] === option.value" class="filter-check">✓</span></button></div></div>
     </div><button v-if="Object.keys(modelValue).length" class="filter-clear" @click="emit('update:modelValue', {})">{{ zh ? '清除全部' : 'Clear all' }}</button></div>
     <p v-if="notice" class="filter-notice" role="status">{{ notice }}</p>
   </div>

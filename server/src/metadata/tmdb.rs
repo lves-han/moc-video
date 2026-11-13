@@ -92,6 +92,29 @@ impl Tmdb {
             .filter(|v| !v.is_empty() && *v != "No Language")
             .map(str::to_owned)
             .collect();
+        let countries = self.api("/configuration/countries", &[]).await?;
+        let mut regions: Vec<String> = countries
+            .as_array()
+            .ok_or("invalid TMDB countries")?
+            .iter()
+            .filter_map(|item| item["iso_3166_1"].as_str())
+            .filter(|code| code.len() == 2 && code.bytes().all(|b| b.is_ascii_uppercase()))
+            .map(str::to_owned)
+            .collect();
+        regions.sort();
+        regions.dedup();
+        let preferred = [
+            "CN", "HK", "TW", "US", "JP", "KR", "GB", "FR", "DE", "CA", "AU", "IN", "TH", "SG",
+        ];
+        regions.sort_by_key(|code| {
+            (
+                preferred
+                    .iter()
+                    .position(|item| *item == code)
+                    .unwrap_or(preferred.len()),
+                code.clone(),
+            )
+        });
         let mut catalogs = Vec::new();
         for kind in ["movie", "series"] {
             let genres: Vec<String> = self
@@ -115,7 +138,17 @@ impl Tmdb {
                         .collect(),
                     _ => genres.clone(),
                 };
-                catalogs.push(json!({"type":kind,"id":id,"name":name,"extra":[{"name":"genre","options":options},{"name":"skip"}]}));
+                let mut extras = vec![
+                    json!({"name":"genre","options":options}),
+                    json!({"name":"skip"}),
+                ];
+                if matches!(
+                    id,
+                    "tmdb.top" | "tmdb.latest" | "tmdb.year" | "tmdb.language"
+                ) {
+                    extras.push(json!({"name":"region","options":regions}));
+                }
+                catalogs.push(json!({"type":kind,"id":id,"name":name,"extra":extras}));
             }
             catalogs.push(json!({"type":kind,"id":"tmdb.search","name":"Search","extra":[{"name":"search","isRequired":true}]}));
             let additions = if kind == "movie" {
@@ -258,6 +291,30 @@ impl Tmdb {
             }
             _ => return Err("unknown TMDB catalog"),
         };
+        if let Some(category) = extras.get("category") {
+            if !path.starts_with("/discover/") {
+                return Err("invalid TMDB category");
+            }
+            let genre = match (category.as_str(), media) {
+                ("animation", _) => "16",
+                ("documentary", _) => "99",
+                ("variety", "tv") => "10764|10767",
+                _ => return Err("invalid TMDB category"),
+            };
+            if query.iter().any(|(key, _)| *key == "with_genres") {
+                return Err("invalid TMDB category combination");
+            }
+            query.push(("with_genres", genre.to_owned()));
+        }
+        if let Some(region) = extras.get("region") {
+            if !path.starts_with("/discover/")
+                || region.len() != 2
+                || !region.bytes().all(|b| b.is_ascii_uppercase())
+            {
+                return Err("invalid TMDB origin region");
+            }
+            query.push(("with_origin_country", region.clone()));
+        }
         let value = self.api(&path, &query).await?;
         let metas: Vec<_> = value["results"]
             .as_array()

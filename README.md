@@ -43,7 +43,7 @@ Windows x64 使用 MSVC、LLVM/libclang 和 WebView2。通过 `scripts/run.py` �
 
 构建后用 Finder 打开 `target/release/bundle/macos/墨客视频.app`，或执行 `["/usr/bin/open", "target/release/bundle/macos/墨客视频.app"]`。开发时先执行 `["npm", "run", "dev"]`，再在另一终端执行 `["cargo", "tauri", "dev"]`；前端地址为 `http://127.0.0.1:5173/`。浏览器预览用于前端开发，桌面业务通过 Tauri IPC 调用 Rust。
 
-首次启动后在设置中填写服务地址和访问令牌。元数据、扩展和播放源通过服务端 API 管理；点击影片后显示各来源状态、清晰度和大小，由用户选择线路。服务端将来源信息缓存一天，选中后才下发播放地址。本地视频可通过侧栏打开，历史与待播清单保存在应用数据目录。
+首次启动后在设置中填写服务地址和访问令牌。元数据、扩展和播放源通过服务端 API 管理；电影与剧集可按作品来源地区筛选。点击影片后显示各来源状态、清晰度和大小，由用户选择线路。服务端将来源信息缓存一天，选中后才下发播放地址。本地视频可通过侧栏打开，历史与待播清单保存在应用数据目录。
 
 应用数据位置：`~/Library/Application Support/app.moc.video/`，包含 `settings.json`、`moc-video.db` 和 `media-cache/`。WebKit 的网站存储另保留线路偏好；系统按应用标识管理。卸载 app 保留用户数据；显式清理按 [生命周期操作](packaging/T23.md) 仅删除本次可识别测试数据，原用户数据保留。
 

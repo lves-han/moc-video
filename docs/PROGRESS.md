@@ -3344,3 +3344,9 @@
 - 服务端按影片、目标集、来源及解析配置缓存线路信息，稳定定位的结果跨重启复用；地址和请求头只保存在短期内存，缓存线路在选择后按需重新解析。缺少稳定定位的线路保留单项检测缓存，重查时访问来源。手动刷新、过期及配置变更触发重查或失效。
 - 服务端受控验收 5 项通过，覆盖线路状态、大小、24 小时有效期、数据库重启及过期、Stremio 描述、配置修订、失败刷新和选线后取址：`evidence/runs/20261113T081146313898-unified-source-final-cache/output.log`。原生端服务状态消费测试通过：`evidence/runs/20261113T081154246323-unified-source-final-host/output.log`；手动选线与恢复 13 项通过：`evidence/runs/20261113T081206389039-unified-source-final-ui/output.log`；前端全量 241 项通过：`evidence/runs/20261113T075321766794-unified-source-ui2/output.log`。
 - 隔离 macOS 桌面窗口中，T4 与 Stremio 两组来源显示可用性、大小及描述，点击其中一条后影片从约 7 秒播放至 10 秒；设置页仅显示服务连接、外观、字体、语言、播放及折叠的存储管理。独立测试应用和容器已清理；本次窗口观察先于最后的禁用来源状态和缓存失效修正，这些变更由自动化检查覆盖。
+
+## TMDB 地区筛选 2026-11-13
+
+- 服务端从 TMDB 国家和地区配置获取 ISO 代码，电影与剧集查询使用 `with_origin_country`；App 展示本地化地区名称，支持与类型、年份和语言组合，并保留适用的热门、最新排序。综艺分类的地区组合保持分类约束；选择地区后隐藏无法组合的趋势排序。
+- 受控服务验收 3 项通过：`evidence/runs/20261113T085233168068-tmdb-region-api-final/output.log`；原生端地区组合及分页、综艺分类、旧服务能力兼容分别通过 `evidence/runs/20261113T084901152715-tmdb-region-sort-test/output.log`、`evidence/runs/20261113T085227848840-tmdb-region-host-special/output.log`、`evidence/runs/20261113T085230509207-tmdb-region-host-legacy/output.log`。原类型/语言/排序相关回归 4 项通过，前端全量 241 项通过：`evidence/runs/20261113T085944680847-tmdb-region-final-frontend-tests/output.log`；契约与 OpenAPI 校验通过。
+- 隔离 macOS 窗口验证电影“香港”和剧集“日本”筛选及地区下的排序，受控上游分别记录 `HK` 和 `JP`；测试应用与容器已清理。地区含义为 TMDB 作品来源地，旧服务未声明该能力时选项不可用。

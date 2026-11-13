@@ -27,10 +27,11 @@ fn tv_manifest(chinese: bool) -> Value {
         ] {
             catalogs.push(
                 json!({"id":id,"type":kind,"name":if chinese {"中文栏目"} else {"Catalog"},
-                "pageSize":20,"extra":[{"name":"genre","options":options},{"name":"skip"}]}),
+                "pageSize":20,"extra":[{"name":"genre","options":options},{"name":"skip"},{"name":"region","options":["CN","HK","JP","US"]}]}),
             );
         }
     }
+    catalogs.push(json!({"id":"tmdb.variety","type":"series","name":"Variety","pageSize":20,"extra":[{"name":"skip"}]}));
     let mut value = manifest(json!(["catalog", "meta"]), json!(catalogs));
     value["id"] = json!("tmdb-addon");
     value
@@ -103,6 +104,109 @@ fn trace(fixture: &Fixture, name: &str) {
         .map(|r| r.target.clone())
         .collect();
     println!("TV2_TRACE:{}", json!({"test":name,"targets":targets}));
+}
+
+#[test]
+fn tv2_origin_region_filters_and_pages_with_other_conditions() {
+    let (fixture, _temp, host, source, data) = tv_setup(false);
+    let sorted = filtered(
+        &host,
+        &source,
+        &data["page"]["sections"][0],
+        json!({"region":"CN","sort":"popular"}),
+        1,
+    );
+    assert!(!sorted["items"].as_array().unwrap().is_empty());
+    let options = sorted["filters"]["sort"]["options"].as_array().unwrap();
+    assert!(options.iter().any(|option| option["value"] == "popular"));
+    assert!(
+        !options
+            .iter()
+            .any(|option| option["value"] == "trending_week")
+    );
+    for section in [&data["page"]["sections"][0], &data["page"]["sections"][5]] {
+        for filter in [
+            json!({"region":"CN"}),
+            json!({"region":"HK","genre":"Drama"}),
+            json!({"region":"JP","language":"Mandarin","year":"2024","genre":"Drama"}),
+        ] {
+            let first = filtered(&host, &source, section, filter.clone(), 1);
+            assert!(!first["items"].as_array().unwrap().is_empty());
+            let _ = filtered(&host, &source, section, filter.clone(), 2);
+            let requests = fixture.requests.lock().unwrap();
+            assert!(
+                requests
+                    .iter()
+                    .filter(|request| request.target.contains("/catalog/"))
+                    .map(route)
+                    .any(|(_, _, extra)| extra.get("region").map(String::as_str)
+                        == filter["region"].as_str())
+            );
+            assert!(
+                requests
+                    .iter()
+                    .filter(|request| request.target.contains("/catalog/"))
+                    .map(route)
+                    .any(|(_, _, extra)| extra.get("region").map(String::as_str)
+                        == filter["region"].as_str()
+                        && extra.contains_key("skip"))
+            );
+        }
+    }
+}
+
+#[test]
+fn tv2_older_manifest_keeps_region_unavailable() {
+    let fixture = Fixture::new(|request| {
+        if request.target.ends_with("manifest.json") {
+            let mut value = tv_manifest(request.target.contains("/zh-CN/"));
+            for catalog in value["catalogs"].as_array_mut().unwrap() {
+                if let Some(extras) = catalog["extra"].as_array_mut() {
+                    extras.retain(|item| item["name"] != "region");
+                }
+            }
+            Reply::json(value)
+        } else {
+            tv_reply(request, false)
+        }
+    });
+    let (_temp, host) = setup(vec![fixture.url("/tmdb/zh-CN/manifest.json")]);
+    let source = sync(&host);
+    let data = ok(&host, "get_home", home_input(&source));
+    assert_eq!(
+        data["page"]["sections"][0]["filters"]["region"]["available"],
+        false
+    );
+}
+
+#[test]
+fn tv2_region_keeps_variety_category_with_year_and_genre() {
+    let (fixture, _temp, host, source, data) = tv_setup(false);
+    let section = data["page"]["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|section| section["title"] == "Variety")
+        .unwrap();
+    let result = filtered(
+        &host,
+        &source,
+        section,
+        json!({"region":"JP","year":"2024","genre":"Drama"}),
+        1,
+    );
+    assert!(!result["items"].as_array().unwrap().is_empty());
+    let requests = fixture.requests.lock().unwrap();
+    assert!(
+        requests
+            .iter()
+            .filter(|request| request.target.contains("/catalog/"))
+            .map(route)
+            .any(|(_, id, extra)| id == "tmdb.year"
+                && extra.get("region").map(String::as_str) == Some("JP")
+                && extra.get("category").map(String::as_str) == Some("variety")
+                && extra.get("genre").map(String::as_str) == Some("2024"))
+    );
 }
 
 #[test]
@@ -348,9 +452,13 @@ fn tv2_sort_routing_and_disabled_dimensions() {
                     && e.get("genre").map(String::as_str) == Some(genre))
         );
     }
-    assert_eq!(
-        section["filters"]["region"],
-        json!({"available":false,"options":[]})
+    assert_eq!(section["filters"]["region"]["available"], true);
+    assert!(
+        section["filters"]["region"]["options"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|option| option["value"] == "CN")
     );
     let series = &data["page"]["sections"][5];
     assert_eq!(
@@ -569,7 +677,7 @@ fn tv3_catalog_descriptions_zero_content_and_old_compatibility() {
     assert_eq!(descriptions["images"], json!({}));
     assert_eq!(
         descriptions["page"]["sections"].as_array().unwrap().len(),
-        10
+        11
     );
     for section in descriptions["page"]["sections"].as_array().unwrap() {
         assert_eq!(section["items"], json!([]));

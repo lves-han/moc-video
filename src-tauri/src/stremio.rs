@@ -245,9 +245,13 @@ fn meta_year(meta: &Value) -> Option<u64> {
 }
 
 fn genre_options(catalog: &Value) -> Vec<String> {
+    extra_options(catalog, "genre")
+}
+
+fn extra_options(catalog: &Value, name: &str) -> Vec<String> {
     catalog["extra"]
         .as_array()
-        .and_then(|extras| extras.iter().find(|e| e["name"] == "genre"))
+        .and_then(|extras| extras.iter().find(|e| e["name"] == name))
         .and_then(|extra| extra["options"].as_array())
         .map(|options| {
             options
@@ -1224,7 +1228,7 @@ impl Catalog {
         let addon = &self.addons[section.addon];
         let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
         let mut facets = crate::home::unavailable_filters();
-        for dimension in ["genre", "year", "language"] {
+        for dimension in ["genre", "year", "language", "region"] {
             let id = if tmdb {
                 match dimension {
                     "year" => "tmdb.year",
@@ -1245,8 +1249,15 @@ impl Catalog {
                     .iter()
                     .find(|c| c["id"] == id && c["type"] == section.kind)
             });
-            let options = genre_options(catalog);
-            let local_options = local.map(genre_options).unwrap_or_default();
+            let option_name = if dimension == "region" {
+                "region"
+            } else {
+                "genre"
+            };
+            let options = extra_options(catalog, option_name);
+            let local_options = local
+                .map(|value| extra_options(value, option_name))
+                .unwrap_or_default();
             let values: Vec<_> = options
                 .into_iter()
                 .map(|value| {
@@ -1286,6 +1297,11 @@ impl Catalog {
                 ("popular", "tmdb.top", None, "Popular", "热门"),
                 ("latest", "tmdb.latest", None, "Latest", "最新"),
             ] {
+                if !input["filter"]["region"].is_null()
+                    && matches!(value, "trending_day" | "trending_week")
+                {
+                    continue;
+                }
                 if value == "popular" && section.kind == "series" {
                     continue;
                 }
@@ -1368,7 +1384,7 @@ impl Catalog {
                     "latest" => catalog_id = "tmdb.latest",
                     _ => unreachable!("Validated sort"),
                 }
-            } else if selected("genre").is_some() {
+            } else if selected("genre").is_some() || selected("region").is_some() {
                 catalog_id = if section.kind == "series" {
                     "tmdb.latest"
                 } else {
@@ -1376,10 +1392,25 @@ impl Catalog {
                 };
             }
         }
+        let region_category = if tmdb && selected("region").is_some() {
+            match section.catalog_id.as_str() {
+                "tmdb.animation" => Some("animation"),
+                "tmdb.documentary" => Some("documentary"),
+                "tmdb.variety" => Some("variety"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if region_category.is_some() && server_dimension == "genre" {
+            server_genre = None;
+            server_dimension = "";
+        }
         let definition = self
             .catalog_definition(section, catalog_id)
             .ok_or_else(|| ApiError::bad("Filter catalog is unavailable"))?;
         if server_genre.is_none()
+            && region_category.is_none()
             && let Some(genre) = selected("genre")
             && genre_options(definition).iter().any(|o| o == genre)
         {
@@ -1424,6 +1455,14 @@ impl Catalog {
             let mut pairs = Vec::new();
             if let Some(genre) = server_genre {
                 pairs.push(("genre".into(), genre.to_owned()));
+            }
+            if let Some(category) = region_category {
+                pairs.push(("category".into(), category.into()));
+            }
+            if tmdb {
+                if let Some(region) = selected("region") {
+                    pairs.push(("region".into(), region.to_owned()));
+                }
             }
             if skip && (cursor.offset > 0 || !filter.is_empty()) {
                 pairs.push(("skip".into(), cursor.offset.to_string()));
