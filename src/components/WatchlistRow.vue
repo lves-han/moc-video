@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 import { appController as app, appState as state } from '../state';
 import { metadataReference } from '../data/history';
+import { loadWatchlistPosters } from '../data/watchlist-posters';
 import { locale, t } from '../i18n';
 import type { Bridge_MediaRef, WatchlistEntry } from '../models';
 
@@ -10,7 +11,8 @@ const emit = defineEmits<{ open: [ref: Bridge_MediaRef] }>();
 defineProps<{ wall?:boolean }>();
 const entries = ref<WatchlistEntry[]>([]), posters = ref<Record<string, { id: string; url: string }>>({}), error = ref('');
 const refreshed = new Set<string>();
-let generation = 0;
+const opening = ref(false);
+let generation = 0, mounted = true;
 function detailsHref(entry: WatchlistEntry) {
   const ref = metadataReference(entry, state.sources.data?.providers ?? []);
   return ref ? `#/details/${encodeURIComponent(JSON.stringify(ref))}` : '#/home';
@@ -31,12 +33,10 @@ async function load() {
     const response = await api.call('list_watchlist', {}, crypto.randomUUID(), host ?? undefined);
     if (current !== generation || host !== state.runtime.engine_epoch) return;
     entries.value = response.entries; posters.value = {};
-    for (const entry of response.entries) {
-      try {
-        await loadPoster(entry, current, host);
-        if (current !== generation) return;
-      } catch (cause) { if (current === generation) error.value = String(cause); }
-    }
+    await loadWatchlistPosters(response.entries, () => current === generation && host === state.runtime.engine_epoch, async entry => {
+      try { await loadPoster(entry, current, host); }
+      catch (cause) { if (current === generation) error.value = String(cause); }
+    });
   } catch (cause) { if (current === generation) error.value = String(cause); }
 }
 async function imageFailed(entry: WatchlistEntry, event: Event) {
@@ -55,24 +55,28 @@ async function imageFailed(entry: WatchlistEntry, event: Event) {
   } catch (cause) { if (current === generation && host === state.runtime.engine_epoch) error.value = String(cause); }
 }
 async function open(entry: WatchlistEntry) {
+  if (opening.value) return;
   const ref = metadataReference(entry, state.sources.data?.providers ?? []);
   if (!ref) { error.value = t('This title is unavailable in the current catalog.'); return; }
+  opening.value = true;
   try {
     await app.selectSource(ref.source_id, entry.metadata_identity.namespace === 'maccms' ? 'playback' : 'metadata');
-    emit('open', ref);
+    if (mounted) emit('open', ref);
   } catch (cause) { error.value = String(cause); }
+  finally { opening.value = false; }
 }
 watch([() => state.runtime.engine_epoch, () => state.sources.data, () => locale.value], load, { immediate: true });
-onBeforeUnmount(() => generation++);
+onBeforeUnmount(() => { mounted = false; generation++; });
 </script>
 <template>
   <section v-if="wall || entries.length || error" class="watchlist-row home-section" :class="{ 'watchlist-wall':wall }">
     <h2>{{ locale === 'zh-CN' ? '待播清单' : 'Watchlist' }}</h2>
+    <p v-if="opening" role="status">{{ locale === 'zh-CN' ? '正在打开影片…' : 'Opening title…' }}</p>
     <p v-if="error" role="alert">{{ error }} <button class="glass-pill" @click="load">{{ t('Retry') }}</button></p>
     <p v-if="wall && !entries.length && !error" class="library-empty" role="status">{{ locale === 'zh-CN' ? '添加影片到待播清单，稍后观看。' : 'Add titles to your watchlist to watch later.' }}</p>
     <div class="watchlist-track" data-focus-row>
       <article v-for="entry in entries" :key="entry.content_id" class="watchlist-card home-card" :data-content-id="entry.content_id">
-        <a class="poster-link watchlist-poster" :href="detailsHref(entry)" :aria-label="entry.title" @click.prevent="open(entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]!.url" alt="" loading="lazy" @error="imageFailed(entry, $event)" /><span v-else>{{ entry.title }}</span></a>
+        <a class="poster-link watchlist-poster" :aria-disabled="opening" :href="detailsHref(entry)" :aria-label="entry.title" @click.prevent="open(entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]!.url" alt="" loading="lazy" @error="imageFailed(entry, $event)" /><span v-else>{{ entry.title }}</span></a>
         <p class="card-title">{{ entry.title }}</p>
       </article>
     </div>

@@ -222,12 +222,12 @@ onMounted(() => { void refreshCache(); });
     <div class="settings-panel">
     <div class="setting-row">
       <div>
-        <h3>{{ word("自动查找下一集线路", "Find next episode automatically") }}</h3>
-        <p>{{ word("播放结束后显示下一集可选线路。", "Show the next episode’s available lines when playback ends.") }}</p>
+        <h3>{{ word("自动播放下一集", "Play next episode automatically") }}</h3>
+        <p>{{ word("优先沿用当前播放线路，无法使用时选择其他线路。", "Reuse the current line when available, or choose another line.") }}</p>
       </div>
       <NSwitch
         v-model:value="autoNext"
-        :aria-label="word('自动查找下一集线路', 'Find next episode automatically')"
+        :aria-label="word('自动播放下一集', 'Play next episode automatically')"
       />
     </div>
     <div class="setting-row">

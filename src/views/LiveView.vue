@@ -15,6 +15,7 @@ const list = ref<ChannelList | null>(null);
 const group = ref("");
 const loading = ref(false), error = ref("");
 const playing = ref<{ index: number; session: string; url: string } | null>(null);
+const openingIndex = ref<number | null>(null);
 let playbackRequest = 0, listRequest = 0;
 const message = (cause: unknown) => cause instanceof ApiFailure ? describeError(cause.error) : String(cause);
 
@@ -29,7 +30,7 @@ async function stop() {
 }
 async function load(id: string) {
   const request = ++listRequest;
-  ++playbackRequest;
+  ++playbackRequest; openingIndex.value = null;
   await stop();
   if (request !== listRequest) return;
   list.value = null; error.value = ""; group.value = "";
@@ -47,6 +48,7 @@ async function play(index: number) {
   const current = list.value;
   if (!current) return;
   const request = ++playbackRequest;
+  openingIndex.value = index; error.value = "";
   await stop();
   if (request !== playbackRequest) return;
   error.value = "";
@@ -55,6 +57,7 @@ async function play(index: number) {
     if (request !== playbackRequest || list.value !== current) { await api.call("close_playback", { session_id: view.session_id }).catch(() => undefined); return; }
     playing.value = { index, session: view.session_id, url: view.media_url };
   } catch (cause) { if (request === playbackRequest) error.value = message(cause); }
+  finally { if (request === playbackRequest) openingIndex.value = null; }
 }
 watch(lists, value => { if (!value.some(config => config.config_id === listId.value)) listId.value = value[0]?.config_id ?? ""; }, { immediate: true });
 watch(listId, id => { void load(id); }, { immediate: true });
@@ -98,7 +101,7 @@ function mediaError() { error.value = word("该频道无法播放，可能已失
             <button type="button" class="live-fullscreen" @click="fullscreen">{{ word('全屏', 'Full screen') }}</button>
           </div>
         </template>
-        <p v-else class="live-hint">{{ word('选择一个频道开始播放。', 'Choose a channel to start watching.') }}</p>
+        <p v-else class="live-hint" role="status">{{ openingIndex !== null ? word('正在切换频道…', 'Opening channel…') : word('选择一个频道开始播放。', 'Choose a channel to start watching.') }}</p>
         <p v-if="current" class="live-now">{{ current.name }}</p>
       </div>
     </div>
