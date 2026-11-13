@@ -135,10 +135,7 @@ fn validate(input: &Value) -> Result<Value, &'static str> {
     for (name, value) in values {
         let header = reqwest::header::HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| "invalid parser header")?;
-        if matches!(
-            header.as_str(),
-            "host" | "content-length" | "connection" | "transfer-encoding" | "proxy-authorization"
-        ) {
+        if !crate::metadata::http::allowed_header(&header) {
             return Err("disallowed parser header");
         }
         reqwest::header::HeaderValue::from_str(value.as_str().ok_or("invalid parser header")?)

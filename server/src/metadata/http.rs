@@ -27,6 +27,13 @@ pub fn valid(url: &Url) -> bool {
         && url.password().is_none()
 }
 
+pub(crate) fn allowed_header(name: &reqwest::header::HeaderName) -> bool {
+    !matches!(
+        name.as_str(),
+        "host" | "content-length" | "connection" | "transfer-encoding" | "proxy-authorization"
+    )
+}
+
 fn redirect(url: &Url, next: &Url, headers: &mut HeaderMap) -> Result<(), Error> {
     if !valid(next) || (url.scheme() == "https" && next.scheme() != "https") {
         return Err(Error::Failed);

@@ -3324,3 +3324,10 @@
 
 - 结果：DECISION（ADR-083）。用户选择保留 App 内置 TMDB 作为无服务时的后备；方案 Q5、第 8 节元数据说明及 T1.5、T1.10 卡片表述已同步，代码无改动。
 - 遗留：旧匹配/线路记忆与 MacCMS 元数据代码维持原生端拦截、浏览器预览使用的现状。已知偶发项 `x4_tmdb_api_catalog_details_identity_endpoints_and_secrets` 属保留的 X4 功能，仅在全量并发运行时失败，尚未处理。
+
+## Review 2026-11-13 — 执行器与来源请求头
+
+- 完成已授权的执行器调整：已完成任务遗留在 current 标记中时，后续非该卡验收命令独立记录，不继承其硬停止或消耗额度；该卡的原验收命令仍遵循硬停止。原失败记录及额度保持不变。相关反例 2 项通过：`evidence/runs/20261113T063916818219-review-workflow-tests/output.log`。
+- 核实并统一来源、解析器、T4、Stremio 的传输控制请求头校验；来源配置增加拒绝 `Transfer-Encoding`。服务单元测试 18 项通过、2 项夹具测试忽略：`evidence/runs/20261113T063920698520-review-service-unit/output.log`。
+- 来源回归：MacCMS 3 项、JSON 解析 3 项、T4 Query 4 项、T4 REST 2 项、Stremio 4 项及配置导入 3 项通过，日志分别为 `evidence/runs/20261113T064011152071-review-regression-playback-sources/output.log`、`evidence/runs/20261113T064155246826-review-regression-json-parser/output.log`、`evidence/runs/20261113T064200278786-review-regression-t4-query-adapters/output.log`、`evidence/runs/20261113T064206388889-review-regression-t4-rest-adapter/output.log`、`evidence/runs/20261113T064211546915-review-regression-stremio-stream-adapter/output.log`、`evidence/runs/20261113T064216525929-review-regression-provider-import-integration/output.log`。
+- HTTP 测量：8 次本地请求，当前实现与使用共享客户端的对照均建立 8 条连接，日志 `evidence/runs/20261113T063849897149-review-transport-measure/output.log`；未据此宣称性能改善。固定公共 DNS 及内网访问按 ADR-068/079 保留。同步 SQLite 等待及大文件维护成本属已确认设计风险，个人使用负载下的瓶颈尚无量化证据，留待实际测量后处理。

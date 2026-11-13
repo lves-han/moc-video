@@ -159,10 +159,7 @@ pub fn validate(input: &Value) -> Result<Value, &'static str> {
     for (name, value) in values {
         let header = reqwest::header::HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| "invalid source header")?;
-        if matches!(
-            header.as_str(),
-            "host" | "content-length" | "connection" | "proxy-authorization"
-        ) {
+        if !crate::metadata::http::allowed_header(&header) {
             return Err("disallowed source header");
         }
         reqwest::header::HeaderValue::from_str(value.as_str().ok_or("invalid source header")?)
@@ -198,4 +195,19 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     Ok(
         json!({"id":row.get::<_,String>(0)?,"client_config_id":row.get::<_,Option<String>>(1)?,"name":row.get::<_,String>(2)?,"kind":row.get::<_,String>(3)?,"api":row.get::<_,String>(4)?,"ext":parse(row.get(5)?)?,"headers":parse(row.get(6)?)?,"enabled":row.get::<_,bool>(7)?,"parse_ids":parse(row.get(8)?)?,"revision":row.get::<_,u64>(9)?,"status":row.get::<_,String>(10)?,"checked_at":row.get::<_,Option<i64>>(11)?}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_headers_reject_transport_control() {
+        let mut input =
+            json!({"name":"Example", "kind":"maccms_json", "api":"https://example.test/api"});
+        input["headers"] = json!({"Transfer-Encoding":"chunked"});
+        assert_eq!(validate(&input), Err("disallowed source header"));
+        input["headers"] = json!({"Referer":"https://example.test/"});
+        assert!(validate(&input).is_ok());
+    }
 }

@@ -120,10 +120,7 @@ async fn parse(parser: &Value, item: &Value) -> Result<(String, Value), &'static
         return Err(HEADERS);
     }
     for (name, value) in response_headers.iter() {
-        if matches!(
-            name.as_str(),
-            "host" | "content-length" | "connection" | "transfer-encoding" | "proxy-authorization"
-        ) {
+        if !crate::metadata::http::allowed_header(&name) {
             return Err(HEADERS);
         }
         headers.insert(name.clone(), value.clone());

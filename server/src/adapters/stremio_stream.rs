@@ -251,15 +251,7 @@ fn playback_headers(stream: &Value) -> Result<Value, &'static str> {
     for (name, value) in values {
         let name = HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| "invalid Stremio playback headers")?;
-        if matches!(
-            name.as_str(),
-            "host"
-                | "content-length"
-                | "connection"
-                | "transfer-encoding"
-                | "proxy-authorization"
-                | "range"
-        ) {
+        if !crate::metadata::http::allowed_header(&name) || name == reqwest::header::RANGE {
             return Err("unsafe Stremio playback header");
         }
         let value =

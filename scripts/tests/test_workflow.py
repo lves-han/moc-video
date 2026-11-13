@@ -1174,6 +1174,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(attempts[0]["exit"], 2)
         self.assertFalse(any(attempt["exit"] == 0 for attempt in attempts))
 
+    def test_completed_card_hard_stop_does_not_block_later_unrelated_work(self):
+        self.w.start("T0.1")
+        node = self.w.state("T0.1")
+        node.update(sessions=0, hard_sessions=[0], failures=[{"session":0,"signature":"retained"}])
+        self.w.write_json(self.w.card_dir("T0.1") / "state.json", node)
+        before = self.w.state("T0.1")
+        with patch.object(self.w, "completed", return_value=True):
+            with patch.object(self.w.runtime, "require_process_support", side_effect=RuntimeError("reached execution")):
+                with self.assertRaisesRegex(RuntimeError, "reached execution"):
+                    self.w.run_command("later-check", ["python3", "-c", "pass"])
+            with self.assertRaises(self.w.WorkflowError) as caught:
+                self.w.run_command("A1", ARGV)
+            self.assertEqual(caught.exception.code, 4)
+        self.assertEqual(self.w.state("T0.1"), before)
+
     def test_stuck_hard_preserves_history_and_limits_recovery(self):
         (self.repo / "src/value.txt").write_text("bad", encoding="utf-8", newline="\n")
         self.w.start("T0.1")

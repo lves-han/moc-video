@@ -129,10 +129,7 @@ pub(crate) fn play_values(
     for (name, value) in headers {
         let name =
             HeaderName::from_bytes(name.as_bytes()).map_err(|_| "invalid T4 playback headers")?;
-        if matches!(
-            name.as_str(),
-            "host" | "content-length" | "connection" | "transfer-encoding" | "proxy-authorization"
-        ) {
+        if !crate::metadata::http::allowed_header(&name) {
             return Err("unsafe T4 playback header");
         }
         let value = HeaderValue::from_str(value.as_str().ok_or("invalid T4 playback headers")?)
