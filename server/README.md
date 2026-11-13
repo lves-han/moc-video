@@ -16,10 +16,16 @@
 
 需要远程访问时使用 HTTPS 反向代理；`packaging/playback-service.nginx.conf` 提供关闭访问日志的示例。
 
-## 添加与导入播放源
+## 来源与线路
 
-在 App 的元数据设置中填写服务地址和令牌，连接后进入播放源设置。可单独添加 MacCMS JSON/XML、T4 Query、T4 DRPYJS0、T4 REST（CatVod）或 Stremio Stream；T4 扩展参数使用 JSON，Stremio 地址填写 `manifest.json`。
+通过服务 API 管理播放源、扩展和解析器：`GET/POST /v1/sources`、`POST /v1/sources/import`、`GET/POST /v1/parsers` 和 `GET/POST /v1/metadata-sources`。导入支持 TVBox、zyfun 3.4.1+ 和旧版 zyfun JSON；相对地址使用 `base_url`。脚本、jar 和网页嗅探类型会在导入结果中标明跳过。
 
-选择“导入配置”，粘贴 JSON 并选择 TVBox、zyfun 3.4.1 及以上或 zyfun 旧版；需要解析相对地址时填写配置文件的完整 URL。逐项结果显示成功、跳过或失败；重复导入根据来源身份更新已有配置。解析器按来源的关联及线路 flag 选择，空 flag 匹配全部线路。影片详情页的“选择线路”和“刷新”可重新查询当前影片的线路。脚本、jar、网页嗅探等格式会显示跳过。
+例如，将配置保存为 `sources.json`，并在本机环境中设置服务地址和令牌后执行：
 
-服务接口见 `protocol/service.openapi.json`。`/v1/parsers` 支持配置 JSON 解析接口的请求头、页面 URL 参数名及响应 URL 字段路径；这些请求头只用于访问解析接口，媒体请求头由来源或解析结果提供。
+```sh
+curl -fsS -H "Authorization: Bearer $SERVICE_TOKEN" -H 'Content-Type: application/json' --data-binary @sources.json "$SERVICE_URL/v1/sources/import"
+```
+
+查找时服务端访问来源并检测线路，状态、清晰度、描述和大小保存到数据库，缓存期为一天。App 先取得展示信息，用户选择后调用 `POST /v1/lines/{id}/play` 获取播放地址及请求头。地址与请求头保留在短期内存中；可重新解析的缓存线路在选中时获取最新地址。缺少稳定身份的线路保留检测信息缓存，重查时重新访问来源以确保选中正确。
+
+接口定义见 `protocol/service.openapi.json`；`/v1/parsers` 支持配置 JSON 解析接口的请求头、页面 URL 参数名及响应 URL 字段路径。

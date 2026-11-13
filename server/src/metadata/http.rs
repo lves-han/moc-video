@@ -74,26 +74,53 @@ pub async fn json(url: Url, headers: HeaderMap) -> Result<Value, Error> {
 }
 
 pub async fn bytes(url: Url, headers: HeaderMap) -> Result<Vec<u8>, Error> {
-    tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, None))
+    tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, None, false))
         .await
         .map_err(|_| Error::Failed)?
+        .map(|(body, _)| body)
 }
 
 pub async fn post_json(url: Url, headers: HeaderMap, body: &Value) -> Result<Value, Error> {
-    let bytes = tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, Some(body)))
-        .await
-        .map_err(|_| Error::Failed)??;
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(8),
+        fetch(url, headers, Some(body), false),
+    )
+    .await
+    .map_err(|_| Error::Failed)??
+    .0;
     if bytes.is_empty() {
         return Ok(serde_json::json!({}));
     }
     serde_json::from_slice(&bytes).map_err(|_| Error::Failed)
 }
 
+pub async fn probe(url: Url, mut headers: HeaderMap, hls: bool) -> Result<Option<u64>, Error> {
+    headers.insert(
+        reqwest::header::RANGE,
+        "bytes=0-65535".parse().map_err(|_| Error::Failed)?,
+    );
+    let (body, response_headers) =
+        tokio::time::timeout(Duration::from_secs(5), fetch(url, headers, None, true))
+            .await
+            .map_err(|_| Error::Failed)??;
+    if body.is_empty() || (hls && !body.starts_with(b"#EXTM3U")) {
+        return Err(Error::Failed);
+    }
+    Ok(response_headers
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("bytes "))
+        .and_then(|v| v.split_once('/'))
+        .and_then(|(_, size)| size.parse::<u64>().ok())
+        .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991))
+}
+
 async fn fetch(
     mut url: Url,
     mut headers: HeaderMap,
     body: Option<&Value>,
-) -> Result<Vec<u8>, Error> {
+    probe: bool,
+) -> Result<(Vec<u8>, HeaderMap), Error> {
     for _ in 0..=5 {
         if !valid(&url) {
             return Err(Error::Failed);
@@ -173,14 +200,23 @@ async fn fetch(
         if !response.status().is_success() {
             return Err(Error::Failed);
         }
+        let response_headers = response.headers().clone();
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|_| Error::Failed)? {
-            if bytes.len() + chunk.len() > 8 * 1024 * 1024 {
-                return Err(Error::Failed);
+            if probe {
+                let remaining = 65_536usize.saturating_sub(bytes.len());
+                bytes.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+                if bytes.len() >= 65_536 {
+                    break;
+                }
+            } else {
+                if bytes.len() + chunk.len() > 8 * 1024 * 1024 {
+                    return Err(Error::Failed);
+                }
+                bytes.extend_from_slice(&chunk);
             }
-            bytes.extend_from_slice(&chunk);
         }
-        return Ok(bytes);
+        return Ok((bytes, response_headers));
     }
     Err(Error::Failed)
 }

@@ -19,7 +19,7 @@ function setup(call: (command: string, input: any) => Promise<any>) {
   return { app, root };
 }
 
-test('automatic selection waits for completed probes and carries the native resolution', async () => {
+test('lookup waits for the user to choose a ready line', async () => {
   const calls: string[] = [];
   const { app, root } = setup(async (command, input) => {
     calls.push(command);
@@ -29,10 +29,12 @@ test('automatic selection waits for completed probes and carries the native reso
     throw new Error(command);
   });
   await app.startServiceRound(video);
-  assert.deepEqual(calls, ['start_line_round', 'get_line_round', 'play_line']);
+  assert.deepEqual(calls, ['start_line_round', 'get_line_round']);
+  assert.equal(app.serviceRound.open, true);
+  assert.notEqual(root.route.name, 'playback');
+  await app.chooseServiceLine(line.line_id);
   assert.equal(root.route.name, 'playback');
   assert.equal(app.takeServiceResolution(context as any)?.id, resolution.id);
-  assert.equal(app.takeServiceResolution(context as any), undefined);
 });
 
 test('manual selection wins over a late automatic result', async () => {
@@ -69,6 +71,22 @@ test('candidates use their owning source and can be confirmed', async () => {
   await app.confirmServiceCandidate(candidate);
   await running;
   assert.equal(confirmed, true);
+});
+
+test('connecting a service keeps existing local settings and does not import sources', async t => {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const local = { kind:'maccms' as const, config_id:'existing', name:'Existing', enabled:true, api_url:'https://example.test/api' };
+  const root = createAppState(); root.settings = { ...defaultSettings(), source_configs:[local] };
+  let stored = JSON.parse(JSON.stringify(root.settings)); let call: any;
+  const settings = { update: async (fn: (value: typeof stored) => typeof stored) => stored = fn(stored) };
+  Object.defineProperty(globalThis, 'window', { configurable:true, value:{ __TAURI__:{ core:{ invoke: async (name:string, args:any) => { call={name,args}; return {groups:[]}; } } } } });
+  t.after(() => prior ? Object.defineProperty(globalThis, 'window', prior) : Reflect.deleteProperty(globalThis, 'window'));
+  const app = new AppController({call:async()=>({})} as any, settings as any, root, null);
+  app.loadSources = async () => {};
+  await app.connectPlaybackService('http://service','token');
+  assert.equal(call.name,'app_service_import'); assert.deepEqual(call.args.configs,[]);
+  assert.equal(stored.source_configs[0].config_id,'existing');
+  assert.equal(stored.playback_service.enabled,true);
 });
 
 test('migration removes successful sources and retains failed sources for retry', async t => {
@@ -118,7 +136,7 @@ test('explicit line selection keeps the completed list open', async () => {
     if (command === 'play_line') { selections.push(input.line_id); return { context, resolution }; }
     throw new Error(command);
   });
-  await app.startServiceRound(video, false, false);
+  await app.startServiceRound(video);
   assert.equal(app.serviceRound.open, true);
   assert.deepEqual(selections, []);
   await app.chooseServiceLine(line.line_id);
@@ -139,6 +157,7 @@ test('metadata add-on identity selects its registered service source without a g
   await app.startServiceRound(video);
   assert.equal(received.metadata_source_id, 'registered-addon');
   assert.equal(received.video_id, video);
+  await app.chooseServiceLine(line.line_id);
   assert.equal(root.route.name, 'playback');
 });
 
@@ -152,7 +171,10 @@ test('expired line restarts lookup for the same episode', async () => {
     throw new Error(command);
   });
   await app.startServiceRound(video);
+  await app.chooseServiceLine(line.line_id);
   assert.equal(rounds.length, 2); assert.notEqual(rounds[0], rounds[1]);
+  assert.equal(app.serviceRound.open, true);
+  await app.chooseServiceLine(line.line_id);
   assert.equal(root.route.name, 'playback');
 });
 
@@ -164,7 +186,7 @@ test('refreshing a vanished line restarts the same episode lookup', async () => 
     if (command === 'cancel_line_round') return { ok:true };
     throw new Error(command);
   });
-  await app.startServiceRound(video, false, false);
+  await app.startServiceRound(video);
   await app.refreshServiceLine(line.line_id);
   assert.equal(rounds.length, 2); assert.notEqual(rounds[0], rounds[1]);
   assert.equal(app.serviceRound.videoId, video); assert.equal(app.serviceRound.open, true);
@@ -202,23 +224,7 @@ test('migration keeps local configuration if service changes during import', asy
   assert.match(app.serviceSources.error, /变化/);
 });
 
-test('failed service line switches to an untried ready line once', async () => {
-  const second = { ...line, line_id:'33333333-3333-4333-8333-333333333333', source_id:'other', latency_ms:30 };
-  const selections:string[] = [];
-  const { app, root } = setup(async (command, input) => {
-    if (command === 'start_line_round') return { ...view(input.round_id, true, line.line_id), lines:[line,second] };
-    if (command === 'play_line') { selections.push(input.line_id); return { context:{...context,match_id:'match-'+selections.length}, resolution }; }
-    throw new Error(command);
-  });
-  await app.startServiceRound(video);
-  const first = root.playback.context!;
-  assert.equal(await app.tryNextServiceLine(first), true);
-  assert.deepEqual(selections, [line.line_id,second.line_id]);
-  assert.equal(await app.tryNextServiceLine(root.playback.context!), false);
-  assert.equal(selections.length,2);
-});
-
-test('current media failure requests automatic service-line recovery', async () => {
+test('current media failure requests line selection', async () => {
   const { fixture, context: makeContext, flush } = await import('../t12_player.ts');
   const { createPlaybackController } = await import('../../../src/state.ts');
   const f = fixture(); const ctx = makeContext();
@@ -238,22 +244,4 @@ test('current media failure requests automatic service-line recovery', async () 
   f.ready(); await flush(); f.error(); await new Promise(resolve => setTimeout(resolve, 10));
   assert.deepEqual(reasons,['failed']);
   await playback.stop();
-});
-
-test('automatic recovery waits for other in-flight probes after an early manual choice', async () => {
-  const second = { ...line, line_id:'33333333-3333-4333-8333-333333333333', source_id:'other', latency_ms:30 };
-  const selections:string[] = [];
-  const { app, root } = setup(async (command, input) => {
-    if (command === 'start_line_round') return view(input.round_id, false);
-    if (command === 'get_line_round') return { ...view(input.round_id, true, line.line_id), lines:[line,second] };
-    if (command === 'play_line') { selections.push(input.line_id); return { context:{...context,match_id:'match-'+selections.length}, resolution }; }
-    throw new Error(command);
-  });
-  const query = app.startServiceRound(video);
-  await new Promise(resolve => setTimeout(resolve, 10));
-  await app.chooseServiceLine(line.line_id);
-  const switched = app.tryNextServiceLine(root.playback.context!);
-  await query;
-  assert.equal(await switched, true);
-  assert.deepEqual(selections,[line.line_id,second.line_id]);
 });

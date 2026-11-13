@@ -974,7 +974,7 @@
         },
         "responses": {
           "200": {
-            "description": "Lookup event stream",
+            "description": "Lookup events with server-checked line information; cached for up to one day and without playback addresses.",
             "content": {
               "application/x-ndjson": {
                 "schema": {
@@ -1047,7 +1047,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Same line with refreshed playback info",
+            "description": "Same logical line with refreshed availability; no playback address is returned.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1263,6 +1263,92 @@
           },
           "404": {
             "description": "Parser not found"
+          }
+        }
+      }
+    },
+    "/v1/lines/{id}/play": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selected line playback address and request headers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "line_id",
+                    "source_id",
+                    "source_revision",
+                    "target",
+                    "play",
+                    "expires_at"
+                  ],
+                  "properties": {
+                    "line_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "source_id": {
+                      "type": "string"
+                    },
+                    "source_revision": {
+                      "type": "integer"
+                    },
+                    "target": {
+                      "$ref": "#/components/schemas/LineTarget"
+                    },
+                    "play": {
+                      "type": "object",
+                      "required": [
+                        "url",
+                        "headers"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "headers": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "expires_at": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Line unavailable"
+          },
+          "401": {
+            "description": "Invalid token"
+          },
+          "410": {
+            "description": "Line expired or changed"
           }
         }
       }
@@ -1538,7 +1624,11 @@
           "kind",
           "target",
           "expires_at",
-          "history"
+          "history",
+          "availability",
+          "latency_ms",
+          "availability_checked_at",
+          "availability_expires_at"
         ],
         "properties": {
           "line_id": {
@@ -1578,28 +1668,43 @@
           "history": {
             "type": "object"
           },
-          "play": {
-            "type": "object",
-            "required": [
-              "url",
-              "headers"
-            ],
-            "properties": {
-              "url": {
-                "type": "string",
-                "format": "uri"
-              },
-              "headers": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "reason": {
             "type": "string",
             "description": "Why the line has no play field: needs_sniffing, unsupported_media_format, unsupported_protocol_or_script, a JSON parser failure (parser_request_failed, parser_invalid_response, parser_url_missing, parser_url_invalid, parser_headers_invalid, parser_config_invalid), or an adapter reason such as external_url_unsupported."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "nullable": true,
+            "description": "Video size in bytes when supplied by the source."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true,
+            "description": "Optional source-provided stream description."
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "failed",
+              "unsupported",
+              "unknown"
+            ]
+          },
+          "latency_ms": {
+            "type": "integer",
+            "nullable": true
+          },
+          "availability_checked_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "availability_expires_at": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

@@ -66,19 +66,16 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
         "hls"
     } else if url.is_some() {
         "file"
+    } else if matches!(line.cached_kind.as_deref(), Some("hls" | "file")) {
+        line.cached_kind.as_deref().unwrap_or("unsupported")
     } else {
         "unsupported"
     };
-    let play = url
-        .as_ref()
-        .filter(|_| kind != "unsupported")
-        .map(|_| json!({"url":line.url,"headers":line.headers}));
+    let playable = kind != "unsupported";
     let mut value = json!({"line_id":line_id,"source_id":line.source_id,"source_revision":line.source_revision,
-        "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":line.quality,"target":line.target,
+        "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":line.quality,"size_bytes":line.size_bytes,"description":line.description,"availability":line.availability,"latency_ms":line.latency_ms,"availability_checked_at":line.availability_checked_at,"availability_expires_at":line.availability_expires_at,"target":line.target,
         "expires_at":line.play_expires_at,"history":reports.get(&line.logical_key).unwrap_or_else(|_|json!({"ok":0,"failed":0,"last_ok_at":null}))});
-    if let Some(play) = play {
-        value["play"] = play;
-    } else {
+    if !playable {
         value["reason"] = json!(if let Some(reason) = line.unsupported_reason.as_deref() {
             reason
         } else if line.needs_sniffing {
@@ -133,6 +130,7 @@ pub fn issue(
         let line = Line {
             source_id: source_id.clone(),
             source_revision: revision,
+            parser_generation: registry.parser_generation,
             content_id: template.content_id.clone(),
             target: target.clone(),
             logical_key: key(target, &template.source, &template.content_id, &locator),
@@ -145,8 +143,23 @@ pub fn issue(
                 .cloned()
                 .unwrap_or_else(|| template.source["headers"].clone()),
             quality: item["episode"]["quality"].as_str().map(str::to_owned),
+            description: item["episode"]["description"].as_str().map(str::to_owned),
+            availability_key: item["episode"]["availability_key"]
+                .as_str()
+                .map(str::to_owned),
+            availability: item["episode"]["availability"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_owned(),
+            latency_ms: item["episode"]["latency_ms"].as_u64(),
+            availability_checked_at: item["episode"]["availability_checked_at"].as_i64(),
+            availability_expires_at: item["episode"]["availability_expires_at"].as_i64(),
+            size_bytes: item["episode"]["size_bytes"]
+                .as_u64()
+                .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991),
             needs_sniffing: item["episode"]["requires_parse"] == true,
             kind_hint: item["episode"]["kind_hint"].as_str().map(str::to_owned),
+            cached_kind: item["episode"]["cached_kind"].as_str().map(str::to_owned),
             unsupported_reason: item["episode"]["unsupported_reason"]
                 .as_str()
                 .map(str::to_owned),

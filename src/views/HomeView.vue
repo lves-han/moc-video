@@ -14,9 +14,6 @@ const query = matchMedia('(min-width: 960px)'), desktop = ref(query.matches);
 function resize() { desktop.value = query.matches; if (state.selected_metadata_source) void (query.matches ? app.loadCatalog() : app.loadHome()); }
 onMounted(() => query.addEventListener('change', resize)); onBeforeUnmount(() => query.removeEventListener('change', resize));
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
-const providers = computed(() => (state.sources.data?.providers ?? []).filter(source => source.runtime_status === "ready"));
-const metadataSources = computed(() => providers.value.filter(source => source.kind === "stremio" && source.capabilities.home && source.capabilities.details));
-const playbackSources = computed(() => providers.value.filter(source => source.kind !== "stremio" && source.capabilities.resolve));
 const rows = computed(() => [
   ...(state.home.data?.page.sections ?? []).map(section => ({ index: section.index, title: section.title, ref: section.section_ref, section, failed: null })),
   ...(state.home.data?.page.failed_sections ?? []).map(failed => ({ index: failed.index, title: failed.title, ref: failed.section_ref, section: null, failed })),
@@ -40,13 +37,8 @@ async function refresh() {
 <template>
   <HomeCatalog v-if="desktop" @open="emit('open', $event)" @resume="emit('resume', $event)" />
   <template v-else>
-  <div class="catalog-sources">
-    <label>{{ t('Metadata provider') }}<select class="home-metadata-source" :value="state.selected_metadata_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="source in metadataSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
-    <label>{{ word('播放源', 'Playback source') }}<select class="home-playback-source" :value="state.selected_playback_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'playback')"><option value="" disabled>{{ t('Choose a video source') }}</option><option v-for="source in playbackSources" :key="source.id" :value="source.id">{{ source.name }}</option></select></label>
-    <NButton class="home-refresh" :loading="state.sources.phase === 'loading'" @click="refresh">{{ t('Refresh catalog') }}</NButton>
-  </div>
   <p v-if="state.runtime.phase !== 'ready'" role="status">{{ word('宿主准备中', 'Preparing the app engine') }}</p>
-  <p v-if="state.sources.phase !== 'loading' && !metadataSources.length" class="home-setup" role="status">{{ word('还没有可用的元数据来源。', 'No metadata source is available yet.') }} <a href="#/setup">{{ word('前往设置来源', 'Set up sources') }}</a></p>
+  <p v-if="!state.settings.playback_service?.enabled" class="home-setup" role="status">{{ word('请先连接服务。', 'Connect the service to browse.') }} <a href="#/settings">{{ word('打开设置', 'Open settings') }}</a></p>
   <NAlert v-if="state.sources.error || state.runtime.error" type="error">{{ state.sources.error?.message ?? state.runtime.error?.message }}</NAlert>
   <NAlert v-if="state.home.phase === 'failed' && state.home.error" class="home-failed" type="error">{{ state.home.error.message }}<NButton class="home-retry" size="small" @click="app.loadHome()">{{ t('Retry') }}</NButton></NAlert>
   <NAlert v-else-if="app.homeImage.error" class="home-image-error" type="error">{{ app.homeImage.error }}<NButton size="small" @click="app.loadHome()">{{ t('Retry') }}</NButton></NAlert>

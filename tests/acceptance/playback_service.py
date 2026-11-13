@@ -808,7 +808,7 @@ class AppSourceSelection(unittest.TestCase):
         for name in names: self.assertIn('✔ ' + name, result.stdout)
 
     def test_1_actions(self):
-        self.run_frontend('automatic selection|manual selection|candidates use|explicit line selection|expired line|late lookup|failed service line|current media failure|automatic recovery waits', ['automatic selection waits for completed probes and carries the native resolution', 'manual selection wins over a late automatic result', 'candidates use their owning source and can be confirmed', 'explicit line selection keeps the completed list open', 'expired line restarts lookup for the same episode', 'late lookup after cancellation is retired', 'failed service line switches to an untried ready line once', 'current media failure requests automatic service-line recovery', 'automatic recovery waits for other in-flight probes after an early manual choice'])
+        self.run_frontend('lookup waits|manual selection|candidates use|explicit line selection|expired line|late lookup|current media failure|connecting a service', ['lookup waits for the user to choose a ready line', 'manual selection wins over a late automatic result', 'candidates use their owning source and can be confirmed', 'explicit line selection keeps the completed list open', 'expired line restarts lookup for the same episode', 'late lookup after cancellation is retired', 'current media failure requests line selection', 'connecting a service keeps existing local settings and does not import sources'])
 
     def test_2_migration(self):
         self.run_frontend('migration removes', ['migration removes successful sources and retains failed sources for retry'])
@@ -1072,6 +1072,7 @@ class StremioStreamAdapter(LookupLifecycle):
         self.assertFalse(any(line['line_name']=='Torrent' for line in lines))
         primary=next(line for line in lines if line['line_name']=='Primary')
         self.assertEqual(primary['kind'],'hls');self.assertEqual(primary['play']['headers']['referer'],'https://fixture.test/')
+        self.assertEqual(primary['description'],'1080p · H.264');self.assertEqual(primary['size_bytes'],2147483648)
         self.assertEqual(primary['play']['headers']['user-agent'],'FixturePlayer');self.assertNotIn('x-fixture',primary['play']['headers'])
         external=next(line for line in lines if line['line_name']=='Website');self.assertEqual((external['kind'],external['reason']),('unsupported','external_url_unsupported'));self.assertNotIn('play',external)
         dash=next(line for line in lines if line['line_name']=='DASH');self.assertEqual((dash['kind'],dash['reason']),('unsupported','unsupported_media_format'))
@@ -1243,15 +1244,114 @@ class ProviderImportIntegrationApp(unittest.TestCase):
         self.assertGreater(observed['stremio_resumed_seconds'],0)
 
 
+class ServerAvailability(LookupLifecycle):
+    test_1_stream_partial_failure = None
+    test_2_confirm_cancel = None
+    test_3_refresh_identity = None
+    test_4_cache_versions_restart_expiry = None
+    test_5_disconnect_stops_work = None
+
+    def test_1_server_probe_and_select(self):
+        self.start('app-token', self.fixture_env)
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        media=base+'/probe-fast.mp4'
+        self.fixture_request('/control?reset=1&'+urllib.parse.urlencode({'media_url':media}))
+        status,source=self.native('POST','/v1/sources',{'name':'Fixture','kind':'maccms_json','api':base+'/maccms'})
+        self.assertEqual(status,201,source);type(self).source=source;type(self).media=media
+        status,disabled=self.native('POST','/v1/sources',{'name':'Disabled fixture','kind':'maccms_json','api':base+'/disabled-fixture','enabled':False})
+        self.assertEqual(status,201,disabled);type(self).disabled=disabled
+        request=self.input([source['id'],disabled['id']],kind='movie');request.update(meta_id='tmdb:42',video_id='tmdb:42')
+        type(self).lookup_request=request
+        _,events=self.ndjson('/v1/lookups',request)
+        lines=[e['line'] for e in events if e['event']=='line'];self.assertEqual(len(lines),1,events)
+        line=lines[0];self.assertEqual(line['availability'],'ready');self.assertNotIn('play',line)
+        self.assertTrue(any(e.get('source_id')==disabled['id'] and e.get('status')=='disabled' for e in events))
+        self.assertEqual(self.fixture_request('/stats')['counts'].get('/disabled-fixture',0),0)
+        self.assertEqual(line['size_bytes'],len(b'controlled-media-bytes'))
+        self.assertEqual(line['availability_expires_at']-line['availability_checked_at'],86400)
+        self.assertNotIn(media,json.dumps(events));type(self).first=line
+        before=self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0);self.assertEqual(before,1)
+        _,again=self.ndjson('/v1/lookups',request)
+        self.assertTrue(any(e['event']=='line' and e['line']['availability']=='ready' for e in again))
+        self.assertEqual(self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0),before)
+        selected=next(e['line'] for e in again if e['event']=='line')
+        status,play=self.native('POST','/v1/lines/'+selected['line_id']+'/play',{})
+        self.assertEqual(status,200,play);self.assertEqual(play['play']['url'],media)
+
+    def test_2_cache_persists_and_expires(self):
+        counts=self.fixture_request('/stats')['counts'];before=counts.get('/probe-fast.mp4',0);source_before=counts.get('/maccms',0)
+        self.start('app-token',self.fixture_env)
+        _,events=self.ndjson('/v1/lookups',self.lookup_request)
+        line=next(e['line'] for e in events if e['event']=='line')
+        self.assertEqual(line['availability'],'ready');self.assertNotIn('play',line)
+        counts=self.fixture_request('/stats')['counts']
+        self.assertEqual(counts.get('/probe-fast.mp4',0),before)
+        self.assertEqual(counts.get('/maccms',0),source_before)
+        database=docker('exec',self.fixture,'python','-c','import sqlite3,json; c=sqlite3.connect(\'/service-data/service.sqlite3\'); print(json.dumps(c.execute("select payload from metadata_cache where cache_key like \'line-info:v1:%\'").fetchall()))')
+        self.assertNotIn(self.media,database)
+        status,play=self.native('POST','/v1/lines/'+line['line_id']+'/play',{})
+        self.assertEqual(status,200,play);self.assertEqual(play['play']['url'],self.media)
+        self.assertGreater(self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0),before)
+        _,events=self.ndjson('/v1/lookups',self.lookup_request)
+        before=self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0)
+        docker('exec',self.fixture,'python','-c','import sqlite3; c=sqlite3.connect(\'/service-data/service.sqlite3\'); c.execute("update metadata_cache set expires_at=0 where cache_key like \'line-info:v1:%\' or cache_key like \'availability:v1:%\'"); c.commit()')
+        self.start('app-token',self.fixture_env)
+        _,events=self.ndjson('/v1/lookups',self.lookup_request)
+        self.assertTrue(any(e['event']=='line' and e['line']['availability']=='ready' for e in events))
+        self.assertGreater(self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0),before)
+        self.assert_budget(fixture=True)
+
+    def test_3_stremio_descriptions(self):
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        self.fixture_request('/control?stream_mode=window')
+        status,source=self.native('POST','/v1/sources',{'name':'Streams','kind':'stremio_stream','api':base+'/stream-tt/manifest.json','headers':{'X-Fixture':'allowed'}})
+        self.assertEqual(status,201,source);type(self).stream_source=source
+        _,events=self.ndjson('/v1/lookups',self.input([source['id']]))
+        lines=[e['line'] for e in events if e['event']=='line']
+        primary=next(line for line in lines if line['line_name']=='Primary')
+        self.assertEqual(primary['availability'],'ready');self.assertNotIn('play',primary)
+        self.assertEqual(primary['description'],'1080p · H.264');self.assertEqual(primary['size_bytes'],2147483648)
+        status,selected=self.native('POST','/v1/lines/'+primary['line_id']+'/play',{})
+        self.assertEqual(status,200,selected);self.assertEqual(selected['play']['url'],self.media)
+
+    def test_4_stremio_cache_and_revision(self):
+        before=len(self.fixture_request('/stats')['stream_requests'])
+        self.start('app-token',self.fixture_env)
+        _,events=self.ndjson('/v1/lookups',self.input([self.stream_source['id']]))
+        lines=[e['line'] for e in events if e['event']=='line']
+        self.assertEqual(len(self.fixture_request('/stats')['stream_requests']),before)
+        primary=next(line for line in lines if line['line_name']=='Primary')
+        self.assertEqual(primary['size_bytes'],2147483648);self.assertNotIn('play',primary)
+        status,selected=self.native('POST','/v1/lines/'+primary['line_id']+'/play',{})
+        self.assertEqual(status,200,selected);self.assertEqual(selected['play']['url'],self.media)
+        status,parser=self.native('POST','/v1/parsers',{'name':'New parser','api':'https://example.test/parser'})
+        self.assertEqual(status,201,parser)
+        status,problem=self.native('POST','/v1/lines/'+primary['line_id']+'/play',{})
+        self.assertEqual(status,410,problem);self.assertEqual(problem['error']['reason'],'parser_changed')
+
+    def test_5_refresh_failed_line(self):
+        self.fixture_request('/control?probe_fail=1')
+        request=dict(self.lookup_request);request['refresh']=True
+        _,events=self.ndjson('/v1/lookups',request)
+        line=next(e['line'] for e in events if e['event']=='line')
+        self.assertEqual(line['availability'],'failed');self.assertNotIn('play',line)
+        self.assertEqual(self.native('POST','/v1/lines/'+line['line_id']+'/play',{})[0],400)
+        self.fixture_request('/control?probe_fail=0')
+        status,refreshed=self.native('POST','/v1/lines/'+line['line_id']+'/refresh',{})
+        self.assertEqual(status,200,refreshed);self.assertEqual(refreshed['availability'],'ready');self.assertNotIn('play',refreshed)
+        status,selected=self.native('POST','/v1/lines/'+line['line_id']+'/play',{})
+        self.assertEqual(status,200,selected);self.assertEqual(selected['play']['url'],self.media)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app"])
+    parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app", "server-availability"])
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--junit", type=Path, required=True)
     args = parser.parse_args()
-    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp}[args.suite]
+    test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp, "server-availability":ServerAvailability}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1268,7 +1368,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

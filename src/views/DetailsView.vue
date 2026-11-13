@@ -9,7 +9,7 @@ import { locale, t } from "../i18n";
 import { correspondingEpisode, prioritizePlaybackGroups } from '../line-preference';
 import type { Bridge_Episode, Bridge_EpisodeGroup, Bridge_ImageRef, PlaybackMatchSelection, WatchHistoryRecord } from "../models";
 
-const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string, explicitLine?: boolean, resumePosition?: number]; resume: [record: WatchHistoryRecord]; back: [] }>();
+const emit = defineEmits<{ open: [ref: import('../models').Bridge_MediaRef]; play: [video: string, explicitLine?: boolean, resumePosition?: number]; resume: [record: WatchHistoryRecord]; cancelPlayback: []; back: [] }>();
 const word = (zh: string, en: string) => locale.value === "zh-CN" ? zh : en;
 const native = Boolean(window.__TAURI__);
 const data = computed(() => state.details.data);
@@ -98,10 +98,36 @@ function updateMatchingModal(show: boolean) { if (!show) app.invalidatePlayback(
 function updateServiceModal(show: boolean) {
   if (show) return;
   app.invalidatePlayback();
+  emit('cancelPlayback');
   if (state.route.name === 'details') location.hash = `#/details/${encodeURIComponent(JSON.stringify(state.route.ref))}`;
 }
-function retryServiceRound() { void app.startServiceRound(app.serviceRound.videoId, false, app.serviceRound.autoPlay); }
-function serviceSourceName(id: string) { return app.serviceRound.snapshot?.sources.find(source => source.source_id === id)?.name ?? id; }
+function retryServiceRound() { void app.startServiceRound(app.serviceRound.videoId); }
+const sourceGroups = computed(() => (app.serviceRound.snapshot?.sources ?? []).map(source => ({
+  ...source,
+  lines: (app.serviceRound.snapshot?.lines ?? []).filter(line => line.source_id === source.source_id),
+  candidates: (app.serviceRound.snapshot?.candidates ?? []).filter(candidate => candidate.source_id === source.source_id),
+})));
+function sourceStatus(source: (typeof sourceGroups.value)[number]) {
+  if (source.lines.some(line => line.probe_status === 'ready')) return word('可播放', 'Available');
+  if (source.lines.some(line => line.probe_status === 'testing') || ['pending', 'searching'].includes(source.status)) return word('检测中', 'Checking');
+  if (source.candidates.length || source.status === 'needs_confirmation') return word('需要确认影片', 'Confirm title');
+  if (source.status === 'disabled') return word('已停用', 'Disabled');
+  if (source.status === 'no_episode') return word('无此集', 'Episode unavailable');
+  if (source.status === 'not_found') return word('未找到影片', 'Not found');
+  return word('暂不可用', 'Unavailable');
+}
+function lineStatus(status: string) {
+  return ({ ready: word('可播放', 'Available'), testing: word('检测中', 'Checking'), timeout: word('超时', 'Timed out'), failed: word('检测失败', 'Check failed'), unsupported: word('暂不支持', 'Unsupported'), unknown: word('未检测，可刷新', 'Unchecked; refresh') } as Record<string, string>)[status] ?? status;
+}
+function lineReason(reason: string | null) {
+  return ({ needs_sniffing: word('需要解析接口', 'Parser required'), unsupported_media_format: word('格式不支持', 'Unsupported format'), external_url_unsupported: word('外部网页', 'External page') } as Record<string, string>)[reason ?? ''] ?? '';
+}
+function formatSize(bytes: number | null | undefined) {
+  if (!Number.isSafeInteger(bytes) || !bytes || bytes < 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']; let value = bytes, unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return `${unit ? value.toFixed(value < 10 ? 1 : 0) : value} ${units[unit]}`;
+}
 function retry() { if (state.route.name === "details") void app.loadDetails(state.route.ref); }
 onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
 </script>
@@ -160,9 +186,18 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
   <NModal :show="app.serviceRound.open" preset="card" role="dialog" class="tv-dialog details-confirm" :title="word('选择播放线路', 'Choose a playback line')" :style="{ width: 'min(640px, calc(100vw - 32px))' }" @update:show="updateServiceModal">
     <p v-if="!app.serviceRound.snapshot?.query_done || app.serviceRound.snapshot.pending || app.serviceRound.snapshot.pending_confirm" role="status">{{ word('正在查找和测试线路…', 'Finding and testing lines…') }}</p>
     <NAlert v-if="app.serviceRound.error" type="error">{{ app.serviceRound.error }} <NButton size="small" @click="retryServiceRound">{{ t('Retry') }}</NButton></NAlert>
-    <p v-for="source in app.serviceRound.snapshot?.sources ?? []" :key="source.source_id">{{ source.name }} · {{ source.status }}</p>
-    <div class="details-candidates"><div v-for="line in app.serviceRound.snapshot?.lines ?? []" :key="line.line_id"><NButton class="details-candidate" :disabled="line.probe_status !== 'ready' || app.serviceRound.busy" @click="app.chooseServiceLine(line.line_id)">{{ line.source_name }} · {{ line.line_name }} · {{ line.latency_ms === null ? line.probe_status : `${line.latency_ms} ms` }}</NButton><NButton v-if="line.probe_status === 'ready'" :disabled="app.serviceRound.busy" :aria-label="word('刷新线路', 'Refresh line') + ' ' + line.line_name" @click="app.refreshServiceLine(line.line_id)">{{ word('刷新', 'Refresh') }}</NButton></div></div>
-    <div class="details-candidates"><NButton v-for="(candidate, index) in app.serviceRound.snapshot?.candidates ?? []" :key="candidate.candidate_id" class="details-candidate" :disabled="app.serviceRound.busy" @click="app.confirmServiceCandidate(candidate)">{{ serviceSourceName(candidate.source_id) }} · {{ candidate.title }}<template v-if="candidate.year"> ({{ candidate.year }})</template> · {{ index + 1 }}</NButton></div>
+    <section v-for="source in sourceGroups" :key="source.source_id" class="line-source">
+      <div class="line-source-heading"><strong>{{ source.name || source.source_id }}</strong><span>{{ sourceStatus(source) }}</span></div>
+      <div v-for="line in source.lines" :key="line.line_id" class="line-source-row">
+        <button class="line-choice" :disabled="line.probe_status !== 'ready' || app.serviceRound.busy" @click="app.chooseServiceLine(line.line_id)">
+          <span class="line-choice-name">{{ line.line_name }}</span>
+          <span v-if="line.description" class="line-choice-description">{{ line.description }}</span>
+          <span class="line-choice-meta"><span v-if="line.quality">{{ line.quality }}</span><span v-if="formatSize(line.size_bytes)">{{ formatSize(line.size_bytes) }}</span><span>{{ lineReason(line.reason) || lineStatus(line.probe_status) }}</span><span v-if="line.latency_ms !== null">{{ word('服务端', 'Server') }} {{ line.latency_ms }} ms</span><span v-if="line.availability_expires_at">{{ word('缓存至', 'Cached until') }} {{ new Date(line.availability_expires_at * 1000).toLocaleString(locale) }}</span></span>
+        </button>
+        <NButton v-if="line.kind !== 'unsupported'" size="small" :disabled="app.serviceRound.busy" :aria-label="word('刷新线路', 'Refresh line') + ' ' + line.line_name" @click="app.refreshServiceLine(line.line_id)">{{ word('刷新', 'Refresh') }}</NButton>
+      </div>
+      <NButton v-for="candidate in source.candidates" :key="candidate.candidate_id" class="details-candidate" :disabled="app.serviceRound.busy" @click="app.confirmServiceCandidate(candidate)">{{ word('确认', 'Confirm') }} · {{ candidate.title }}<template v-if="candidate.year"> ({{ candidate.year }})</template></NButton>
+    </section>
     <p v-if="app.serviceRound.snapshot?.query_done && !app.serviceRound.snapshot.pending && !app.serviceRound.snapshot.lines.length && !app.serviceRound.snapshot.candidates.length">{{ word('没有找到可用线路', 'No lines found') }}</p>
     <NButton class="details-confirm-cancel" @click="updateServiceModal(false)">{{ t('Cancel') }}</NButton>
   </NModal>

@@ -29,7 +29,6 @@ const expandedQuery = matchMedia("(min-width: 1200px)");
 const sidebarCollapsed = ref(!expandedQuery.matches);
 const sidebarToggle = ref<HTMLButtonElement>();
 const shell = ref<HTMLElement>();
-const sidebarSources = ref<HTMLElement>();
 const desktopNavigation = computed(() => [
   { page: "home", href: "#/home", icon: "compass", label: t("Discover") },
   { page: "search", href: "#/search", icon: "search", label: locale.value === 'zh-CN' ? '搜索' : 'Search' },
@@ -46,13 +45,7 @@ const desktopNavigation = computed(() => [
   { page: "history", href: "#/history", icon: "library", label: locale.value === 'zh-CN' ? '资料库' : 'Library' },
   { page: "settings", href: "#/settings", icon: "settings", label: t("Settings") },
 ]);
-const metadataProviders = computed(() => (appState.sources.data?.providers ?? []).filter(item => item.kind === "stremio" && item.runtime_status === "ready" && item.capabilities.home && item.capabilities.details));
 function resetSidebar() { sidebarCollapsed.value = !expandedQuery.matches; }
-async function expandSource(role: "metadata" | "playback") {
-  sidebarCollapsed.value = false;
-  await nextTick();
-  sidebarSources.value?.querySelector<HTMLSelectElement>(`[data-role="${role}"]`)?.focus();
-}
 async function dragWindow(event: MouseEvent) {
   if (event.button !== 0 || (event.target as HTMLElement).closest("a,button,input,select,textarea,[role=button]")) return;
   try { await window.__TAURI__?.core.invoke("plugin:window|start_dragging"); }
@@ -190,10 +183,6 @@ async function selectNativeSource(id: string, role: "metadata" | "playback") {
     }
   } catch (error) { preferenceError.value = String(error); }
 }
-async function changeSource(id: string) {
-  try { await selectNativeSource(native ? id : previewSourceKey(id).source_id, "playback"); }
-  catch (cause) { preferenceError.value = String(cause); }
-}
 function openDetails(ref: Bridge_MediaRef) {
   const target = `#/details/${encodeURIComponent(JSON.stringify(ref))}`;
   if (target === location.hash) return;
@@ -250,7 +239,12 @@ async function playEpisode(videoId: string, explicitLine = false, resumePosition
     if (native && appState.settings.playback_service?.enabled) {
       if (resumePosition && resumePosition > 0) wantedResume = { video_id: videoId, position_ms: resumePosition };
       else if (appState.playback.context?.metadata_video_id === videoId && appState.playback.position_ms > 0) wantedResume = { video_id: videoId, position_ms: appState.playback.position_ms };
-      await appController.startServiceRound(videoId, false, !explicitLine);
+      if (appState.route.name === 'playback' && appState.details.data) {
+        wantedResume = { video_id: videoId, position_ms: wantedResume?.video_id === videoId ? wantedResume.position_ms : 0 };
+        location.hash = `#/details/${encodeURIComponent(JSON.stringify(appState.details.data.details.ref))}`;
+        return;
+      }
+      await appController.startServiceRound(videoId);
       return;
     }
     if (native) throw new Error('请先连接播放服务。 / Connect the playback service first.');
@@ -258,18 +252,9 @@ async function playEpisode(videoId: string, explicitLine = false, resumePosition
     if (result?.status === "matched") location.hash = "#/playback";
   } catch (error) { preferenceError.value = String(error); }
 }
-let switchingServiceLine = false;
 async function switchFailedServiceLine(context: PlaybackContext) {
-  if (switchingServiceLine) return;
-  switchingServiceLine = true;
-  try {
-  const snapshot = appState.playback, epoch = snapshot.playback_epoch, session = snapshot.session?.session_id;
-  const position = snapshot.position_ms;
-  await flushHistory();
-  if (snapshot.playback_epoch !== epoch || snapshot.session?.session_id !== session || snapshot.context?.match_id !== context.match_id) return;
-  wantedResume = { video_id: context.metadata_video_id, position_ms: position };
-  if (!await appController.tryNextServiceLine(context)) wantedResume = null;
-  } finally { switchingServiceLine = false; }
+  if (appState.playback.context?.match_id !== context.match_id) return;
+  await playEpisode(context.metadata_video_id, true, appState.playback.position_ms);
 }
 const pendingResume = ref<ResumeSnapshot | null>(null);
 let sequence = 0;
@@ -576,7 +561,6 @@ onBeforeUnmount(() => {
     <a href="#/history">{{ t('History') }}</a>
     <button ref="paletteTrigger" class="icon-button palette-shortcut" :aria-label="t('Customize colors')" @click="appearanceOpen = true"><Icon name="palette" /></button>
     <select class="language-picker compact-select" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
-    <select v-if="!native" class="compact-select playback-source" :value="sourceId" :aria-label="t('Choose a video source')" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select>
   </div></template>
   </PlaybackView>
   <template v-else>
@@ -590,16 +574,6 @@ onBeforeUnmount(() => {
       <nav class="tv-navigation" data-focus-row>
         <a v-for="item in desktopNavigation" :key="item.href" :href="item.href" :aria-label="item.label" :title="item.label" :aria-current="item.page === 'browse' ? hash.split('?')[0] === item.href ? 'page' : undefined : route.page === item.page ? 'page' : undefined"><Icon :name="item.icon" /><span>{{ item.label }}</span></a>
       </nav>
-      <div ref="sidebarSources" class="tv-sidebar-sources" data-focus-row>
-        <template v-if="sidebarCollapsed">
-          <button :aria-label="t('Choose a metadata source')" :title="t('Choose a metadata source')" @click="expandSource('metadata')"><Icon name="library" /></button>
-          <button v-if="!native" :aria-label="t('Choose a video source')" :title="t('Choose a video source')" @click="expandSource('playback')"><Icon name="layers" /></button>
-        </template>
-        <template v-else>
-          <label :title="t('Metadata provider')"><Icon name="library" :size="16" /><select data-role="metadata" :aria-label="t('Choose a metadata source')" :value="appState.selected_metadata_source?.source_id ?? ''" @change="selectNativeSource(($event.target as HTMLSelectElement).value, 'metadata')"><option value="" disabled>{{ t('Choose a metadata source') }}</option><option v-for="item in metadataProviders" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-          <label v-if="!native" :title="t('Playback source')"><Icon name="layers" :size="16" /><select data-role="playback" :aria-label="t('Choose a video source')" :value="sourceId" @change="changeSource(($event.target as HTMLSelectElement).value)"><option v-for="item in sources.filter(item => item.enabled && item.kind !== 'stremio')" :key="item.id" :value="item.id">{{ sourceText(item).name }}</option></select></label>
-        </template>
-      </div>
     </aside>
     <aside class="sidebar legacy-sidebar" :aria-label="t('Main navigation')">
       <a class="brand" href="#/home" :aria-label="t('Moc Video home')"
@@ -702,22 +676,6 @@ onBeforeUnmount(() => {
               {{ item.label }}
             </option>
           </select>
-          <label v-if="!native" class="source-select"
-            ><span class="status-dot" /><select
-              class="compact-select"
-              :value="sourceId"
-              :aria-label="t('Choose a video source')"
-              @change="changeSource(($event.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="item in sources.filter((item) => item.enabled && item.kind !== 'stremio')"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ sourceText(item).name }}
-              </option>
-            </select></label
-          >
           <a
             class="icon-button settings-shortcut"
             href="#/settings"
@@ -734,7 +692,7 @@ onBeforeUnmount(() => {
         <HomeView v-else-if="native && route.page === 'home'" @open="openDetails" @select="selectNativeSource" @resume="continueHistory" />
         <BrowseView v-else-if="native && route.page === 'browse'" :category="readHash().id" :query="hash.split('?')[1] ?? ''" @open="openDetails" />
         <div v-else-if="native && route.page === 'film'" :class="{ 'maccms-details': maccmsDetailsSource }" :style="maccmsDetailsStyle">
-          <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @back="backFromDetails" />
+          <DetailsView @open="openDetails" @play="playEpisode" @resume="continueNativeHistory" @cancel-playback="wantedResume = null" @back="backFromDetails" />
           <span v-if="maccmsDetailsSource" class="maccms-accessible-source">{{ maccmsDetailsSource.name }}</span>
         </div>
         <template v-else-if="route.page === 'home'">

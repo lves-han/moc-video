@@ -3337,3 +3337,10 @@
 - 按用户要求将 Noto Sans SC 和 Noto Serif SC 完整字体纳入应用资源，移除字体准备页面、运行时下载/IndexedDB 缓存和专用字体网关；启动与字体切换直接使用本地资源，加载期间回退系统字体。
 - 字体文件大小及 SHA-256 校验、字体偏好与缩放 2 项通过：`evidence/runs/20261113T070140396702-bundled-fonts-tests/output.log`；前端 241 项通过：`evidence/runs/20261113T070202196069-bundled-font-all-ui/output.log`；原生库测试 237 项通过、8 项忽略：`evidence/runs/20261113T070210597395-bundled-font-native/output.log`；契约检查通过：`evidence/runs/20261113T070620110349-bundled-font-contracts/output.log`。
 - 浏览器预览观察到主界面直接显示，设置中两款字体均可切换，浏览器字体状态确认两者已加载。最终 macOS arm64 应用构建及 DMG 校验通过：`evidence/runs/20261113T070621759964-bundled-font-release/output.log`、`evidence/runs/20261113T070803697715-bundled-font-dmg-check/output.log`。安装包无 Apple 签名及公证；最终 DMG 未做独立应用资料目录的离线桌面启动。
+
+## 服务端来源缓存与手动选线 2026-11-13
+
+- 用户要求来源信息由服务端访问、在数据库缓存一天，选中后下发播放地址；App 展示各来源状态及可用的清晰度、描述和大小，由用户手动选择。App 设置仅保留服务连接与日常使用项，原本地来源配置数据保留。
+- 服务端按影片、目标集、来源及解析配置缓存线路信息，稳定定位的结果跨重启复用；地址和请求头只保存在短期内存，缓存线路在选择后按需重新解析。缺少稳定定位的线路保留单项检测缓存，重查时访问来源。手动刷新、过期及配置变更触发重查或失效。
+- 服务端受控验收 5 项通过，覆盖线路状态、大小、24 小时有效期、数据库重启及过期、Stremio 描述、配置修订、失败刷新和选线后取址：`evidence/runs/20261113T081146313898-unified-source-final-cache/output.log`。原生端服务状态消费测试通过：`evidence/runs/20261113T081154246323-unified-source-final-host/output.log`；手动选线与恢复 13 项通过：`evidence/runs/20261113T081206389039-unified-source-final-ui/output.log`；前端全量 241 项通过：`evidence/runs/20261113T075321766794-unified-source-ui2/output.log`。
+- 隔离 macOS 桌面窗口中，T4 与 Stremio 两组来源显示可用性、大小及描述，点击其中一条后影片从约 7 秒播放至 10 秒；设置页仅显示服务连接、外观、字体、语言、播放及折叠的存储管理。独立测试应用和容器已清理；本次窗口观察先于最后的禁用来源状态和缓存失效修正，这些变更由自动化检查覆盖。

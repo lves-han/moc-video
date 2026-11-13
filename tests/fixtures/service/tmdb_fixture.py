@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": []}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": [], "probe_fail": False}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,6 +20,7 @@ class Handler(BaseHTTPRequestHandler):
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
             if "detail_delay" in query: STATE["detail_delay"] = float(query["detail_delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
+            if "probe_fail" in query: STATE["probe_fail"] = query["probe_fail"][0] == "1"
             if "parser_mode" in query: STATE["parser_mode"] = query["parser_mode"][0]
             if "reset_parser" in query: STATE["parser_requests"].clear()
             if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
@@ -119,10 +120,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(data)))
             self.end_headers(); self.wfile.write(data); return
         if url.path in ("/probe-fast.mp4", "/probe-slow.mp4", "/hls/segment.ts"):
+            if STATE["probe_fail"] and url.path == "/probe-fast.mp4": self.send_response(503); self.end_headers(); return
             time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
             payload = b"controlled-media-bytes"
             self.send_response(206 if self.headers.get("Range") else 200)
             self.send_header("Content-Length", str(len(payload)))
+            if self.headers.get("Range"): self.send_header("Content-Range", f"bytes 0-{len(payload)-1}/{len(payload)}")
             self.end_headers()
             self.wfile.write(payload)
             return
@@ -228,7 +231,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) != 4 or parts[1] != 'stream' or not parts[3].endswith('.json'):
             self.send_response(404); self.end_headers(); return
         mode=STATE['stream_mode'];generation='1' if mode == 'normal' else '2'
-        first={'name':'Primary','url':'https://media.test/a.m3u8?token='+generation,'behaviorHints':{'videoHash':'0123456789abcdef','proxyHeaders':{'request':{'Referer':'https://fixture.test/','User-Agent':'FixturePlayer'}}}}
+        first={'name':'Primary','description':'1080p · H.264','url':'https://media.test/a.m3u8?token='+generation,'behaviorHints':{'videoSize':2147483648,'videoHash':'0123456789abcdef','proxyHeaders':{'request':{'Referer':'https://fixture.test/','User-Agent':'FixturePlayer'}}}}
         second={'name':'Backup','url':'https://media.test/b.mp4?token='+generation,'behaviorHints':{'videoHash':'fedcba9876543210'}}
         if mode == 'window': first['url'] = STATE['media_url']; second['url'] = STATE['media_url'] + '?backup=1'
         streams=[first,second,{'infoHash':'a'*40,'name':'Torrent'},{'name':'Website','externalUrl':'https://media.test/page'},{'name':'DASH','url':'https://media.test/video.mpd'},{'name':'Unknown','url':'https://media.test/opaque?id=unknown'}]

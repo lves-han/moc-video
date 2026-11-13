@@ -811,22 +811,17 @@ mod tests {
         let round = uuid::Uuid::new_v4().to_string();
         let input = json!({"round_id":round,"metadata_source_id":"tmdb","type":"series","meta_id":"tmdb:44","video_id":"tt7654321:1:2"});
         call(&host, "start_line_round", input);
-        let mut saw_wait = false;
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
         let snapshot = loop {
             assert!(std::time::Instant::now() < deadline, "line round timed out");
             let state = call(&host, "get_line_round", json!({"round_id":round}));
             assert!(state["error"].is_null(), "round error: {state}");
-            if state["query_done"] == true && state["pending"].as_u64().unwrap() > 0 {
-                saw_wait = true;
-                assert!(state["selected_line_id"].is_null());
-            }
+            assert!(state["selected_line_id"].is_null());
             if state["query_done"] == true && state["pending"] == 0 {
                 break state;
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
         };
-        assert!(saw_wait, "query must wait for probes: {snapshot}");
         assert_eq!(snapshot["lines"].as_array().unwrap().len(), 3, "{snapshot}");
         assert!(
             snapshot["lines"]
@@ -836,14 +831,7 @@ mod tests {
                 .all(|l| l["probe_status"] == "ready"),
             "{snapshot}"
         );
-        let selected = snapshot["selected_line_id"].as_str().unwrap();
-        let fastest = snapshot["lines"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .min_by_key(|v| v["latency_ms"].as_u64().unwrap())
-            .unwrap();
-        assert_eq!(selected, fastest["line_id"]);
+        assert!(snapshot["selected_line_id"].is_null(), "{snapshot}");
         let visible = snapshot.to_string();
         assert!(
             !visible.contains("127.0.0.1")
@@ -871,15 +859,13 @@ mod tests {
                 "manual line timed out"
             );
             let state = call(&host, "get_line_round", json!({"round_id":round}));
-            if state["pending"].as_u64().unwrap() > 0 {
-                if let Some(line) = state["lines"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|v| v["probe_status"] == "ready")
-                {
-                    break line["line_id"].as_str().unwrap().to_owned();
-                }
+            if let Some(line) = state["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| v["probe_status"] == "ready")
+            {
+                break line["line_id"].as_str().unwrap().to_owned();
             }
             std::thread::sleep(Duration::from_millis(10));
         };

@@ -54,6 +54,11 @@ impl Cache {
             })
             .transpose()
     }
+    pub fn remove(&self, key: &str) -> rusqlite::Result<()> {
+        self.connection()?
+            .execute("DELETE FROM metadata_cache WHERE cache_key=?1", [key])?;
+        Ok(())
+    }
     pub fn put(&self, key: &str, value: &Value, ttl: i64) -> rusqlite::Result<()> {
         self.connection()?.execute(
             "INSERT OR REPLACE INTO metadata_cache(cache_key,payload,expires_at) VALUES(?1,?2,?3)",

@@ -1,7 +1,6 @@
 //! Native round state. Playback addresses never enter a WebView response.
 use crate::{
     contracts::ApiError,
-    host::maccms::{self, Http},
     requests::{Job, Requests},
     service,
 };
@@ -19,12 +18,9 @@ use std::{
 #[derive(Clone)]
 pub struct NativeLine {
     pub raw: Value,
-    pub headers: HeaderMap,
-    pub url: String,
     pub status: String,
     pub latency_ms: Option<u64>,
-    /// Identifies the probe whose result may settle this entry; a refresh replaces it.
-    pub probe: u64,
+    pub size_bytes: Option<u64>,
 }
 
 /// Waiting budget for one stage of work: the initial lookup, a confirmation or a refresh.
@@ -44,7 +40,6 @@ pub struct Round {
     pub pending: usize,
     pub pending_confirm: usize,
     pub selected: Option<String>,
-    pub manual: bool,
     pub error: Option<String>,
     pub deadline: Instant,
     pub stop: Arc<AtomicBool>,
@@ -206,24 +201,16 @@ impl Round {
             self.pending_confirm = 0;
             self.query_done = true;
         }
-        if !self.manual && self.query_done && self.pending == 0 && self.pending_confirm == 0 {
-            self.selected = self
-                .lines
-                .iter()
-                .filter(|(_, line)| line.status == "ready")
-                .min_by_key(|(_, line)| line.latency_ms.unwrap_or(u64::MAX))
-                .map(|(id, _)| id.clone());
-        }
     }
     pub fn snapshot(&mut self) -> Value {
         self.settle();
-        let mut lines:Vec<_>=self.lines.iter().map(|(id,line)|json!({"line_id":id,"source_id":line.raw["source_id"],"source_revision":line.raw["source_revision"],"source_name":self.sources.get(line.raw["source_id"].as_str().unwrap_or("")).map(|s|s["name"].clone()).unwrap_or(Value::Null),"line_name":line.raw["line_name"],"episode_label":line.raw["episode_label"],"kind":line.raw["kind"],"quality":line.raw["quality"],"history":line.raw["history"],"probe_status":line.status,"latency_ms":line.latency_ms})).collect();
+        let mut lines:Vec<_>=self.lines.iter().map(|(id,line)|json!({"line_id":id,"source_id":line.raw["source_id"],"source_revision":line.raw["source_revision"],"source_name":self.sources.get(line.raw["source_id"].as_str().unwrap_or("")).map(|s|s["name"].clone()).unwrap_or(Value::Null),"line_name":line.raw["line_name"],"episode_label":line.raw["episode_label"],"kind":line.raw["kind"],"quality":line.raw["quality"],"description":line.raw["description"],"size_bytes":line.size_bytes,"reason":line.raw["reason"],"availability_checked_at":line.raw["availability_checked_at"],"availability_expires_at":line.raw["availability_expires_at"],"history":line.raw["history"],"probe_status":line.status,"latency_ms":line.latency_ms})).collect();
         lines.sort_by(|a, b| a["line_id"].as_str().cmp(&b["line_id"].as_str()));
         json!({"round_id":self.id,"lookup_id":self.lookup_id,"query_done":self.query_done,"pending":self.pending,"pending_confirm":self.pending_confirm,"selected_line_id":self.selected,"lines":lines,"sources":self.sources.values().cloned().collect::<Vec<_>>(),"candidates":self.candidates.values().cloned().collect::<Vec<_>>(),"error":self.error})
     }
 }
 
-fn header_map(value: &Value) -> Result<HeaderMap, ApiError> {
+pub(crate) fn header_map(value: &Value) -> Result<HeaderMap, ApiError> {
     let mut headers = HeaderMap::new();
     for (name, value) in value
         .as_object()
@@ -251,7 +238,7 @@ fn header_map(value: &Value) -> Result<HeaderMap, ApiError> {
 pub fn event(
     round: &Arc<Mutex<Round>>,
     value: Value,
-    permits: &Arc<tokio::sync::Semaphore>,
+    _permits: &Arc<tokio::sync::Semaphore>,
     confirmation: bool,
 ) -> Result<(), ApiError> {
     let event = value["event"]
@@ -295,6 +282,7 @@ pub fn event(
                     matches!(
                         *s,
                         "searching"
+                            | "disabled"
                             | "done"
                             | "needs_confirmation"
                             | "not_found"
@@ -364,90 +352,29 @@ pub fn event(
             if state.lines.contains_key(id) {
                 return Err(ApiError::bad("Duplicate line ID"));
             }
-            if line["kind"] == "unsupported" {
-                state.lines.insert(
-                    id.into(),
-                    NativeLine {
-                        raw: line.clone(),
-                        headers: HeaderMap::new(),
-                        url: String::new(),
-                        status: "unsupported".into(),
-                        latency_ms: None,
-                        probe: 0,
-                    },
-                );
+            let status = if line["kind"] == "unsupported" {
+                "unsupported"
+            } else if !matches!(line["kind"].as_str(), Some("file" | "hls")) {
+                return Err(ApiError::bad("Unsupported line kind"));
             } else {
-                let url = line["play"]["url"]
-                    .as_str()
-                    .ok_or_else(|| ApiError::bad("Line playback URL missing"))?
-                    .to_owned();
-                maccms::http_url(&url, false)?;
-                let headers = header_map(&line["play"]["headers"])?;
-                if !matches!(line["kind"].as_str(), Some("file" | "hls")) {
-                    return Err(ApiError::bad("Unsupported line kind"));
+                match line["availability"].as_str() {
+                    Some("ready") => "ready",
+                    Some("failed") => "failed",
+                    Some("unsupported") => "unsupported",
+                    _ => "unknown",
                 }
-                static PROBES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-                let probe_id = PROBES.fetch_add(1, Ordering::Relaxed);
-                let native = NativeLine {
+            };
+            state.lines.insert(
+                id.into(),
+                NativeLine {
                     raw: line.clone(),
-                    headers,
-                    url,
-                    status: "testing".into(),
-                    latency_ms: None,
-                    probe: probe_id,
-                };
-                state.lines.insert(id.into(), native.clone());
-                state.pending += 1;
-                let round = round.clone();
-                let id = id.to_owned();
-                let permits = permits.clone();
-                let parent = state.job.clone();
-                tokio::spawn(async move {
-                    let Ok(_permit) = permits.acquire().await else {
-                        return;
-                    };
-                    let child = parent.limited_child(
-                        &uuid::Uuid::new_v4().to_string(),
-                        "default_metadata",
-                        5000,
-                    );
-                    let measured = match child {
-                        Ok(job) => tokio::task::spawn_blocking(move || probe(&native, &job))
-                            .await
-                            .unwrap_or_else(|_| Err(ApiError::internal("Line probe failed"))),
-                        Err(error) => Err(error),
-                    };
-                    let mut round = round.lock().expect("round state");
-                    if round.stop.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    // Only a line still waiting on this probe counts toward `pending`;
-                    // a budget timeout or a refresh has already settled the others.
-                    let Some(line) = round
-                        .lines
-                        .get_mut(&id)
-                        .filter(|line| line.probe == probe_id && line.status == "testing")
-                    else {
-                        return;
-                    };
-                    match measured {
-                        Ok(ms) => {
-                            line.status = "ready".into();
-                            line.latency_ms = Some(ms);
-                        }
-                        Err(error) => {
-                            line.status = if error.code == "UPSTREAM_TIMEOUT" {
-                                "timeout"
-                            } else {
-                                "failed"
-                            }
-                            .into();
-                        }
-                    }
-                    round.pending = round.pending.saturating_sub(1);
-                    round.settle();
-                });
-            }
+                    status: status.into(),
+                    latency_ms: line["latency_ms"].as_u64(),
+                    size_bytes: line["size_bytes"]
+                        .as_u64()
+                        .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991),
+                },
+            );
         }
         "done" => {
             if !confirmation {
@@ -458,55 +385,6 @@ pub fn event(
         _ => return Err(ApiError::bad("Unknown service event")),
     }
     Ok(())
-}
-
-fn probe(line: &NativeLine, job: &Job) -> Result<u64, ApiError> {
-    let start = Instant::now();
-    let http = Http::default();
-    let mut url = maccms::http_url(&line.url, false)?;
-    let mut headers = line.headers.clone();
-    if line.raw["kind"] == "hls" {
-        for _ in 0..2 {
-            let manifest = http.get(
-                url.clone(),
-                headers.clone(),
-                job,
-                crate::gateway::hls::LIMIT,
-                false,
-                false,
-            )?;
-            let text = std::str::from_utf8(&manifest.body)
-                .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Invalid HLS playlist"))?;
-            let refs = crate::gateway::hls::references(text)?;
-            let selected = refs
-                .iter()
-                .find(|r| r.playlist)
-                .or_else(|| refs.iter().find(|r| r.cacheable))
-                .ok_or_else(|| ApiError::new("UPSTREAM_FAILED", "HLS playlist has no media"))?;
-            let next = manifest
-                .url
-                .join(&text[selected.span.clone()])
-                .map_err(|_| ApiError::new("UPSTREAM_FAILED", "Invalid HLS child"))?;
-            maccms::redirect_headers(&manifest.url, &next, &mut headers)?;
-            url = next;
-            if !selected.playlist {
-                let body = http.get(url, headers, job, 65536, true, false)?;
-                if body.body.is_empty() {
-                    return Err(ApiError::new("UPSTREAM_FAILED", "Empty media probe"));
-                }
-                return Ok(start.elapsed().as_millis() as u64);
-            }
-        }
-        return Err(ApiError::new(
-            "UPSTREAM_FAILED",
-            "HLS nesting limit reached",
-        ));
-    }
-    let body = http.get(url, headers, job, 65536, true, false)?;
-    if body.body.is_empty() {
-        return Err(ApiError::new("UPSTREAM_FAILED", "Empty media probe"));
-    }
-    Ok(start.elapsed().as_millis() as u64)
 }
 
 #[cfg(test)]
@@ -545,7 +423,6 @@ mod tests {
             pending: 0,
             pending_confirm: 0,
             selected: None,
-            manual: false,
             error: None,
             deadline,
             stop: Arc::new(AtomicBool::new(false)),
@@ -557,63 +434,18 @@ mod tests {
     }
 
     #[test]
-    fn confirmed_lines_after_initial_budget_are_probed_and_selected() {
-        use std::io::{Read, Write};
-        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = server.local_addr().unwrap();
-        std::thread::spawn(move || {
-            for stream in server.incoming().take(4) {
-                let mut stream = stream.unwrap();
-                let mut request = [0; 4096];
-                let _ = stream.read(&mut request);
-                // A probe that is still running while the App polls the round.
-                std::thread::sleep(Duration::from_millis(300));
-                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: 5\r\nConnection: close\r\n\r\nmedia");
-            }
-        });
-        // The initial lookup finished and its budget is spent before the user confirms.
-        let round = round(Instant::now() - Duration::from_secs(1));
-        round.lock().unwrap().snapshot();
-        {
-            let mut state = round.lock().unwrap();
-            state.pending_confirm += 1;
-            state.extend();
-        }
-        let line_id = uuid::Uuid::new_v4().to_string();
-        let line = json!({"line_id":line_id,"source_id":"source-a","source_revision":1,"kind":"file",
+    fn server_availability_is_shown_without_client_probe() {
+        let round = round(Instant::now() + Duration::from_secs(5));
+        let id = uuid::Uuid::new_v4().to_string();
+        let line = json!({"line_id":id,"source_id":"source-a","source_revision":1,"kind":"file", "availability":"ready", "size_bytes":123456, "latency_ms":7,
             "expires_at":time::OffsetDateTime::now_utc().unix_timestamp()+60,
-            "target":round.lock().unwrap().target.clone(),
-            "play":{"url":format!("http://{address}/video.mp4"),"headers":{}}});
+            "target":round.lock().unwrap().target.clone()});
         let permits = round.lock().unwrap().permits.clone();
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            event(&round, json!({"event":"line","line":line}), &permits, true).unwrap();
-            round.lock().unwrap().pending_confirm -= 1;
-            for _ in 0..200 {
-                // Polls like the App does while the probe is still running.
-                let probing = {
-                    let mut state = round.lock().unwrap();
-                    state.snapshot();
-                    state.lines[&line_id].status == "testing"
-                };
-                if !probing {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(25)).await;
-            }
-        });
+        event(&round, json!({"event":"line","line":line}), &permits, false).unwrap();
         let snapshot = round.lock().unwrap().snapshot();
-        assert_eq!(round.lock().unwrap().lines[&line_id].status, "ready");
-        assert_eq!(snapshot["selected_line_id"], line_id.as_str());
-        assert_eq!(
-            (
-                snapshot["pending"].clone(),
-                snapshot["pending_confirm"].clone()
-            ),
-            (json!(0), json!(0))
-        );
+        assert_eq!(snapshot["lines"][0]["probe_status"], "ready");
+        assert_eq!(snapshot["lines"][0]["size_bytes"], 123456);
+        assert_eq!(snapshot["lines"][0]["latency_ms"], 7);
+        assert!(snapshot["selected_line_id"].is_null());
     }
 }

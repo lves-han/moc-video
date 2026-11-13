@@ -324,7 +324,15 @@ pub async fn streams(
             .or_else(|| stream["title"].as_str())
             .filter(|value| !value.trim().is_empty())
             .unwrap_or("Stremio");
+        let description = stream["description"]
+            .as_str()
+            .or_else(|| stream["title"].as_str())
+            .filter(|value| !value.trim().is_empty() && *value != label)
+            .map(|value| value.chars().take(512).collect::<String>());
         let label: String = label.chars().take(512).collect();
+        let size = stream["behaviorHints"]["videoSize"]
+            .as_u64()
+            .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991);
         let key = if reason.is_none() {
             stable_key(stream, url)
         } else {
@@ -339,7 +347,7 @@ pub async fn streams(
                     "hls" | "m3u8" | "application/vnd.apple.mpegurl"
                 )
             });
-        candidates.push((key.clone(),json!({"flag":label,"episode":{"label":request_id,"url":url,"headers":playback_headers(stream)?,"resolved":true,"kind_hint":hint.map(|_| "hls"),"unsupported_reason":reason,"stable_key":key,"locator":null}})));
+        candidates.push((key.clone(),json!({"flag":label,"episode":{"label":request_id,"url":url,"headers":playback_headers(stream)?,"resolved":true,"kind_hint":hint.map(|_| "hls"),"description":description,"size_bytes":size,"unsupported_reason":reason,"stable_key":key,"locator":null}})));
     }
     let mut counts = HashMap::new();
     for (key, _) in &candidates {

@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton, NSwitch, NTag, NButton, NAlert, NModal, useOsTheme } from "naive-ui";
 import { api, ApiFailure, describeError, settingsQueue } from "../api";
 import { appController, appState } from "../state";
 import type { MediaCacheStatus, Settings } from "../models";
 import Icon from "../components/Icon.vue";
-import SourceSettings from "./SourceSettings.vue";
-import LiveSettings from "./LiveSettings.vue";
 import { fontOptions, setAppFont, setFontScale } from '../ui/fonts';
 import sansLicense from '../../licenses/fonts/notosanssc-OFL.txt?raw';
 import serifLicense from '../../licenses/fonts/notoserifsc-OFL.txt?raw';
-import { locale, getStremioLanguage, t } from "../i18n";
+import { locale, t } from "../i18n";
 import {
   palette,
   paletteOptions,
@@ -20,8 +18,24 @@ const speed = defineModel<number>("speed", { required: true });
 const props = defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
 const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string]; select: [id: string, role: "metadata" | "playback"] }>();
+const serviceDraft = reactive({ url: appState.settings.playback_service?.url ?? 'http://127.0.0.1:8787', token: appState.settings.playback_service?.token ?? '' });
+const serviceBusy = ref(false), serviceError = ref('');
+const word = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en;
+async function connectService() {
+  const url = serviceDraft.url.trim().replace(/\/+$/, ''), token = serviceDraft.token.trim();
+  if (!url || !token) { serviceError.value = word('请输入服务地址和令牌。', 'Enter the service address and token.'); return; }
+  serviceBusy.value = true; serviceError.value = '';
+  try { await appController.connectPlaybackService(url, token); }
+  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
+  finally { serviceBusy.value = false; }
+}
+async function disconnectService() {
+  serviceBusy.value = true; serviceError.value = '';
+  try { await appController.disconnectPlaybackService(); }
+  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
+  finally { serviceBusy.value = false; }
+}
 const osTheme = useOsTheme();
-const metadataLanguage = computed(() => getStremioLanguage(locale.value));
 const languageOptions = [
   { value: "en", label: "English" },
   { value: "zh-CN", label: "简体中文" },
@@ -135,6 +149,15 @@ onMounted(() => { void refreshCache(); });
       </p>
     </div>
   </div>
+  <section v-if="!preview" class="settings-group service-settings">
+    <h2>{{ word('服务连接', 'Service connection') }}</h2>
+    <div class="settings-panel">
+      <div class="setting-row"><label for="service-address">{{ word('服务地址', 'Service address') }}</label><input id="service-address" v-model="serviceDraft.url" class="setting-select" :disabled="serviceBusy" /></div>
+      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" class="setting-select" :disabled="serviceBusy" /></div>
+      <div class="setting-row"><span>{{ appState.settings.playback_service?.enabled ? word('已连接', 'Connected') : word('未连接', 'Disconnected') }}</span><div class="cache-limit-controls"><NButton type="primary" :disabled="serviceBusy" @click="connectService">{{ word('连接', 'Connect') }}</NButton><NButton v-if="appState.settings.playback_service?.enabled" :disabled="serviceBusy" @click="disconnectService">{{ word('断开', 'Disconnect') }}</NButton></div></div>
+      <NAlert v-if="serviceError" type="error" role="alert">{{ serviceError }}</NAlert>
+    </div>
+  </section>
   <section class="settings-group appearance-panel">
     <h2>{{ t("Appearance") }}</h2>
     <div class="settings-panel">
@@ -180,7 +203,7 @@ onMounted(() => { void refreshCache(); });
     </div>
   </section>
   <section class="settings-group">
-    <h2>{{ t("Language & metadata") }}</h2>
+    <h2>{{ word("语言", "Language") }}</h2>
     <div class="settings-panel">
     <div class="setting-row">
       <div>
@@ -192,33 +215,6 @@ onMounted(() => { void refreshCache(); });
       <div class="settings-language library-tabs" role="radiogroup" :aria-label="t('App language')" data-focus-row><button v-for="item in languageOptions" :key="item.value" role="radio" :aria-checked="locale === item.value" @click="changeLanguage(item.value)">{{ item.label }}</button></div>
       <select class="setting-select compact-select narrow-language" :value="locale" :aria-label="t('App language')" @change="changeLanguage(($event.target as HTMLSelectElement).value)"><option v-for="item in languageOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select>
     </div>
-    <SourceSettings v-if="!preview" section="metadata" @select="(id, role) => emit('select', id, role)" />
-    <template v-else>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t("Metadata provider") }}</h3>
-        <p>
-          {{ t(preview ? "Metadata language preview · Live Stremio connection pending" : "Follows the app: Chinese uses Chinese; all other languages use English.") }}
-        </p>
-      </div>
-      <NTag :bordered="false">Stremio</NTag>
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t("Metadata language") }}</h3>
-        <p>
-          {{
-            t(
-              "Follows the app: Chinese uses Chinese; all other languages use English.",
-            )
-          }}
-        </p>
-      </div>
-      <output class="metadata-language" :lang="metadataLanguage">{{
-        t(metadataLanguage === "zh-CN" ? "Simplified Chinese" : "English")
-      }}</output>
-    </div>
-    </template>
       </div>
   </section>
   <section class="settings-group">
@@ -226,12 +222,12 @@ onMounted(() => { void refreshCache(); });
     <div class="settings-panel">
     <div class="setting-row">
       <div>
-        <h3>{{ t("Automatically play next episode") }}</h3>
-        <p>{{ t("Continue to the next episode when this one ends.") }}</p>
+        <h3>{{ word("自动查找下一集线路", "Find next episode automatically") }}</h3>
+        <p>{{ word("播放结束后显示下一集可选线路。", "Show the next episode’s available lines when playback ends.") }}</p>
       </div>
       <NSwitch
         v-model:value="autoNext"
-        :aria-label="t('Automatically play next episode')"
+        :aria-label="word('自动查找下一集线路', 'Find next episode automatically')"
       />
     </div>
     <div class="setting-row">
@@ -253,13 +249,9 @@ onMounted(() => { void refreshCache(); });
         </option>
       </select>
     </div>
-    <SourceSettings v-if="!preview" section="playback" @select="(id, role) => emit('select', id, role)" />
       </div>
   </section>
-  <section v-if="!preview" class="settings-group live-settings-group">
-    <h2>{{ t("Live") }}</h2>
-    <div class="settings-panel"><LiveSettings /></div>
-  </section>
+  <details class="settings-group storage-settings"><summary>{{ word('存储与数据', 'Storage and data') }}</summary>
   <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
     <h2>{{ t('Media cache') }}</h2>
     <div class="settings-panel">
@@ -277,35 +269,16 @@ onMounted(() => { void refreshCache(); });
   <section class="settings-group reset-settings" :aria-busy="resetBusy">
     <h2>{{ t('Reset app') }}</h2>
     <div class="settings-panel">
-      <div class="setting-row"><div><h3>{{ t('Clear all data and reset') }}</h3><p>{{ t('Delete settings, added sources, watch history, watchlist and all caches. The app will restart with defaults.') }}</p></div><NButton data-action="app-reset" type="error" secondary :disabled="preview || resetBusy || cacheBusy || fontSaving" @click="resetError = ''; resetConfirm = true">{{ t('Clear all data and reset') }}</NButton></div>
+      <div class="setting-row"><div><h3>{{ t('Clear all data and reset') }}</h3><p>{{ t('Delete settings, watch history, watchlist and all caches. The app will restart with defaults.') }}</p></div><NButton data-action="app-reset" type="error" secondary :disabled="preview || resetBusy || cacheBusy || fontSaving" @click="resetError = ''; resetConfirm = true">{{ t('Clear all data and reset') }}</NButton></div>
       <p v-if="preview">{{ t('Reset is available in the desktop app.') }}</p>
       <p v-if="resetBusy" role="status">{{ t('Resetting app and restarting…') }}</p>
     </div>
   </section>
   <NModal v-model:show="resetConfirm" preset="dialog" type="warning" :title="t('Reset app?')" :positive-text="t('Clear all data and reset')" :negative-text="t('Cancel')" :loading="resetBusy" :closable="!resetBusy" :mask-closable="!resetBusy" :close-on-esc="!resetBusy" :negative-button-props="{ disabled: resetBusy }" :positive-button-props="{ type: 'error' }" @positive-click="resetApp">
-    <p>{{ t('This permanently deletes all app settings, added sources, watch history, watchlist and cached data. Defaults will be restored.') }}</p>
+    <p>{{ t('This permanently deletes all app settings, watch history, watchlist and cached data. Defaults will be restored.') }}</p>
     <NAlert v-if="resetError" type="error" role="alert">{{ resetError }}</NAlert>
   </NModal>
-  <section class="settings-group">
-    <h2>{{ t("About Moc Video") }}</h2>
-    <div class="settings-panel">
-    <div class="about-brand">
-      <img src="/mark.svg" width="48" height="48" alt="" />
-      <div>
-        <h3>{{ t("Moc Video") }}</h3>
-        <p>{{ t("A place for good stories.") }}</p>
-      </div>
-      <NTag :bordered="false">{{ preview ? t("Interface preview 0.1.0") : '0.1.0' }}</NTag>
-    </div>
-    <p class="about-copy">
-      {{
-        t(
-          preview ? "Explore discovery, film details, episodes, embedded playback and source management. Artwork is original, playback uses a local 30-second demo, and playback preferences last for this page session." : "A place for good stories.",
-        )
-      }}
-    </p>
-      </div>
-  </section>
+  </details>
   </div>
 </template>
 

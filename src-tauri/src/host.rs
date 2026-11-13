@@ -1756,7 +1756,6 @@ impl Host {
             pending: 0,
             pending_confirm: 0,
             selected: None,
-            manual: false,
             error: None,
             deadline: std::time::Instant::now() + line_round::BUDGET,
             stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -1944,6 +1943,25 @@ impl Host {
             .as_u64()
             .ok_or_else(|| ApiError::bad("Invalid line source"))?;
         self.verify_service_source(&service, source_id, revision, job)?;
+        let selected = crate::service::blocking_json(
+            &service,
+            reqwest::Method::POST,
+            &["v1", "lines", line_id, "play"],
+            Some(json!({})),
+            job,
+        )?;
+        if selected["line_id"] != line_id
+            || selected["source_id"] != source_id
+            || selected["source_revision"] != revision
+            || selected["target"] != line.raw["target"]
+        {
+            return Err(ApiError::bad("Selected line identity changed"));
+        }
+        let url = selected["play"]["url"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("Selected playback URL missing"))?;
+        maccms::http_url(url, false)?;
+        let headers = crate::line_round::header_map(&selected["play"]["headers"])?;
         let mut committed = self.committed.lock().expect("Host commit lock");
         job.check()?;
         committed.line_rounds.get(round_id)?;
@@ -1960,12 +1978,11 @@ impl Host {
             let mut state = round.lock().expect("round state");
             if state.lines.get(line_id).is_none_or(|current| {
                 current.status != "ready"
-                    || current.url != line.url
+                    || current.raw != line.raw
                     || current.raw["source_revision"] != revision
             }) {
                 return Err(ApiError::cancelled());
             }
-            state.manual = true;
             state.selected = Some(line_id.into());
         }
         let provider = identity("service_source", &[source_id]);
@@ -1977,8 +1994,8 @@ impl Host {
         let link = resolution::Link {
             original: json!({}),
             provider: provider.clone(),
-            url: line.url.clone(),
-            headers: line.headers.clone(),
+            url: url.to_owned(),
+            headers,
             referer: String::new(),
             extractor_data: None,
             interceptor: None,

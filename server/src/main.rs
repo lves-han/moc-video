@@ -1,4 +1,5 @@
 mod adapters;
+mod availability;
 mod config;
 mod db;
 mod line_cache;
@@ -972,6 +973,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/lookups", post(lookups::create))
         .route("/v1/lookups/{id}", axum::routing::delete(lookups::cancel))
         .route("/v1/lines/{id}/refresh", post(lookups::refresh))
+        .route("/v1/lines/{id}/play", post(lookups::play))
         .route("/v1/reports", post(lookups::report))
         .route(
             "/v1/sources/{id}",
