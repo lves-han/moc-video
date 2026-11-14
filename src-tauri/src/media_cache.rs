@@ -290,8 +290,8 @@ impl MediaCache {
             tx.execute("INSERT OR IGNORE INTO images(image_key) VALUES(?1)", [key]).map_err(|_| ApiError::internal("Image cache update failed"))?;
             tx.execute("INSERT OR IGNORE INTO image_owners(owner,image_key) VALUES(?1,?2)", rusqlite::params![owner,key]).map_err(|_| ApiError::internal("Image cache update failed"))?;
         }
-        tx.execute("DELETE FROM image_owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 100)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
-        tx.execute("DELETE FROM owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 100)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
+        tx.execute("DELETE FROM image_owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 200)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
+        tx.execute("DELETE FROM owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 200)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
         tx.execute("DELETE FROM images WHERE image_key NOT IN (SELECT image_key FROM image_owners)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
         tx.commit().map_err(|_| ApiError::internal("Image cache commit failed"))
     }
@@ -605,7 +605,7 @@ impl MediaCache {
             remaining: metadata.body_len,
         })
     }
-    /// Assemble a requested byte interval only from complete, consistently validated chunks.
+    /// Assemble a requested byte interval from complete chunks of the same representation.
     pub fn cached_sequence(self: &Arc<Self>, resource: &str, requested: Option<&str>) -> Option<CachedSequence> {
         #[derive(Clone)]
         struct Piece { key: String, start: u64, end: u64, total: u64, validator: Option<String> }
@@ -641,9 +641,8 @@ impl MediaCache {
         let mut position = start; let mut selected = Vec::new(); let mut validator: Option<String> = None;
         while position < end {
             let part = pieces.iter().filter(|part| part.total == total && part.start <= position && part.end > position)
-                .filter(|part| validator.as_ref().is_none_or(|current| part.validator.as_ref() == Some(current)))
+                .filter(|part| selected.is_empty() || part.validator == validator)
                 .max_by_key(|part| part.end)?.clone();
-            if !selected.is_empty() && (validator.is_none() || part.validator.is_none()) { return None; }
             if selected.is_empty() { validator = part.validator.clone(); }
             let stop = part.end.min(end);
             selected.push((part.clone(), position - part.start, stop - position)); position = stop;
@@ -710,10 +709,7 @@ impl MediaCache {
         }
         let at = now();
         // Explicit episode caching retains media until the episode is evicted.
-        // Preserve upstream no-store/no-cache and wildcard Vary protections.
         let ttl = if episode.is_some() {
-            if directives(upstream).iter().any(|part| matches!(part.split('=').next().map(str::trim), Some("no-store" | "no-cache")))
-                || upstream.get_all("vary").iter().any(|value| value.to_str().is_ok_and(|v| v.split(',').any(|part| part.trim() == "*"))) { return None; }
             u64::MAX.saturating_sub(at)
         } else { freshness(upstream, at)? };
         let stored: BTreeMap<String, String> = HEADERS
@@ -1079,15 +1075,15 @@ mod tests {
     }
 
     #[test]
-    fn detail_images_retain_the_most_recent_100_titles_across_restart() {
+    fn detail_images_retain_the_most_recent_200_titles_across_restart() {
         let (root, cache) = cache(0);
-        for id in 0..100 {
+        for id in 0..200 {
             let image = format!("image-{id}");
             cache.register_images(&format!("title-{id}"), std::slice::from_ref(&image)).unwrap();
             cache.save_image(&image, &[id as u8; 8], "image/png").unwrap();
         }
         cache.touch_image_owner("title-0").unwrap();
-        cache.register_images("title-100", &["image-100".into()]).unwrap();
+        cache.register_images("title-200", &["image-200".into()]).unwrap();
         assert!(cache.cached_image("image-0").unwrap().is_some());
         assert!(cache.cached_image("image-1").unwrap().is_none());
         drop(cache);

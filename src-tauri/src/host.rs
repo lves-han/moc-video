@@ -1600,22 +1600,40 @@ impl Host {
                 self.media_cache.clone(),
             )?);
         }
-        let owner = value.get("details").and_then(|v| v.get("ref")).map(|reference| {
+        let owner_for = |reference: &Value| {
             use sha2::{Digest, Sha256};
             format!("{:x}", Sha256::digest(reference.to_string().as_bytes()))
-        });
-        let keys: Vec<_> = references.values().map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
-        let caching = owner.as_deref().is_some_and(|owner| self.media_cache.register_images(owner, &keys).is_ok());
+        };
+        let mut owners = std::collections::HashMap::new();
+        if let Some(reference) = value.get("details").and_then(|v| v.get("ref")) {
+            let owner = owner_for(reference);
+            let keys: Vec<_> = references.values().map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
+            if self.media_cache.register_images(&owner, &keys).is_ok() {
+                for id in references.keys() { owners.insert(id.clone(), owner.clone()); }
+            }
+        } else if let Some(sections) = value.pointer("/page/sections").and_then(Value::as_array) {
+            for card in sections.iter().flat_map(|section| section["items"].as_array().into_iter().flatten()) {
+                let Some(reference) = card.get("ref") else { continue; };
+                let owner = owner_for(reference);
+                let mut ids = Vec::new();
+                crate::details::images(card, &mut |image| { ids.push(image["resource_id"].as_str().expect("Image ID").to_owned()); Ok(()) })?;
+                let keys: Vec<_> = ids.iter().filter_map(|id| references.get(id)).map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
+                if self.media_cache.register_images(&owner, &keys).is_ok() {
+                    for id in ids { owners.insert(id, owner.clone()); }
+                }
+            }
+        }
         let mut access = serde_json::Map::new();
         for (id, image) in references {
-            let cache_key = caching.then(|| crate::media_cache::key(source, "image", &image.url, &image.headers));
+            let owner = owners.get(&id).cloned();
+            let cache_key = owner.as_ref().map(|_| crate::media_cache::key(source, "image", &image.url, &image.headers));
             access.insert(
                 id,
                 committed
                     .gateway
                     .as_ref()
                     .expect("Image gateway")
-                    .image_cached(source, image, cache_key, if caching { owner.clone() } else { None })?,
+                    .image_cached(source, image, cache_key, owner)?,
             );
         }
         fn capabilities(value: &mut Value, access: &serde_json::Map<String, Value>) {

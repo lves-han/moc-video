@@ -435,6 +435,70 @@ fn progressive_prefetch_caches_complete_verified_file_and_serves_arbitrary_range
 }
 
 #[test]
+fn progressive_prefetch_reuses_chunks_without_cache_headers_or_validators() {
+    const SIZE: usize = 4 * 1024 * 1024 + 1024;
+    let fixture = Fixture::new(|request, _| {
+        let range = request.headers.get("range").unwrap().strip_prefix("bytes=").unwrap();
+        let (first, last) = range.split_once('-').unwrap();
+        let start = first.parse::<usize>().unwrap();
+        let end = last.parse::<usize>().unwrap().min(SIZE - 1);
+        let body = (start..=end).map(|index| (index % 251) as u8).collect::<Vec<_>>();
+        let mut reply = Reply::body(body, "video/mp4")
+            .header("Cache-Control", "no-store, no-cache")
+            .header("Vary", "*")
+            .header("Content-Range", format!("bytes {start}-{end}/{SIZE}"));
+        reply.status = 206; reply
+    });
+    let temp = tempfile::tempdir().unwrap();
+    let cache = MediaCache::for_episodes(temp.path().join("media-cache"));
+    let gateway = Gateway::with_media_cache(Arc::new(MonotonicClock::default()), cache).unwrap();
+    let mut store = ResolutionStore::default();
+    let resolution = register(&mut store, link(fixture.url("/uncacheable.mp4")), vec![], 0);
+    let selected = store.selected(resolution["id"].as_str().unwrap(), resolution["streams"][0]["id"].as_str().unwrap(), 0).unwrap();
+    let view = gateway.open_episode(selected, "episode-no-validator".into()).unwrap();
+    let mut status_url = url::Url::parse(media(&view)).unwrap();
+    status_url.set_path(&format!("/cache/{}", view["session_id"].as_str().unwrap()));
+    wait_for(|| {
+        let data: Value = serde_json::from_slice(&fetch(status_url.as_str(), "GET", &[]).body).unwrap();
+        if data["status"] == "failed" { panic!("prefetch failed: {data}"); }
+        data["status"] == "complete"
+    });
+    let before = count(&fixture, "/uncacheable.mp4");
+    let response = fetch(media(&view), "GET", &[("Range", "bytes=4194300-4194310"), ("Cache-Control", "no-cache")]);
+    assert_eq!(response.status, 206);
+    assert_eq!(response.body, (4194300..=4194310).map(|index| (index % 251) as u8).collect::<Vec<_>>());
+    assert_eq!(count(&fixture, "/uncacheable.mp4"), before);
+}
+
+#[test]
+fn progressive_prefetch_uses_original_cookie_and_interceptor() {
+    const SIZE: usize = 4 * 1024 * 1024 + 1024;
+    let fixture = Fixture::new(|request, _| {
+        if request.headers.get("cookie").map(String::as_str) != Some("session=fixture") || request.headers.get("x-source").map(String::as_str) != Some("intercepted") {
+            let mut reply = Reply::body("forbidden", "text/plain"); reply.status = 403; return reply;
+        }
+        let range = request.headers.get("range").unwrap().strip_prefix("bytes=").unwrap();
+        let (first, last) = range.split_once('-').unwrap();
+        let start = first.parse::<usize>().unwrap(); let end = last.parse::<usize>().unwrap().min(SIZE - 1);
+        let mut reply = Reply::body(vec![7; end - start + 1], "video/mp4").header("Content-Range", format!("bytes {start}-{end}/{SIZE}"));
+        reply.status = 206; reply
+    });
+    let temp = tempfile::tempdir().unwrap(); let cache = MediaCache::for_episodes(temp.path().join("media-cache"));
+    let gateway = Gateway::with_media_cache(Arc::new(MonotonicClock::default()), cache).unwrap();
+    let mut source = link(fixture.url("/context-video.mp4"));
+    source.cookies = Some(Arc::new(HttpContext(Box::new(|_, headers| { headers.insert("cookie", "session=fixture".parse().unwrap()); Ok(()) }))));
+    source.interceptor = Some(Arc::new(HttpContext(Box::new(|_, headers| { headers.insert("x-source", "intercepted".parse().unwrap()); Ok(()) }))));
+    let mut store = ResolutionStore::default(); let resolution = register(&mut store, source, vec![], 0);
+    let selected = store.selected(resolution["id"].as_str().unwrap(), resolution["streams"][0]["id"].as_str().unwrap(), 0).unwrap();
+    let view = gateway.open_episode(selected, "context-video".into()).unwrap();
+    let mut status_url = url::Url::parse(media(&view)).unwrap(); status_url.set_path(&format!("/cache/{}", view["session_id"].as_str().unwrap()));
+    wait_for(|| { let state: Value = serde_json::from_slice(&fetch(status_url.as_str(), "GET", &[]).body).unwrap(); if state["status"] == "failed" { panic!("{state}"); } state["status"] == "complete" });
+    let before = count(&fixture, "/context-video.mp4");
+    assert_eq!(fetch(media(&view), "GET", &[("Range", "bytes=4194300-4194310")]).body, vec![7; 11]);
+    assert_eq!(count(&fixture, "/context-video.mp4"), before);
+}
+
+#[test]
 fn progressive_prefetch_preserves_chunks_after_exit_and_reuses_them() {
     const SIZE: usize = 4 * 1024 * 1024 + 1024;
     let fixture = Fixture::new(|request, _| {
@@ -462,6 +526,65 @@ fn progressive_prefetch_preserves_chunks_after_exit_and_reuses_them() {
     let requests = fixture.state.requests.lock().unwrap();
     assert_eq!(requests.iter().filter(|r| r.headers.get("range").map(String::as_str) == Some("bytes=0-4194303")).count(), 1);
     assert_eq!(cache.status()["entry_count"], 2);
+}
+
+#[test]
+fn hls_prefetch_reuses_segments_with_no_store_response() {
+    let fixture = Fixture::new(|request, _| match request.target.as_str() {
+        "/restricted.m3u8" => Reply::body("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/first.ts\n#EXTINF:4,\n/next.ts\n#EXT-X-ENDLIST\n", "application/vnd.apple.mpegurl"),
+        _ => Reply::body(vec![9; 128], "video/mp2t").header("Cache-Control", "no-store").header("Vary", "*"),
+    });
+    let temp = tempfile::tempdir().unwrap();
+    let cache = MediaCache::for_episodes(temp.path().join("media-cache"));
+    let gateway = Gateway::with_media_cache(Arc::new(MonotonicClock::default()), cache).unwrap();
+    let mut store = ResolutionStore::default();
+    let mut stream = link(fixture.url("/restricted.m3u8")); stream.kind = "hls".into();
+    let resolution = register(&mut store, stream, vec![], 0);
+    let selected = store.selected(resolution["id"].as_str().unwrap(), resolution["streams"][0]["id"].as_str().unwrap(), 0).unwrap();
+    let view = gateway.open_episode(selected, "episode-hls-policy".into()).unwrap();
+    let playlist = fetch(media(&view), "GET", &[]);
+    let text = std::str::from_utf8(&playlist.body).unwrap();
+    let segments: Vec<_> = text.lines().filter(|line| line.starts_with("http://")).collect();
+    assert_eq!(segments.len(), 2);
+    assert_eq!(fetch(segments[0], "GET", &[]).status, 200);
+    let mut status_url = url::Url::parse(media(&view)).unwrap();
+    status_url.set_path(&format!("/cache/{}", view["session_id"].as_str().unwrap()));
+    wait_for(|| {
+        let data: Value = serde_json::from_slice(&fetch(status_url.as_str(), "GET", &[]).body).unwrap();
+        if data["status"] == "failed" { panic!("prefetch failed: {data}"); }
+        data["status"] == "complete"
+    });
+    assert_eq!(count(&fixture, "/next.ts"), 1);
+    assert_eq!(fetch(segments[1], "GET", &[]).body, vec![9; 128]);
+    assert_eq!(count(&fixture, "/next.ts"), 1);
+}
+
+#[test]
+fn hls_prefetch_uses_original_cookie_and_interceptor() {
+    let fixture = Fixture::new(|request, _| {
+        if request.headers.get("cookie").map(String::as_str) != Some("session=fixture") || request.headers.get("x-source").map(String::as_str) != Some("intercepted") {
+            let mut reply = Reply::body("forbidden", "text/plain"); reply.status = 403; return reply;
+        }
+        match request.target.as_str() {
+            "/context.m3u8" => Reply::body("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n/context-first.ts\n#EXTINF:4,\n/context-next.ts\n#EXT-X-ENDLIST\n", "application/vnd.apple.mpegurl"),
+            _ => Reply::body(vec![9; 128], "video/mp2t"),
+        }
+    });
+    let temp = tempfile::tempdir().unwrap(); let cache = MediaCache::for_episodes(temp.path().join("media-cache"));
+    let gateway = Gateway::with_media_cache(Arc::new(MonotonicClock::default()), cache).unwrap();
+    let mut source = link(fixture.url("/context.m3u8")); source.kind = "hls".into();
+    source.cookies = Some(Arc::new(HttpContext(Box::new(|_, headers| { headers.insert("cookie", "session=fixture".parse().unwrap()); Ok(()) }))));
+    source.interceptor = Some(Arc::new(HttpContext(Box::new(|_, headers| { headers.insert("x-source", "intercepted".parse().unwrap()); Ok(()) }))));
+    let mut store = ResolutionStore::default(); let resolution = register(&mut store, source, vec![], 0);
+    let selected = store.selected(resolution["id"].as_str().unwrap(), resolution["streams"][0]["id"].as_str().unwrap(), 0).unwrap();
+    let view = gateway.open_episode(selected, "context-hls".into()).unwrap();
+    let playlist = fetch(media(&view), "GET", &[]); assert_eq!(playlist.status, 200);
+    let text = std::str::from_utf8(&playlist.body).unwrap(); let segments: Vec<_> = text.lines().filter(|line| line.starts_with("http://")).collect();
+    assert_eq!(segments.len(), 2); assert_eq!(fetch(segments[0], "GET", &[]).status, 200);
+    let mut status_url = url::Url::parse(media(&view)).unwrap(); status_url.set_path(&format!("/cache/{}", view["session_id"].as_str().unwrap()));
+    wait_for(|| { let state: Value = serde_json::from_slice(&fetch(status_url.as_str(), "GET", &[]).body).unwrap(); if state["status"] == "failed" { panic!("{state}"); } state["status"] == "complete" });
+    assert_eq!(count(&fixture, "/context-next.ts"), 1); assert_eq!(fetch(segments[1], "GET", &[]).body, vec![9; 128]);
+    assert_eq!(count(&fixture, "/context-next.ts"), 1);
 }
 
 #[test]

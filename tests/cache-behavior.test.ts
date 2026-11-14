@@ -78,6 +78,20 @@ test('film details containing URLs stay in memory only', () => {
   assert.equal(cache.get(ref, 'en', 'host')?.value.details.title, 'Film');
 });
 
+test('film details retain the latest 200 titles', () => {
+  const store = storage(), cache = metadataCache(() => store);
+  for (let index = 0; index <= 200; index++) {
+    const ref = { source_id: 's', source_revision: 'r', data: `${index}` };
+    const value = { details: { ref, id: `${index}`, title: 'Film', groups: [], related: [], tags: [], kind: 'movie' },
+      metadata_ref: { identity: { config_id: 'c', addon_key: 'a', namespace: 'n', type: 'movie', meta_id: `${index}`, canonical_id: `${index}` }, content_ref: ref }, images: {} } as never;
+    cache.put(ref, 'en', 'host', value, index);
+  }
+  const reopened = metadataCache(() => store);
+  assert.equal(reopened.get({ source_id: 's', source_revision: 'r', data: '0' }, 'en', 'host'), null);
+  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '1' }, 'en', 'host'));
+  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '200' }, 'en', 'host'));
+});
+
 test('background refresh waits for idle and never runs two updates together', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let idle = false, running = 0, maximum = 0, finished = 0;

@@ -59,7 +59,7 @@ export async function cacheWrite(store: StoreName, row: CacheRow): Promise<void>
     if (store === 'details') {
       let count = 0;
       const cursor = bucket.index('touched').openCursor(null, 'prev');
-      cursor.onsuccess = () => { const value = cursor.result; if (!value) return; if (++count > 100) value.delete(); value.continue(); };
+      cursor.onsuccess = () => { const value = cursor.result; if (!value) return; if (++count > 200) value.delete(); value.continue(); };
     }
     tx.oncomplete = () => resolve();
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache write failed'));
