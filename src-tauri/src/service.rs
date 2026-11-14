@@ -702,7 +702,7 @@ mod tests {
         let host = Host::open(settings_path.clone()).unwrap();
         set_fixture(1);
         let partial = runtime
-            .block_on(import(&endpoint, token, &[config.clone()]))
+            .block_on(import(&endpoint, token, std::slice::from_ref(&config)))
             .unwrap();
         assert_eq!(partial["groups"][0]["status"], "pending");
         assert_eq!(partial["groups"][0]["addons"].as_array().unwrap().len(), 1);
@@ -728,7 +728,7 @@ mod tests {
         );
         set_fixture(0);
         let complete = runtime
-            .block_on(import(&endpoint, token, &[config.clone()]))
+            .block_on(import(&endpoint, token, std::slice::from_ref(&config)))
             .unwrap();
         assert_eq!(complete["groups"][0]["status"], "ready");
         assert_eq!(complete["groups"][0]["addons"][0]["source_id"], first_id);

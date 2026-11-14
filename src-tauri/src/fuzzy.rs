@@ -108,7 +108,7 @@ pub fn score(query: &str, title: &str) -> f64 {
 /// Whether a search result title names the queried title at all. Some MacCMS
 /// sites answer `wd` with full-text relevance (descriptions, cast), so an
 /// unrelated title can come back first; matching keeps only containment.
-
+///
 /// Stable sort of search cards by closeness of their titles to the typed query.
 pub fn rank(query: &str, items: &mut [Value]) {
     items.sort_by(|a, b| {

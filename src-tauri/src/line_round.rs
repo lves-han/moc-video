@@ -125,18 +125,18 @@ pub async fn drive(round: Arc<Mutex<Round>>, body: Value, confirmation: bool) {
         let mut state = round.lock().expect("round state");
         if confirmation {
             state.pending_confirm = state.pending_confirm.saturating_sub(1);
-            if result.is_ok() {
-                if let Some(id) = confirmed_candidate {
-                    state.candidates.remove(&id);
-                }
+            if result.is_ok()
+                && let Some(id) = confirmed_candidate
+            {
+                state.candidates.remove(&id);
             }
         } else {
             state.query_done = true;
         }
-        if let Err(error) = result {
-            if error.code != "CANCELLED" {
-                state.error = Some(error.message);
-            }
+        if let Err(error) = result
+            && error.code != "CANCELLED"
+        {
+            state.error = Some(error.message);
         }
         state.settle();
     }

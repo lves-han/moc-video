@@ -14,11 +14,24 @@ fn home_card_images_are_registered_for_persistent_cache() {
     let key = crate::media_cache::key("source", "image", &image.url, &image.headers);
     {
         let mut committed = host.committed.lock().unwrap();
-        host.image_access(&mut committed, "source", &mut value, |id| (id == "poster").then(|| image.clone())).unwrap();
+        host.image_access(&mut committed, "source", &mut value, |id| {
+            (id == "poster").then(|| image.clone())
+        })
+        .unwrap();
     }
-    host.media_cache.save_image(&key, b"cached poster", "image/jpeg").unwrap();
-    assert_eq!(host.media_cache.cached_image(&key).unwrap().unwrap().0, b"cached poster");
-    assert!(value["images"]["poster"]["url"].as_str().unwrap().starts_with("http://127.0.0.1:"));
+    host.media_cache
+        .save_image(&key, b"cached poster", "image/jpeg")
+        .unwrap();
+    assert_eq!(
+        host.media_cache.cached_image(&key).unwrap().unwrap().0,
+        b"cached poster"
+    );
+    assert!(
+        value["images"]["poster"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("http://127.0.0.1:")
+    );
 }
 
 #[test]
@@ -65,7 +78,10 @@ fn t24_cache_host_settings_permissions_and_restart() {
     );
     settings["media_cache_max_bytes"] = json!(0);
     ok(&restarted, "save_settings", settings);
-    assert_eq!(ok(&restarted, "get_media_cache", json!({}))["max_bytes"], 9_007_199_254_740_991u64);
+    assert_eq!(
+        ok(&restarted, "get_media_cache", json!({}))["max_bytes"],
+        9_007_199_254_740_991u64
+    );
 }
 
 #[test]

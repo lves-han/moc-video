@@ -105,11 +105,16 @@ pub struct Call {
 
 fn cache_episode_owner(context: &Value) -> Option<String> {
     let metadata = &context["metadata_ref"]["identity"];
-    Some(identity("episode_cache", &[
-        metadata["config_id"].as_str()?, metadata["namespace"].as_str()?,
-        metadata["type"].as_str()?, metadata["meta_id"].as_str()?,
-        context["metadata_video_id"].as_str()?,
-    ]))
+    Some(identity(
+        "episode_cache",
+        &[
+            metadata["config_id"].as_str()?,
+            metadata["namespace"].as_str()?,
+            metadata["type"].as_str()?,
+            metadata["meta_id"].as_str()?,
+            context["metadata_video_id"].as_str()?,
+        ],
+    ))
 }
 
 impl Host {
@@ -609,9 +614,16 @@ impl Host {
                         self.media_cache.clone(),
                     )?);
                 }
-                let owner = input["resolution_id"].as_str().and_then(|id| committed.resolution_contexts.get(id)).and_then(cache_episode_owner);
+                let owner = input["resolution_id"]
+                    .as_str()
+                    .and_then(|id| committed.resolution_contexts.get(id))
+                    .and_then(cache_episode_owner);
                 let gateway = committed.gateway.as_ref().expect("Gateway ready");
-                let view = if let Some(owner) = owner { gateway.open_episode(selected, owner)? } else { gateway.open(selected)? };
+                let view = if let Some(owner) = owner {
+                    gateway.open_episode(selected, owner)?
+                } else {
+                    gateway.open(selected)?
+                };
                 if let Err(error) = job.check() {
                     gateway.close(view["session_id"].as_str().expect("Session ID"));
                     return Err(error);
@@ -1607,26 +1619,49 @@ impl Host {
         let mut owners = std::collections::HashMap::new();
         if let Some(reference) = value.get("details").and_then(|v| v.get("ref")) {
             let owner = owner_for(reference);
-            let keys: Vec<_> = references.values().map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
+            let keys: Vec<_> = references
+                .values()
+                .map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers))
+                .collect();
             if self.media_cache.register_images(&owner, &keys).is_ok() {
-                for id in references.keys() { owners.insert(id.clone(), owner.clone()); }
+                for id in references.keys() {
+                    owners.insert(id.clone(), owner.clone());
+                }
             }
         } else if let Some(sections) = value.pointer("/page/sections").and_then(Value::as_array) {
-            for card in sections.iter().flat_map(|section| section["items"].as_array().into_iter().flatten()) {
-                let Some(reference) = card.get("ref") else { continue; };
+            for card in sections
+                .iter()
+                .flat_map(|section| section["items"].as_array().into_iter().flatten())
+            {
+                let Some(reference) = card.get("ref") else {
+                    continue;
+                };
                 let owner = owner_for(reference);
                 let mut ids = Vec::new();
-                crate::details::images(card, &mut |image| { ids.push(image["resource_id"].as_str().expect("Image ID").to_owned()); Ok(()) })?;
-                let keys: Vec<_> = ids.iter().filter_map(|id| references.get(id)).map(|image| crate::media_cache::key(source, "image", &image.url, &image.headers)).collect();
+                crate::details::images(card, &mut |image| {
+                    ids.push(image["resource_id"].as_str().expect("Image ID").to_owned());
+                    Ok(())
+                })?;
+                let keys: Vec<_> = ids
+                    .iter()
+                    .filter_map(|id| references.get(id))
+                    .map(|image| {
+                        crate::media_cache::key(source, "image", &image.url, &image.headers)
+                    })
+                    .collect();
                 if self.media_cache.register_images(&owner, &keys).is_ok() {
-                    for id in ids { owners.insert(id, owner.clone()); }
+                    for id in ids {
+                        owners.insert(id, owner.clone());
+                    }
                 }
             }
         }
         let mut access = serde_json::Map::new();
         for (id, image) in references {
             let owner = owners.get(&id).cloned();
-            let cache_key = owner.as_ref().map(|_| crate::media_cache::key(source, "image", &image.url, &image.headers));
+            let cache_key = owner
+                .as_ref()
+                .map(|_| crate::media_cache::key(source, "image", &image.url, &image.headers));
             access.insert(
                 id,
                 committed
@@ -2137,21 +2172,22 @@ impl Host {
         let refreshed = runtime.block_on(async {
             line_round::event(&round, json!({"event":"line","line":value}), &permits, true)?;
             loop {
-                let state = round.lock().expect("round state");
-                if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
-                    return Err(ApiError::cancelled());
-                }
-                if std::time::Instant::now() >= state.deadline {
-                    return Err(ApiError::new(
-                        "SESSION_EXPIRED",
-                        "Line round expired; search again",
-                    ));
-                }
-                let done = state
-                    .lines
-                    .get(line_id)
-                    .is_none_or(|line| line.status != "testing");
-                drop(state);
+                let done = {
+                    let state = round.lock().expect("round state");
+                    if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
+                        return Err(ApiError::cancelled());
+                    }
+                    if std::time::Instant::now() >= state.deadline {
+                        return Err(ApiError::new(
+                            "SESSION_EXPIRED",
+                            "Line round expired; search again",
+                        ));
+                    }
+                    state
+                        .lines
+                        .get(line_id)
+                        .is_none_or(|line| line.status != "testing")
+                };
                 if done {
                     break;
                 }
@@ -2227,7 +2263,11 @@ impl Host {
             )?);
         }
         let gateway = committed.gateway.as_ref().expect("Gateway ready");
-        let view = if let Some(owner) = cache_episode_owner(&context) { gateway.open_episode(selected, owner)? } else { gateway.open(selected)? };
+        let view = if let Some(owner) = cache_episode_owner(&context) {
+            gateway.open_episode(selected, owner)?
+        } else {
+            gateway.open(selected)?
+        };
         if let Err(error) = job.check() {
             gateway.close(view["session_id"].as_str().expect("Session ID"));
             return Err(error);

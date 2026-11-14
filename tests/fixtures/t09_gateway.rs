@@ -1635,7 +1635,9 @@ fn t15_service_images_use_configured_origin_and_native_gateway() {
 #[test]
 fn detail_image_cache_survives_gateway_restart() {
     let mut png = Cursor::new(Vec::new());
-    image::DynamicImage::new_rgb8(1, 1).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    image::DynamicImage::new_rgb8(1, 1)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
     let bytes = png.into_inner();
     let fixture = Fixture::new(move |_, _| Reply::body(bytes.clone(), "image/png"));
     let dir = tempfile::tempdir().unwrap();
@@ -1643,17 +1645,41 @@ fn detail_image_cache_survives_gateway_restart() {
     let image = image_record(fixture.url("/persistent-image"));
     let key = crate::media_cache::key("source", "image", &image.url, &image.headers);
     let cache = crate::media_cache::MediaCache::new(root.clone(), 0);
-    cache.register_images("title", std::slice::from_ref(&key)).unwrap();
-    let gateway = Gateway::with_cache(Arc::new(TestClock::default()), Http::default(), cache).unwrap();
-    let access = gateway.image_cached("source", image.clone(), Some(key.clone()), Some("title".into())).unwrap();
-    assert_eq!(fetch(access["url"].as_str().unwrap(), "GET", &[]).status, 200);
-    assert_eq!(fetch(access["url"].as_str().unwrap(), "GET", &[]).status, 200);
+    cache
+        .register_images("title", std::slice::from_ref(&key))
+        .unwrap();
+    let gateway =
+        Gateway::with_cache(Arc::new(TestClock::default()), Http::default(), cache).unwrap();
+    let access = gateway
+        .image_cached(
+            "source",
+            image.clone(),
+            Some(key.clone()),
+            Some("title".into()),
+        )
+        .unwrap();
+    assert_eq!(
+        fetch(access["url"].as_str().unwrap(), "GET", &[]).status,
+        200
+    );
+    assert_eq!(
+        fetch(access["url"].as_str().unwrap(), "GET", &[]).status,
+        200
+    );
     assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
     drop(gateway);
     let cache = crate::media_cache::MediaCache::new(root, 0);
-    cache.register_images("title", std::slice::from_ref(&key)).unwrap();
-    let gateway = Gateway::with_cache(Arc::new(TestClock::default()), Http::default(), cache).unwrap();
-    let access = gateway.image_cached("source", image, Some(key), Some("title".into())).unwrap();
-    assert_eq!(fetch(access["url"].as_str().unwrap(), "GET", &[]).status, 200);
+    cache
+        .register_images("title", std::slice::from_ref(&key))
+        .unwrap();
+    let gateway =
+        Gateway::with_cache(Arc::new(TestClock::default()), Http::default(), cache).unwrap();
+    let access = gateway
+        .image_cached("source", image, Some(key), Some("title".into()))
+        .unwrap();
+    assert_eq!(
+        fetch(access["url"].as_str().unwrap(), "GET", &[]).status,
+        200
+    );
     assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
 }

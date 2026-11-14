@@ -1459,10 +1459,8 @@ impl Catalog {
             if let Some(category) = region_category {
                 pairs.push(("category".into(), category.into()));
             }
-            if tmdb {
-                if let Some(region) = selected("region") {
-                    pairs.push(("region".into(), region.to_owned()));
-                }
+            if tmdb && let Some(region) = selected("region") {
+                pairs.push(("region".into(), region.to_owned()));
             }
             if skip && (cursor.offset > 0 || !filter.is_empty()) {
                 pairs.push(("skip".into(), cursor.offset.to_string()));
