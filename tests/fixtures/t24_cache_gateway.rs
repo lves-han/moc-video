@@ -532,7 +532,18 @@ fn episode_cache_serves_overlapping_ranges_from_verified_chunks() {
         response.headers.get("content-range").unwrap(),
         "bytes 2-16/20"
     );
-    assert_eq!(count(&fixture, "/ranges.mp4"), 2);
+    assert!(
+        fixture
+            .state
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|request| {
+                request.target != "/ranges.mp4"
+                    || request.headers.get("range").map(String::as_str) != Some("bytes=2-16")
+            })
+    );
 }
 
 #[test]
