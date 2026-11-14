@@ -273,6 +273,73 @@ test("R01/R31/R36/REQ-T13: changing playback source rematches the same metadata 
   await assert.rejects(f.app.selectSource(META.source_id, "playback")); await assert.rejects(f.app.selectSource(PLAY.source_id, "metadata"));
 });
 
+test('the latest source selection wins while an earlier preference is saving', async () => {
+  for (const last of [PLAY, { source_id: 'third', source_revision: 'third-revision' }]) {
+    const f = await fixture();
+    f.root.sources.data!.providers.push({ ...providers()[1]!, id: 'third', source_revision: 'third-revision' });
+    await f.app.selectSource(PLAY.source_id, 'playback');
+    const late = deferred<any>(); let response: any;
+    f.intercept((call, value) => {
+      if (call.command === 'save_settings' && call.input.last_playback_source_key === CS.source_id) { response = value; return late.promise; }
+      return value;
+    });
+    const first = f.app.selectSource(CS.source_id, 'playback'); await flush();
+    const second = f.app.selectSource(last.source_id, 'playback'); await flush();
+    late.resolve(response); await Promise.all([first, second]);
+    assert.deepEqual(copy(f.root.selected_playback_source), last);
+    assert.equal(f.root.settings.last_playback_source_key, last.source_id);
+    assert.equal(f.queue.value!.last_playback_source_key, last.source_id);
+  }
+});
+
+test('returning to the current metadata source supersedes a pending selection', async () => {
+  const f = await fixture(); const other = { ...providers()[0]!, id: 'metadata-other', source_revision: 'other',
+    origin: { config_id: NEXT, manifest_urls: ['https://other.example/manifest.json'] } } as AppSource;
+  f.root.sources.data!.providers.push(other);
+  await f.app.selectSource(META.source_id, 'metadata');
+  const late = deferred<any>(); let response: any;
+  f.intercept((call, value) => {
+    if (call.command === 'save_settings' && call.input.last_metadata_config_id === NEXT) { response = value; return late.promise; }
+    return value;
+  });
+  const first = f.app.selectSource(other.id, 'metadata'); await flush();
+  const second = f.app.selectSource(META.source_id, 'metadata'); await flush();
+  late.resolve(response); await Promise.all([first, second]);
+  assert.deepEqual(copy(f.root.selected_metadata_source), META);
+  assert.equal(f.queue.value!.last_metadata_config_id, CONFIG);
+});
+
+test('a failed latest selection restores the previous confirmed preference', async () => {
+  const f = await fixture(); await f.app.selectSource(PLAY.source_id, 'playback');
+  const late = deferred<any>(); let response: any;
+  f.intercept((call, value) => {
+    if (call.command !== 'save_settings') return value;
+    if (call.input.last_playback_source_key === CS.source_id) { response = value; return late.promise; }
+    if (call.input.last_playback_source_key === PLAY.source_id) { f.intercept(); return { request_id: call.request_id, engine_epoch: HOST, error }; }
+    return value;
+  });
+  const first = f.app.selectSource(CS.source_id, 'playback'); await flush();
+  const second = f.app.selectSource(PLAY.source_id, 'playback'); await flush();
+  late.resolve(response); await first; await assert.rejects(second, ApiFailure);
+  assert.deepEqual(copy(f.root.selected_playback_source), PLAY);
+  assert.equal(f.queue.value!.last_playback_source_key, PLAY.source_id);
+  assert.equal(f.root.settings.last_playback_source_key, PLAY.source_id);
+});
+
+test('a source disabled during its selection does not leave a saved preference behind', async () => {
+  const f = await fixture(); await f.app.selectSource(PLAY.source_id, 'playback');
+  const late = deferred<any>(); let response: any;
+  f.intercept((call, value) => {
+    if (call.command === 'save_settings' && call.input.last_playback_source_key === CS.source_id) { response = value; return late.promise; }
+    return value;
+  });
+  const selecting = f.app.selectSource(CS.source_id, 'playback'); await flush();
+  f.root.sources.data!.providers.find(source => source.id === CS.source_id)!.runtime_status = 'failed';
+  late.resolve(response); await assert.rejects(selecting, /Source changed while saving/);
+  assert.deepEqual(copy(f.root.selected_playback_source), PLAY);
+  assert.equal(f.queue.value!.last_playback_source_key, PLAY.source_id);
+});
+
 test("R01/R31/R36/REQ-T13: source revision refresh invalidates old page and confirmed match", async () => {
   const f = await fixture(); await f.app.loadHome(); await f.show(); await f.app.match("show:1");
   f.intercept((call, response) => call.command === "get_sources" ? { ...response, data: { ...response.data, providers: response.data.providers.map((source: AppSource) => source.kind === "stremio" ? { ...source, source_revision: "next" } : source) } } : response);
@@ -457,4 +524,65 @@ test('an unavailable source is not tested again on every launch', async t => {
     await new AppController(client, new SettingsQueue(client), root).loadSources();
   }
   assert.equal(checks, 1);
+});
+
+test('manual source retry bypasses the recent failure interval', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>([['moc-video.source-checks.v1', JSON.stringify({ [CONFIG]: Date.now(), failures: [CONFIG] })]]);
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); },
+  } });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); });
+  const root = createAppState(); root.runtime.engine_epoch = HOST;
+  root.settings.source_configs = [{ kind: 'stremio', config_id: CONFIG, name: 'Metadata', enabled: true, manifest_urls: ['https://metadata.example/manifest.json'] }];
+  let published = false, checks = 0;
+  const client = new Api(async (command, args) => {
+    if (command === 'sync_catalog') { checks++; published = true; return { request_id: args.request_id, engine_epoch: HOST, data: {} }; }
+    if (command === 'get_sources') { const rows = providers(); rows[0]!.runtime_status = published ? 'ready' : 'configured'; return { request_id: args.request_id, engine_epoch: HOST, data: { providers: rows, plugins: [] } }; }
+    throw new Error(`Unexpected ${command}`);
+  });
+  const app = new AppController(client, new SettingsQueue(client), root);
+  await app.loadSources(); assert.equal(checks, 0);
+  await app.retrySource(CONFIG); assert.equal(checks, 1);
+  assert.equal(root.selected_metadata_source?.source_id, META.source_id);
+  root.settings.source_configs[0]!.enabled = false;
+  await assert.rejects(app.retrySource(CONFIG)); assert.equal(checks, 1);
+});
+
+test('service metadata import retries the requested extension and keeps other groups', async t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const root = createAppState();
+  root.settings.playback_service = { enabled: true, url: 'http://service', token: 'test', groups: [{ config_id: NEXT, status: 'ready', addons: [] }] };
+  let saved = copy(root.settings), attempts = 0;
+  const settings = { update: async (change: (value: typeof saved) => typeof saved) => saved = change(copy(saved)) };
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { __TAURI__: { core: { invoke: async (command: string, args: any) => {
+    assert.equal(command, 'app_service_import'); assert.equal(args.configs.length, 1); attempts++;
+    return { groups: [{ config_id: args.configs[0].config_id, status: attempts === 1 ? 'pending' : 'ready', addons: [] }] };
+  } } } } });
+  t.after(() => previous ? Object.defineProperty(globalThis, 'window', previous) : Reflect.deleteProperty(globalThis, 'window'));
+  const app = new AppController({} as Api, settings as never, root); app.loadSources = async () => {};
+  await app.saveSourceConfig({ config_id: null, kind: 'stremio', name: 'Fixture', urls: 'https://example.test/manifest.json', enabled: true });
+  const id = root.settings.source_configs[0]!.config_id;
+  assert.equal(root.settings.playback_service!.groups.find(group => group.config_id === id)?.status, 'pending');
+  await app.retrySource(id);
+  assert.equal(root.settings.playback_service!.groups.find(group => group.config_id === id)?.status, 'ready');
+  assert.ok(root.settings.playback_service!.groups.some(group => group.config_id === NEXT));
+  assert.equal(attempts, 2);
+});
+
+test('service mode restores the selected metadata source after sources reload', async t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { __TAURI__: {} } });
+  t.after(() => previous ? Object.defineProperty(globalThis, 'window', previous) : Reflect.deleteProperty(globalThis, 'window'));
+  const root = createAppState(); root.runtime.engine_epoch = HOST;
+  root.settings.playback_service = { enabled: true, url: 'http://service', token: 'test', groups: [{ config_id: CONFIG, status: 'ready', addons: [] }] };
+  root.settings.last_metadata_config_id = CONFIG;
+  const client = new Api(async (_command, args) => {
+    const custom = providers()[0]!;
+    const tmdb = { ...custom, id: 'tmdb', origin: { config_id: '5f0c6a8e-2d4b-4e7a-9c1f-3b8d7e6a5c40', manifest_urls: [] } };
+    return { request_id: args.request_id, engine_epoch: HOST, data: { providers: [tmdb, custom], plugins: [] } };
+  });
+  const app = new AppController(client, new SettingsQueue(client), root);
+  await app.loadSources(); assert.equal(root.selected_metadata_source?.source_id, META.source_id);
+  await app.loadSources(); assert.equal(root.selected_metadata_source?.source_id, META.source_id);
 });

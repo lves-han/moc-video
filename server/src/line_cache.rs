@@ -1,9 +1,7 @@
-use crate::{
-    reports,
-    state::{Line, Registry, Runtime, Template},
-};
+use crate::state::{Line, Registry, Runtime, Template};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use url::Url;
 
 /// Logical line identity shared by refresh checks and persistent statistics. The
@@ -48,7 +46,7 @@ pub fn cache_key(target: &Value, source: &Value, parser_generation: u64) -> Stri
     )
 }
 
-pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
+pub fn output(line_id: &str, line: &Line, history: &HashMap<String, Value>) -> Value {
     let url = Url::parse(&line.url)
         .ok()
         .filter(crate::metadata::http::valid);
@@ -74,7 +72,7 @@ pub fn output(line_id: &str, line: &Line, reports: &reports::Store) -> Value {
     let playable = kind != "unsupported";
     let mut value = json!({"line_id":line_id,"source_id":line.source_id,"source_revision":line.source_revision,
         "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":line.quality,"size_bytes":line.size_bytes,"description":line.description,"availability":line.availability,"latency_ms":line.latency_ms,"availability_checked_at":line.availability_checked_at,"availability_expires_at":line.availability_expires_at,"target":line.target,
-        "expires_at":line.play_expires_at,"history":reports.get(&line.logical_key).unwrap_or_else(|_|json!({"ok":0,"failed":0,"last_ok_at":null}))});
+        "expires_at":line.play_expires_at,"history":history.get(&line.logical_key).cloned().unwrap_or_else(||json!({"ok":0,"failed":0,"last_ok_at":null}))});
     if !playable {
         value["reason"] = json!(if let Some(reason) = line.unsupported_reason.as_deref() {
             reason
@@ -94,7 +92,7 @@ pub fn issue(
     runtime: &Runtime,
     target: &Value,
     template: &Template,
-    reports: &reports::Store,
+    history: &HashMap<String, Value>,
 ) -> Result<Vec<Value>, &'static str> {
     let now = crate::metadata::cache::now();
     registry.prune(now);
@@ -167,7 +165,7 @@ pub fn issue(
             play_expires_at: now + runtime.cache_ttl,
         };
         let id = uuid::Uuid::new_v4().to_string();
-        output_lines.push(output(&id, &line, reports));
+        output_lines.push(output(&id, &line, history));
         registry.lines.insert(id, line);
     }
     Ok(output_lines)
@@ -182,7 +180,8 @@ mod tests {
     fn statistics_follow_the_line_across_source_revisions() {
         let dir = tempfile::tempdir().unwrap();
         crate::db::initialize(dir.path()).unwrap();
-        let reports = reports::Store::new(dir.path());
+        let reports = crate::reports::Store::new(dir.path());
+        let rt = tokio::runtime::Runtime::new().unwrap();
         let runtime = Runtime {
             registry: Arc::new(Mutex::new(Registry::default())),
             handle_ttl: 900,
@@ -206,7 +205,7 @@ mod tests {
                 &runtime,
                 &target,
                 &template(revision),
-                &reports,
+                &HashMap::new(),
             )
             .unwrap();
             for value in issued {
@@ -214,13 +213,22 @@ mod tests {
                 reports.record(line, "playing", Some(10)).unwrap();
             }
         }
-        let issued = issue(&mut registry, &runtime, &target, &template(3), &reports).unwrap();
+        let history = rt
+            .block_on(reports.get_many(
+                registry
+                    .lines
+                    .values()
+                    .map(|l| l.logical_key.clone())
+                    .collect(),
+            ))
+            .unwrap();
+        let issued = issue(&mut registry, &runtime, &target, &template(3), &history).unwrap();
         assert_eq!(issued[0]["history"]["ok"], 2);
         assert_eq!(issued[1]["history"]["ok"], 0);
-        let rows: i64 = rusqlite::Connection::open(dir.path().join("service.sqlite3"))
-            .unwrap()
-            .query_row("SELECT COUNT(*) FROM line_stats", [], |row| row.get(0))
-            .unwrap();
+        let rows: i64 = crate::db::sync_with(&dir.path().join("service.sqlite3"), |conn| {
+            conn.query_row("SELECT COUNT(*) FROM line_stats", [], |row| row.get(0))
+        })
+        .unwrap();
         assert_eq!(rows, 1, "lines without a locator leave no statistics rows");
     }
 }

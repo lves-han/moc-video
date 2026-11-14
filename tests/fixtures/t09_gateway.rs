@@ -1540,7 +1540,7 @@ fn t15_service_images_use_configured_origin_and_native_gateway() {
     use crate::{host::Host, settings};
     let key = "a".repeat(64);
     let image_path = format!("/stremio/test-token/image/{key}");
-    let expected_path = format!("/service{image_path}");
+    let expected_path = format!("/service/v1/stremio/image/{key}");
     let mut png = Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(2, 3)
         .write_to(&mut png, image::ImageFormat::Png)

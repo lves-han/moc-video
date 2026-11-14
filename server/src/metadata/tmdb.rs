@@ -1,10 +1,49 @@
 use reqwest::header::{AUTHORIZATION, HeaderMap};
 use serde_json::{Value, json};
+use std::{path::Path, sync::Arc};
 use url::Url;
 
+#[derive(Clone)]
 pub struct Tmdb {
     base: Url,
     key: String,
+    cache: super::cache::Cache,
+    genre_gate: Arc<tokio::sync::Mutex<()>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{extract::{Path as RoutePath, State}, routing::get, Json, Router};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn seasons_load_concurrently_and_keep_original_order() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let state = (active.clone(), peak.clone());
+        let app = Router::new()
+            .route("/tv/1", get(|| async { Json(json!({"id":1,"name":"Series","seasons":[{"season_number":3},{"season_number":1},{"season_number":2},{"season_number":4},{"season_number":5}],"credits":{"cast":[],"crew":[]},"external_ids":{"imdb_id":"tt1"}})) }))
+            .route("/tv/1/season/{season}", get(|RoutePath(season): RoutePath<u64>, State((active, peak)): State<(Arc<AtomicUsize>, Arc<AtomicUsize>)>| async move {
+                let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(running, Ordering::SeqCst);
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                active.fetch_sub(1, Ordering::SeqCst);
+                Json(json!({"episodes":[{"episode_number":1,"name":format!("Season {season}")}]}))
+            })).with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let tmdb = Tmdb { base: Url::parse(&format!("http://{address}/")).unwrap(), key: "test".into(),
+            cache: super::super::cache::Cache::new(dir.path(), "test".into()), genre_gate: Arc::new(tokio::sync::Mutex::new(())) };
+        let value = tmdb.meta("en-US", "series", "tmdb:1").await.unwrap();
+        let seasons: Vec<_> = value["meta"]["videos"].as_array().unwrap().iter().map(|v| v["season"].as_u64().unwrap()).collect();
+        assert_eq!(seasons, [3, 1, 2, 4, 5]);
+        assert!((2..=4).contains(&peak.load(Ordering::SeqCst)));
+        server.abort();
+    }
 }
 
 impl Tmdb {
@@ -20,7 +59,7 @@ impl Tmdb {
         !self.key.trim().is_empty()
     }
 
-    pub fn from_env() -> Result<Self, &'static str> {
+    pub fn from_env(data_dir: &Path) -> Result<Self, &'static str> {
         let base = std::env::var("MOC_TMDB_API_URL")
             .unwrap_or_else(|_| "https://api.themoviedb.org/3".into());
         let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))
@@ -32,9 +71,13 @@ impl Tmdb {
         {
             return Err("invalid TMDB endpoint");
         }
+        let key = std::env::var("MOC_TMDB_KEY").unwrap_or_default();
+        use sha2::{Digest, Sha256};
+        let revision = format!("{:x}", Sha256::digest(format!("{}\0{}", base, key)));
         Ok(Self {
-            base,
-            key: std::env::var("MOC_TMDB_KEY").unwrap_or_default(),
+            base, key,
+            cache: super::cache::Cache::new(data_dir, revision),
+            genre_gate: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -68,12 +111,23 @@ impl Tmdb {
     }
 
     async fn genres(&self, kind: &str, lang: &str) -> Result<Vec<(u64, String)>, &'static str> {
-        let value = self
-            .api(
-                &format!("/genre/{}/list", media_type(kind)?),
-                &[("language", lang.into())],
-            )
-            .await?;
+        let key = self.cache.key("tmdb", "genres", lang, kind);
+        let cached = self.cache.get(&key).map_err(|_| "metadata cache read failed")?;
+        let value = if let Some(value) = cached {
+            value
+        } else {
+            let _guard = self.genre_gate.lock().await;
+            if let Some(value) = self.cache.get(&key).map_err(|_| "metadata cache read failed")? {
+                value
+            } else {
+                let value = self.api(
+                    &format!("/genre/{}/list", media_type(kind)?),
+                    &[("language", lang.into())],
+                ).await?;
+                self.cache.put(&key, &value, 24 * 3600).map_err(|_| "metadata cache write failed")?;
+                value
+            }
+        };
         Ok(value["genres"]
             .as_array()
             .into_iter()
@@ -83,7 +137,12 @@ impl Tmdb {
     }
 
     pub async fn manifest(&self, lang: &str) -> Result<Value, &'static str> {
-        let languages = self.api("/configuration/languages", &[]).await?;
+        let (languages, countries, movie_genres, series_genres) = tokio::try_join!(
+            self.api("/configuration/languages", &[]),
+            self.api("/configuration/countries", &[]),
+            self.genres("movie", lang),
+            self.genres("series", lang),
+        )?;
         let languages: Vec<String> = languages
             .as_array()
             .into_iter()
@@ -92,7 +151,6 @@ impl Tmdb {
             .filter(|v| !v.is_empty() && *v != "No Language")
             .map(str::to_owned)
             .collect();
-        let countries = self.api("/configuration/countries", &[]).await?;
         let mut regions: Vec<String> = countries
             .as_array()
             .ok_or("invalid TMDB countries")?
@@ -117,12 +175,8 @@ impl Tmdb {
         });
         let mut catalogs = Vec::new();
         for kind in ["movie", "series"] {
-            let genres: Vec<String> = self
-                .genres(kind, lang)
-                .await?
-                .into_iter()
-                .map(|(_, name)| name)
-                .collect();
+            let genres: Vec<String> = (if kind == "movie" { &movie_genres } else { &series_genres })
+                .iter().map(|(_, name)| name.clone()).collect();
             for (id, name) in [
                 ("tmdb.top", "Popular"),
                 ("tmdb.year", "Year"),
@@ -428,28 +482,39 @@ impl Tmdb {
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("tmdb:{number}"));
             let mut videos = Vec::new();
-            for season in item["seasons"]
+            let seasons: Vec<_> = item["seasons"]
                 .as_array()
                 .into_iter()
                 .flatten()
                 .filter_map(|s| s["season_number"].as_u64())
                 .take(60)
-            {
-                let detail = self
-                    .api(
-                        &format!("/tv/{number}/season/{season}"),
-                        &[("language", lang.into())],
-                    )
-                    .await?;
-                for ep in detail["episodes"].as_array().into_iter().flatten() {
-                    let Some(n) = ep["episode_number"].as_u64() else {
-                        continue;
-                    };
-                    let released = ep["air_date"]
-                        .as_str()
-                        .filter(|d| d.len() == 10)
-                        .map(|d| format!("{d}T00:00:00.000Z"));
-                    videos.push(json!({"id":format!("{prefix}:{season}:{n}"),"name":ep["name"],"title":ep["name"],"season":season,"number":n,"episode":n,"overview":ep["overview"],"description":ep["overview"],"thumbnail":image("w500",&ep["still_path"]),"released":released,"runtime":moc_core::tmdb::runtime(ep["runtime"].as_u64())}));
+                .collect();
+            for chunk in seasons.chunks(4) {
+                let mut jobs = tokio::task::JoinSet::new();
+                for (index, season) in chunk.iter().enumerate() {
+                    let tmdb = self.clone();
+                    let path = format!("/tv/{number}/season/{season}");
+                    let language = lang.to_owned();
+                    jobs.spawn(async move { (index, tmdb.api(&path, &[("language", language)]).await) });
+                }
+                let mut details = Vec::with_capacity(chunk.len());
+                while let Some(result) = jobs.join_next().await {
+                    let (index, detail) = result.map_err(|_| "TMDB season request failed")?;
+                    details.push((index, detail?));
+                }
+                details.sort_by_key(|(index, _)| *index);
+                for (index, detail) in details {
+                    let season = chunk[index];
+                    for ep in detail["episodes"].as_array().into_iter().flatten() {
+                        let Some(n) = ep["episode_number"].as_u64() else {
+                            continue;
+                        };
+                        let released = ep["air_date"]
+                            .as_str()
+                            .filter(|d| d.len() == 10)
+                            .map(|d| format!("{d}T00:00:00.000Z"));
+                        videos.push(json!({"id":format!("{prefix}:{season}:{n}"),"name":ep["name"],"title":ep["name"],"season":season,"number":n,"episode":n,"overview":ep["overview"],"description":ep["overview"],"thumbnail":image("w500",&ep["still_path"]),"released":released,"runtime":moc_core::tmdb::runtime(ep["runtime"].as_u64())}));
+                    }
                 }
             }
             meta["videos"] = json!(videos);

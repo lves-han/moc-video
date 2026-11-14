@@ -611,9 +611,11 @@ mod tests {
                 .unwrap()["content_id"],
             "101"
         );
-        assert!(store.revoke(saved["id"].as_str().unwrap()).unwrap());
-        let revoked = store
-            .revoked("tmdb", "movie", "tmdb:42", "source-a")
+        assert!(rt
+            .block_on(store.revoke(saved["id"].as_str().unwrap()))
+            .unwrap());
+        let revoked = rt
+            .block_on(store.revoked("tmdb", "movie", "tmdb:42", "source-a"))
             .unwrap();
         assert!(revoked.contains("101"));
         assert!(rt.block_on(propose(&source, &meta, &revoked)).unwrap()["selected"].is_null());
@@ -632,8 +634,18 @@ mod tests {
         store
             .save(&other, &source, "101", &evidence(&other, &detail), "user")
             .unwrap();
-        assert_eq!(store.list("other", "movie", "tmdb:42").unwrap().len(), 1);
-        assert_eq!(store.list("tmdb", "series", "tmdb:42").unwrap().len(), 0);
+        assert_eq!(
+            rt.block_on(store.list("other", "movie", "tmdb:42"))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            rt.block_on(store.list("tmdb", "series", "tmdb:42"))
+                .unwrap()
+                .len(),
+            0
+        );
         let series = json!({"metadata_source_id":"tmdb","meta_id":"tmdb:show","type":"series","title":"Show","year":2020,"episode":{"season":1,"number":2},"seasons":[1,2]});
         let p = rt
             .block_on(propose(&source, &series, &HashSet::new()))

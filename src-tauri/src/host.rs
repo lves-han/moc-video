@@ -501,9 +501,11 @@ impl Host {
                 self.runtime(&committed)
             }
             "get_sources" => Ok(committed.sources.sources()),
-            "get_settings" => Ok(committed.settings.clone()),
+            "get_settings" => Ok(crate::settings::redact_for_ui(&committed.settings)),
             "save_settings" => {
                 job.check()?;
+                let merged = crate::settings::merge_preserved_token(input, &committed.settings)?;
+                let input = &merged;
                 // After replacement starts, finish publication even if cancellation arrives.
                 self.store.save_checked(input, || job.check())?;
                 if input["last_playback_source_key"]
@@ -578,7 +580,7 @@ impl Host {
                 self.media_cache
                     .configure(crate::media_cache::limit(&confirmed));
                 drop(committed);
-                return Ok(confirmed);
+                return Ok(crate::settings::redact_for_ui(&confirmed));
             }
             "start_interaction" | "finish_interaction" => Err(ApiError::new(
                 "CAPABILITY_UNAVAILABLE",
@@ -2012,7 +2014,6 @@ impl Host {
         let revision = line.raw["source_revision"]
             .as_u64()
             .ok_or_else(|| ApiError::bad("Invalid line source"))?;
-        self.verify_service_source(&service, source_id, revision, job)?;
         let selected = crate::service::blocking_json(
             &service,
             reqwest::Method::POST,
@@ -2159,42 +2160,26 @@ impl Host {
         {
             return Err(ApiError::bad("Refreshed line identity changed"));
         }
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| ApiError::internal("Probe runtime unavailable"))?;
         {
             let mut state = round.lock().expect("round state");
             state.lines.remove(line_id);
             state.extend();
         }
         let permits = { round.lock().expect("round state").permits.clone() };
-        let refreshed = runtime.block_on(async {
+        let refreshed = (|| {
             line_round::event(&round, json!({"event":"line","line":value}), &permits, true)?;
-            loop {
-                let done = {
-                    let state = round.lock().expect("round state");
-                    if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
-                        return Err(ApiError::cancelled());
-                    }
-                    if std::time::Instant::now() >= state.deadline {
-                        return Err(ApiError::new(
-                            "SESSION_EXPIRED",
-                            "Line round expired; search again",
-                        ));
-                    }
-                    state
-                        .lines
-                        .get(line_id)
-                        .is_none_or(|line| line.status != "testing")
-                };
-                if done {
-                    break;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            let state = round.lock().expect("round state");
+            if state.stop.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(ApiError::cancelled());
+            }
+            if std::time::Instant::now() >= state.deadline {
+                return Err(ApiError::new(
+                    "SESSION_EXPIRED",
+                    "Line round expired; search again",
+                ));
             }
             Ok::<(), ApiError>(())
-        });
+        })();
         if let Err(error) = refreshed {
             round
                 .lock()

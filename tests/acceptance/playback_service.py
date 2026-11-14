@@ -691,9 +691,14 @@ class LookupLifecycle(StremioMetadata):
         first=self.lines[self.sources[0]["id"]]["line_id"];second=self.lines[self.sources[1]["id"]]["line_id"]
         self.assertEqual(self.native("DELETE","/v1/lookups/"+self.lookup_id)[0],204)
         self.assertEqual(self.native("POST","/v1/reports",{"line_id":first,"outcome":"invalid"})[0],400)
-        self.fixture_request("/control?line_mode=reordered")
+        base=self.fixture_env['MOC_TMDB_API_URL'].removesuffix('/3')
+        self.fixture_request('/control?line_mode=reordered&'+urllib.parse.urlencode({'media_url':base}))
         status,line=self.native("POST","/v1/lines/"+first+"/refresh")
-        self.assertEqual((status,line["line_id"],line["play"]["url"]),(200,first,"https://media.test/new"))
+        self.assertEqual((status,line["line_id"]),(200,first))
+        self.assertNotIn("play",line)
+        status,selected=self.native('POST','/v1/lines/'+first+'/play',{})
+        self.assertEqual((status,selected['play']['url']),(200,base+'/probe-fast.mp4?generation=2'))
+        self.fixture_request('/control?clear_media=1')
         self.assertEqual(self.native("POST","/v1/reports",{"line_id":first,"outcome":"playing","latency_ms":31})[0],200)
         status,again=self.native("POST","/v1/lines/"+first+"/refresh")
         self.assertEqual((status,again["line_id"],again["history"]["ok"]),(200,first,1))
@@ -1342,6 +1347,53 @@ class ServerAvailability(LookupLifecycle):
         status,selected=self.native('POST','/v1/lines/'+line['line_id']+'/play',{})
         self.assertEqual(status,200,selected);self.assertEqual(selected['play']['url'],self.media)
 
+    def test_6_fast_line_is_visible_before_slow_probe_finishes(self):
+        self.fixture_request('/control?probe_fail=0&stream_mode=progressive&hold_probe=1')
+        request=self.input([self.stream_source['id']],refresh=True)
+        url=self.url.rsplit('/v1/health',1)[0]+'/v1/lookups'
+        data=json.dumps(request).encode()
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url,data=data,headers={'Authorization':'Bearer app-token','Content-Type':'application/json'}),timeout=15) as response:
+                for raw in response:
+                    event=json.loads(raw)
+                    if event['event']=='line':
+                        self.assertEqual(event['line']['line_name'],'Primary')
+                        self.assertEqual(event['line']['availability'],'ready')
+                        self.assertFalse(self.fixture_request('/stats')['slow_finished'])
+                        status, selected = self.native('POST', '/v1/lines/'+event['line']['line_id']+'/play', {})
+                        self.assertEqual(status, 200, selected)
+                        self.assertFalse(self.fixture_request('/stats')['slow_finished'])
+                        break
+                else: self.fail('fast line was not returned')
+                self.fixture_request('/control?hold_probe=0')
+                remaining=[json.loads(raw) for raw in response]
+                self.assertTrue(any(event['event']=='line' and event['line']['line_name']=='Backup' for event in remaining))
+                self.assertTrue(any(event['event']=='done' for event in remaining))
+        finally:
+            self.fixture_request('/control?hold_probe=0')
+
+    def test_7_lookup_reuses_cached_tmdb_details(self):
+        self.fixture_request('/control?reset=1')
+        self.assertEqual(self.resource('en-US/meta/movie/tmdb:45.json')[0], 200)
+        before = self.fixture_request('/stats')['counts'].get('/3/movie/45', 0)
+        status, events = self.ndjson('/v1/lookups', self.input([], kind='movie'))
+        self.assertEqual(status, 200, events)
+        self.assertTrue(any(event['event'] == 'done' for event in events))
+        self.assertEqual(self.fixture_request('/stats')['counts'].get('/3/movie/45', 0), before)
+
+    def test_8_manifest_reuses_successful_configuration(self):
+        self.fixture_request('/control?reset=1')
+        status, first = self.resource('en-US/manifest.json')
+        self.assertEqual(status, 200)
+        before = self.fixture_request('/stats')['counts']
+        status, second = self.resource('en-US/manifest.json')
+        self.assertEqual(status, 200)
+        self.assertEqual(first, second)
+        after = self.fixture_request('/stats')['counts']
+        for path in ('/3/configuration/languages', '/3/configuration/countries'):
+            self.assertEqual(before.get(path), 1)
+            self.assertEqual(after.get(path), 1)
+
 
 class TmdbRegion(LookupLifecycle):
     test_1_stream_partial_failure = None
@@ -1394,7 +1446,7 @@ def main():
     args = parser.parse_args()
     test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp, "server-availability":ServerAvailability, "tmdb-region":TmdbRegion}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"tmdb-region":["tmdb-region-options", "tmdb-region-query", "tmdb-region-category"],"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"tmdb-region":["tmdb-region-options", "tmdb-region-query", "tmdb-region-category"],"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed", "server-progressive-probes", "server-lookup-metadata-cache", "server-manifest-cache"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1411,7 +1463,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"tmdb-region":("test_1_regions_are_declared", "test_2_region_queries_and_combinations", "test_3_region_preserves_special_category"),"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"tmdb-region":("test_1_regions_are_declared", "test_2_region_queries_and_combinations", "test_3_region_preserves_special_category"),"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line", "test_6_fast_line_is_visible_before_slow_probe_finishes", "test_7_lookup_reuses_cached_tmdb_details", "test_8_manifest_reuses_successful_configuration"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

@@ -135,6 +135,52 @@ fn initial_defaults() -> Value {
     settings
 }
 
+pub fn redact_for_ui(settings: &Value) -> Value {
+    let mut out = settings.clone();
+    if let Some(service) = out
+        .get_mut("playback_service")
+        .and_then(Value::as_object_mut)
+    {
+        let configured = service
+            .get("token")
+            .and_then(Value::as_str)
+            .is_some_and(|t| !t.trim().is_empty());
+        service.insert("token".into(), json!(""));
+        service.insert("token_configured".into(), json!(configured));
+    }
+    out
+}
+
+pub fn merge_preserved_token(next: &Value, current: &Value) -> Result<Value, ApiError> {
+    let mut out = next.clone();
+    if let Some(service) = out
+        .get_mut("playback_service")
+        .and_then(Value::as_object_mut)
+    {
+        service.remove("token_configured");
+        let incoming_empty = service
+            .get("token")
+            .and_then(Value::as_str)
+            .is_none_or(|t| t.trim().is_empty());
+        if incoming_empty {
+            if let Some(existing) = current
+                .get("playback_service")
+                .and_then(|s| s.get("token"))
+                .and_then(Value::as_str)
+                .filter(|t| !t.trim().is_empty())
+            {
+                let old_address = current["playback_service"]["url"].as_str().unwrap_or("");
+                let new_address = service.get("url").and_then(Value::as_str).unwrap_or("");
+                if !crate::service::same_service_address(old_address, new_address) {
+                    return Err(ApiError::bad("Enter a token when changing the service address / 更换服务地址时请输入令牌"));
+                }
+                service.insert("token".into(), json!(existing));
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn validate(settings: &Value) -> Result<(), ApiError> {
     Contracts::get().validate("Settings", settings)?;
     if let Some(service) = settings.get("playback_service") {
@@ -363,6 +409,21 @@ fn persist_windows(temporary: NamedTempFile, destination: &Path) -> std::io::Res
 #[cfg(test)]
 mod preset_tests {
     use super::*;
+
+    #[test]
+    fn preserved_service_token_is_bound_to_the_same_address_and_path() {
+        let mut current = defaults();
+        current["playback_service"] = json!({"enabled":true,"url":"http://127.0.0.1:18801/base","token":"saved-token","groups":[]});
+        let mut next = redact_for_ui(&current);
+        next["playback_service"]["url"] = json!("http://127.0.0.1:18801/base/");
+        assert_eq!(merge_preserved_token(&next, &current).unwrap()["playback_service"]["token"], "saved-token");
+        for address in ["http://127.0.0.1:18802/base", "http://127.0.0.1:18801/other", "https://127.0.0.1:18801/base"] {
+            next["playback_service"]["url"] = json!(address);
+            assert!(merge_preserved_token(&next, &current).is_err(), "{address}");
+        }
+        next["playback_service"]["token"] = json!("new-token");
+        assert_eq!(merge_preserved_token(&next, &current).unwrap()["playback_service"]["token"], "new-token");
+    }
 
     #[test]
     fn atomic_replacement_keeps_open_reader_snapshots() {

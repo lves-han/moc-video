@@ -1641,10 +1641,11 @@ impl Catalog {
         http_url(url.as_str(), false)?;
         // Service image paths are relative to the real service, while addon
         // manifests use an internal host that must never reach public DNS.
-        let url = if url.host_str() == Some(crate::service::HOST) {
-            crate::service::current()?.image_url(&url)?
+        let (url, headers) = if url.host_str() == Some(crate::service::HOST) {
+            let service = crate::service::current()?;
+            (service.image_url(&url)?, service.auth_headers()?)
         } else {
-            url
+            (url, HeaderMap::new())
         };
         let id = identity(
             "http_image",
@@ -1688,7 +1689,7 @@ impl Catalog {
         output.images.push(Image {
             reference: reference.clone(),
             url: url.to_string(),
-            headers: HeaderMap::new(),
+            headers,
         });
         Ok(reference)
     }

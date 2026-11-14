@@ -1,6 +1,125 @@
-use rusqlite::params;
+use rusqlite::{Connection, params};
 use serde_json::Value;
-use std::{fs::OpenOptions, io, path::Path};
+use std::{
+    collections::HashMap,
+    fs::OpenOptions,
+    io,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+    time::Duration,
+};
+use tokio::sync::Semaphore;
+
+const POOL_SIZE: usize = 8;
+
+struct Pool {
+    path: PathBuf,
+    idle: Mutex<Vec<Connection>>,
+    slots: Arc<Semaphore>,
+}
+
+impl Pool {
+    fn open(&self) -> rusqlite::Result<Connection> {
+        let conn = Connection::open(&self.path)?;
+        conn.busy_timeout(Duration::from_secs(3))?;
+        conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL;")?;
+        Ok(conn)
+    }
+
+    fn checkout(&self) -> rusqlite::Result<Connection> {
+        if let Some(conn) = self.idle.lock().expect("sqlite pool").pop() {
+            return Ok(conn);
+        }
+        self.open()
+    }
+
+    fn checkin(&self, conn: Connection) {
+        if !conn.is_autocommit() {
+            return;
+        }
+        let mut idle = self.idle.lock().expect("sqlite pool");
+        if idle.len() < POOL_SIZE {
+            idle.push(conn);
+        }
+    }
+}
+
+fn pool_for(path: &Path) -> Arc<Pool> {
+    static POOLS: OnceLock<Mutex<HashMap<PathBuf, Arc<Pool>>>> = OnceLock::new();
+    let pools = POOLS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut map = pools.lock().expect("sqlite pools");
+    map.entry(path.to_path_buf())
+        .or_insert_with(|| {
+            Arc::new(Pool {
+                path: path.to_path_buf(),
+                idle: Mutex::new(Vec::with_capacity(POOL_SIZE)),
+                slots: Arc::new(Semaphore::new(POOL_SIZE)),
+            })
+        })
+        .clone()
+}
+
+pub fn sync_with<T>(
+    path: &Path,
+    f: impl FnOnce(&mut Connection) -> rusqlite::Result<T>,
+) -> rusqlite::Result<T> {
+    let pool = pool_for(path);
+    let mut conn = pool.checkout()?;
+    let result = f(&mut conn);
+    pool.checkin(conn);
+    result
+}
+
+pub async fn run<T, E>(
+    path: PathBuf,
+    db_err: E,
+    f: impl FnOnce(&mut Connection) -> Result<T, E> + Send + 'static,
+) -> Result<T, E>
+where
+    T: Send + 'static,
+    E: Clone + Send + 'static,
+{
+    let pool = pool_for(&path);
+    let _permit = pool
+        .slots
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| db_err.clone())?;
+    let err_for_join = db_err.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut conn = pool.checkout().map_err(|_| db_err)?;
+        let result = f(&mut conn);
+        pool.checkin(conn);
+        result
+    })
+    .await
+    .unwrap_or(Err(err_for_join))
+}
+
+pub async fn run_sqlite<T>(
+    path: PathBuf,
+    f: impl FnOnce(&mut Connection) -> rusqlite::Result<T> + Send + 'static,
+) -> rusqlite::Result<T>
+where
+    T: Send + 'static,
+{
+    let pool = pool_for(&path);
+    let _permit = pool
+        .slots
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+    tokio::task::spawn_blocking(move || {
+        let mut conn = pool.checkout()?;
+        let result = f(&mut conn);
+        pool.checkin(conn);
+        result
+    })
+    .await
+    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?
+}
 
 const MAPPINGS: &str = "CREATE TABLE IF NOT EXISTS mappings (
         id TEXT PRIMARY KEY, metadata_source_id TEXT NOT NULL, media_type TEXT NOT NULL,
@@ -166,12 +285,12 @@ mod tests {
         initialize(dir.path()).unwrap();
         let store = crate::mappings::Store::new(dir.path());
         let season =
-            |kind: &str, id: &str| store.list("tmdb", kind, id).unwrap()[0]["season"].clone();
+            |kind: &str, id: &str| store.list_sync("tmdb", kind, id).unwrap()[0]["season"].clone();
         assert_eq!(season("movie", "tmdb:a"), 0);
         assert_eq!(season("series", "tmdb:b"), 2);
         assert_eq!(season("series", "tmdb:c"), 1);
         assert_eq!(
-            store.list("tmdb", "series", "tmdb:b").unwrap()[0]["confirmed_by"],
+            store.list_sync("tmdb", "series", "tmdb:b").unwrap()[0]["confirmed_by"],
             "user"
         );
         // Each season of one show now keeps its own source content.
@@ -182,7 +301,7 @@ mod tests {
                 .save(&meta, &source, content, &json!({}), "user")
                 .unwrap();
         }
-        let rows = store.list("tmdb", "series", "tmdb:show").unwrap();
+        let rows = store.list_sync("tmdb", "series", "tmdb:show").unwrap();
         let mut kept: Vec<_> = rows
             .iter()
             .map(|row| {

@@ -9,53 +9,64 @@ pub async fn resolve(
     if !lines.iter().any(|v| v["episode"]["requires_parse"] == true) {
         return Ok(lines.to_vec());
     }
-    let all = store.list().map_err(|_| "parser database failed")?;
+    let all = store.list().await.map_err(|_| "parser database failed")?;
     let ids = source["parse_ids"].as_array();
-    let parsers: Vec<&Value> = if ids.is_some_and(|v| !v.is_empty()) {
+    let parsers: Vec<Value> = if ids.is_some_and(|v| !v.is_empty()) {
         ids.unwrap()
             .iter()
-            .filter_map(|id| all.iter().find(|parser| parser["id"] == *id))
+            .filter_map(|id| all.iter().find(|parser| parser["id"] == *id).cloned())
             .collect()
     } else {
-        all.iter().collect()
+        all
     };
-    let mut output = Vec::with_capacity(lines.len());
-    for original in lines {
+    let mut output: Vec<Option<Value>> = vec![None; lines.len()];
+    let mut jobs = tokio::task::JoinSet::new();
+    let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
+    for (index, original) in lines.iter().enumerate() {
         let mut item = original.clone();
         if item["episode"]["requires_parse"] != true {
-            output.push(item);
+            output[index] = Some(item);
             continue;
         }
-        let flag = item["flag"].as_str().unwrap_or("");
-        let matching: Vec<_> = parsers
+        let flag = item["flag"].as_str().unwrap_or("").to_owned();
+        let matching: Vec<Value> = parsers
             .iter()
             .filter(|p| {
                 p["enabled"] == true
                     && p["flags"].as_array().is_some_and(|flags| {
-                        flags.is_empty() || flags.iter().any(|v| v == flag || v == "*")
+                        flags.is_empty() || flags.iter().any(|v| v == flag.as_str() || v == "*")
                     })
             })
+            .cloned()
             .collect();
-        let mut reason = None;
-        for parser in &matching {
-            match parse(parser, &item).await {
-                Ok((url, headers)) => {
-                    item["episode"]["url"] = json!(url);
-                    item["episode"]["headers"] = headers;
-                    item["episode"]["requires_parse"] = json!(false);
-                    item["episode"]["unsupported_reason"] = Value::Null;
-                    reason = None;
-                    break;
+        let slots = slots.clone();
+        jobs.spawn(async move {
+            let _permit = slots.acquire().await.ok();
+            let mut reason = None;
+            for parser in &matching {
+                match parse(parser, &item).await {
+                    Ok((url, headers)) => {
+                        item["episode"]["url"] = json!(url);
+                        item["episode"]["headers"] = headers;
+                        item["episode"]["requires_parse"] = json!(false);
+                        item["episode"]["unsupported_reason"] = Value::Null;
+                        reason = None;
+                        break;
+                    }
+                    Err(failure) => reason = Some(failure),
                 }
-                Err(failure) => reason = Some(failure),
             }
-        }
-        if let Some(reason) = reason {
-            item["episode"]["unsupported_reason"] = json!(reason);
-        }
-        output.push(item);
+            if let Some(reason) = reason {
+                item["episode"]["unsupported_reason"] = json!(reason);
+            }
+            (index, item)
+        });
     }
-    Ok(output)
+    while let Some(result) = jobs.join_next().await {
+        let (index, item) = result.map_err(|_| "parser task failed")?;
+        output[index] = Some(item);
+    }
+    Ok(output.into_iter().flatten().collect())
 }
 
 /// Why the last tried parser produced no playable address.
@@ -168,18 +179,18 @@ mod tests {
         });
         let dir = tempfile::tempdir().unwrap();
         crate::db::initialize(dir.path()).unwrap();
-        let store = crate::parsers::Store::new(dir.path());
-        store
-            .save(
-                &json!({"name":"P","api":format!("http://{address}/?url="),"flags":["vip"]}),
-                None,
-            )
-            .unwrap();
-        let line = |page: &str| json!({"flag":"vip","episode":{"label":"1","url":format!("https://page.test/{page}"),"requires_parse":true,"headers":{}}});
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
+        let store = crate::parsers::Store::new(dir.path());
+        runtime
+            .block_on(store.save(
+                &json!({"name":"P","api":format!("http://{address}/?url="),"flags":["vip"]}),
+                None,
+            ))
+            .unwrap();
+        let line = |page: &str| json!({"flag":"vip","episode":{"label":"1","url":format!("https://page.test/{page}"),"requires_parse":true,"headers":{}}});
         let lines = runtime
             .block_on(resolve(
                 &store,

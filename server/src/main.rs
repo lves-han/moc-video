@@ -37,6 +37,7 @@ struct AppState {
     lookup_runtime: state::Runtime,
     reports: reports::Store,
     metadata_gate: Arc<tokio::sync::Mutex<()>>,
+    manifest_gate: Arc<tokio::sync::Mutex<()>>,
 }
 
 async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) -> Response {
@@ -54,10 +55,24 @@ async fn authorize(State(token): State<Arc<str>>, request: Request, next: Next) 
 
 async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     let home = state.home.read().await;
-    let source_count = state.playback_sources.list().ok().map(|v| v.len());
+    let source_count = state.playback_sources.list().await.ok().map(|v| v.len());
     Json(
         json!({"version":env!("CARGO_PKG_VERSION"),"status":"ok","tmdb":if state.tmdb.is_configured() { "configured" } else { "not_configured" },"snapshot_at":home.built_at,"snapshot_error":home.error,"sources":source_count}),
     )
+}
+
+async fn manifest(state: &AppState, lang: &str) -> Result<serde_json::Value, &'static str> {
+    let key = state.cache.key("tmdb", "manifest", lang, "");
+    if let Some(value) = state.cache.get_async(&key).await.map_err(|_| "metadata cache read failed")? {
+        return Ok(value);
+    }
+    let _guard = state.manifest_gate.lock().await;
+    if let Some(value) = state.cache.get_async(&key).await.map_err(|_| "metadata cache read failed")? {
+        return Ok(value);
+    }
+    let value = state.tmdb.manifest(lang).await?;
+    state.cache.put_async(&key, &value, 24 * 3600).await.map_err(|_| "metadata cache write failed")?;
+    Ok(value)
 }
 
 async fn catalog(
@@ -89,7 +104,8 @@ async fn catalog(
     );
     if let Some(value) = state
         .cache
-        .get(&key)
+        .get_async(&key)
+        .await
         .map_err(|_| "metadata cache read failed")?
     {
         return Ok(value);
@@ -98,7 +114,8 @@ async fn catalog(
     let ttl = if id == "tmdb.search" { 3600 } else { 6 * 3600 };
     state
         .cache
-        .put(&key, &value, ttl)
+        .put_async(&key, &value, ttl)
+        .await
         .map_err(|_| "metadata cache write failed")?;
     Ok(value)
 }
@@ -117,7 +134,8 @@ async fn meta(
     );
     if let Some(value) = state
         .cache
-        .get(&key)
+        .get_async(&key)
+        .await
         .map_err(|_| "metadata cache read failed")?
     {
         return Ok(value);
@@ -125,7 +143,7 @@ async fn meta(
     let value = match state.tmdb.meta(lang, kind, id).await {
         Ok(value) => value,
         Err(error) => {
-            if let Some(value) = state.cache.stale_detail(&key).map_err(|_| "metadata cache read failed")? {
+            if let Some(value) = state.cache.stale_detail_async(&key).await.map_err(|_| "metadata cache read failed")? {
                 eprintln!("TMDB detail refresh failed; serving cached detail");
                 return Ok(value);
             }
@@ -138,31 +156,60 @@ async fn meta(
             .is_some_and(|s| s.ends_with('-'));
     state
         .cache
-        .put(&key, &value, if airing { 6 * 3600 } else { 24 * 3600 })
+        .put_async(&key, &value, if airing { 6 * 3600 } else { 24 * 3600 })
+        .await
         .map_err(|_| "metadata cache write failed")?;
     Ok(value)
 }
 
-fn warm_catalog(state: &AppState, source: &str, lang: &str, default_kind: &str, token: &str, value: &mut serde_json::Value) -> rusqlite::Result<()> {
+async fn warm_catalog(state: &AppState, source: &str, lang: &str, default_kind: &str, token: &str, value: &mut serde_json::Value) -> rusqlite::Result<()> {
     let Some(items) = value.get_mut("metas").and_then(serde_json::Value::as_array_mut) else { return Ok(()); };
-    let base = if source == "tmdb" { None } else { state.sources.get(source).ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
+    let base = if source == "tmdb" { None } else { state.sources.get(source).await.ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
     let mut titles = Vec::new();
+    let mut title_keys = Vec::new();
     for item in items.iter_mut() {
         let Some(id) = item["id"].as_str().map(str::to_owned) else { continue; };
         let kind = item["type"].as_str().unwrap_or(default_kind).to_owned();
         let title = metadata::cache::title_key(&json!(source), &json!(kind), &json!(id));
-        state.cache.touch_title(&title)?;
-        metadata::media::rewrite(&state.cache, &title, token, base.as_ref(), item)?;
+        title_keys.push(title.clone());
         titles.push((kind, id, title, item.clone()));
+    }
+    state.cache.touch_titles_async(title_keys).await?;
+    for (index, item) in items.iter_mut().enumerate() {
+        if let Some((_, _, title, _)) = titles.get(index) {
+            metadata::media::rewrite(&state.cache, title, token, base.as_ref(), item)?;
+        }
     }
     let state = state.clone(); let source = source.to_owned(); let lang = lang.to_owned(); let token = token.to_owned();
     tokio::spawn(async move {
         static GATE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+        static WARMED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, i64>>> = std::sync::OnceLock::new();
+        let warmed = WARMED.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        let now = metadata::cache::now();
+        let titles: Vec<_> = {
+            let mut seen = warmed.lock().expect("warm cache");
+            seen.retain(|_, ts| now - *ts < 300);
+            titles.into_iter().filter(|(_, _, title, _)| {
+                let key = format!("{lang}:{title}");
+                if seen.contains_key(&key) {
+                    false
+                } else {
+                    if seen.len() >= 1024 {
+                        seen.clear();
+                    }
+                    seen.insert(key, now);
+                    true
+                }
+            }).collect()
+        };
+        if titles.is_empty() {
+            return;
+        }
         let Ok(_permit) = GATE.acquire().await else { return; };
         for (kind, id, title, item) in titles {
             metadata::media::warm(&state.cache, &item).await;
             let result = if source == "tmdb" { meta(&state, &lang, &kind, &id).await } else {
-                match state.sources.get(&source) {
+                match state.sources.get(&source).await {
                     Ok(Some(entry)) => metadata::stremio::response(&entry, &state.cache, &lang, &["meta".into(), kind.clone(), format!("{id}.json")]).await,
                     _ => continue,
                 }
@@ -181,6 +228,30 @@ async fn stremio(
     State(state): State<AppState>,
     Path((token, source, lang, _resource)): Path<(String, String, String, String)>,
     OriginalUri(uri): OriginalUri,
+) -> Response {
+    if !bool::from(token.as_bytes().ct_eq(state.token.as_bytes())) {
+        return api_error(
+            StatusCode::UNAUTHORIZED,
+            "UNAUTHORIZED",
+            "Invalid or missing token",
+        );
+    }
+    stremio_inner(state, source, lang, uri).await
+}
+
+async fn stremio_v1(
+    State(state): State<AppState>,
+    Path((source, lang, _resource)): Path<(String, String, String)>,
+    OriginalUri(uri): OriginalUri,
+) -> Response {
+    stremio_inner(state, source, lang, uri).await
+}
+
+async fn stremio_inner(
+    state: AppState,
+    source: String,
+    lang: String,
+    uri: axum::http::Uri,
 ) -> Response {
     let raw = uri.path().splitn(6, '/').nth(5).unwrap_or("");
     let decoded: Result<Vec<String>, _> = raw
@@ -201,20 +272,14 @@ async fn stremio(
             );
         }
     };
-    let result = if !bool::from(token.as_bytes().ct_eq(state.token.as_bytes())) {
-        Err((
-            StatusCode::UNAUTHORIZED,
-            "UNAUTHORIZED",
-            "Invalid or missing token",
-        ))
-    } else if !matches!(lang.as_str(), "zh-CN" | "en-US") {
+    let result = if !matches!(lang.as_str(), "zh-CN" | "en-US") {
         Err((
             StatusCode::BAD_REQUEST,
             "BAD_REQUEST",
             "Unsupported language",
         ))
     } else if source != "tmdb" {
-        match state.sources.get(&source) {
+        match state.sources.get(&source).await {
             Ok(Some(source)) => metadata::stremio::response(&source, &state.cache, &lang, &decoded)
                 .await
                 .map_err(|message| {
@@ -248,7 +313,7 @@ async fn stremio(
         let parts: Vec<_> = decoded.iter().map(String::as_str).collect();
         let strip = |s: &str| s.strip_suffix(".json").map(str::to_owned);
         let data = match parts.as_slice() {
-            ["manifest.json"] => state.tmdb.manifest(&lang).await,
+            ["manifest.json"] => manifest(&state, &lang).await,
             ["catalog", kind, id] => match strip(id) {
                 Some(id) => catalog(&state, &lang, kind, &id, "").await,
                 None => Err("invalid catalog path"),
@@ -279,7 +344,7 @@ async fn stremio(
         Ok(mut value) => {
             if decoded.first().is_some_and(|part| part == "catalog") {
                 if let Some(kind) = decoded.get(1) {
-                    if warm_catalog(&state, &source, &lang, kind, &token, &mut value).is_err() {
+                    if warm_catalog(&state, &source, &lang, kind, &state.token, &mut value).await.is_err() {
                         return api_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL", "Catalog cache registration failed");
                     }
                 }
@@ -288,8 +353,8 @@ async fn stremio(
                 if resource == "meta" {
                     if let Some(id) = id.strip_suffix(".json") {
                         let title = metadata::cache::title_key(&json!(source), &json!(kind), &json!(id));
-                        let base = if source == "tmdb" { None } else { state.sources.get(&source).ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
-                        if metadata::media::rewrite(&state.cache, &title, &token, base.as_ref(), &mut value).is_err() {
+                        let base = if source == "tmdb" { None } else { state.sources.get(&source).await.ok().flatten().and_then(|entry| entry["manifest_url"].as_str().and_then(|url| url::Url::parse(url).ok())) };
+                        if metadata::media::rewrite(&state.cache, &title, &state.token, base.as_ref(), &mut value).is_err() {
                             return api_error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL", "Image cache registration failed");
                         }
                     }
@@ -315,12 +380,12 @@ fn api_error(status: StatusCode, code: &str, message: &str) -> Response {
 }
 
 async fn playback_list(State(state): State<AppState>) -> Response {
-    match state.playback_sources.list() {
+    match state.playback_sources.list().await {
         Ok(mut items) => {
             for item in &mut items {
                 if item["kind"] == "stremio_stream" {
                     if let Ok(Some(manifest)) =
-                        adapters::stremio_stream::cached_manifest(item, &state.cache)
+                        adapters::stremio_stream::cached_manifest(item, &state.cache).await
                     {
                         item["capabilities"] = manifest;
                     }
@@ -358,7 +423,7 @@ async fn mapping_list(
             "Invalid metadata identity",
         );
     }
-    match state.mappings.list(source, kind, id) {
+    match state.mappings.list(source, kind, id).await {
         Ok(items) => Json(json!({"mappings":items})).into_response(),
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -369,13 +434,14 @@ async fn mapping_list(
 }
 
 async fn mapping_revoke(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.mappings.revoke(&id) {
+    let _gate = state.metadata_gate.lock().await;
+    match state.mappings.revoke(&id).await {
         Ok(true) => {
+            let mut registry = state
+                .lookup_runtime
+                .registry
+                .lock()
+                .expect("lookup registry");
             registry.cache.clear();
             registry.mapping_generation = registry.mapping_generation.wrapping_add(1);
             StatusCode::NO_CONTENT.into_response()
@@ -390,7 +456,7 @@ async fn mapping_revoke(State(state): State<AppState>, Path(id): Path<String>) -
 }
 
 async fn parser_list(State(state): State<AppState>) -> Response {
-    match state.parsers.list() {
+    match state.parsers.list().await {
         Ok(items) => Json(json!({"parsers":items})).into_response(),
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -403,23 +469,24 @@ async fn parser_create(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
-    parser_save(state, input, None)
+    parser_save(state, input, None).await
 }
 async fn parser_update(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
-    parser_save(state, input, Some(id))
+    parser_save(state, input, Some(id)).await
 }
-fn parser_save(state: AppState, input: serde_json::Value, id: Option<String>) -> Response {
-    let mut reg = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.parsers.save(&input, id.as_deref()) {
+async fn parser_save(state: AppState, input: serde_json::Value, id: Option<String>) -> Response {
+    let _gate = state.metadata_gate.lock().await;
+    match state.parsers.save(&input, id.as_deref()).await {
         Ok(item) => {
+            let mut reg = state
+                .lookup_runtime
+                .registry
+                .lock()
+                .expect("lookup registry");
             reg.parser_generation = reg.parser_generation.wrapping_add(1);
             reg.cache.clear();
             (
@@ -439,13 +506,14 @@ fn parser_save(state: AppState, input: serde_json::Value, id: Option<String>) ->
     }
 }
 async fn parser_delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let mut reg = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.parsers.remove(&id) {
+    let _gate = state.metadata_gate.lock().await;
+    match state.parsers.remove(&id).await {
         Ok(true) => {
+            let mut reg = state
+                .lookup_runtime
+                .registry
+                .lock()
+                .expect("lookup registry");
             reg.parser_generation = reg.parser_generation.wrapping_add(1);
             reg.cache.clear();
             StatusCode::NO_CONTENT.into_response()
@@ -463,15 +531,16 @@ async fn playback_create(
     State(state): State<AppState>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.playback_sources.save(&input, None) {
+    let _gate = state.metadata_gate.lock().await;
+    match state.playback_sources.save(&input, None).await {
         Ok(item) => {
             if let Some(id) = item["id"].as_str() {
-                registry.changed(id);
+                state
+                    .lookup_runtime
+                    .registry
+                    .lock()
+                    .expect("lookup registry")
+                    .changed(id);
             }
             (StatusCode::CREATED, Json(item)).into_response()
         }
@@ -484,14 +553,15 @@ async fn playback_update(
     Path(id): Path<String>,
     Json(input): Json<serde_json::Value>,
 ) -> Response {
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.playback_sources.save(&input, Some(&id)) {
+    let _gate = state.metadata_gate.lock().await;
+    match state.playback_sources.save(&input, Some(&id)).await {
         Ok(item) => {
-            registry.changed(&id);
+            state
+                .lookup_runtime
+                .registry
+                .lock()
+                .expect("lookup registry")
+                .changed(&id);
             Json(item).into_response()
         }
         Err("source not found") => {
@@ -502,14 +572,15 @@ async fn playback_update(
 }
 
 async fn playback_delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    match state.playback_sources.remove(&id) {
+    let _gate = state.metadata_gate.lock().await;
+    match state.playback_sources.remove(&id).await {
         Ok(true) => {
-            registry.changed(&id);
+            state
+                .lookup_runtime
+                .registry
+                .lock()
+                .expect("lookup registry")
+                .changed(&id);
             StatusCode::NO_CONTENT.into_response()
         }
         Ok(false) => api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found"),
@@ -526,7 +597,7 @@ async fn playback_check(
     Path(id): Path<String>,
     Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Response {
-    let source = match state.playback_sources.get(&id) {
+    let source = match state.playback_sources.get(&id).await {
         Ok(Some(value)) => value,
         Ok(None) => return api_error(StatusCode::NOT_FOUND, "NOT_FOUND", "Source not found"),
         Err(_) => {
@@ -544,6 +615,7 @@ async fn playback_check(
     if state
         .playback_sources
         .status(&id, revision, "checking")
+        .await
         .is_err()
     {
         return api_error(
@@ -577,7 +649,7 @@ async fn playback_check(
     }
     .await;
     let status = if result.is_ok() { "ready" } else { "failed" };
-    match state.playback_sources.status(&id, revision, status) {
+    match state.playback_sources.status(&id, revision, status).await {
         Ok(true) => {}
         Ok(false) => {
             return api_error(
@@ -740,12 +812,8 @@ async fn playback_import(
             .unwrap_or_else(|| "url".to_owned());
         let (flags, headers) = parser_flags_headers(item);
         let candidate = json!({"client_config_id":identity(item,"parser"),"name":item["name"],"api":api,"flags":flags,"headers":headers,"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"url_param":url_param,"url_field":item.get("url_field").cloned().unwrap_or(json!("url"))});
-        let mut registry = state
-            .lookup_runtime
-            .registry
-            .lock()
-            .expect("lookup registry");
-        match state.parsers.save(&candidate, None) {
+        let _gate = state.metadata_gate.lock().await;
+        match state.parsers.save(&candidate, None).await {
             Ok(parser) => {
                 for key in [
                     item["key"].as_str(),
@@ -757,6 +825,11 @@ async fn playback_import(
                 {
                     imported.insert(key.to_owned(), parser["id"].clone());
                 }
+                let mut registry = state
+                    .lookup_runtime
+                    .registry
+                    .lock()
+                    .expect("lookup registry");
                 registry.parser_generation = registry.parser_generation.wrapping_add(1);
                 registry.cache.clear();
                 parser_results.push(json!({"name":label,"status":"ok","parser":parser}));
@@ -839,15 +912,16 @@ async fn playback_import(
             _ => item["ext"].clone(),
         };
         let candidate = json!({"client_config_id":identity(item,"source"),"name":item["name"],"kind":kind,"api":api,"ext":ext,"headers":item.get("headers").or_else(|| item.get("header")).cloned().unwrap_or(json!({})),"enabled":item.get("enabled").or_else(||item.get("isActive")).cloned().unwrap_or(json!(true)),"parse_ids":parse_ids});
-        let mut registry = state
-            .lookup_runtime
-            .registry
-            .lock()
-            .expect("lookup registry");
-        match state.playback_sources.save(&candidate, None) {
+        let _gate = state.metadata_gate.lock().await;
+        match state.playback_sources.save(&candidate, None).await {
             Ok(source) => {
                 if let Some(id) = source["id"].as_str() {
-                    registry.changed(id);
+                    state
+                        .lookup_runtime
+                        .registry
+                        .lock()
+                        .expect("lookup registry")
+                        .changed(id);
                 }
                 results.push(json!({"name":label,"status":"ok","source":source}));
             }
@@ -858,7 +932,7 @@ async fn playback_import(
 }
 
 async fn list_sources(State(state): State<AppState>) -> Response {
-    match state.sources.list() {
+    match state.sources.list().await {
         Ok(items) => Json(json!({"sources":items})).into_response(),
         Err(_) => api_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -929,7 +1003,7 @@ async fn update_source(
     Json(mut item): Json<serde_json::Value>,
 ) -> Response {
     let _gate = state.metadata_gate.lock().await;
-    let existing = match state.sources.get(&id) {
+    let existing = match state.sources.get(&id).await {
         Ok(Some(v)) => v,
         Ok(None) => {
             return api_error(
@@ -965,7 +1039,7 @@ async fn update_source(
 
 async fn delete_source(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let _gate = state.metadata_gate.lock().await;
-    match state.sources.delete(&id) {
+    match state.sources.delete(&id).await {
         Ok(true) => StatusCode::NO_CONTENT.into_response(),
         Ok(false) => api_error(
             StatusCode::NOT_FOUND,
@@ -995,7 +1069,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::Config::load()?;
     db::initialize(&config.data_dir)?;
     let token = Arc::<str>::from(config.token);
-    let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env()?);
+    let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env(&config.data_dir)?);
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
     cache.prepare_details()?;
     let sources = metadata::sources::Store::new(&config.data_dir);
@@ -1048,7 +1122,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/v1/metadata-sources/{id}",
             axum::routing::put(update_source).delete(delete_source),
         )
+        .route("/v1/stremio/image/{key}", get(metadata::media::image_v1))
+        .route("/v1/stremio/{source}/{lang}/{*resource}", get(stremio_v1))
         .route_layer(middleware::from_fn_with_state(token.clone(), authorize))
+        .route(
+            "/v1/stremio/{source}/{lang}/{*resource}",
+            axum::routing::options(stremio_options),
+        )
         .route("/stremio/{token}/image/{key}", get(metadata::media::image))
         .route(
             "/stremio/{token}/{source}/{lang}/{*resource}",
@@ -1066,15 +1146,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             lookup_runtime,
             reports,
             metadata_gate: Arc::new(tokio::sync::Mutex::new(())),
+            manifest_gate: Arc::new(tokio::sync::Mutex::new(())),
         });
     let listener = tokio::net::TcpListener::bind(config.listen).await?;
     eprintln!("Service listening on {}", listener.local_addr()?);
     axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
+        .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut sig) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            sig.recv().await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use url::Url;
@@ -13,80 +13,81 @@ impl Store {
             path: dir.join("service.sqlite3"),
         }
     }
-    fn conn(&self) -> rusqlite::Result<Connection> {
-        let conn = Connection::open(&self.path)?;
-        conn.busy_timeout(std::time::Duration::from_secs(3))?;
-        Ok(conn)
+    pub async fn list(&self) -> rusqlite::Result<Vec<Value>> {
+        crate::db::run_sqlite(self.path.clone(), |conn| {
+            let mut stmt = conn.prepare("SELECT payload FROM json_parsers ORDER BY rowid")?;
+            let rows = stmt.query_map([], row)?;
+            rows.collect()
+        })
+        .await
     }
-    pub fn list(&self) -> rusqlite::Result<Vec<Value>> {
-        let conn = self.conn()?;
-        let mut stmt = conn.prepare("SELECT payload FROM json_parsers ORDER BY rowid")?;
-        let rows = stmt.query_map([], row)?;
-        rows.collect()
+    pub async fn remove(&self, id: &str) -> rusqlite::Result<bool> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Ok(conn.execute("DELETE FROM json_parsers WHERE id=?1", [&id])? > 0)
+        })
+        .await
     }
-    pub fn remove(&self, id: &str) -> rusqlite::Result<bool> {
-        Ok(self
-            .conn()?
-            .execute("DELETE FROM json_parsers WHERE id=?1", [id])?
-            > 0)
-    }
-    pub fn save(&self, input: &Value, id: Option<&str>) -> Result<Value, &'static str> {
+    pub async fn save(&self, input: &Value, id: Option<&str>) -> Result<Value, &'static str> {
         let mut value = validate(input)?;
-        let mut conn = self.conn().map_err(|_| "parser database failed")?;
-        let tx = conn.transaction().map_err(|_| "parser database failed")?;
-        let old = if let Some(id) = id {
-            Some(
-                tx.query_row("SELECT payload FROM json_parsers WHERE id=?1", [id], row)
-                    .optional()
-                    .map_err(|_| "parser database failed")?
-                    .ok_or("parser not found")?,
-            )
-        } else if let Some(client) = value["client_config_id"].as_str() {
-            tx.query_row(
-                "SELECT payload FROM json_parsers WHERE client_config_id=?1",
-                [client],
-                row,
-            )
-            .optional()
-            .map_err(|_| "parser database failed")?
-        } else {
-            None
-        };
-        if id.is_some()
-            && old
+        let id = id.map(str::to_owned);
+        crate::db::run(self.path.clone(), "parser database failed", move |conn| {
+            let tx = conn.transaction().map_err(|_| "parser database failed")?;
+            let old = if let Some(id) = id.as_deref() {
+                Some(
+                    tx.query_row("SELECT payload FROM json_parsers WHERE id=?1", [id], row)
+                        .optional()
+                        .map_err(|_| "parser database failed")?
+                        .ok_or("parser not found")?,
+                )
+            } else if let Some(client) = value["client_config_id"].as_str() {
+                tx.query_row(
+                    "SELECT payload FROM json_parsers WHERE client_config_id=?1",
+                    [client],
+                    row,
+                )
+                .optional()
+                .map_err(|_| "parser database failed")?
+            } else {
+                None
+            };
+            if id.is_some()
+                && old
+                    .as_ref()
+                    .is_some_and(|v| v["client_config_id"] != value["client_config_id"])
+            {
+                return Err("client identity cannot change");
+            }
+            let parser_id = old
                 .as_ref()
-                .is_some_and(|v| v["client_config_id"] != value["client_config_id"])
-        {
-            return Err("client identity cannot change");
-        }
-        let parser_id = old
-            .as_ref()
-            .and_then(|v| v["id"].as_str())
-            .map(str::to_owned)
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let changed = old.as_ref().is_none_or(|v| {
-            [
-                "name",
-                "api",
-                "flags",
-                "headers",
-                "enabled",
-                "url_param",
-                "url_field",
-            ]
-            .iter()
-            .any(|key| v[*key] != value[*key])
-        });
-        value["id"] = json!(parser_id);
-        value["revision"] = json!(
-            old.as_ref()
-                .and_then(|v| v["revision"].as_u64())
-                .unwrap_or(0)
-                + u64::from(changed)
-        );
-        tx.execute("INSERT INTO json_parsers(id,client_config_id,payload) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload", params![parser_id,value["client_config_id"].as_str(),value.to_string()]).map_err(|_| "parser database failed")?;
-        tx.commit().map_err(|_| "parser database failed")?;
-        Ok(value)
+                .and_then(|v| v["id"].as_str())
+                .map(str::to_owned)
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let changed = old.as_ref().is_none_or(|v| {
+                [
+                    "name",
+                    "api",
+                    "flags",
+                    "headers",
+                    "enabled",
+                    "url_param",
+                    "url_field",
+                ]
+                .iter()
+                .any(|key| v[*key] != value[*key])
+            });
+            value["id"] = json!(parser_id);
+            value["revision"] = json!(
+                old.as_ref()
+                    .and_then(|v| v["revision"].as_u64())
+                    .unwrap_or(0)
+                    + u64::from(changed)
+            );
+            tx.execute("INSERT INTO json_parsers(id,client_config_id,payload) VALUES(?1,?2,?3) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload", params![parser_id,value["client_config_id"].as_str(),value.to_string()]).map_err(|_| "parser database failed")?;
+            tx.commit().map_err(|_| "parser database failed")?;
+            Ok(value)
+        })
+        .await
     }
 }
 fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {

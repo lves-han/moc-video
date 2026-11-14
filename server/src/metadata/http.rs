@@ -1,18 +1,111 @@
 use hickory_resolver::{
+    TokioResolver,
     config::{NameServerConfig, ResolveHosts, ResolverConfig},
     net::runtime::TokioRuntimeProvider,
 };
 use reqwest::{
     StatusCode,
+    dns::{Addrs, Name, Resolve, Resolving},
     header::{HeaderMap, LOCATION},
     redirect::Policy,
 };
 use serde_json::Value;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use url::Url;
+
+struct FallbackDns {
+    system: Option<TokioResolver>,
+    public: Vec<TokioResolver>,
+}
+
+impl FallbackDns {
+    fn new() -> Self {
+        let system = TokioResolver::builder_tokio()
+            .ok()
+            .map(|b| b.build())
+            .transpose()
+            .ok()
+            .flatten();
+        let public = [Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(8, 8, 8, 8)]
+            .into_iter()
+            .filter_map(|ip| {
+                let mut builder = TokioResolver::builder_with_config(
+                    ResolverConfig::from_name_servers(vec![NameServerConfig::udp(ip.into())]),
+                    TokioRuntimeProvider::default(),
+                );
+                builder.options_mut().use_hosts_file = ResolveHosts::Never;
+                builder.build().ok()
+            })
+            .collect();
+        Self { system, public }
+    }
+}
+
+impl Resolve for FallbackDns {
+    fn resolve(&self, name: Name) -> Resolving {
+        let host = name.as_str().to_owned();
+        let system = self.system.clone();
+        let public = self.public.clone();
+        Box::pin(async move {
+            if let Ok(ip) = host.parse::<IpAddr>() {
+                let addrs: Addrs = Box::new(std::iter::once(SocketAddr::new(ip, 0)));
+                return Ok(addrs);
+            }
+            let fqdn = format!("{}.", host.trim_end_matches('.'));
+            if let Some(resolver) = system {
+                if let Ok(ips) = resolver.lookup_ip(fqdn.clone()).await {
+                    let collected: Vec<SocketAddr> =
+                        ips.iter().map(|ip| SocketAddr::new(ip, 0)).collect();
+                    if !collected.is_empty() {
+                        let addrs: Addrs = Box::new(collected.into_iter());
+                        return Ok(addrs);
+                    }
+                }
+            }
+            let mut set = tokio::task::JoinSet::new();
+            for resolver in public {
+                let fqdn = fqdn.clone();
+                set.spawn(async move {
+                    resolver
+                        .lookup_ip(fqdn)
+                        .await
+                        .map(|ips| ips.iter().map(|ip| SocketAddr::new(ip, 0)).collect::<Vec<_>>())
+                });
+            }
+            while let Some(result) = set.join_next().await {
+                if let Ok(Ok(ips)) = result {
+                    if !ips.is_empty() {
+                        let addrs: Addrs = Box::new(ips.into_iter());
+                        return Ok(addrs);
+                    }
+                }
+            }
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "DNS lookup failed",
+            )) as Box<dyn std::error::Error + Send + Sync>)
+        })
+    }
+}
+
+fn shared_client() -> Result<&'static reqwest::Client, Error> {
+    static CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .redirect(Policy::none())
+                .timeout(Duration::from_secs(8))
+                .dns_resolver(Arc::new(FallbackDns::new()))
+                .build()
+                .ok()
+        })
+        .as_ref()
+        .ok_or(Error::Failed)
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -125,45 +218,7 @@ async fn fetch(
         if !valid(&url) {
             return Err(Error::Failed);
         }
-        let host = url.host_str().ok_or(Error::Failed)?;
-        let port = url.port_or_known_default().ok_or(Error::Failed)?;
-        let addresses = if let Ok(ip) = host.parse::<IpAddr>() {
-            vec![SocketAddr::new(ip, port)]
-        } else {
-            let mut set = tokio::task::JoinSet::new();
-            for ip in [Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(8, 8, 8, 8)] {
-                let mut builder = hickory_resolver::TokioResolver::builder_with_config(
-                    ResolverConfig::from_name_servers(vec![NameServerConfig::udp(ip.into())]),
-                    TokioRuntimeProvider::default(),
-                );
-                builder.options_mut().use_hosts_file = ResolveHosts::Never;
-                let resolver = builder.build().map_err(|_| Error::Failed)?;
-                let host = format!("{}.", host.trim_end_matches('.'));
-                set.spawn(async move {
-                    resolver.lookup_ip(host).await.map(|ips| {
-                        ips.iter()
-                            .map(|ip| SocketAddr::new(ip, port))
-                            .collect::<Vec<_>>()
-                    })
-                });
-            }
-            let mut found = None;
-            while let Some(result) = set.join_next().await {
-                if let Ok(Ok(ips)) = result {
-                    if !ips.is_empty() {
-                        found = Some(ips);
-                        break;
-                    }
-                }
-            }
-            found.ok_or(Error::Failed)?
-        };
-        let client = reqwest::Client::builder()
-            .redirect(Policy::none())
-            .timeout(Duration::from_secs(8))
-            .resolve_to_addrs(host, &addresses)
-            .build()
-            .map_err(|_| Error::Failed)?;
+        let client = shared_client()?;
         let request = if let Some(body) = body {
             client.post(url.clone()).json(body)
         } else {

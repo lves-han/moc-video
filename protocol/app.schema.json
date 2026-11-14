@@ -182,7 +182,8 @@
           "properties": {
             "enabled": { "type": "boolean" },
             "url": { "type": "string", "minLength": 1, "maxLength": 2048 },
-            "token": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "token": { "type": "string", "minLength": 0, "maxLength": 2048 },
+            "token_configured": { "type": "boolean" },
             "groups": {
               "type": "array", "maxItems": 32,
               "items": {

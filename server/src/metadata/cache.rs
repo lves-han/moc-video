@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -42,9 +42,31 @@ fn trim_details(tx: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
 
 impl Cache {
     pub fn touch_title(&self, title: &str) -> rusqlite::Result<()> {
-        let mut conn = self.connection()?;
+        self.touch_titles(&[title.to_owned()])
+    }
+    pub fn touch_titles(&self, titles: &[String]) -> rusqlite::Result<()> {
+        if titles.is_empty() {
+            return Ok(());
+        }
+        crate::db::sync_with(&self.path, |conn| Self::touch_titles_conn(conn, titles))
+    }
+    pub async fn touch_titles_async(&self, titles: Vec<String>) -> rusqlite::Result<()> {
+        if titles.is_empty() {
+            return Ok(());
+        }
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Self::touch_titles_conn(conn, &titles)
+        })
+        .await
+    }
+    fn touch_titles_conn(conn: &mut rusqlite::Connection, titles: &[String]) -> rusqlite::Result<()> {
         let tx = conn.transaction()?;
-        tx.execute("INSERT OR REPLACE INTO detail_cache_access(title_key) VALUES(?1)", [title])?;
+        {
+            let mut stmt = tx.prepare("INSERT OR REPLACE INTO detail_cache_access(title_key) VALUES(?1)")?;
+            for title in titles {
+                stmt.execute([title])?;
+            }
+        }
         trim_details(&tx)?;
         tx.commit()
     }
@@ -54,16 +76,17 @@ impl Cache {
             revision,
         }
     }
-    fn connection(&self) -> rusqlite::Result<Connection> {
-        let conn = Connection::open(&self.path)?;
-        conn.busy_timeout(std::time::Duration::from_secs(3))?;
-        Ok(conn)
-    }
     pub fn key(&self, source: &str, kind: &str, lang: &str, resource: &str) -> String {
         serde_json::json!([source, self.revision, kind, lang, resource]).to_string()
     }
     pub fn get(&self, key: &str) -> rusqlite::Result<Option<Value>> {
-        let conn = self.connection()?;
+        crate::db::sync_with(&self.path, |conn| Self::get_conn(conn, key))
+    }
+    pub async fn get_async(&self, key: &str) -> rusqlite::Result<Option<Value>> {
+        let key = key.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| Self::get_conn(conn, &key)).await
+    }
+    fn get_conn(conn: &rusqlite::Connection, key: &str) -> rusqlite::Result<Option<Value>> {
         let payload: Option<String> = conn
             .query_row(
                 "SELECT payload FROM metadata_cache WHERE cache_key=?1 AND expires_at>?2",
@@ -90,8 +113,14 @@ impl Cache {
             .transpose()
     }
     pub fn stale_detail(&self, key: &str) -> rusqlite::Result<Option<Value>> {
+        crate::db::sync_with(&self.path, |conn| Self::stale_detail_conn(conn, key))
+    }
+    pub async fn stale_detail_async(&self, key: &str) -> rusqlite::Result<Option<Value>> {
+        let key = key.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| Self::stale_detail_conn(conn, &key)).await
+    }
+    fn stale_detail_conn(conn: &rusqlite::Connection, key: &str) -> rusqlite::Result<Option<Value>> {
         let Some(title) = detail_key(key) else { return Ok(None); };
-        let conn = self.connection()?;
         let payload: Option<String> = conn.query_row("SELECT payload FROM metadata_cache WHERE cache_key=?1", [key], |row| row.get(0)).optional()?;
         if payload.is_some() {
             conn.execute("INSERT OR REPLACE INTO detail_cache_access(title_key) VALUES(?1)", [&title])?;
@@ -100,16 +129,41 @@ impl Cache {
         payload.map(|value| serde_json::from_str(&value).map_err(|error| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error)))).transpose()
     }
     pub fn remove(&self, key: &str) -> rusqlite::Result<()> {
-        self.connection()?
-            .execute("DELETE FROM metadata_cache WHERE cache_key=?1", [key])?;
-        Ok(())
+        crate::db::sync_with(&self.path, |conn| {
+            conn.execute("DELETE FROM metadata_cache WHERE cache_key=?1", [key])?;
+            Ok(())
+        })
+    }
+    pub async fn remove_async(&self, key: &str) -> rusqlite::Result<()> {
+        let key = key.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            conn.execute("DELETE FROM metadata_cache WHERE cache_key=?1", [&key])?;
+            Ok(())
+        })
+        .await
     }
     pub fn put(&self, key: &str, value: &Value, ttl: i64) -> rusqlite::Result<()> {
-        let mut conn = self.connection()?;
+        let serialized = value.to_string();
+        crate::db::sync_with(&self.path, |conn| Self::put_conn(conn, key, &serialized, ttl))
+    }
+    pub async fn put_async(&self, key: &str, value: &Value, ttl: i64) -> rusqlite::Result<()> {
+        let key = key.to_owned();
+        let serialized = value.to_string();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Self::put_conn(conn, &key, &serialized, ttl)
+        })
+        .await
+    }
+    fn put_conn(
+        conn: &mut rusqlite::Connection,
+        key: &str,
+        serialized: &str,
+        ttl: i64,
+    ) -> rusqlite::Result<()> {
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT OR REPLACE INTO metadata_cache(cache_key,payload,expires_at) VALUES(?1,?2,?3)",
-            params![key, value.to_string(), now() + ttl],
+            params![key, serialized, now() + ttl],
         )?;
         if let Some(title) = detail_key(key) {
             tx.execute("INSERT OR REPLACE INTO detail_cache_access(title_key) VALUES(?1)", [&title])?;
@@ -119,25 +173,31 @@ impl Cache {
         tx.commit()
     }
     pub fn prepare_details(&self) -> rusqlite::Result<()> {
-        let mut conn = self.connection()?;
-        let tx = conn.transaction()?;
-        let keys = {
-            let mut statement = tx.prepare("SELECT cache_key FROM metadata_cache WHERE cache_key NOT IN (SELECT cache_key FROM detail_cache_entries) ORDER BY expires_at")?;
-            let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()?
-        };
-        for key in keys {
-            if let Some(title) = detail_key(&key) {
-                tx.execute("INSERT OR IGNORE INTO detail_cache_access(title_key) VALUES(?1)", [&title])?;
-                tx.execute("INSERT OR REPLACE INTO detail_cache_entries(cache_key,title_key) VALUES(?1,?2)", params![key, title])?;
+        crate::db::sync_with(&self.path, |conn| {
+            let tx = conn.transaction()?;
+            let keys = {
+                let mut statement = tx.prepare("SELECT cache_key FROM metadata_cache WHERE cache_key NOT IN (SELECT cache_key FROM detail_cache_entries) ORDER BY expires_at")?;
+                let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            for key in keys {
+                if let Some(title) = detail_key(&key) {
+                    tx.execute("INSERT OR IGNORE INTO detail_cache_access(title_key) VALUES(?1)", [&title])?;
+                    tx.execute("INSERT OR REPLACE INTO detail_cache_entries(cache_key,title_key) VALUES(?1,?2)", params![key, title])?;
+                }
             }
-        }
-        trim_details(&tx)?;
-        tx.commit()
+            trim_details(&tx)?;
+            tx.commit()
+        })
     }
     /// Expired rows are never read again (`get` filters them), so drop them.
     pub fn prune(&self, now: i64) -> rusqlite::Result<usize> {
-        let mut conn = self.connection()?;
+        crate::db::sync_with(&self.path, |conn| Self::prune_conn(conn, now))
+    }
+    pub async fn prune_async(&self, now: i64) -> rusqlite::Result<usize> {
+        crate::db::run_sqlite(self.path.clone(), move |conn| Self::prune_conn(conn, now)).await
+    }
+    fn prune_conn(conn: &mut rusqlite::Connection, now: i64) -> rusqlite::Result<usize> {
         let tx = conn.transaction()?;
         let removed = tx.execute("DELETE FROM metadata_cache WHERE expires_at<=?1 AND cache_key NOT IN (SELECT cache_key FROM detail_cache_entries)", [now])?;
         tx.execute("DELETE FROM detail_cache_entries WHERE cache_key NOT IN (SELECT cache_key FROM metadata_cache)", [])?;
@@ -148,48 +208,70 @@ impl Cache {
     pub fn register_image(&self, title: &str, url: &str) -> rusqlite::Result<String> {
         use sha2::{Digest, Sha256};
         let key = format!("{:x}", Sha256::digest(url.as_bytes()));
-        let mut conn = self.connection()?;
-        let tx = conn.transaction()?;
-        tx.execute("INSERT OR IGNORE INTO detail_media_assets(image_key,url) VALUES(?1,?2)", params![key,url])?;
-        tx.execute("INSERT OR IGNORE INTO detail_media_owners(title_key,image_key) VALUES(?1,?2)", params![title,key])?;
-        tx.commit()?;
-        Ok(key)
+        crate::db::sync_with(&self.path, |conn| {
+            let tx = conn.transaction()?;
+            tx.execute("INSERT OR IGNORE INTO detail_media_assets(image_key,url) VALUES(?1,?2)", params![key,url])?;
+            tx.execute("INSERT OR IGNORE INTO detail_media_owners(title_key,image_key) VALUES(?1,?2)", params![title,key])?;
+            tx.commit()?;
+            Ok(key)
+        })
     }
     pub fn image(&self, key: &str) -> rusqlite::Result<Option<(String, Option<Vec<u8>>, Option<String>)>> {
-        self.connection()?.query_row("SELECT url,body,mime FROM detail_media_assets WHERE image_key=?1", [key], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional()
+        crate::db::sync_with(&self.path, |conn| {
+            conn.query_row("SELECT url,body,mime FROM detail_media_assets WHERE image_key=?1", [key], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional()
+        })
     }
     pub fn save_image(&self, key: &str, body: &[u8], mime: &str) -> rusqlite::Result<()> {
-        self.connection()?.execute("UPDATE detail_media_assets SET body=?2,mime=?3 WHERE image_key=?1", params![key,body,mime])?;
-        Ok(())
+        crate::db::sync_with(&self.path, |conn| {
+            conn.execute("UPDATE detail_media_assets SET body=?2,mime=?3 WHERE image_key=?1", params![key,body,mime])?;
+            Ok(())
+        })
     }
     pub fn snapshot(&self) -> rusqlite::Result<Option<(i64, Value)>> {
-        let conn = self.connection()?;
-        let row: Option<(i64, String)> = conn
-            .query_row(
-                "SELECT built_at,payload FROM home_snapshots WHERE revision=?1",
-                [&self.revision],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .optional()?;
-        row.map(|(time, body)| {
-            serde_json::from_str(&body)
-                .map(|value| (time, value))
-                .map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        1,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })
+        crate::db::sync_with(&self.path, |conn| {
+            let row: Option<(i64, String)> = conn
+                .query_row(
+                    "SELECT built_at,payload FROM home_snapshots WHERE revision=?1",
+                    [&self.revision],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            row.map(|(time, body)| {
+                serde_json::from_str(&body)
+                    .map(|value| (time, value))
+                    .map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            1,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })
+            })
+            .transpose()
         })
-        .transpose()
     }
     pub fn save_snapshot(&self, built_at: i64, value: &Value) -> rusqlite::Result<()> {
-        self.connection()?.execute(
-            "INSERT OR REPLACE INTO home_snapshots(revision,built_at,payload) VALUES(?1,?2,?3)",
-            params![self.revision, built_at, value.to_string()],
-        )?;
-        Ok(())
+        let body = value.to_string();
+        let revision = self.revision.clone();
+        crate::db::sync_with(&self.path, |conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO home_snapshots(revision,built_at,payload) VALUES(?1,?2,?3)",
+                params![revision, built_at, body],
+            )?;
+            Ok(())
+        })
+    }
+    pub async fn save_snapshot_async(&self, built_at: i64, value: &Value) -> rusqlite::Result<()> {
+        let body = value.to_string();
+        let revision = self.revision.clone();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            conn.execute(
+                "INSERT OR REPLACE INTO home_snapshots(revision,built_at,payload) VALUES(?1,?2,?3)",
+                params![revision, built_at, body],
+            )?;
+            Ok(())
+        })
+        .await
     }
 }
 
@@ -278,11 +360,10 @@ mod tests {
         cache.put("fresh", &serde_json::json!(2), 600).unwrap();
         assert_eq!(cache.prune(now()).unwrap(), 1);
         assert_eq!(cache.get("fresh").unwrap(), Some(serde_json::json!(2)));
-        let rows: i64 = cache
-            .connection()
-            .unwrap()
-            .query_row("SELECT COUNT(*) FROM metadata_cache", [], |row| row.get(0))
-            .unwrap();
+        let rows: i64 = crate::db::sync_with(&cache.path, |conn| {
+            conn.query_row("SELECT COUNT(*) FROM metadata_cache", [], |row| row.get(0))
+        })
+        .unwrap();
         assert_eq!(rows, 1);
     }
 }

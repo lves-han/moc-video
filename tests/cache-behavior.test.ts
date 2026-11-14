@@ -78,6 +78,33 @@ test('film details containing URLs stay in memory only', () => {
   assert.equal(cache.get(ref, 'en', 'host')?.value.details.title, 'Film');
 });
 
+test('new URL-bearing data invalidates older persistent catalog and details', async () => {
+  const store = storage(), source = { source_id: 's', source_revision: 'r' }, ref = { ...source, data: 'id' };
+  const catalog = catalogCache(() => store);
+  const section = (title: string) => ({ id: 'section', title: 'Films', section_ref: 'handle', items: [{ id: 'id', title, ref }], page: 1, has_next: false, next_page: null }) as never;
+  await catalog.putPersistent(source, 'section', {}, 'en', 'host', section('old'), {}, 1000);
+  await catalog.putPersistent(source, 'section', {}, 'en', 'host', section('https://example.invalid/new'), {}, 2000);
+  assert.equal((await catalogCache(() => store).getPersistent(source, 'section', {}, 'en', 'other', 2001)), null);
+  const details = metadataCache(() => store);
+  const value = (title: string) => ({ details: { ref, id: 'id', title, groups: [], related: [], tags: [] },
+    metadata_ref: { identity: { config_id: 'c', addon_key: 'a', namespace: 'n', type: 'movie', meta_id: 'id', canonical_id: 'id' }, content_ref: ref }, images: {} }) as never;
+  await details.putPersistent(ref, 'en', 'host', value('old'), 1000);
+  await details.putPersistent(ref, 'en', 'host', value('https://example.invalid/new'), 2000);
+  assert.equal(await metadataCache(() => store).getPersistent(ref, 'en', 'other', 2001), null);
+});
+
+test('cache invalidation reports storage write failures', async () => {
+  const base = storage(), source = { source_id: 's', source_revision: 'r' }, ref = { ...source, data: 'id' };
+  let fail = false;
+  const store = { getItem: base.getItem, setItem: (key: string, value: string) => { if (fail) throw new Error('storage denied'); base.setItem(key, value); } };
+  const cache = catalogCache(() => store);
+  const section = (title: string) => ({ id: 'section', title: 'Films', section_ref: 'handle', items: [{ id: 'id', title, ref }], page: 1, has_next: false, next_page: null }) as never;
+  await cache.putPersistent(source, 'section', {}, 'en', 'host', section('old'), {}, 1000);
+  fail = true;
+  await assert.rejects(cache.putPersistent(source, 'section', {}, 'en', 'host', section('https://example.invalid/new'), {}, 2000), /storage denied/);
+  assert.equal(cache.get(source, 'section', {}, 'en', 'host', 2001)?.items[0]?.title, 'https://example.invalid/new');
+});
+
 test('film details retain the latest 200 titles', () => {
   const store = storage(), cache = metadataCache(() => store);
   for (let index = 0; index <= 200; index++) {

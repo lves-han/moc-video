@@ -51,6 +51,14 @@ pub async fn warm(cache: &Cache, value: &Value) {
 }
 pub async fn image(State(state): State<crate::AppState>, Path((token, key)): Path<(String, String)>) -> Response {
     if !bool::from(token.as_bytes().ct_eq(state.token.as_bytes())) { return StatusCode::UNAUTHORIZED.into_response(); }
+    serve_image(state, key).await
+}
+
+pub async fn image_v1(State(state): State<crate::AppState>, Path(key): Path<String>) -> Response {
+    serve_image(state, key).await
+}
+
+async fn serve_image(state: crate::AppState, key: String) -> Response {
     if key.len() != 64 || !key.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) { return StatusCode::BAD_REQUEST.into_response(); }
     let (url, cached, mime) = match state.cache.image(&key) {
         Ok(Some(row)) => row, Ok(None) => return StatusCode::NOT_FOUND.into_response(), Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),

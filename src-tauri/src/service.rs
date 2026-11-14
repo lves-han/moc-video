@@ -9,8 +9,25 @@ use reqwest::{
     header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap},
 };
 use serde_json::{Value, json};
-use std::{sync::Mutex, time::Duration};
+use std::{
+    sync::{Mutex, OnceLock},
+    time::Duration,
+};
 use url::Url;
+
+fn shared_client() -> Result<&'static reqwest::Client, ApiError> {
+    static CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .ok()
+        })
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Service client unavailable"))
+}
 
 pub const HOST: &str = "moc-service.invalid";
 #[derive(Clone)]
@@ -61,6 +78,15 @@ impl Config {
         }
         Ok(url)
     }
+    pub(crate) fn auth_headers(&self) -> Result<HeaderMap, ApiError> {
+        let mut headers = HeaderMap::new();
+        let value = format!("Bearer {}", self.token)
+            .parse()
+            .map_err(|_| ApiError::bad("Service token is invalid"))?;
+        headers.insert(AUTHORIZATION, value);
+        Ok(headers)
+    }
+
     pub(crate) fn image_url(&self, virtual_url: &Url) -> Result<Url, ApiError> {
         let parts: Vec<_> = virtual_url
             .path_segments()
@@ -84,7 +110,7 @@ impl Config {
         {
             return Err(ApiError::bad("Invalid service image route"));
         }
-        self.endpoint(&["stremio", &self.token, "image", parts[3]])
+        self.endpoint(&["v1", "stremio", "image", parts[3]])
     }
 
     async fn request(
@@ -97,14 +123,9 @@ impl Config {
         if url.origin() != self.base.origin() || !url.path().starts_with(self.base.path()) {
             return Err(ApiError::bad("Service request escaped configured address"));
         }
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(15))
-            .build()
-            .map_err(|_| ApiError::internal("Service client unavailable"))?;
+        let client = shared_client()?;
         let deleting = method == Method::DELETE;
-        let mut request = client.request(method, url);
+        let mut request = client.request(method, url).timeout(Duration::from_secs(15));
         if bearer {
             request = request.header(AUTHORIZATION, format!("Bearer {}", self.token));
         }
@@ -198,14 +219,10 @@ impl Config {
     ) -> Result<(), ApiError> {
         use std::sync::atomic::Ordering;
         let url = self.endpoint(path)?;
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(45))
-            .build()
-            .map_err(|_| ApiError::internal("Service client unavailable"))?;
+        let client = shared_client()?;
         let mut response = client
             .post(url)
+            .timeout(Duration::from_secs(45))
             .header(AUTHORIZATION, format!("Bearer {}", self.token))
             .header(CONTENT_TYPE, "application/json")
             .body(body.to_string())
@@ -276,6 +293,13 @@ impl Config {
     }
 }
 
+pub(crate) fn same_service_address(left: &str, right: &str) -> bool {
+    match (Config::parse(left, "comparison"), Config::parse(right, "comparison")) {
+        (Ok(left), Ok(right)) => left.base == right.base,
+        _ => false,
+    }
+}
+
 /// The service answers failures as `{"error":{"code","message","retryable"}}` with
 /// fixed, credential-free messages. Keep its code when the App contract has one and
 /// append its message, so a rejected source or parser says what was wrong.
@@ -324,6 +348,18 @@ pub fn current() -> Result<Config, ApiError> {
         .map_err(|_| ApiError::internal("Service configuration unavailable"))?
         .clone()
         .ok_or_else(|| ApiError::new("ENGINE_NOT_READY", "Playback service is not configured"))
+}
+
+fn requested_config(base: &str, token: &str) -> Result<Config, ApiError> {
+    if !token.trim().is_empty() {
+        return Config::parse(base, token);
+    }
+    let saved = current()?;
+    let requested = Config::parse(base, &saved.token)?;
+    if requested.base != saved.base {
+        return Err(ApiError::bad("Enter a token when changing the service address / 更换服务地址时请输入令牌"));
+    }
+    Ok(requested)
 }
 
 pub async fn playback_sources(
@@ -420,7 +456,7 @@ pub fn proxy(virtual_url: &Url, job: &Job) -> Result<Response, ApiError> {
     if parts.len() < 3 {
         return Err(ApiError::bad("Invalid service route"));
     }
-    let mut segments = vec!["stremio", config.token.as_str()];
+    let mut segments = vec!["v1", "stremio"];
     segments.extend(parts.iter().map(String::as_str));
     let url = config.endpoint(&segments)?;
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -431,7 +467,7 @@ pub fn proxy(virtual_url: &Url, job: &Job) -> Result<Response, ApiError> {
     let (headers, body) = runtime.block_on(maccms::watched(
         job,
         timeout,
-        config.request(Method::GET, url, None, false),
+        config.request(Method::GET, url, None, true),
     ))?;
     Ok(Response {
         url: virtual_url.clone(),
@@ -441,7 +477,7 @@ pub fn proxy(virtual_url: &Url, job: &Job) -> Result<Response, ApiError> {
 }
 
 pub async fn import(base: &str, token: &str, configs: &[Value]) -> Result<Value, ApiError> {
-    let client = Config::parse(base, token)?;
+    let client = requested_config(base, token)?;
     client.json(Method::GET, &["v1", "health"], None).await?;
     let mut groups = Vec::new();
     for config in configs.iter().filter(|v| v["kind"] == "stremio") {
@@ -515,7 +551,7 @@ pub async fn import(base: &str, token: &str, configs: &[Value]) -> Result<Value,
 }
 
 pub async fn delete(base: &str, token: &str, ids: &[String]) -> Result<(), ApiError> {
-    let client = Config::parse(base, token)?;
+    let client = requested_config(base, token)?;
     for id in ids {
         uuid::Uuid::parse_str(id).map_err(|_| ApiError::bad("Invalid metadata source ID"))?;
         client
@@ -537,6 +573,55 @@ mod tests {
     use std::{net::TcpListener, sync::Arc};
 
     #[test]
+    fn import_never_sends_a_saved_token_to_a_different_service() {
+        struct Restore(Option<Config>);
+        impl Drop for Restore {
+            fn drop(&mut self) { *CONFIG.lock().unwrap() = self.0.take(); }
+        }
+        let original = TcpListener::bind("127.0.0.1:0").unwrap();
+        let other = TcpListener::bind("127.0.0.1:0").unwrap();
+        let old_url = format!("http://{}/base", original.local_addr().unwrap());
+        let new_url = format!("http://{}/base", other.local_addr().unwrap());
+        let restore = Restore(CONFIG.lock().unwrap().replace(Config::parse(&old_url, "saved-test-token").unwrap()));
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        other.set_nonblocking(true).unwrap();
+        let error = runtime.block_on(import(&new_url, "", &[])).unwrap_err();
+        assert_eq!(error.code, "BAD_REQUEST");
+        let id = uuid::Uuid::new_v4().to_string();
+        assert!(runtime.block_on(delete(&new_url, "", std::slice::from_ref(&id))).is_err());
+        assert!(runtime.block_on(delete(&old_url, "", &[])).is_ok());
+        assert!(other.accept().is_err(), "changed service received a request");
+        original.set_nonblocking(true).unwrap();
+        assert!(runtime.block_on(import(&format!("{old_url}/other"), "", &[])).is_err());
+        assert!(original.accept().is_err(), "changed base path received a request");
+        original.set_nonblocking(false).unwrap();
+        assert!(same_service_address(&old_url, &format!("{old_url}/")));
+        assert!(!same_service_address(&old_url, &format!("{old_url}/other")));
+
+        fn answer(listener: TcpListener, expected: &'static str) -> std::thread::JoinHandle<()> {
+            std::thread::spawn(move || {
+                use std::io::{Read, Write};
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0; 4096];
+                let size = stream.read(&mut request).unwrap();
+                assert!(String::from_utf8_lossy(&request[..size]).contains(expected));
+                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}").unwrap();
+            })
+        }
+        let first = answer(original.try_clone().unwrap(), "Bearer saved-test-token");
+        assert!(runtime.block_on(import(&format!("{old_url}/"), "", &[])).is_ok());
+        first.join().unwrap();
+        let deletion = answer(original, "Bearer saved-test-token");
+        assert!(runtime.block_on(delete(&old_url, "", &[id])).is_ok());
+        deletion.join().unwrap();
+        other.set_nonblocking(false).unwrap();
+        let second = answer(other, "Bearer new-test-token");
+        assert!(runtime.block_on(import(&new_url, "new-test-token", &[])).is_ok());
+        second.join().unwrap();
+        drop(restore);
+    }
+
+    #[test]
     fn service_image_url_preserves_base_and_checks_route() {
         let key = "a".repeat(64);
         let path = format!("/stremio/private%20token/image/{key}");
@@ -545,7 +630,7 @@ mod tests {
             let config = Config::parse(base, "private token").unwrap();
             assert_eq!(
                 config.image_url(&virtual_url).unwrap().as_str(),
-                format!("{}{path}", base.trim_end_matches('/'))
+                format!("{}/v1/stremio/image/{key}", base.trim_end_matches('/'))
             );
             for invalid in [
                 format!("https://other.test{path}"),

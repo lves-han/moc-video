@@ -72,7 +72,7 @@ pub fn start(cache: Cache, tmdb: Arc<Tmdb>, home: Arc<RwLock<Home>>, zone: Tz, p
             let now = cache::now();
             if now.saturating_sub(pruned_at) >= 3600 {
                 pruned_at = now;
-                if cache.prune(now).is_err() {
+                if cache.prune_async(now).await.is_err() {
                     eprintln!("Metadata cache cleanup failed; retrying within an hour");
                 }
             }
@@ -83,11 +83,12 @@ pub fn start(cache: Cache, tmdb: Arc<Tmdb>, home: Arc<RwLock<Home>>, zone: Tz, p
                         .unwrap_or(false)
                 })
                 .unwrap_or(false);
+            let previous = home.read().await.payload.clone();
             if due {
-                match build(&tmdb).await {
+                match build(&tmdb, previous.as_ref()).await {
                     Ok(snapshot) => {
                         let at = cache::now();
-                        match cache.save_snapshot(at, &snapshot) {
+                        match cache.save_snapshot_async(at, &snapshot).await {
                             Ok(()) => {
                                 let mut state = home.write().await;
                                 state.built_at = Some(at);
@@ -110,21 +111,45 @@ pub fn start(cache: Cache, tmdb: Arc<Tmdb>, home: Arc<RwLock<Home>>, zone: Tz, p
     });
 }
 
-async fn build(tmdb: &Tmdb) -> Result<Value, &'static str> {
+async fn build(tmdb: &Tmdb, previous: Option<&Value>) -> Result<Value, &'static str> {
     let mut all = serde_json::Map::new();
+    let mut any_ok = false;
+    let mut last_err = None;
     for lang in ["zh-CN", "en-US"] {
         let mut catalogs = serde_json::Map::new();
-        for (kind, ids) in [("movie", MOVIE), ("series", SERIES)] {
-            for id in ids {
-                for page in [0, 20] {
-                    let result = tmdb
-                        .catalog(lang, kind, id, &format!("skip={page}"))
-                        .await?;
-                    catalogs.insert(format!("{kind}/{id}/{page}"), result);
+        let requests: Vec<_> = [("movie", MOVIE), ("series", SERIES)].into_iter()
+            .flat_map(|(kind, ids)| ids.iter().flat_map(move |id| [0, 20].into_iter().map(move |page| (kind, *id, page))))
+            .collect();
+        for chunk in requests.chunks(4) {
+            let mut jobs = tokio::task::JoinSet::new();
+            for &(kind, id, page) in chunk {
+                let tmdb = tmdb.clone();
+                jobs.spawn(async move { (kind, id, page, tmdb.catalog(lang, kind, id, &format!("skip={page}")).await) });
+            }
+            while let Some(result) = jobs.join_next().await {
+                let Ok((kind, id, page, value)) = result else {
+                    last_err = Some("home snapshot request failed");
+                    continue;
+                };
+                let slot = format!("{kind}/{id}/{page}");
+                match value {
+                    Ok(v) => {
+                        any_ok = true;
+                        catalogs.insert(slot, v);
+                    }
+                    Err(err) => {
+                        last_err = Some(err);
+                        if let Some(prev) = previous.and_then(|p| p.get(lang)).and_then(|l| l.get(&slot)) {
+                            catalogs.insert(slot, prev.clone());
+                        }
+                    }
                 }
             }
         }
         all.insert(lang.into(), json!(catalogs));
+    }
+    if !any_ok {
+        return Err(last_err.unwrap_or("home snapshot request failed"));
     }
     Ok(Value::Object(all))
 }

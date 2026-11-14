@@ -5,7 +5,7 @@ import { describeError } from '../api';
 import { locale, t } from '../i18n';
 import MediaRow from '../components/MediaRow.vue';
 import Icon from '../components/Icon.vue';
-import type { Bridge_MediaRef } from '../models';
+import type { Bridge_MediaCard, Bridge_MediaRef } from '../models';
 import { approximateResults } from '../data/search-match';
 
 const emit = defineEmits<{ open:[ref:Bridge_MediaRef] }>();
@@ -29,7 +29,8 @@ const genres = computed(() => [
 ]);
 const approximate = computed(() => app.search.phase === 'ready' && approximateResults(app.search.query, app.search.items.map(item => item.title)));
 let timer: ReturnType<typeof setTimeout> | undefined, observer:IntersectionObserver | undefined;
-let posterQueue = Promise.resolve();
+let posterQueue: Bridge_MediaCard[] = [], posterRunning = 0, posterGeneration = 0;
+let pumpPosters = () => {};
 const opening = ref(false);
 let mounted = true;
 function search() {
@@ -42,12 +43,20 @@ watch([query, sourceId, () => state.settings.ui_locale, () => providers.value.fi
   timer = setTimeout(search, 300);
 }, { immediate:true });
 watch(() => app.search.items, async items => {
-  observer?.disconnect(); await nextTick();
+  observer?.disconnect(); posterQueue = []; const generation = ++posterGeneration; await nextTick();
+  if (!mounted || generation !== posterGeneration) return;
+  pumpPosters = () => {
+    while (mounted && generation === posterGeneration && posterRunning < 4 && posterQueue.length) {
+      const card = posterQueue.shift()!; posterRunning++;
+      void (query.value.trim() === app.search.query ? app.searchPoster(card) : Promise.resolve())
+        .finally(() => { posterRunning--; pumpPosters(); });
+    }
+  };
   observer = new IntersectionObserver(entries => {
     for (const entry of entries) if (entry.isIntersecting) {
       observer?.unobserve(entry.target);
       const card = items.find(card => card.id === (entry.target as HTMLElement).dataset.cardId);
-      if (card) posterQueue = posterQueue.then(() => query.value.trim() === app.search.query ? app.searchPoster(card) : undefined);
+      if (card) { posterQueue.push(card); pumpPosters(); }
     }
   });
   document.querySelectorAll('.search-results .media-card').forEach(card => observer!.observe(card));
@@ -64,7 +73,7 @@ async function open(ref:Bridge_MediaRef) {
 }
 function focus() { input.value?.focus(); input.value?.select(); }
 defineExpose({ focus });
-onBeforeUnmount(() => { mounted = false; clearTimeout(timer); observer?.disconnect(); app.cancelSearch(); });
+onBeforeUnmount(() => { mounted = false; posterGeneration++; posterQueue = []; pumpPosters = () => {}; clearTimeout(timer); observer?.disconnect(); app.cancelSearch(); });
 </script>
 
 <template>

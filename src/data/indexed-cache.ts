@@ -1,5 +1,5 @@
 type StoreName = 'details' | 'catalog';
-type CacheRow = { key: string; savedAt: number; touchedAt?: number; [name: string]: unknown };
+type CacheRow = { key: string; savedAt: number; touchedAt?: number; invalidated?: boolean; [name: string]: unknown };
 let opening: Promise<IDBDatabase> | undefined;
 let lastTouch = 0;
 const touch = () => lastTouch = Math.max(Date.now(), lastTouch + 1);
@@ -27,7 +27,7 @@ export async function cacheRead<T>(store: StoreName, key: string): Promise<T | n
     let value: T | null = null;
     request.onsuccess = () => {
       const row = request.result as CacheRow | undefined;
-      if (row) { value = row as T; if (store === 'details') bucket.put({ ...row, touchedAt: touch() }); }
+      if (row) { value = row as T; if (store === 'details' && !row.invalidated) bucket.put({ ...row, touchedAt: touch() }); }
     };
     tx.oncomplete = () => resolve(value);
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache read failed'));
@@ -63,5 +63,24 @@ export async function cacheWrite(store: StoreName, row: CacheRow): Promise<void>
     }
     tx.oncomplete = () => resolve();
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache write failed'));
+  });
+}
+export async function cacheDelete(store: StoreName, key: string): Promise<void> {
+  const db = await database();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache deletion failed'));
+  });
+}
+// A tombstone prevents legacy fallback after an unsuccessful legacy cleanup.
+export async function cacheInvalidate(store: StoreName, key: string): Promise<void> {
+  const db = await database();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put({ key, savedAt: Number.MAX_SAFE_INTEGER, invalidated: true });
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache invalidation failed'));
   });
 }
