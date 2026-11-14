@@ -81,6 +81,45 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual(result["raw_exit"], 7)
         self.assertEqual(result["exit"], 7)
 
+    def test_windows_cleanup_waits_for_recorded_identities(self):
+        class FakePayload:
+            pid, returncode = 123, 0
+            def __init__(self, *_args, **_kwargs): pass
+            def pids(self): return []
+            def poll(self): return 0
+            def terminate(self): pass
+            def wait(self, timeout=5): return 0
+            def close(self): pass
+        module = types.SimpleNamespace(WindowsPayload=FakePayload, JobError=OSError)
+        observed = []
+        with patch.object(runtime, 'os', types.SimpleNamespace(name='nt')), \
+             patch.object(runtime, 'resolve_argv', side_effect=lambda args: args), \
+             patch.object(runtime, 'identity', side_effect=['created:1', 'created:1', None, None]), \
+             patch.dict(sys.modules, {'windows_job': module}):
+            result = runtime.run_payload(['program'], cwd=self.base, env={}, seconds=1, memory_mib=1,
+                                         sampled=False, lock_fd=None, observe=lambda *args: observed.append(args))
+        self.assertEqual(result['exit'], 0)
+        self.assertEqual(observed[0][2], [{'pid': 123, 'identity': 'created:1'}])
+
+    def test_windows_quick_exit_does_not_record_an_absent_identity(self):
+        class FakePayload:
+            pid, returncode = 123, 0
+            def __init__(self, *_args, **_kwargs): pass
+            def pids(self): return []
+            def poll(self): return 0
+            def terminate(self): pass
+            def wait(self, timeout=5): return 0
+            def close(self): pass
+        module = types.SimpleNamespace(WindowsPayload=FakePayload, JobError=OSError)
+        observed = []
+        with patch.object(runtime, 'os', types.SimpleNamespace(name='nt')), \
+             patch.object(runtime, 'resolve_argv', side_effect=lambda args: args), \
+             patch.object(runtime, 'identity', return_value=None), \
+             patch.dict(sys.modules, {'windows_job': module}):
+            runtime.run_payload(['program'], cwd=self.base, env={}, seconds=1, memory_mib=1,
+                                sampled=False, lock_fd=None, observe=lambda *args: observed.append(args))
+        self.assertEqual(observed[0][2], [])
+
     @unittest.skipIf(os.name == "nt", "POSIX session enumeration failure")
     def test_initial_and_cleanup_enumeration_failure_registers_and_reaps_payload(self):
         marker = self.base / "enumeration-failure-ready.json"

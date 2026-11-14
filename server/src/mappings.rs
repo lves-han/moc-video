@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
@@ -16,36 +16,60 @@ impl Store {
             path: dir.join("service.sqlite3"),
         }
     }
-    fn conn(&self) -> rusqlite::Result<Connection> {
-        let conn = Connection::open(&self.path)?;
-        conn.busy_timeout(std::time::Duration::from_secs(3))?;
-        Ok(conn)
-    }
-    pub fn list(
+    pub fn list_sync(
         &self,
         metadata_source: &str,
         kind: &str,
         meta_id: &str,
     ) -> rusqlite::Result<Vec<Value>> {
-        let conn = self.conn()?;
-        let mut statement=conn.prepare("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 ORDER BY updated_at DESC")?;
+        crate::db::sync_with(&self.path, |conn| {
+            Self::list_conn(conn, metadata_source, kind, meta_id)
+        })
+    }
+    pub async fn list(
+        &self,
+        metadata_source: &str,
+        kind: &str,
+        meta_id: &str,
+    ) -> rusqlite::Result<Vec<Value>> {
+        let metadata_source = metadata_source.to_owned();
+        let kind = kind.to_owned();
+        let meta_id = meta_id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Self::list_conn(conn, &metadata_source, &kind, &meta_id)
+        })
+        .await
+    }
+    fn list_conn(
+        conn: &rusqlite::Connection,
+        metadata_source: &str,
+        kind: &str,
+        meta_id: &str,
+    ) -> rusqlite::Result<Vec<Value>> {
+        let mut statement = conn.prepare("SELECT id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season FROM mappings WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 ORDER BY updated_at DESC")?;
         let rows = statement.query_map(params![metadata_source, kind, meta_id], row)?;
         rows.collect()
     }
-    pub fn revoked(
+    pub async fn revoked(
         &self,
         metadata_source: &str,
         kind: &str,
         meta_id: &str,
         source_id: &str,
     ) -> rusqlite::Result<HashSet<String>> {
-        let conn = self.conn()?;
-        let mut statement=conn.prepare("SELECT content_id FROM mapping_revocations WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4")?;
-        let rows = statement
-            .query_map(params![metadata_source, kind, meta_id, source_id], |row| {
-                row.get(0)
-            })?;
-        rows.collect()
+        let metadata_source = metadata_source.to_owned();
+        let kind = kind.to_owned();
+        let meta_id = meta_id.to_owned();
+        let source_id = source_id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            let mut statement = conn.prepare("SELECT content_id FROM mapping_revocations WHERE metadata_source_id=?1 AND media_type=?2 AND meta_id=?3 AND source_id=?4")?;
+            let rows = statement
+                .query_map(params![metadata_source, kind, meta_id, source_id], |row| {
+                    row.get(0)
+                })?;
+            rows.collect()
+        })
+        .await
     }
     #[cfg(test)]
     pub fn save(
@@ -56,9 +80,28 @@ impl Store {
         evidence: &Value,
         confirmed_by: &str,
     ) -> Result<Value, &'static str> {
-        self.save_inner(metadata, source, content_id, evidence, confirmed_by, false)
+        let metadata = metadata.clone();
+        let source = source.clone();
+        let content_id = content_id.to_owned();
+        let evidence = evidence.clone();
+        let confirmed_by = confirmed_by.to_owned();
+        let mut out: Option<Result<Value, &'static str>> = None;
+        let _ = crate::db::sync_with(&self.path, |conn| {
+            out = Some(Self::save_conn(
+                conn,
+                &metadata,
+                &source,
+                &content_id,
+                &evidence,
+                &confirmed_by,
+                false,
+            ));
+            Ok(())
+        });
+        out.unwrap_or(Err("mapping database failed"))
     }
-    pub fn save_checked(
+    #[cfg(test)]
+    pub fn save_checked_sync(
         &self,
         metadata: &Value,
         source: &Value,
@@ -66,10 +109,49 @@ impl Store {
         evidence: &Value,
         confirmed_by: &str,
     ) -> Result<Value, &'static str> {
-        self.save_inner(metadata, source, content_id, evidence, confirmed_by, true)
+        let mut out: Option<Result<Value, &'static str>> = None;
+        let _ = crate::db::sync_with(&self.path, |conn| {
+            out = Some(Self::save_conn(
+                conn,
+                metadata,
+                source,
+                content_id,
+                evidence,
+                confirmed_by,
+                true,
+            ));
+            Ok(())
+        });
+        out.unwrap_or(Err("mapping database failed"))
     }
-    fn save_inner(
+    pub async fn save_checked(
         &self,
+        metadata: &Value,
+        source: &Value,
+        content_id: &str,
+        evidence: &Value,
+        confirmed_by: &str,
+    ) -> Result<Value, &'static str> {
+        let metadata = metadata.clone();
+        let source = source.clone();
+        let content_id = content_id.to_owned();
+        let evidence = evidence.clone();
+        let confirmed_by = confirmed_by.to_owned();
+        crate::db::run(self.path.clone(), "mapping database failed", move |conn| {
+            Self::save_conn(
+                conn,
+                &metadata,
+                &source,
+                &content_id,
+                &evidence,
+                &confirmed_by,
+                true,
+            )
+        })
+        .await
+    }
+    fn save_conn(
+        conn: &mut rusqlite::Connection,
         metadata: &Value,
         source: &Value,
         content_id: &str,
@@ -92,8 +174,9 @@ impl Store {
         let revision = source["revision"]
             .as_u64()
             .ok_or("invalid source revision")?;
-        let mut conn = self.conn().map_err(|_| "mapping database failed")?;
-        let tx = conn.transaction().map_err(|_| "mapping database failed")?;
+        // Read source versions and write the mapping in one write transaction.
+        // A deferred read transaction can lose its WAL snapshot when cache writes race it.
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(|_| "mapping database failed")?;
         if check_sources {
             let current: Option<(u64, bool)> = tx
                 .query_row(
@@ -142,26 +225,29 @@ impl Store {
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         tx.execute("INSERT INTO mappings(id,metadata_source_id,media_type,meta_id,source_id,source_revision,content_id,confirmed_by,evidence,updated_at,revoked,season) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11) ON CONFLICT(metadata_source_id,media_type,meta_id,season,source_id) DO UPDATE SET source_revision=excluded.source_revision,content_id=excluded.content_id,confirmed_by=excluded.confirmed_by,evidence=excluded.evidence,updated_at=excluded.updated_at,revoked=0",params![id,metadata_source,kind,meta_id,source_id,revision,content_id,confirmed_by,evidence.to_string(),crate::metadata::cache::now(),season]).map_err(|_|"mapping database failed")?;
         tx.commit().map_err(|_| "mapping database failed")?;
-        self.list(metadata_source, kind, meta_id)
+        Self::list_conn(conn, metadata_source, kind, meta_id)
             .map_err(|_| "mapping database failed")?
             .into_iter()
             .find(|value| value["id"] == id)
             .ok_or("mapping database failed")
     }
-    pub fn revoke(&self, id: &str) -> rusqlite::Result<bool> {
-        let mut conn = self.conn()?;
-        let tx = conn.transaction()?;
-        let found:Option<(String,String,String,String,String)>=tx.query_row("SELECT metadata_source_id,media_type,meta_id,source_id,content_id FROM mappings WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional()?;
-        let Some((metadata_source, kind, meta_id, source_id, content_id)) = found else {
-            return Ok(false);
-        };
-        tx.execute("INSERT OR IGNORE INTO mapping_revocations(metadata_source_id,media_type,meta_id,source_id,content_id) VALUES(?1,?2,?3,?4,?5)",params![metadata_source,kind,meta_id,source_id,content_id])?;
-        tx.execute(
-            "UPDATE mappings SET revoked=1,updated_at=?1 WHERE id=?2",
-            params![crate::metadata::cache::now(), id],
-        )?;
-        tx.commit()?;
-        Ok(true)
+    pub async fn revoke(&self, id: &str) -> rusqlite::Result<bool> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let found:Option<(String,String,String,String,String)>=tx.query_row("SELECT metadata_source_id,media_type,meta_id,source_id,content_id FROM mappings WHERE id=?1",[&id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional()?;
+            let Some((metadata_source, kind, meta_id, source_id, content_id)) = found else {
+                return Ok(false);
+            };
+            tx.execute("INSERT OR IGNORE INTO mapping_revocations(metadata_source_id,media_type,meta_id,source_id,content_id) VALUES(?1,?2,?3,?4,?5)",params![metadata_source,kind,meta_id,source_id,content_id])?;
+            tx.execute(
+                "UPDATE mappings SET revoked=1,updated_at=?1 WHERE id=?2",
+                params![crate::metadata::cache::now(), id],
+            )?;
+            tx.commit()?;
+            Ok(true)
+        })
+        .await
     }
 
     pub async fn reusable(
@@ -176,6 +262,7 @@ impl Store {
         let season = season(metadata)?;
         let row = self
             .list(metadata_source, kind, meta_id)
+            .await
             .map_err(|_| "mapping database failed")?
             .into_iter()
             .find(|row| {
@@ -200,6 +287,7 @@ impl Store {
         }
         let current = self
             .list(metadata_source, kind, meta_id)
+            .await
             .map_err(|_| "mapping database failed")?
             .into_iter()
             .find(|value| value["id"] == row["id"]);
@@ -237,4 +325,36 @@ fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     Ok(
         json!({"id":row.get::<_,String>(0)?,"metadata_source_id":row.get::<_,String>(1)?,"type":row.get::<_,String>(2)?,"meta_id":row.get::<_,String>(3)?,"source_id":row.get::<_,String>(4)?,"source_revision":row.get::<_,u64>(5)?,"content_id":row.get::<_,String>(6)?,"confirmed_by":row.get::<_,String>(7)?,"evidence":evidence,"updated_at":row.get::<_,i64>(9)?,"revoked":row.get::<_,bool>(10)?,"season":row.get::<_,u32>(11)?}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn mapping_updates_survive_concurrent_cache_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::db::initialize(dir.path()).unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let source = rt
+            .block_on(crate::sources::Store::new(dir.path()).save(
+                &json!({"name":"fixture","kind":"maccms_json","api":"https://example.test/api"}),
+                None,
+            ))
+            .unwrap();
+        let cache = crate::metadata::cache::Cache::new(dir.path(), "test".into());
+        let barrier = Arc::new(Barrier::new(2));
+        let other = barrier.clone();
+        let writer = std::thread::spawn(move || {
+            other.wait();
+            for n in 0..200 { cache.put(&format!("background-{n}"), &json!(n), 3600).unwrap(); }
+        });
+        let store = Store::new(dir.path());
+        let metadata = json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:1"});
+        barrier.wait();
+        for _ in 0..100 { store.save_checked_sync(&metadata, &source, "1", &json!({}), "auto").unwrap(); }
+        writer.join().unwrap();
+        assert_eq!(store.list_sync("tmdb", "movie", "tmdb:1").unwrap().len(), 1);
+    }
 }

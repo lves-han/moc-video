@@ -182,16 +182,20 @@ mod tests {
             handle_ttl: 900,
             cache_ttl: 60,
         };
-        let dir = tempfile::tempdir().unwrap();
-        let reports = crate::reports::Store::new(dir.path());
         let template = Template {
             source: json!({"id":"s","revision":1,"headers":{}}),
             content_id: "c".into(),
             lines: vec![],
         };
         assert!(
-            crate::line_cache::issue(&mut registry, &runtime, &json!({}), &template, &reports)
-                .is_err()
+            crate::line_cache::issue(
+                &mut registry,
+                &runtime,
+                &json!({}),
+                &template,
+                &HashMap::new()
+            )
+            .is_err()
         );
     }
 

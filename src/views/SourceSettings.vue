@@ -33,7 +33,7 @@ const statusText = (config: { kind: HttpSourceConfig["kind"]; config_id: string;
 
 const busy = ref(false);
 const failure = ref("");
-const serviceDraft = reactive({ url: state.settings.playback_service?.url ?? "http://127.0.0.1:8787", token: state.settings.playback_service?.token ?? "" });
+const serviceDraft = reactive({ url: state.settings.playback_service?.url ?? "http://127.0.0.1:8787", token: "" });
 const serviceEnabled = computed(() => state.settings.playback_service?.enabled === true);
 const remoteEditing = ref(false);
 const remoteDraft = reactive({ id: '', name: '', api: '', kind: 'maccms_json', headers: '{}', ext: '', parseIds: '' });
@@ -64,6 +64,7 @@ async function saveRemote() {
   if (await run(() => controller.changeServiceSource(old ? 'update' : 'create', body, old?.id ?? null))) remoteEditing.value = false;
 }
 const retryMigration = () => run(() => controller.migratePlaybackSources());
+const retryServiceSources = () => run(() => controller.refreshServiceSources());
 const toggleRemote = (source: ServiceSource) => run(() => controller.changeServiceSource('update', { ...source, enabled: !source.enabled }, source.id));
 const deleteRemote = (source: ServiceSource) => run(() => controller.changeServiceSource('delete', {}, source.id));
 const pendingGroup = (id: string) => {
@@ -75,8 +76,11 @@ const pendingGroup = (id: string) => {
 };
 async function connectService() {
   const url = serviceDraft.url.trim().replace(/\/+$/, ""), token = serviceDraft.token.trim();
-  if (!url || !token) { failure.value = word("请输入服务地址和令牌。", "Enter the service address and token."); return; }
-  await run(() => controller.connectPlaybackService(url, token));
+  const hasSavedToken = state.settings.playback_service?.token_configured === true;
+  if (!url || (!token && !hasSavedToken)) { failure.value = word("请输入服务地址和令牌。", "Enter the service address and token."); return; }
+  if (await run(() => controller.connectPlaybackService(url, token))) {
+    serviceDraft.token = "";
+  }
 }
 const disconnectService = () => run(() => controller.disconnectPlaybackService());
 async function run(work: () => Promise<unknown>) {
@@ -144,6 +148,7 @@ async function submit() {
   await run(() => controller.saveSourceConfig(draft));
 }
 const toggleConfig = (config: HttpSourceConfig) => run(() => controller.setSourceEnabled(config.config_id, !config.enabled));
+const retryConfig = (config: HttpSourceConfig) => run(() => controller.retrySource(config.config_id));
 async function addPreset(preset: { name: string; api_url: string }) {
   const [limit] = validateSourceDraft({ kind: "maccms", name: preset.name, urls: preset.api_url }, configs.value.length);
   if (limit) { failure.value = limit; return; }
@@ -171,10 +176,14 @@ async function copyDiagnostics() {
 
     <template v-if="section === 'metadata'">
       <div class="setting-row">
-        <div><h3>{{ word('播放服务', 'Playback service') }}</h3><p>{{ serviceEnabled ? word('已连接；扩展可重试迁入。', 'Connected; add-ons can be retried.') : word('连接后由服务提供元数据。本机和局域网可使用 HTTP。', 'The service supplies metadata. HTTP is available on local networks.') }}</p></div>
+        <div><h3>{{ word('播放服务', 'Playback service') }}</h3><p>{{ serviceEnabled ? word('已配置服务；扩展可重试迁入。', 'Service configured; add-ons can be retried.') : word('连接后由服务提供元数据。本机和局域网可使用 HTTP。', 'The service supplies metadata. HTTP is available on local networks.') }}</p></div>
+      </div>
+      <div v-if="metadataSources.length > 1" class="setting-row">
+        <label for="metadata-source">{{ t('Metadata provider') }}</label>
+        <select id="metadata-source" class="setting-select" :value="state.selected_metadata_source?.source_id ?? ''" @change="emit('select', ($event.target as HTMLSelectElement).value, 'metadata')"><option v-for="source in metadataSources" :key="source.id" :value="source.id">{{ source.name }}</option></select>
       </div>
       <div class="setting-row"><label for="service-url">{{ word('服务地址', 'Service address') }}</label><input id="service-url" v-model="serviceDraft.url" class="setting-select compact-select tmdb-instance" :disabled="busy" /></div>
-      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" class="setting-select compact-select tmdb-instance" :disabled="busy" /></div>
+      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" :placeholder="state.settings.playback_service?.token_configured ? word('已配置，留空保持不变', 'Configured; leave blank to keep') : ''" class="setting-select compact-select tmdb-instance" :disabled="busy" /></div>
       <div class="setting-row"><span></span><div class="sources-row-actions"><NButton class="service-connect" type="primary" :disabled="busy" @click="connectService">{{ serviceEnabled ? word('更新并重试', 'Update and retry') : word('连接并导入', 'Connect and import') }}</NButton><NButton v-if="serviceEnabled" class="service-disconnect" :disabled="busy" @click="disconnectService">{{ word('断开', 'Disconnect') }}</NButton></div></div>
       <div class="setting-row tmdb-row">
         <div>
@@ -182,6 +191,7 @@ async function copyDiagnostics() {
           <p>{{ word('通用 TMDB 元数据源', 'General TMDB metadata source') }} · <span class="tmdb-status">{{ statusText(tmdbConfig) }}</span></p>
           <p v-if="sourceError(tmdbConfig)" class="sources-row-error" role="alert">{{ sourceError(tmdbConfig) }}</p>
         </div>
+        <NButton v-if="tmdb.enabled && !serviceEnabled && (providerOf(tmdbConfig)?.runtime_status !== 'ready' || sourceError(tmdbConfig))" class="tmdb-retry" :disabled="busy" @click="saveTmdb({})">{{ t('Retry') }}</NButton>
         <NSwitch class="tmdb-enabled" :value="tmdb.enabled" :disabled="busy" :aria-label="word('启用 TMDB', 'Enable TMDB')" @update:value="saveTmdb({ enabled: $event })" />
       </div>
       <template v-if="!serviceEnabled">
@@ -220,7 +230,7 @@ async function copyDiagnostics() {
     <template v-else-if="serviceEnabled">
       <div class="sources-heading"><h3>{{ word('播放源', 'Playback sources') }}</h3><div class="sources-row-actions"><NButton class="sources-import" :disabled="busy" @click="importEditing = true">{{ word('导入配置', 'Import configuration') }}</NButton><NButton class="sources-add" :disabled="busy" @click="editRemote()">{{ word('添加来源', 'Add source') }}</NButton></div></div>
       <NButton v-if="configs.some(config => config.kind === 'maccms')" :disabled="busy" @click="retryMigration">{{ word('迁入本地来源', 'Import local sources') }}</NButton>
-      <NAlert v-if="controller.serviceSources.error" type="error">{{ controller.serviceSources.error }} <NButton size="small" @click="retryMigration">{{ t('Retry') }}</NButton></NAlert>
+      <NAlert v-if="controller.serviceSources.error" type="error">{{ controller.serviceSources.error }} <NButton size="small" @click="retryServiceSources">{{ t('Retry') }}</NButton></NAlert>
       <article v-for="source in controller.serviceSources.items" :key="source.id" class="sources-row">
         <span class="source-status" :class="source.enabled ? 'ready' : 'disabled'" /><div class="sources-row-text"><h3>{{ source.name }}</h3><p>{{ source.kind }} · {{ source.status }}</p></div>
         <div class="sources-row-actions"><NButton :disabled="busy" @click="editRemote(source)">{{ word('编辑', 'Edit') }}</NButton><NButton :disabled="busy" @click="toggleRemote(source)">{{ source.enabled ? word('禁用', 'Disable') : word('启用', 'Enable') }}</NButton><NButton :disabled="busy" @click="deleteRemote(source)">{{ word('删除', 'Delete') }}</NButton></div>
@@ -266,6 +276,7 @@ async function copyDiagnostics() {
         <p v-if="sourceError(config)" class="sources-row-error" role="alert">{{ sourceError(config) }}</p>
       </div>
       <div class="sources-row-actions">
+        <NButton v-if="config.enabled && (providerOf(config)?.runtime_status !== 'ready' || sourceError(config) || pendingGroup(config.config_id))" class="sources-retry" :disabled="busy" @click="retryConfig(config)">{{ t('Retry') }}</NButton>
         <NButton class="sources-edit" :disabled="busy" @click="openDraft(config)">{{ word('编辑', 'Edit') }}</NButton>
         <NButton class="sources-toggle" :disabled="busy" @click="toggleConfig(config)">{{ config.enabled ? word('禁用', 'Disable') : word('启用', 'Enable') }}</NButton>
         <NButton class="sources-delete" :disabled="busy" @click="pendingDelete = config">{{ word('删除', 'Delete') }}</NButton>

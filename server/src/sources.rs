@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use url::Url;
@@ -14,94 +14,105 @@ impl Store {
             path: dir.join("service.sqlite3"),
         }
     }
-    fn conn(&self) -> rusqlite::Result<Connection> {
-        let conn = Connection::open(&self.path)?;
-        conn.busy_timeout(std::time::Duration::from_secs(3))?;
-        Ok(conn)
+    pub async fn list(&self) -> rusqlite::Result<Vec<Value>> {
+        crate::db::run_sqlite(self.path.clone(), |conn| {
+            let mut stmt = conn.prepare("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources ORDER BY rowid")?;
+            let rows = stmt.query_map([], row)?;
+            rows.collect()
+        })
+        .await
     }
-    pub fn list(&self) -> rusqlite::Result<Vec<Value>> {
-        let conn = self.conn()?;
-        let mut stmt=conn.prepare("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources ORDER BY rowid")?;
-        let rows = stmt.query_map([], row)?;
-        rows.collect()
+    pub async fn get(&self, id: &str) -> rusqlite::Result<Option<Value>> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            conn.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE id=?1",[&id],row).optional()
+        })
+        .await
     }
-    pub fn get(&self, id: &str) -> rusqlite::Result<Option<Value>> {
-        self.conn()?.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE id=?1",[id],row).optional()
+    pub async fn remove(&self, id: &str) -> rusqlite::Result<bool> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Ok(conn.execute("DELETE FROM playback_sources WHERE id=?1", [&id])? > 0)
+        })
+        .await
     }
-    pub fn remove(&self, id: &str) -> rusqlite::Result<bool> {
-        Ok(self
-            .conn()?
-            .execute("DELETE FROM playback_sources WHERE id=?1", [id])?
-            > 0)
+    pub async fn status(&self, id: &str, revision: u64, status: &str) -> rusqlite::Result<bool> {
+        let id = id.to_owned();
+        let status = status.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Ok(conn.execute(
+                "UPDATE playback_sources SET status=?1,checked_at=?2 WHERE id=?3 AND revision=?4",
+                params![status, crate::metadata::cache::now(), id, revision],
+            )? > 0)
+        })
+        .await
     }
-    pub fn status(&self, id: &str, revision: u64, status: &str) -> rusqlite::Result<bool> {
-        Ok(self.conn()?.execute(
-            "UPDATE playback_sources SET status=?1,checked_at=?2 WHERE id=?3 AND revision=?4",
-            params![status, crate::metadata::cache::now(), id, revision],
-        )? > 0)
-    }
-    pub fn save(&self, input: &Value, id: Option<&str>) -> Result<Value, &'static str> {
+    pub async fn save(&self, input: &Value, id: Option<&str>) -> Result<Value, &'static str> {
         let value = validate(input)?;
-        let mut conn = self.conn().map_err(|_| "source database failed")?;
-        let tx = conn.transaction().map_err(|_| "source database failed")?;
-        let client = value["client_config_id"].as_str();
-        let existing = if let Some(id) = id {
-            tx.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE id=?1",[id],row).optional().map_err(|_|"source database failed")?
-                .ok_or("source not found").map(Some)?
-        } else if let Some(client) = client {
-            tx.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE client_config_id=?1",[client],row).optional().map_err(|_|"source database failed")?
-        } else {
-            None
-        };
-        if let Some(old) = &existing {
-            if id.is_some() && old["client_config_id"] != value["client_config_id"] {
-                return Err("client identity cannot change");
+        let id = id.map(str::to_owned);
+        crate::db::run(self.path.clone(), "source database failed", move |conn| {
+            let tx = conn.transaction().map_err(|_| "source database failed")?;
+            let client = value["client_config_id"].as_str();
+            let existing = if let Some(id) = id.as_deref() {
+                tx.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE id=?1",[id],row).optional().map_err(|_|"source database failed")?
+                    .ok_or("source not found").map(Some)?
+            } else if let Some(client) = client {
+                tx.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE client_config_id=?1",[client],row).optional().map_err(|_|"source database failed")?
+            } else {
+                None
+            };
+            if let Some(old) = &existing {
+                if id.is_some() && old["client_config_id"] != value["client_config_id"] {
+                    return Err("client identity cannot change");
+                }
             }
-        }
-        let source_id = existing
-            .as_ref()
-            .and_then(|v| v["id"].as_str())
-            .map(str::to_owned)
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let changed = existing.as_ref().is_none_or(|old| {
-            [
-                "name",
-                "kind",
-                "api",
-                "ext",
-                "headers",
-                "enabled",
-                "parse_ids",
-            ]
-            .iter()
-            .any(|key| old[*key] != value[*key])
-        });
-        let revision = existing
-            .as_ref()
-            .and_then(|v| v["revision"].as_u64())
-            .unwrap_or(0)
-            + u64::from(changed);
-        let status = if value["enabled"] == false {
-            "disabled"
-        } else if changed {
-            "configured"
-        } else {
-            existing
+            let source_id = existing
                 .as_ref()
-                .and_then(|v| v["status"].as_str())
-                .unwrap_or("configured")
-        };
-        let checked = if changed {
-            None
-        } else {
-            existing.as_ref().and_then(|v| v["checked_at"].as_i64())
-        };
-        tx.execute("INSERT INTO playback_sources(id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12) ON CONFLICT(id) DO UPDATE SET name=excluded.name,kind=excluded.kind,api=excluded.api,ext=excluded.ext,headers=excluded.headers,enabled=excluded.enabled,parse_ids=excluded.parse_ids,revision=excluded.revision,status=excluded.status,checked_at=excluded.checked_at",
-            params![source_id,client,value["name"].as_str(),value["kind"].as_str(),value["api"].as_str(),value["ext"].to_string(),value["headers"].to_string(),value["enabled"].as_bool(),value["parse_ids"].to_string(),revision,status,checked]).map_err(|_|"source database failed")?;
-        tx.commit().map_err(|_| "source database failed")?;
-        self.get(&source_id)
-            .map_err(|_| "source database failed")?
-            .ok_or("source database failed")
+                .and_then(|v| v["id"].as_str())
+                .map(str::to_owned)
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let changed = existing.as_ref().is_none_or(|old| {
+                [
+                    "name",
+                    "kind",
+                    "api",
+                    "ext",
+                    "headers",
+                    "enabled",
+                    "parse_ids",
+                ]
+                .iter()
+                .any(|key| old[*key] != value[*key])
+            });
+            let revision = existing
+                .as_ref()
+                .and_then(|v| v["revision"].as_u64())
+                .unwrap_or(0)
+                + u64::from(changed);
+            let status = if value["enabled"] == false {
+                "disabled"
+            } else if changed {
+                "configured"
+            } else {
+                existing
+                    .as_ref()
+                    .and_then(|v| v["status"].as_str())
+                    .unwrap_or("configured")
+            };
+            let checked = if changed {
+                None
+            } else {
+                existing.as_ref().and_then(|v| v["checked_at"].as_i64())
+            };
+            tx.execute("INSERT INTO playback_sources(id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12) ON CONFLICT(id) DO UPDATE SET name=excluded.name,kind=excluded.kind,api=excluded.api,ext=excluded.ext,headers=excluded.headers,enabled=excluded.enabled,parse_ids=excluded.parse_ids,revision=excluded.revision,status=excluded.status,checked_at=excluded.checked_at",
+                params![source_id,client,value["name"].as_str(),value["kind"].as_str(),value["api"].as_str(),value["ext"].to_string(),value["headers"].to_string(),value["enabled"].as_bool(),value["parse_ids"].to_string(),revision,status,checked]).map_err(|_|"source database failed")?;
+            tx.commit().map_err(|_| "source database failed")?;
+            conn.query_row("SELECT id,client_config_id,name,kind,api,ext,headers,enabled,parse_ids,revision,status,checked_at FROM playback_sources WHERE id=?1",[&source_id],row)
+                .optional()
+                .map_err(|_| "source database failed")?
+                .ok_or("source database failed")
+        })
+        .await
     }
 }
 

@@ -5,9 +5,10 @@ use std::sync::{Arc, OnceLock};
 use url::Url;
 
 const TTL: i64 = 86_400;
+const FAILED_TTL: i64 = 300;
 
-fn template_key(state: &AppState, target: &Value, source: &Value) -> Result<String, &'static str> {
-    let parsers = state.parsers.list().map_err(|_| "parser database failed")?;
+async fn template_key(state: &AppState, target: &Value, source: &Value) -> Result<String, &'static str> {
+    let parsers = state.parsers.list().await.map_err(|_| "parser database failed")?;
     let versions: Vec<_> = parsers
         .iter()
         .map(|p| json!([p["id"], p["revision"], p["enabled"]]))
@@ -22,13 +23,13 @@ fn template_key(state: &AppState, target: &Value, source: &Value) -> Result<Stri
     ))
 }
 
-pub fn load(
+pub async fn load(
     state: &AppState,
     target: &Value,
     source: &Value,
 ) -> Result<Option<Template>, &'static str> {
-    let key = template_key(state, target, source)?;
-    let Some(value) = state.cache.get(&key).map_err(|_| "line cache failed")? else {
+    let key = template_key(state, target, source).await?;
+    let Some(value) = state.cache.get_async(&key).await.map_err(|_| "line cache failed")? else {
         return Ok(None);
     };
     let Some(content_id) = value["content_id"].as_str() else {
@@ -45,14 +46,14 @@ pub fn load(
     }))
 }
 
-pub fn store(state: &AppState, target: &Value, template: &Template) -> Result<(), &'static str> {
+pub async fn store(state: &AppState, target: &Value, template: &Template) -> Result<(), &'static str> {
     let mut lines = Vec::new();
     let now = crate::metadata::cache::now();
     let mut expires_at = now + TTL;
     for item in &template.lines {
         let episode = &item["episode"];
         if episode["availability"] == "unknown" {
-            return Ok(());
+            continue;
         }
         if let Some(expiry) = episode["availability_expires_at"].as_i64() {
             expires_at = expires_at.min(expiry);
@@ -85,24 +86,27 @@ pub fn store(state: &AppState, target: &Value, template: &Template) -> Result<()
             "availability":episode["availability"], "availability_key":episode["availability_key"], "latency_ms":episode["latency_ms"],
             "availability_checked_at":episode["availability_checked_at"], "availability_expires_at":episode["availability_expires_at"]}}));
     }
-    if expires_at <= now {
+    if lines.is_empty() || expires_at <= now {
         return Ok(());
     }
-    let key = template_key(state, target, &template.source)?;
+    let key = template_key(state, target, &template.source).await?;
     state
         .cache
-        .put(
+        .put_async(
             &key,
             &json!({"content_id":template.content_id,"lines":lines}),
             expires_at - now,
         )
+        .await
         .map_err(|_| "line cache failed")
 }
 
-pub fn invalidate(state: &AppState, target: &Value, source: &Value) -> Result<(), &'static str> {
+pub async fn invalidate(state: &AppState, target: &Value, source: &Value) -> Result<(), &'static str> {
+    let key = template_key(state, target, source).await?;
     state
         .cache
-        .remove(&template_key(state, target, source)?)
+        .remove_async(&key)
+        .await
         .map_err(|_| "line cache failed")
 }
 
@@ -130,8 +134,8 @@ fn probe_key(
     )
 }
 
-pub fn invalidate_line(state: &AppState, line: &crate::state::Line) -> Result<(), &'static str> {
-    let parsers = state.parsers.list().map_err(|_| "parser database failed")?;
+pub async fn invalidate_line(state: &AppState, line: &crate::state::Line) -> Result<(), &'static str> {
+    let parsers = state.parsers.list().await.map_err(|_| "parser database failed")?;
     let versions: Vec<_> = parsers
         .iter()
         .map(|p| json!([p["id"], p["revision"], p["enabled"]]))
@@ -144,19 +148,22 @@ pub fn invalidate_line(state: &AppState, line: &crate::state::Line) -> Result<()
     {
         return state
             .cache
-            .remove(key)
+            .remove_async(key)
+            .await
             .map_err(|_| "availability cache failed");
     }
     let locator = line.locator.clone().unwrap_or_else(|| json!({"url":line.url,"flag":line.flag,"label":line.episode_label,"quality":line.quality}));
+    let key = probe_key(
+        &line.target,
+        &source,
+        &line.content_id,
+        &locator,
+        &versions,
+    );
     state
         .cache
-        .remove(&probe_key(
-            &line.target,
-            &source,
-            &line.content_id,
-            &locator,
-            &versions,
-        ))
+        .remove_async(&key)
+        .await
         .map_err(|_| "availability cache failed")
 }
 
@@ -165,13 +172,15 @@ pub async fn inspect(
     target: &Value,
     template: &Template,
     force: bool,
+    progress: Option<tokio::sync::mpsc::Sender<Value>>,
 ) -> Result<Vec<Value>, &'static str> {
-    let parsers = state.parsers.list().map_err(|_| "parser database failed")?;
+    let parsers = state.parsers.list().await.map_err(|_| "parser database failed")?;
     let versions: Vec<_> = parsers
         .iter()
         .map(|p| json!([p["id"], p["revision"], p["enabled"]]))
         .collect();
     let mut output = template.lines.clone();
+    let mut emitted = vec![false; output.len()];
     let mut jobs = tokio::task::JoinSet::new();
     static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
     let slots = SLOTS
@@ -191,6 +200,7 @@ pub async fn inspect(
             });
         if unsupported {
             output[index]["episode"]["availability"] = json!("unsupported");
+            if let Some(tx) = &progress { tx.send(output[index].clone()).await.map_err(|_| "lookup cancelled")?; emitted[index] = true; }
             continue;
         }
         let locator = episode.get("locator").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({"url":url,"flag":item["flag"],"label":episode["label"],"quality":episode["quality"]}));
@@ -205,7 +215,8 @@ pub async fn inspect(
         if !force {
             if let Some(cached) = state
                 .cache
-                .get(&key)
+                .get_async(&key)
+                .await
                 .map_err(|_| "availability cache failed")?
             {
                 if cached["expires_at"]
@@ -213,6 +224,7 @@ pub async fn inspect(
                     .is_some_and(|expires| expires > crate::metadata::cache::now())
                 {
                     apply(&mut output[index], &cached);
+                    if let Some(tx) = &progress { tx.send(output[index].clone()).await.map_err(|_| "lookup cancelled")?; emitted[index] = true; }
                     continue;
                 }
             }
@@ -231,8 +243,9 @@ pub async fn inspect(
             let result = crate::metadata::http::probe(url, header_map, hls).await;
             drop(permit);
             let now = crate::metadata::cache::now();
-            let value = json!({"status":if result.is_ok() {"ready"} else {"failed"},"latency_ms":if result.is_ok() {Some(start.elapsed().as_millis() as u64)} else {None},"size_bytes":line["episode"]["size_bytes"].as_u64().or_else(|| result.ok().flatten()),"quality":line["episode"]["quality"],"description":line["episode"]["description"],"checked_at":now,"expires_at":now+TTL});
-            cache.put(&key, &value, TTL).map_err(|_| "availability cache failed")?;
+            let item_ttl = if result.is_ok() { TTL } else { FAILED_TTL };
+            let value = json!({"status":if result.is_ok() {"ready"} else {"failed"},"latency_ms":if result.is_ok() {Some(start.elapsed().as_millis() as u64)} else {None},"size_bytes":line["episode"]["size_bytes"].as_u64().or_else(|| result.ok().flatten()),"quality":line["episode"]["quality"],"description":line["episode"]["description"],"checked_at":now,"expires_at":now+item_ttl});
+            cache.put_async(&key, &value, item_ttl).await.map_err(|_| "availability cache failed")?;
             Ok::<_, &'static str>((index,value))
         });
     }
@@ -242,14 +255,17 @@ pub async fn inspect(
         tokio::select! {
             _ = &mut deadline => { jobs.abort_all(); break; }
             next = jobs.join_next() => match next {
-                Some(result) => { let (index, value) = result.map_err(|_| "availability worker failed")??; apply(&mut output[index], &value); }
+                Some(result) => { let (index, value) = result.map_err(|_| "availability worker failed")??; apply(&mut output[index], &value); if let Some(tx) = &progress { tx.send(output[index].clone()).await.map_err(|_| "lookup cancelled")?; emitted[index] = true; } }
                 None => break,
             }
         }
     }
-    for item in &mut output {
+    for (index, item) in output.iter_mut().enumerate() {
         if item["episode"]["availability"].is_null() {
             item["episode"]["availability"] = json!("unknown");
+        }
+        if !emitted[index] {
+            if let Some(tx) = &progress { tx.send(item.clone()).await.map_err(|_| "lookup cancelled")?; }
         }
     }
     Ok(output)

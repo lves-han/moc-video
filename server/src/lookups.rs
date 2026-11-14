@@ -28,19 +28,25 @@ fn error(status: StatusCode, code: &str, message: &str) -> Response {
 fn expired(reason: &str) -> Response {
     (StatusCode::GONE,Json(json!({"error":{"code":"SESSION_EXPIRED","message":"Lookup or line expired","retryable":true,"reason":reason}}))).into_response()
 }
-fn retire(state: &AppState, id: &str, reason: &str) -> Response {
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    if let Some(line) = registry.lines.remove(id) {
-        registry.changed(&line.source_id);
-        if let Err(message) = crate::availability::invalidate_line(state, &line) {
+async fn retire(state: &AppState, id: &str, reason: &str) -> Response {
+    let removed = {
+        let mut registry = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        let removed = registry.lines.remove(id);
+        if let Some(line) = &removed {
+            registry.changed(&line.source_id);
+        }
+        removed
+    };
+    if let Some(line) = removed {
+        if let Err(message) = crate::availability::invalidate_line(state, &line).await {
             return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
         }
         let source = json!({"id":line.source_id,"revision":line.source_revision});
-        if let Err(message) = crate::availability::invalidate(state, &line.target, &source) {
+        if let Err(message) = crate::availability::invalidate(state, &line.target, &source).await {
             return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
         }
     }
@@ -85,7 +91,7 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
         .ok_or("invalid language")?;
     let (body, revision, namespace_prefixes) = if source == "tmdb" {
         (
-            state.tmdb.meta(lang, kind, id).await?,
+            crate::meta(state, lang, kind, id).await?,
             0,
             Vec::<String>::new(),
         )
@@ -93,6 +99,7 @@ async fn metadata(state: &AppState, input: &Value) -> Result<Value, &'static str
         let entry = state
             .sources
             .get(source)
+            .await
             .map_err(|_| "metadata database failed")?
             .ok_or("metadata source not found")?;
         let revision = entry["revision"]
@@ -185,7 +192,7 @@ fn target(metadata: &Value) -> Value {
     json!({"metadata_source_id":metadata["metadata_source_id"],"metadata_revision":metadata["metadata_revision"],"type":metadata["type"],"meta_id":metadata["meta_id"],"video_id":metadata["video_id"]})
 }
 
-fn metadata_current(state: &AppState, metadata: &Value) -> bool {
+async fn metadata_current(state: &AppState, metadata: &Value) -> bool {
     let id = metadata["metadata_source_id"].as_str().unwrap_or("");
     if id == "tmdb" {
         return true;
@@ -193,14 +200,21 @@ fn metadata_current(state: &AppState, metadata: &Value) -> bool {
     state
         .sources
         .get(id)
+        .await
         .ok()
         .flatten()
         .is_some_and(|source| source["revision"] == metadata["metadata_revision"])
 }
-fn source_current(state: &AppState, source: &Value) -> bool {
-    source["id"]
-        .as_str()
-        .and_then(|id| state.playback_sources.get(id).ok().flatten())
+async fn source_current(state: &AppState, source: &Value) -> bool {
+    let Some(id) = source["id"].as_str() else {
+        return false;
+    };
+    state
+        .playback_sources
+        .get(id)
+        .await
+        .ok()
+        .flatten()
         .is_some_and(|current| {
             current["enabled"] == true && current["revision"] == source["revision"]
         })
@@ -264,7 +278,7 @@ pub async fn create(State(state): State<AppState>, Json(input): Json<Value>) -> 
         }
         Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
     };
-    let sources = match state.playback_sources.list() {
+    let sources = match state.playback_sources.list().await {
         Ok(values) => values
             .into_iter()
             .filter(|source| {
@@ -410,6 +424,26 @@ fn finish(state: &AppState, id: &str) -> Option<i64> {
     })
 }
 
+fn history_keys(target: &Value, template: &Template) -> Vec<String> {
+    template
+        .lines
+        .iter()
+        .filter_map(|item| {
+            let locator = item["episode"]
+                .get("locator")
+                .filter(|v| !v.is_null())
+                .cloned();
+            locator.as_ref()?;
+            Some(line_cache::key(
+                target,
+                &template.source,
+                &template.content_id,
+                &locator,
+            ))
+        })
+        .collect()
+}
+
 async fn process(
     state: &AppState,
     lookup_id: &str,
@@ -418,7 +452,7 @@ async fn process(
     refresh: bool,
     tx: &mpsc::Sender<Value>,
 ) -> Result<(&'static str, usize, Option<&'static str>), &'static str> {
-    if !source_current(state, source) || !metadata_current(state, metadata) {
+    if !source_current(state, source).await || !metadata_current(state, metadata).await {
         return Err("source configuration changed");
     }
     let target = target(metadata);
@@ -458,7 +492,7 @@ async fn process(
         .map(|(status, count)| (status, count, None));
     }
     if !refresh {
-        if let Some(template) = crate::availability::load(state, &target, source)? {
+        if let Some(template) = crate::availability::load(state, &target, source).await? {
             return emit_lines(
                 state,
                 lookup_id,
@@ -533,6 +567,7 @@ async fn process(
             metadata["meta_id"].as_str().unwrap_or(""),
             source["id"].as_str().unwrap_or(""),
         )
+        .await
         .map_err(|_| "mapping database failed")?;
     let proposal = matching::propose(source, metadata, &revoked).await?;
     let candidates = proposal["candidates"]
@@ -553,25 +588,27 @@ async fn process(
     if let Some(chosen) = proposal["selected"].as_str() {
         if let Some(candidate) = candidates.iter().find(|v| v["content_id"] == chosen) {
             let gate = state.metadata_gate.lock().await;
-            let saved = {
+            let active = {
                 let reg = state
                     .lookup_runtime
                     .registry
                     .lock()
                     .expect("lookup registry");
-                if reg.parser_generation != parser_generation
-                    || tx.is_closed()
-                    || !reg.lookups.contains_key(lookup_id)
-                    || !source_current(state, source)
-                    || !metadata_current(state, metadata)
-                {
-                    return Err("lookup or source changed");
-                }
-                let evidence = matching::evidence(metadata, &candidate["detail"]);
-                state
-                    .mappings
-                    .save_checked(metadata, source, chosen, &evidence, "auto")
+                reg.parser_generation == parser_generation
+                    && !tx.is_closed()
+                    && reg.lookups.contains_key(lookup_id)
             };
+            if !active
+                || !source_current(state, source).await
+                || !metadata_current(state, metadata).await
+            {
+                return Err("lookup or source changed");
+            }
+            let evidence = matching::evidence(metadata, &candidate["detail"]);
+            let saved = state
+                .mappings
+                .save_checked(metadata, source, chosen, &evidence, "auto")
+                .await;
             drop(gate);
             if saved
                 .as_ref()
@@ -603,13 +640,15 @@ async fn process(
         }
     }
     let mut public = Vec::new();
+    let src_ok = source_current(state, source).await;
+    let meta_ok = metadata_current(state, metadata).await;
     {
         let mut reg = state
             .lookup_runtime
             .registry
             .lock()
             .expect("lookup registry");
-        if tx.is_closed() || !source_current(state, source) || !metadata_current(state, metadata) {
+        if tx.is_closed() || !src_ok || !meta_ok {
             return Err("source configuration changed");
         }
         let candidate_bytes = candidates
@@ -663,10 +702,85 @@ async fn emit_lines(
         template.lines =
             crate::adapters::json_parse::resolve(&state.parsers, &template.source, &template.lines)
                 .await?;
-        template.lines =
-            crate::availability::inspect(state, &target(metadata), &template, refresh).await?;
+        let target = target(metadata);
+        let (progress, mut updates) = mpsc::channel(64);
+        let inspection_template = template.clone();
+        let inspect = crate::availability::inspect(state, &target, &inspection_template, refresh, Some(progress));
+        tokio::pin!(inspect);
+        let mut count = 0;
+        let result = loop {
+            tokio::select! {
+                Some(item) = updates.recv() => {
+                    let partial = Template { source: template.source.clone(), content_id: template.content_id.clone(), lines: vec![item] };
+                    let lines = register_lines(state, lookup_id, metadata, &partial, parser_generation, tx, false, true).await?;
+                    count += lines.len();
+                    for line in lines { if !send(tx, json!({"event":"line","line":line})).await { return Err("stream closed"); } }
+                },
+                result = &mut inspect => break result?,
+            }
+        };
+        while let Some(item) = updates.recv().await {
+            let partial = Template { source: template.source.clone(), content_id: template.content_id.clone(), lines: vec![item] };
+            let lines = register_lines(state, lookup_id, metadata, &partial, parser_generation, tx, false, true).await?;
+            count += lines.len();
+            for line in lines { if !send(tx, json!({"event":"line","line":line})).await { return Err("stream closed"); } }
+        }
+        template.lines = result;
+        register_lines(state, lookup_id, metadata, &template, parser_generation, tx, true, false).await?;
+        return Ok(("done", count));
     }
+    let lines = register_lines(state, lookup_id, metadata, &template, parser_generation, tx, false, true).await?;
+    let count = lines.len();
+    for line in lines {
+        if !send(tx, json!({"event":"line","line":line})).await {
+            return Err("stream closed");
+        }
+    }
+    Ok(("done", count))
+}
+
+async fn register_lines(
+    state: &AppState,
+    lookup_id: &str,
+    metadata: &Value,
+    template: &Template,
+    parser_generation: u64,
+    tx: &mpsc::Sender<Value>,
+    store: bool,
+    issue: bool,
+) -> Result<Vec<Value>, &'static str> {
     let _gate = state.metadata_gate.lock().await;
+    let src_ok = source_current(state, &template.source).await;
+    let meta_ok = metadata_current(state, metadata).await;
+    if !src_ok || !meta_ok {
+        return Err("lookup or source changed");
+    }
+    let revoked = state
+        .mappings
+        .revoked(
+            metadata["metadata_source_id"].as_str().unwrap_or(""),
+            metadata["type"].as_str().unwrap_or(""),
+            metadata["meta_id"].as_str().unwrap_or(""),
+            template.source["id"].as_str().unwrap_or(""),
+        )
+        .await
+        .map_err(|_| "mapping database failed")?;
+    if revoked.contains(&template.content_id) {
+        return Err("mapping revoked");
+    }
+    let target = target(metadata);
+    if store {
+        crate::availability::store(state, &target, template).await?;
+    }
+    let history = if issue {
+        state
+            .reports
+            .get_many(history_keys(&target, template))
+            .await
+            .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
     let lines = {
         let mut registry = state
             .lookup_runtime
@@ -678,35 +792,15 @@ async fn emit_lines(
         if registry.parser_generation != parser_generation
             || tx.is_closed()
             || !registry.lookups.contains_key(lookup_id)
-            || !source_current(state, &template.source)
-            || !metadata_current(state, metadata)
         {
             return Err("lookup or source changed");
         }
-        let revoked = state
-            .mappings
-            .revoked(
-                metadata["metadata_source_id"].as_str().unwrap_or(""),
-                metadata["type"].as_str().unwrap_or(""),
-                metadata["meta_id"].as_str().unwrap_or(""),
-                template.source["id"].as_str().unwrap_or(""),
-            )
-            .map_err(|_| "mapping database failed")?;
-        if revoked.contains(&template.content_id) {
-            return Err("mapping revoked");
-        }
-        let target = target(metadata);
-        if !from_cache {
-            crate::availability::store(state, &target, &template)?;
-        }
-        let values = line_cache::issue(
-            &mut registry,
-            &state.lookup_runtime,
-            &target,
-            &template,
-            &state.reports,
-        )?;
-        if !from_cache {
+        let values = if issue {
+            line_cache::issue(&mut registry, &state.lookup_runtime, &target, template, &history)?
+        } else {
+            Vec::new()
+        };
+        if store {
             registry.cache.insert(
                 line_cache::cache_key(&target, &template.source, parser_generation),
                 crate::state::CacheEntry {
@@ -717,14 +811,7 @@ async fn emit_lines(
         }
         values
     };
-    let count = lines.len();
-    drop(_gate);
-    for line in lines {
-        if !send(tx, json!({"event":"line","line":line})).await {
-            return Err("stream closed");
-        }
-    }
-    Ok(("done", count))
+    Ok(lines)
 }
 
 pub async fn cancel(State(state): State<AppState>, Path(id): Path<String>) -> Response {
@@ -814,7 +901,9 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
             reg.parser_generation,
         )
     };
-    if !source_current(&state, &candidate.source) || !metadata_current(&state, &metadata) {
+    if !source_current(&state, &candidate.source).await
+        || !metadata_current(&state, &metadata).await
+    {
         return expired("source_changed");
     }
     let detail = match tokio::select! {
@@ -853,13 +942,13 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
     let availability_target = target(&metadata);
     let lines = match tokio::select! {
         _=cancellation.changed()=>return lookup_gone_now(&state, lookup_id),
-        result=crate::availability::inspect(&state, &availability_target, &pending_template, false)=>result,
+        result=crate::availability::inspect(&state, &availability_target, &pending_template, false, None)=>result,
     } {
         Ok(value) => value,
         Err(message) => return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message),
     };
     let _gate = state.metadata_gate.lock().await;
-    let result = {
+    {
         let mut reg = state
             .lookup_runtime
             .registry
@@ -884,50 +973,101 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
                 "Candidate no longer belongs to lookup",
             );
         }
-        if !source_current(&state, &candidate.source) || !metadata_current(&state, &metadata) {
-            return expired("source_changed");
+    }
+    if !source_current(&state, &candidate.source).await
+        || !metadata_current(&state, &metadata).await
+    {
+        return expired("source_changed");
+    }
+    let template = Template {
+        source: candidate.source.clone(),
+        content_id: candidate.content_id.clone(),
+        lines,
+    };
+    let target = target(&metadata);
+    if let Err(message) = crate::availability::store(&state, &target, &template).await {
+        return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
+    }
+    let history = state
+        .reports
+        .get_many(history_keys(&target, &template))
+        .await
+        .unwrap_or_default();
+    let output = {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        reg.prune(crate::metadata::cache::now());
+        if reg.parser_generation != parser_generation {
+            return expired("parser_changed");
         }
-        let template = Template {
-            source: candidate.source.clone(),
-            content_id: candidate.content_id.clone(),
-            lines,
+        if reg.mapping_generation != mapping_generation {
+            return expired("mapping_changed");
+        }
+        let Some(lookup) = reg.lookups.get(lookup_id) else {
+            return lookup_gone(reg.cancelled.contains_key(lookup_id));
         };
-        let target = target(&metadata);
-        if let Err(message) = crate::availability::store(&state, &target, &template) {
-            return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
+        if lookup.candidates.get(candidate_id).is_none_or(|item| {
+            item.source["id"] != source_id || item.content_id != candidate.content_id
+        }) {
+            return error(
+                StatusCode::BAD_REQUEST,
+                "BAD_REQUEST",
+                "Candidate no longer belongs to lookup",
+            );
         }
-        let output = match line_cache::issue(
+        match line_cache::issue(
             &mut reg,
             &state.lookup_runtime,
             &target,
             &template,
-            &state.reports,
+            &history,
         ) {
             Ok(lines) => lines,
-            Err(message) => return error(StatusCode::TOO_MANY_REQUESTS, "RESOURCE_LIMIT", message),
-        };
-        let evidence = matching::evidence(&metadata, &detail);
-        if let Err(problem) = state.mappings.save_checked(
+            Err(message) => {
+                return error(StatusCode::TOO_MANY_REQUESTS, "RESOURCE_LIMIT", message)
+            }
+        }
+    };
+    let evidence = matching::evidence(&metadata, &detail);
+    if let Err(problem) = state
+        .mappings
+        .save_checked(
             &metadata,
             &candidate.source,
             &candidate.content_id,
             &evidence,
             "user",
-        ) {
-            for line in &output {
-                if let Some(id) = line["line_id"].as_str() {
-                    reg.lines.remove(id);
-                }
+        )
+        .await
+    {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        for line in &output {
+            if let Some(id) = line["line_id"].as_str() {
+                reg.lines.remove(id);
             }
-            return match problem {
-                "source changed" | "metadata source changed" => expired("source_changed"),
-                _ => error(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "INTERNAL_ERROR",
-                    "Mapping could not be saved",
-                ),
-            };
         }
+        return match problem {
+            "source changed" | "metadata source changed" => expired("source_changed"),
+            _ => error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Mapping could not be saved",
+            ),
+        };
+    }
+    let result = {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
         reg.cache.insert(
             line_cache::cache_key(&target, &candidate.source, parser_generation),
             crate::state::CacheEntry {
@@ -978,18 +1118,18 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
         }
     };
     let Some(locator) = line.locator.as_ref() else {
-        return retire(&state, &id, "line_identity_ambiguous");
+        return retire(&state, &id, "line_identity_ambiguous").await;
     };
-    let source = match state.playback_sources.get(&line.source_id) {
+    let source = match state.playback_sources.get(&line.source_id).await {
         Ok(Some(value))
             if value["enabled"] == true && value["revision"] == line.source_revision =>
         {
             value
         }
-        _ => return retire(&state, &id, "source_changed"),
+        _ => return retire(&state, &id, "source_changed").await,
     };
-    if !metadata_current(&state, &line.target) {
-        return retire(&state, &id, "metadata_changed");
+    if !metadata_current(&state, &line.target).await {
+        return retire(&state, &id, "metadata_changed").await;
     }
     let resolved = if source["kind"] == "stremio_stream" {
         let manifest = match crate::adapters::stremio_stream::manifest(&source, &state.cache).await
@@ -1006,14 +1146,16 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
         .await
         {
             Ok(value) => value,
-            Err("Stremio capability changed") => return retire(&state, &id, "source_changed"),
+            Err("Stremio capability changed") => {
+                return retire(&state, &id, "source_changed").await
+            }
             Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
         }
     } else {
         let detail = match crate::adapters::detail(&source, &line.content_id).await {
             Ok(value) => value,
             Err("MacCMS content identity is missing or ambiguous") => {
-                return retire(&state, &id, "line_not_found");
+                return retire(&state, &id, "line_not_found").await;
             }
             Err(message) => return error(StatusCode::BAD_GATEWAY, "UPSTREAM_FAILED", message),
         };
@@ -1026,11 +1168,11 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
             .filter(|episode| episode["label"] == locator["episode"])
             .collect();
         if matches.is_empty() {
-            return retire(&state, &id, "line_not_found");
+            return retire(&state, &id, "line_not_found").await;
         }
         let base_locator = json!({"flag":locator["flag"],"episode":locator["episode"]});
         if matches.len() != 1 || matches[0]["locator"] != base_locator {
-            return retire(&state, &id, "line_identity_ambiguous");
+            return retire(&state, &id, "line_identity_ambiguous").await;
         }
         let requested = vec![json!({"flag":locator["flag"],"episode":matches[0]})];
         match crate::adapters::resolve(&source, &requested).await {
@@ -1062,7 +1204,8 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
             } else {
                 "line_identity_ambiguous"
             },
-        );
+        )
+        .await;
     }
     let selected = matching[0].clone();
     let template = Template {
@@ -1070,15 +1213,51 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
         content_id: line.content_id.clone(),
         lines: vec![selected],
     };
-    let checked = match crate::availability::inspect(&state, &line.target, &template, true).await {
+    let checked = match crate::availability::inspect(&state, &line.target, &template, true, None).await {
         Ok(value) => value,
         Err(message) => return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message),
     };
     let episode = &checked[0]["episode"];
     let Some(url) = episode["url"].as_str() else {
-        return retire(&state, &id, "line_not_found");
+        return retire(&state, &id, "line_not_found").await;
     };
     let _gate = state.metadata_gate.lock().await;
+    let parser_generation_ok = {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        let now = crate::metadata::cache::now();
+        reg.prune(now);
+        reg.parser_generation == parser_generation
+    };
+    if !parser_generation_ok {
+        return expired("parser_changed");
+    }
+    if !source_current(&state, &source).await || !metadata_current(&state, &line.target).await {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        reg.lines.remove(&id);
+        return expired("source_changed");
+    }
+    let changed = line.availability != episode["availability"].as_str().unwrap_or("unknown")
+        || line.quality.as_deref() != episode["quality"].as_str()
+        || line.description.as_deref() != episode["description"].as_str()
+        || line.size_bytes != episode["size_bytes"].as_u64();
+    if invalidate_cache || changed {
+        if let Err(message) = crate::availability::invalidate(&state, &line.target, &source).await {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
+        }
+    }
+    let history = state
+        .reports
+        .get_many(vec![line.logical_key.clone()])
+        .await
+        .unwrap_or_default();
     let mut reg = state
         .lookup_runtime
         .registry
@@ -1088,19 +1267,6 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
     reg.prune(now);
     if reg.parser_generation != parser_generation {
         return expired("parser_changed");
-    }
-    if !source_current(&state, &source) || !metadata_current(&state, &line.target) {
-        reg.lines.remove(&id);
-        return expired("source_changed");
-    }
-    let changed = line.availability != episode["availability"].as_str().unwrap_or("unknown")
-        || line.quality.as_deref() != episode["quality"].as_str()
-        || line.description.as_deref() != episode["description"].as_str()
-        || line.size_bytes != episode["size_bytes"].as_u64();
-    if invalidate_cache || changed {
-        if let Err(message) = crate::availability::invalidate(&state, &line.target, &source) {
-            return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
-        }
     }
     reg.changed(&line.source_id);
     let Some(current) = reg.lines.get_mut(&id) else {
@@ -1134,48 +1300,63 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
     current.cached_kind = None;
     current.unsupported_reason = episode["unsupported_reason"].as_str().map(str::to_owned);
     current.play_expires_at = now + state.lookup_runtime.cache_ttl;
-    Json(line_cache::output(&id, current, &state.reports)).into_response()
+    Json(line_cache::output(&id, current, &history)).into_response()
 }
 
 pub async fn play(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let cached_only = {
-        let registry = state
+    let needs_refresh = {
+        let now = crate::metadata::cache::now();
+        let mut registry = state
             .lookup_runtime
             .registry
             .lock()
             .expect("lookup registry");
+        registry.prune(now);
         registry
             .lines
             .get(&id)
-            .is_some_and(|line| line.url.is_empty())
+            .is_some_and(|line| line.url.is_empty() || line.play_expires_at <= now)
     };
-    if cached_only {
+    if needs_refresh {
         let response = refresh_line(state.clone(), id.clone(), false).await;
         if response.status() != StatusCode::OK {
             return response;
         }
     }
-    let mut registry = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    let now = crate::metadata::cache::now();
-    registry.prune(now);
-    let Some(line) = registry.lines.get(&id).cloned() else {
-        return expired("line_not_found");
+    let line = {
+        let mut registry = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        let now = crate::metadata::cache::now();
+        registry.prune(now);
+        let Some(line) = registry.lines.get(&id).cloned() else {
+            return expired("line_not_found");
+        };
+        if line.play_expires_at <= now {
+            return expired("line_expired");
+        }
+        if line.parser_generation != registry.parser_generation {
+            return expired("parser_changed");
+        }
+        line
     };
-    if line.play_expires_at <= now {
-        return expired("line_expired");
-    }
-    if line.parser_generation != registry.parser_generation {
-        return expired("parser_changed");
-    }
-    let current = state.playback_sources.get(&line.source_id).ok().flatten();
+    let current = state
+        .playback_sources
+        .get(&line.source_id)
+        .await
+        .ok()
+        .flatten();
     if current.as_ref().is_none_or(|source| {
         source["enabled"] != true || source["revision"] != line.source_revision
-    }) || !metadata_current(&state, &line.target)
+    }) || !metadata_current(&state, &line.target).await
     {
+        let mut registry = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
         registry.lines.remove(&id);
         return expired("source_changed");
     }
@@ -1223,25 +1404,43 @@ pub async fn report(State(state): State<AppState>, Json(input): Json<Value>) -> 
         },
     };
     let _gate = state.metadata_gate.lock().await;
-    let mut reg = state
-        .lookup_runtime
-        .registry
-        .lock()
-        .expect("lookup registry");
-    reg.prune(crate::metadata::cache::now());
-    let Some(line) = reg.lines.get(id) else {
-        return expired("line_not_found");
+    let line = {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
+        reg.prune(crate::metadata::cache::now());
+        let Some(line) = reg.lines.get(id).cloned() else {
+            return expired("line_not_found");
+        };
+        line
     };
-    let current = state.playback_sources.get(&line.source_id).ok().flatten();
+    let current = state
+        .playback_sources
+        .get(&line.source_id)
+        .await
+        .ok()
+        .flatten();
     if current
         .as_ref()
         .is_none_or(|s| s["enabled"] != true || s["revision"] != line.source_revision)
-        || !metadata_current(&state, &line.target)
+        || !metadata_current(&state, &line.target).await
     {
+        let mut reg = state
+            .lookup_runtime
+            .registry
+            .lock()
+            .expect("lookup registry");
         reg.lines.remove(id);
         return expired("source_changed");
     }
-    if state.reports.record(line, outcome, latency).is_err() {
+    if state
+        .reports
+        .record_async(&line, outcome, latency)
+        .await
+        .is_err()
+    {
         return error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "INTERNAL_ERROR",

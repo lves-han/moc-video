@@ -1,5 +1,5 @@
 import type { Bridge_MediaRef, DetailsViewData } from './models.ts';
-import { cacheRead, cacheRows, cacheWrite, hasIndexedCache } from './data/indexed-cache.ts';
+import { cacheDelete, cacheInvalidate, cacheRead, cacheRows, cacheWrite, hasIndexedCache } from './data/indexed-cache.ts';
 
 export const METADATA_TTL = 7 * 24 * 60 * 60 * 1000;
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -7,7 +7,7 @@ const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const KEY = 'moc-video.metadata.v1';
 const MAX_ENTRIES = 200;
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
-type Entry = { key: string; savedAt: number; value: DetailsViewData };
+type Entry = { key: string; savedAt: number; value: DetailsViewData; invalidated?: boolean };
 const sameRef = (a: Bridge_MediaRef | undefined, b: Bridge_MediaRef) => Boolean(a && a.source_id === b.source_id
   && a.source_revision === b.source_revision && a.data === b.data);
 
@@ -23,14 +23,22 @@ export function metadataCache(store: () => Store = () => localStorage) {
         && typeof row.value.details.ref.data === 'string' && row.value?.metadata_ref?.content_ref) : [];
     } catch { return []; }
   };
+  const invalidateLegacy = (id: string) => {
+    const storage = store(), raw = storage.getItem(KEY);
+    if (raw === null) return;
+    const rows: unknown = JSON.parse(raw);
+    if (!Array.isArray(rows)) throw new Error('Details cache invalidation failed: invalid stored data');
+    const remaining = rows.filter(row => !row || row.key !== id);
+    if (remaining.length !== rows.length) storage.setItem(KEY, JSON.stringify(remaining));
+  };
   const dueRows = (rows: Entry[], locale: string, now: number) => rows.filter(row => {
         try {
           const fields: unknown = JSON.parse(row.key);
           return Array.isArray(fields) && fields.length === 4 && fields[3] === locale
             && (now < row.savedAt || now - row.savedAt >= METADATA_TTL)
-            && row.value.details.ref?.source_id === fields[0]
-            && row.value.details.ref?.source_revision === fields[1]
-            && row.value.details.ref?.data === fields[2];
+            && row.value?.details?.ref?.source_id === fields[0]
+            && row.value?.details?.ref?.source_revision === fields[1]
+            && row.value?.details?.ref?.data === fields[2];
         } catch { return false; }
       }).sort((a, b) => a.savedAt - b.savedAt).map(row => row.value.details.ref);
   const restore = (item: Entry | undefined | null, ref: Bridge_MediaRef, now: number) => {
@@ -52,6 +60,7 @@ export function metadataCache(store: () => Store = () => localStorage) {
     get(ref: Bridge_MediaRef, locale: string, host: string, now = Date.now()) {
       const id = key(ref, locale), active = memory.get(id);
       if (active && active.host === host) return { value: copy(active.value), stale: now < active.savedAt || now - active.savedAt >= METADATA_TTL, imagesReady: true };
+      if (hasIndexedCache()) return null;
       const item = read().find(row => row.key === id);
       return restore(item, ref, now);
     },
@@ -62,7 +71,9 @@ export function metadataCache(store: () => Store = () => localStorage) {
         if (hasIndexedCache()) await cacheRead<Entry>('details', id);
         return { value: copy(active.value), stale: now < active.savedAt || now - active.savedAt >= METADATA_TTL, imagesReady: true };
       }
-      const item = (hasIndexedCache() ? await cacheRead<Entry>('details', id) : null) ?? read().find(row => row.key === id);
+      const saved = hasIndexedCache() ? await cacheRead<Entry>('details', id) : null;
+      if (saved?.invalidated) return null;
+      const item = saved ?? read().find(row => row.key === id);
       return restore(item, ref, now);
     },
     put(ref: Bridge_MediaRef, locale: string, host: string, value: DetailsViewData, now = Date.now()) {
@@ -74,16 +85,34 @@ export function metadataCache(store: () => Store = () => localStorage) {
       // display DTOs and opaque references; image access is reacquired later.
       const safe = { ...copy(value), images: {} };
       const encoded = JSON.stringify(safe);
-      if (/https?:\/\//i.test(encoded)) return;
+      if (/https?:\/\//i.test(encoded)) {
+        invalidateLegacy(id);
+        return;
+      }
       const rows = read().filter(row => row.key !== id);
       rows.push({ key: id, savedAt: now, value: safe });
       while (rows.length > MAX_ENTRIES) rows.shift();
       if (!hasIndexedCache()) { try { store().setItem(KEY, JSON.stringify(rows)); } catch { /* The live response remains usable. */ } }
     },
     async putPersistent(ref: Bridge_MediaRef, locale: string, host: string, value: DetailsViewData, now = Date.now()) {
-      this.put(ref, locale, host, value, now);
       const safe = { ...copy(value), images: {} };
-      if (hasIndexedCache() && !/https?:\/\//i.test(JSON.stringify(safe))) await cacheWrite('details', { key: key(ref, locale), savedAt: now, value: safe });
+      const unsafe = /https?:\/\//i.test(JSON.stringify(safe)), id = key(ref, locale);
+      let legacyFailed = false, legacyError: unknown;
+      try { this.put(ref, locale, host, value, now); } catch (error) { legacyFailed = true; legacyError = error; }
+      try {
+        if (hasIndexedCache()) {
+          if (unsafe && legacyFailed) await cacheInvalidate('details', id);
+          else if (unsafe) await cacheDelete('details', id);
+          else {
+            if ((await cacheRead<Entry>('details', id))?.invalidated) invalidateLegacy(id);
+            await cacheWrite('details', { key: id, savedAt: now, value: safe });
+          }
+        }
+      } catch (error) {
+        if (legacyFailed) throw new AggregateError([legacyError, error], 'Details cache invalidation failed in both stores');
+        throw error;
+      }
+      if (legacyFailed) throw legacyError;
     },
   };
 }

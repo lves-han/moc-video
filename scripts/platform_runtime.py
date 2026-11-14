@@ -316,8 +316,9 @@ def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observ
         token = (identity(process.pid) if os.name == "nt" else
                  "created:" + repr(psutil.Process(process.pid).create_time()))
         anchor = dict(pid=process.pid, identity=token)
-        known[(process.pid, token)] = anchor
-        observe(process.pid, token, [anchor])
+        if token:
+            known[(process.pid, token)] = anchor
+        observe(process.pid, token, list(known.values()))
         started = time.monotonic()
         if os.name != "nt":
             members = lambda: session_family(process.pid, token)
@@ -395,6 +396,14 @@ def run_payload(argv, *, cwd, env, seconds, memory_mib, sampled, lock_fd, observ
                         process.close()
                     except cleanup_exceptions as error:
                         cleanup_errors.append(str(error))
+        if os.name == "nt":
+            # Job termination is asynchronous, and a just-exited process can
+            # remain queryable briefly after the job reports no active PIDs.
+            deadline = time.monotonic() + 5
+            while any(alive(ref) for ref in known.values()) and time.monotonic() < deadline:
+                time.sleep(.05)
+            if any(alive(ref) for ref in known.values()):
+                cleanup_errors.append("Windows Job 已终止，但已登记的进程仍可查询")
         if cleanup_errors:
             raise PayloadCleanupError("payload 边界清理未确认：" + "; ".join(cleanup_errors), 125)
     raw = process.returncode

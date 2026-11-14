@@ -9,11 +9,23 @@ use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
+
+fn shared_runtime() -> Option<&'static tokio::runtime::Runtime> {
+    static RT: OnceLock<Option<tokio::runtime::Runtime>> = OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .ok()
+    })
+    .as_ref()
+}
 
 #[derive(Clone)]
 pub struct NativeLine {
@@ -81,14 +93,11 @@ pub fn stop(round: &Arc<Mutex<Round>>, requests: &Arc<Requests>) {
     };
     let _ = requests.cancel(&uuid::Uuid::new_v4().to_string(), &job_id);
     if let Some(lookup) = lookup {
-        std::thread::spawn(move || {
-            if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                let _ = runtime.block_on(service.cancel_lookup(&lookup));
-            }
-        });
+        if let Some(rt) = shared_runtime() {
+            rt.spawn(async move {
+                let _ = service.cancel_lookup(&lookup).await;
+            });
+        }
     }
 }
 
@@ -125,31 +134,20 @@ pub async fn drive(round: Arc<Mutex<Round>>, body: Value, confirmation: bool) {
         let mut state = round.lock().expect("round state");
         if confirmation {
             state.pending_confirm = state.pending_confirm.saturating_sub(1);
-            if result.is_ok() {
-                if let Some(id) = confirmed_candidate {
-                    state.candidates.remove(&id);
-                }
+            if result.is_ok()
+                && let Some(id) = confirmed_candidate
+            {
+                state.candidates.remove(&id);
             }
         } else {
             state.query_done = true;
         }
-        if let Err(error) = result {
-            if error.code != "CANCELLED" {
-                state.error = Some(error.message);
-            }
+        if let Err(error) = result
+            && error.code != "CANCELLED"
+        {
+            state.error = Some(error.message);
         }
         state.settle();
-    }
-    loop {
-        let done = {
-            let mut state = round.lock().expect("round state");
-            state.settle();
-            state.pending == 0 || stop.load(Ordering::SeqCst)
-        };
-        if done {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(30)).await;
     }
 }
 
@@ -161,22 +159,19 @@ pub fn launch(round: Arc<Mutex<Round>>, body: Value, confirmation: bool) -> Resu
         ACTIVE.fetch_sub(1, Ordering::SeqCst);
         return Err(ApiError::new("RESOURCE_LIMIT", "Too many line requests"));
     }
-    std::thread::spawn(move || {
-        match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(runtime) => runtime.block_on(drive(round, body, confirmation)),
-            Err(_) => {
-                let mut state = round.lock().expect("round state");
-                state.error = Some("Line runtime unavailable".into());
-                if confirmation {
-                    state.pending_confirm = state.pending_confirm.saturating_sub(1);
-                } else {
-                    state.query_done = true;
-                }
-            }
+    let Some(rt) = shared_runtime() else {
+        ACTIVE.fetch_sub(1, Ordering::SeqCst);
+        let mut state = round.lock().expect("round state");
+        state.error = Some("Line runtime unavailable".into());
+        if confirmation {
+            state.pending_confirm = state.pending_confirm.saturating_sub(1);
+        } else {
+            state.query_done = true;
         }
+        return Ok(());
+    };
+    rt.spawn(async move {
+        drive(round, body, confirmation).await;
         ACTIVE.fetch_sub(1, Ordering::SeqCst);
     });
     Ok(())

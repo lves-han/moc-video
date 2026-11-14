@@ -67,6 +67,7 @@ jobs:
           checks = [
               ('ci-frontend-tests', ['npm', 'test']),
               ('ci-frontend-build', ['npm', 'run', 'build']),
+              ('ci-service-images', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'service_image', '--', '--test-threads=1']),
               ('ci-fmt', ['cargo', 'fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check']),
               ('ci-clippy', ['cargo', 'clippy', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '--all-targets', '-j', '1', '--', '-D', 'warnings']),
               ('ci-settings-atomic', ['cargo', 'test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '-j', '1', '--lib', 'atomic_replacement_', '--', '--test-threads=1']),

@@ -633,7 +633,17 @@ export class AppController {
   readonly serviceRound = reactive({ open: false, busy: false, autoSelecting: false, videoId: '', snapshot: null as ServiceRoundView | null, error: '' });
   readonly serviceSources = reactive({ items: [] as ServiceSource[], error: '' });
   private serviceRoundId: string | null = null;
-  private lastServiceChoice: ServiceLinePreference | null = null;
+  private lastServiceChoice: ServiceLinePreference | null = (() => {
+    try {
+      if (typeof localStorage === "undefined") return null;
+      const raw = localStorage.getItem("moc-video.service-line-choice");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<ServiceLinePreference> | null;
+      return parsed && typeof parsed.source_id === "string" && typeof parsed.line_name === "string"
+        ? { source_id: parsed.source_id, line_name: parsed.line_name, quality: typeof parsed.quality === "string" ? parsed.quality : null }
+        : null;
+    } catch { return null; }
+  })();
   lastServiceLine() { return this.lastServiceChoice && { ...this.lastServiceChoice }; }
   private serviceGeneration = 0;
   private preparedService: { match: string; resolution: Bridge_Resolution } | null = null;
@@ -642,6 +652,8 @@ export class AppController {
     details: { data: null as object | null, queried: new Set<string>(), refreshed: false } };
   private runtimeSequence = 0;
   private sourceSequence = 0;
+  private sourceSelections = { metadata: 0, playback: 0 };
+  private pendingSourceSelections = { metadata: 0, playback: 0 };
   private sourceCheckTimes = sourceChecks();
   private checkingSource = false;
   private metadata = metadataCache();
@@ -764,6 +776,8 @@ export class AppController {
       const data = await this.api.call('get_details', { ref:card.ref }, ticket.id, ticket.host ?? undefined);
       if (!valid()) return;
       requireBinding(data.details.id === card.id && sameSource(data.details.ref, card.ref) && data.details.ref.data === card.ref.data, 'Search poster details identity differs');
+      // Catalog and detail providers may use different poster sizes and IDs.
+      if (data.details.poster && data.images[data.details.poster.resource_id]) card.poster = clone(data.details.poster);
       this.search.images = { ...this.search.images, ...data.images };
     } catch (cause) { if (valid()) this.search.error = failure(cause); }
     finally { if (this.requests.get(scope) === ticket) this.requests.delete(scope); }
@@ -986,10 +1000,10 @@ export class AppController {
       const ready = response.providers.filter(source => source.runtime_status === "ready");
       const metadataReady = ready.filter(source => source.kind === "stremio" && source.capabilities.home && source.capabilities.details);
       const playbackReady = ready.filter(source => source.kind !== "stremio" && source.capabilities.resolve);
-      const metadata = this.state.settings.playback_service?.enabled
-        ? metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === TMDB_CONFIG_ID)
-        : metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === this.state.settings.last_metadata_config_id)
-          ?? metadataReady.find(source => source.id === oldMetadata?.source_id) ?? metadataReady[0];
+      const metadata = metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === this.state.settings.last_metadata_config_id)
+        ?? metadataReady.find(source => source.id === oldMetadata?.source_id)
+        ?? metadataReady.find(source => source.kind === "stremio" && source.origin.config_id === TMDB_CONFIG_ID)
+        ?? metadataReady[0];
       const playback = playbackReady.find(source => source.id === this.state.settings.last_playback_source_key)
         ?? playbackReady.find(source => source.id === oldPlayback?.source_id) ?? playbackReady[0];
       this.state.selected_metadata_source = metadata ? { source_id: metadata.id, source_revision: metadata.source_revision } : null;
@@ -1019,6 +1033,7 @@ export class AppController {
     this.cancel('background-source');
     const source = this.state.sources.data?.providers.find(source => source.id === sourceId);
     requireBinding(source?.runtime_status === "ready" && (role === "metadata" ? source.kind === "stremio" && source.capabilities.home && source.capabilities.details : source.kind !== "stremio" && source.capabilities.resolve), "Source is unavailable for this role");
+    const selection = ++this.sourceSelections[role];
     if (role === 'playback') {
       this.manualSource = this.state.details.data?.metadata_ref ? clone(this.state.details.data.metadata_ref) : null;
       ++this.lineGeneration;
@@ -1028,27 +1043,51 @@ export class AppController {
     const unchanged = sameSource(role === "metadata" ? this.state.selected_metadata_source : this.state.selected_playback_source,
       { source_id: source.id, source_revision: source.source_revision });
     // A fallback selection can differ from the saved choice; confirming it only saves the choice.
-    if (unchanged && (role === "metadata" ? this.state.settings.last_metadata_config_id === configId : this.state.settings.last_playback_source_key === source.id)) return;
+    if (!this.pendingSourceSelections[role] && unchanged && (role === "metadata" ? this.state.settings.last_metadata_config_id === configId : this.state.settings.last_playback_source_key === source.id)) return;
     const host = this.state.runtime.engine_epoch;
-    await this.updateSettings(settings => role === "metadata"
-      ? { ...settings, last_metadata_config_id: configId }
-      : { ...settings, last_playback_source_key: source.id });
-    requireBinding(host === this.state.runtime.engine_epoch && this.state.sources.data?.providers.some(current =>
-      current.id === source.id && current.source_revision === source.source_revision && current.runtime_status === "ready"), "Source changed while saving its preference");
-    if (unchanged) return;
-    const context = this.state.playback.context && clone(this.state.playback.context);
-    this.invalidatePlayback();
-    const key = { source_id: source.id, source_revision: source.source_revision };
-    if (role === "metadata") {
-      this.cancelPages(); this.state.home.data = this.state.details.data = null;
-      this.state.home.phase = this.state.details.phase = "idle";
-      this.state.home.error = this.state.details.error = null;
-      this.state.selected_metadata_source = key;
-      this.state.route = { name: "home" };
-    } else {
-      this.state.selected_playback_source = key;
-      if (context) await this.match(context.metadata_video_id);
-    }
+    this.pendingSourceSelections[role]++;
+    try {
+      try {
+        await this.updateSettings(settings => role === "metadata"
+          ? { ...settings, last_metadata_config_id: configId }
+          : { ...settings, last_playback_source_key: source.id });
+        if (selection !== this.sourceSelections[role]) return;
+        requireBinding(host === this.state.runtime.engine_epoch && this.state.sources.data?.providers.some(current =>
+          current.id === source.id && current.source_revision === source.source_revision && current.runtime_status === "ready"), "Source changed while saving its preference");
+      } catch (cause) {
+        const selected = role === 'metadata' ? this.state.selected_metadata_source : this.state.selected_playback_source;
+        const current = this.state.sources.data?.providers.find(item => item.id === selected?.source_id && item.source_revision === selected.source_revision);
+        const confirmed = this.settings.value;
+        const previous = role === 'metadata' && current?.kind === 'stremio' ? current.origin.config_id : selected?.source_id;
+        const saved = role === 'metadata' ? confirmed?.last_metadata_config_id : confirmed?.last_playback_source_key;
+        if (selection === this.sourceSelections[role] && host === this.state.runtime.engine_epoch && current?.runtime_status === 'ready' && confirmed && !this.settings.paused && saved !== previous) {
+          try {
+            await this.updateSettings(settings => selection !== this.sourceSelections[role] ? settings : role === 'metadata'
+              ? { ...settings, last_metadata_config_id: previous! }
+              : { ...settings, last_playback_source_key: previous! });
+          } catch (restore) {
+            this.diagnostics.push(failure(restore));
+            throw new Error(`Source selection failed and the previous preference could not be restored: ${failure(cause).message}; ${failure(restore).message}`);
+          }
+        }
+        throw cause;
+      }
+      if (sameSource(role === "metadata" ? this.state.selected_metadata_source : this.state.selected_playback_source,
+        { source_id: source.id, source_revision: source.source_revision })) return;
+      const context = this.state.playback.context && clone(this.state.playback.context);
+      this.invalidatePlayback();
+      const key = { source_id: source.id, source_revision: source.source_revision };
+      if (role === "metadata") {
+        this.cancelPages(); this.state.home.data = this.state.details.data = null;
+        this.state.home.phase = this.state.details.phase = "idle";
+        this.state.home.error = this.state.details.error = null;
+        this.state.selected_metadata_source = key;
+        this.state.route = { name: "home" };
+      } else {
+        this.state.selected_playback_source = key;
+        if (context) await this.match(context.metadata_video_id);
+      }
+    } finally { this.pendingSourceSelections[role]--; }
   }
   navigate(route: Route) {
     if (route.name === "details") requireBinding(sameSource(route.ref, this.state.selected_metadata_source) || sameMacCmsSource(this.state, route.ref), "Route requires the selected metadata or MacCMS playback source");
@@ -1207,7 +1246,8 @@ export class AppController {
     });
     const service = this.state.settings.playback_service;
     if (config.kind === "stremio" && service?.enabled) {
-      await this.connectPlaybackService(service.url, service.token);
+      if (config.enabled) await this.syncServiceMetadata(config.config_id);
+      else await this.loadSources();
       return;
     }
     try { if (config.enabled) await this.syncConfig(config.kind, id); }
@@ -1223,11 +1263,36 @@ export class AppController {
       "app_service_import", { url, token, configs: [] });
     await this.updateSettings(settings => ({
       ...settings,
-      last_metadata_config_id: TMDB_CONFIG_ID,
+      last_metadata_config_id: settings.playback_service?.url === url && !token && settings.playback_service.token_configured
+        ? settings.last_metadata_config_id ?? TMDB_CONFIG_ID : TMDB_CONFIG_ID,
       tmdb: { ...(settings.tmdb ?? { instance_url: TMDB_DEFAULT_INSTANCE, language: 'follow' as const }), enabled: true },
-      playback_service: { enabled: true, url, token, groups: settings.playback_service?.url === url && settings.playback_service.token === token ? settings.playback_service.groups : result.groups },
+      playback_service: {
+        enabled: true,
+        url,
+        token,
+        groups: settings.playback_service?.url === url && !token && settings.playback_service.token_configured
+          ? settings.playback_service.groups : result.groups,
+      },
     }));
     this.sourceCheckTimes.mark(TMDB_CONFIG_ID);
+    await this.loadSources();
+  }
+  private async syncServiceMetadata(id: string) {
+    const service = this.state.settings.playback_service;
+    const config = this.state.settings.source_configs.find(row => row.config_id === id && row.kind === 'stremio');
+    requireBinding(service?.enabled && config?.enabled, 'Metadata source or playback service is unavailable');
+    const captured = clone(config);
+    const result = await nativeInvoke<{ groups: NonNullable<Settings['playback_service']>['groups'] }>(
+      'app_service_import', { url: service.url, token: service.token ?? '', configs: [captured] });
+    const group = result.groups.find(row => row.config_id === id);
+    requireBinding(group, 'Playback service did not return the metadata source');
+    await this.updateSettings(settings => {
+      const current = settings.playback_service;
+      requireBinding(current?.enabled && current.url === service.url
+        && JSON.stringify(settings.source_configs.find(row => row.config_id === id)) === JSON.stringify(captured),
+      'Metadata source or playback service changed during import');
+      return { ...settings, playback_service: { ...current, groups: [...current.groups.filter(row => row.config_id !== id), group] } };
+    });
     await this.loadSources();
   }
   async refreshServiceSources() {
@@ -1245,7 +1310,7 @@ export class AppController {
         const result = await nativeInvoke<{ results: { status: string }[] }>('app_playback_sources', { action: 'import', id: null, payload: { sources: local } });
         const migrated = new Set(local.filter((_, index) => result.results[index]?.status === 'ok').map(config => config.config_id));
         await this.updateSettings(settings => {
-          if (settings.playback_service?.url !== service?.url || settings.playback_service?.token !== service?.token || !settings.playback_service?.enabled) throw new Error('Playback service changed during import; retry. / 播放服务已变化，请重试迁入。');
+          if (settings.playback_service?.url !== service?.url || !settings.playback_service?.enabled) throw new Error('Playback service changed during import; retry. / 播放服务已变化，请重试迁入。');
           return { ...settings, source_configs: settings.source_configs.filter(config => !migrated.has(config.config_id) || !local.some(original => JSON.stringify(original) === JSON.stringify(config))) };
         });
         if (migrated.size !== local.length) warning = 'Some sources are waiting to be imported. / 部分来源待重试迁入。';
@@ -1276,10 +1341,22 @@ export class AppController {
     await this.updateSettings(settings => ({ ...settings, source_configs: settings.source_configs.map(row => row.config_id === id ? { ...row, enabled } : row) }));
     const service = this.state.settings.playback_service;
     if (config.kind === "stremio" && enabled && service?.enabled && service.groups.find(group => group.config_id === id)?.status !== "ready") {
-      await this.connectPlaybackService(service.url, service.token);
+      await this.syncServiceMetadata(id);
       return;
     }
     try { if (enabled) await this.syncConfig(config.kind, id); }
+    finally { await this.loadSources(); }
+  }
+  async retrySource(id: string) {
+    const config = this.state.settings.source_configs.find(row => row.config_id === id);
+    requireBinding(config?.enabled, "Source configuration is missing or disabled");
+    const service = this.state.settings.playback_service;
+    if (config.kind === 'stremio' && service?.enabled) {
+      await this.syncServiceMetadata(id);
+      return;
+    }
+    try { await this.syncConfig(config.kind, id); }
+    catch (cause) { this.sourceCheckTimes.mark(id, Date.now(), true); throw cause; }
     finally { await this.loadSources(); }
   }
   async removeSourceConfig(id: string) {
@@ -1489,6 +1566,12 @@ export class AppController {
         return;
       }
       this.lastServiceChoice = selected?.source_id && selected.line_name ? { source_id: selected.source_id, line_name: selected.line_name, quality: selected.quality } : null;
+      try {
+        if (typeof localStorage !== "undefined") {
+          if (this.lastServiceChoice) localStorage.setItem("moc-video.service-line-choice", JSON.stringify(this.lastServiceChoice));
+          else localStorage.removeItem("moc-video.service-line-choice");
+        }
+      } catch { /* ignore storage errors */ }
       this.preparedService = { match: result.context.match_id, resolution: result.resolution };
       this.serviceRound.open = false;
       this.state.selected_playback_source = null;

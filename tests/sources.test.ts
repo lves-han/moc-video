@@ -49,6 +49,21 @@ test("R24/REQ-T17: the last request per source follows the newest request, even 
   assert.equal(api.sourceResults.s!.ok, true);
 });
 
+test('cancelled source requests do not appear as failures or let older failures replace their state', async () => {
+  const pending: ((value: unknown) => void)[] = [], host = '11111111-1111-4111-8111-111111111111';
+  const api = new Api(((_: string, args: { request_id: string }) => new Promise(resolve => pending.push(code => resolve({
+    request_id: args.request_id, engine_epoch: host,
+    ...(code === 'ok' ? { data: { page: {}, images: {} } } : { error: { code, message: String(code), retryable: false } }),
+  })))) as never);
+  const call = () => api.call('get_home', { source_id: 's', source_revision: '1', section_ref: null, page: 1 } as never).catch(() => null);
+  const success = call(); pending.shift()!('ok'); await success;
+  const older = call(), cancelled = call();
+  pending[1]!('CANCELLED'); await cancelled;
+  pending[0]!('UPSTREAM_FAILED'); await older;
+  assert.equal(api.sourceResults.s!.ok, true);
+  assert.ok(!api.failures.some(row => row.code === 'CANCELLED'));
+});
+
 test("U02/R03/REQ-N02: presets are exactly the supported sources of the compatibility report", () => {
   const report = JSON.parse(readFileSync("docs/compatibility-report.json", "utf8"));
   assert.deepEqual(SOURCE_PRESETS.map(preset => preset.name), report.supported_sources);

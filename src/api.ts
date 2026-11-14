@@ -108,6 +108,11 @@ export class Api {
         const error = response.error;
         if (!record(error) || typeof error.code !== "string" || typeof error.message !== "string" || typeof error.retryable !== "boolean") throw new UnknownCommit(requestId, "Invalid API error");
         const shown = { ...error, message: describeError(error as Bridge_ApiError) } as Bridge_ApiError;
+        if (shown.code === 'CANCELLED') {
+          const previous = source ? this.sourceResults[source] : undefined;
+          this.recordSourceResult(source, sequence, previous?.ok ?? true, previous?.message ?? '');
+          throw new ApiFailure(shown);
+        }
         this.recordSourceResult(source, sequence, false, shown.message);
         this.failures.push({ command, request_id: requestId, source_id: source, code: shown.code, message: shown.message });
         if (this.failures.length > 20) this.failures.shift();

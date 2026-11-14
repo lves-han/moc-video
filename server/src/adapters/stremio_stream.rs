@@ -15,13 +15,14 @@ pub enum ResultSet {
     },
 }
 
-pub fn cached_manifest(source: &Value, cache: &Cache) -> Result<Option<Value>, &'static str> {
+pub async fn cached_manifest(source: &Value, cache: &Cache) -> Result<Option<Value>, &'static str> {
     let id = source["id"].as_str().ok_or("source ID missing")?;
     let revision = source["revision"]
         .as_u64()
         .ok_or("source revision missing")?;
     cache
-        .get(&cache.key(id, "stream_manifest", "", &revision.to_string()))
+        .get_async(&cache.key(id, "stream_manifest", "", &revision.to_string()))
+        .await
         .map_err(|_| "manifest cache failed")
 }
 
@@ -43,7 +44,7 @@ async fn read_manifest(
         .as_u64()
         .ok_or("source revision missing")?;
     let key = cache.key(id, "stream_manifest", "", &revision.to_string());
-    if !refresh && let Some(value) = cached_manifest(source, cache)? {
+    if !refresh && let Some(value) = cached_manifest(source, cache).await? {
         return Ok(value);
     }
     let url = Url::parse(source["api"].as_str().ok_or("manifest URL missing")?)
@@ -103,7 +104,8 @@ async fn read_manifest(
         .collect::<Result<Vec<_>, &'static str>>()?;
     let saved = json!({"id":value["id"],"name":value["name"],"version":value["version"],"resources":resources,"types":value["types"],"idPrefixes":value["idPrefixes"]});
     cache
-        .put(&key, &saved, 6 * 3600)
+        .put_async(&key, &saved, 6 * 3600)
+        .await
         .map_err(|_| "manifest cache failed")?;
     Ok(saved)
 }

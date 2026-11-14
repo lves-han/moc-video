@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use url::Url;
@@ -14,25 +14,27 @@ impl Store {
             path: dir.join("service.sqlite3"),
         }
     }
-    fn conn(&self) -> rusqlite::Result<Connection> {
-        let conn = Connection::open(&self.path)?;
-        conn.busy_timeout(std::time::Duration::from_secs(3))?;
-        Ok(conn)
+    pub async fn list(&self) -> rusqlite::Result<Vec<Value>> {
+        crate::db::run_sqlite(self.path.clone(), |conn| {
+            let mut statement = conn.prepare("SELECT id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision FROM metadata_sources ORDER BY origin_config_id,origin_order")?;
+            let rows = statement.query_map([], row)?;
+            rows.collect()
+        })
+        .await
     }
-    pub fn list(&self) -> rusqlite::Result<Vec<Value>> {
-        let conn = self.conn()?;
-        let mut statement=conn.prepare("SELECT id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision FROM metadata_sources ORDER BY origin_config_id,origin_order")?;
-        let rows = statement.query_map([], row)?;
-        rows.collect()
+    pub async fn get(&self, id: &str) -> rusqlite::Result<Option<Value>> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            conn.query_row("SELECT id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision FROM metadata_sources WHERE id=?1",[&id],row).optional()
+        })
+        .await
     }
-    pub fn get(&self, id: &str) -> rusqlite::Result<Option<Value>> {
-        self.conn()?.query_row("SELECT id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision FROM metadata_sources WHERE id=?1",[id],row).optional()
-    }
-    pub fn delete(&self, id: &str) -> rusqlite::Result<bool> {
-        Ok(self
-            .conn()?
-            .execute("DELETE FROM metadata_sources WHERE id=?1", [id])?
-            > 0)
+    pub async fn delete(&self, id: &str) -> rusqlite::Result<bool> {
+        let id = id.to_owned();
+        crate::db::run_sqlite(self.path.clone(), move |conn| {
+            Ok(conn.execute("DELETE FROM metadata_sources WHERE id=?1", [&id])? > 0)
+        })
+        .await
     }
 
     pub async fn register(&self, config: &str, item: &Value) -> Result<Value, &'static str> {
@@ -63,28 +65,35 @@ impl Store {
         {
             return Err("invalid Stremio manifest");
         }
-        let mut conn = self.conn().map_err(|_| "source database failed")?;
-        let tx = conn.transaction().map_err(|_| "source database failed")?;
-        let old:Option<(String,String,String,String,i64)> = tx.query_row("SELECT id,manifest_url,manifest,origin_namespace_rule,origin_order FROM metadata_sources WHERE origin_config_id=?1 AND origin_addon_key=?2",params![config,key],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional().map_err(|_|"source database failed")?;
-        let id = old
-            .as_ref()
-            .map(|v| v.0.clone())
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let body = manifest.to_string();
-        let rule = namespace.to_string();
-        let changed =
-            old.as_ref()
-                .is_some_and(|(_, old_url, old_manifest, old_rule, old_order)| {
-                    old_url != original_url
-                        || old_manifest != &body
-                        || old_rule != &rule
-                        || *old_order != order as i64
-                });
-        tx.execute("INSERT INTO metadata_sources(id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,1) ON CONFLICT(origin_config_id,origin_addon_key) DO UPDATE SET origin_namespace_rule=excluded.origin_namespace_rule,origin_order=excluded.origin_order,manifest_url=excluded.manifest_url,manifest=excluded.manifest,revision=metadata_sources.revision+?8",params![id,config,key,rule,order,original_url,body,if changed {1} else {0}]).map_err(|_|"source database failed")?;
-        tx.commit().map_err(|_| "source database failed")?;
-        self.get(&id)
-            .map_err(|_| "source database failed")?
-            .ok_or("source database failed")
+        let config = config.to_owned();
+        let key = key.to_owned();
+        let original_url = original_url.to_owned();
+        let namespace = namespace.clone();
+        crate::db::run(self.path.clone(), "source database failed", move |conn| {
+            let tx = conn.transaction().map_err(|_| "source database failed")?;
+            let old:Option<(String,String,String,String,i64)> = tx.query_row("SELECT id,manifest_url,manifest,origin_namespace_rule,origin_order FROM metadata_sources WHERE origin_config_id=?1 AND origin_addon_key=?2",params![config,key],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional().map_err(|_|"source database failed")?;
+            let id = old
+                .as_ref()
+                .map(|v| v.0.clone())
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            let body = manifest.to_string();
+            let rule = namespace.to_string();
+            let changed =
+                old.as_ref()
+                    .is_some_and(|(_, old_url, old_manifest, old_rule, old_order)| {
+                        old_url != &original_url
+                            || old_manifest != &body
+                            || old_rule != &rule
+                            || *old_order != order as i64
+                    });
+            tx.execute("INSERT INTO metadata_sources(id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,1) ON CONFLICT(origin_config_id,origin_addon_key) DO UPDATE SET origin_namespace_rule=excluded.origin_namespace_rule,origin_order=excluded.origin_order,manifest_url=excluded.manifest_url,manifest=excluded.manifest,revision=metadata_sources.revision+?8",params![id,config,key,rule,order,original_url,body,if changed {1} else {0}]).map_err(|_|"source database failed")?;
+            tx.commit().map_err(|_| "source database failed")?;
+            conn.query_row("SELECT id,origin_config_id,origin_addon_key,origin_namespace_rule,origin_order,manifest_url,manifest,revision FROM metadata_sources WHERE id=?1",[&id],row)
+                .optional()
+                .map_err(|_| "source database failed")?
+                .ok_or("source database failed")
+        })
+        .await
     }
 }
 

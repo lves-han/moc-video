@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton, NSwitch, NTag, NButton, NAlert, NModal, useOsTheme } from "naive-ui";
 import { api, ApiFailure, describeError, settingsQueue } from "../api";
 import { appController, appState } from "../state";
 import type { MediaCacheStatus, Settings } from "../models";
 import Icon from "../components/Icon.vue";
+import SourceSettings from "./SourceSettings.vue";
 import { fontOptions, setAppFont, setFontScale } from '../ui/fonts';
 import sansLicense from '../../licenses/fonts/notosanssc-OFL.txt?raw';
 import serifLicense from '../../licenses/fonts/notoserifsc-OFL.txt?raw';
@@ -18,23 +19,7 @@ const speed = defineModel<number>("speed", { required: true });
 const props = defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
 const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string]; select: [id: string, role: "metadata" | "playback"] }>();
-const serviceDraft = reactive({ url: appState.settings.playback_service?.url ?? 'http://127.0.0.1:8787', token: appState.settings.playback_service?.token ?? '' });
-const serviceBusy = ref(false), serviceError = ref('');
 const word = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en;
-async function connectService() {
-  const url = serviceDraft.url.trim().replace(/\/+$/, ''), token = serviceDraft.token.trim();
-  if (!url || !token) { serviceError.value = word('请输入服务地址和令牌。', 'Enter the service address and token.'); return; }
-  serviceBusy.value = true; serviceError.value = '';
-  try { await appController.connectPlaybackService(url, token); }
-  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
-  finally { serviceBusy.value = false; }
-}
-async function disconnectService() {
-  serviceBusy.value = true; serviceError.value = '';
-  try { await appController.disconnectPlaybackService(); }
-  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
-  finally { serviceBusy.value = false; }
-}
 const osTheme = useOsTheme();
 const languageOptions = [
   { value: "en", label: "English" },
@@ -130,13 +115,9 @@ onMounted(() => { void refreshCache(); });
     </div>
   </div>
   <section v-if="!preview" class="settings-group service-settings">
-    <h2>{{ word('服务连接', 'Service connection') }}</h2>
-    <div class="settings-panel">
-      <div class="setting-row"><label for="service-address">{{ word('服务地址', 'Service address') }}</label><input id="service-address" v-model="serviceDraft.url" class="setting-select" :disabled="serviceBusy" /></div>
-      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" class="setting-select" :disabled="serviceBusy" /></div>
-      <div class="setting-row"><span>{{ appState.settings.playback_service?.enabled ? word('已连接', 'Connected') : word('未连接', 'Disconnected') }}</span><div class="cache-limit-controls"><NButton type="primary" :disabled="serviceBusy" @click="connectService">{{ word('连接', 'Connect') }}</NButton><NButton v-if="appState.settings.playback_service?.enabled" :disabled="serviceBusy" @click="disconnectService">{{ word('断开', 'Disconnect') }}</NButton></div></div>
-      <NAlert v-if="serviceError" type="error" role="alert">{{ serviceError }}</NAlert>
-    </div>
+    <h2>{{ t('Source manager') }}</h2>
+    <div class="settings-panel"><SourceSettings section="metadata" @select="(id, role) => emit('select', id, role)" /></div>
+    <div class="settings-panel"><SourceSettings section="playback" @select="(id, role) => emit('select', id, role)" /></div>
   </section>
   <section class="settings-group appearance-panel">
     <h2>{{ t("Appearance") }}</h2>

@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import time
 from pathlib import Path
 
-STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": [], "probe_fail": False, "tmdb_requests": []}
+STATE = {"fail": False, "fail_addon_b": False, "add_episode": False, "changed_title": False, "line_mode": "normal", "delay": 0.0, "detail_delay": 0.0, "media_url": "", "counts": {}, "t4_mode": "normal", "t4_requests": [], "rest_requests": [], "rest_contexts": {}, "stream_mode": "normal", "stream_requests": [], "parser_mode":"normal", "parser_requests": [], "probe_fail": False, "tmdb_requests": [], "hold_probe": False, "slow_finished": False}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,7 +20,9 @@ class Handler(BaseHTTPRequestHandler):
             if "delay" in query: STATE["delay"] = float(query["delay"][0])
             if "detail_delay" in query: STATE["detail_delay"] = float(query["detail_delay"][0])
             if "media_url" in query: STATE["media_url"] = query["media_url"][0]
+            if "clear_media" in query: STATE["media_url"] = ""
             if "probe_fail" in query: STATE["probe_fail"] = query["probe_fail"][0] == "1"
+            if "hold_probe" in query: STATE["hold_probe"] = query["hold_probe"][0] == "1"; STATE["slow_finished"] = False
             if "parser_mode" in query: STATE["parser_mode"] = query["parser_mode"][0]
             if "reset_parser" in query: STATE["parser_requests"].clear()
             if "t4_mode" in query: STATE["t4_mode"] = query["t4_mode"][0]
@@ -122,6 +124,10 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(data); return
         if url.path in ("/probe-fast.mp4", "/probe-slow.mp4", "/hls/segment.ts"):
             if STATE["probe_fail"] and url.path == "/probe-fast.mp4": self.send_response(503); self.end_headers(); return
+            if url.path == "/probe-slow.mp4":
+                deadline = time.monotonic() + 4
+                while STATE["hold_probe"] and time.monotonic() < deadline: time.sleep(.02)
+                STATE["slow_finished"] = True
             time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
             payload = b"controlled-media-bytes"
             self.send_response(206 if self.headers.get("Range") else 200)
@@ -192,7 +198,9 @@ class Handler(BaseHTTPRequestHandler):
                 records[item]["vod_play_url"] = "Full$" + STATE["media_url"].rstrip("/") + path
         if STATE["add_episode"]: records["201"]["vod_play_url"] += "#S01E04$https://media.test/4"
         if STATE["changed_title"]: records["201"]["vod_name"] = "Different Show"
-        if STATE["line_mode"] == "reordered": records["201"]["vod_play_url"] = "S01E03$https://media.test/3#S01E02$https://media.test/new"
+        if STATE["line_mode"] == "reordered":
+            updated = STATE["media_url"].rstrip('/') + '/probe-fast.mp4?generation=2' if STATE["media_url"] else 'https://media.test/new'
+            records["201"]["vod_play_url"] = "S01E03$https://media.test/3#S01E02$" + updated
         if STATE["line_mode"] == "missing": records["201"]["vod_play_url"] = "S01E03$https://media.test/3"
         if STATE["line_mode"] == "duplicate": records["201"]["vod_play_url"] = "S01E02$https://media.test/a#S01E02$https://media.test/b"
         if "ids" in query:
@@ -241,6 +249,10 @@ class Handler(BaseHTTPRequestHandler):
         second={'name':'Backup','url':'https://media.test/b.mp4?token='+generation,'behaviorHints':{'videoHash':'fedcba9876543210'}}
         if mode == 'window': first['url'] = STATE['media_url']; second['url'] = STATE['media_url'] + '?backup=1'
         streams=[first,second,{'infoHash':'a'*40,'name':'Torrent'},{'name':'Website','externalUrl':'https://media.test/page'},{'name':'DASH','url':'https://media.test/video.mpd'},{'name':'Unknown','url':'https://media.test/opaque?id=unknown'}]
+        if mode == 'progressive':
+            base = STATE['media_url'].rsplit('/', 1)[0]
+            first['url'], second['url'] = base+'/probe-fast.mp4', base+'/probe-slow.mp4'
+            streams = [first, second]
         if mode == 'reordered': streams[0],streams[1] = streams[1],streams[0]
         if mode == 'missing': streams = [item for item in streams if item.get('name') != 'Primary']
         if mode == 'duplicate': streams.insert(1,dict(first))

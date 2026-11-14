@@ -51,6 +51,16 @@ test('TV7 search posters use the owning details DTO and reject mismatched identi
   assert.deepEqual(f.app.search.images,{}); assert.ok(f.app.search.error?.message.includes('identity'));
 });
 
+test('search posters adopt the details image identity when sizes differ',async()=>{
+  const f=fixture(); const pending=f.app.searchCatalog('query',source); f.calls[0]!.finish({items:[card('film')]}); await pending;
+  const poster=f.app.searchPoster(f.app.search.items[0]!);
+  const detailPoster={resource_id:'detail-poster',path:'/images/detail-poster',capability:'b'.repeat(43),expires_at:'2030-01-01T00:00:00Z'};
+  f.calls.find(c=>c.command==='get_details')!.finish({details:{id:'film',ref:{...source,data:'film'},poster:detailPoster},images:{'detail-poster':{resource_id:'detail-poster',url:'http://127.0.0.1/detail'}}});
+  await poster;
+  assert.equal(f.app.search.items[0]!.poster?.resource_id,'detail-poster');
+  assert.equal(f.app.search.images['detail-poster']?.url,'http://127.0.0.1/detail');
+});
+
 test('TV7 search has the default metadata budget and source/epoch invalidation drops completed work',async()=>{
   const f=fixture(); assert.equal(f.api.budget('search_catalog',{...source,query:'x'}),30000);
   const pending=f.app.searchCatalog('query',source); f.state.sources.data!.providers[0]!.source_revision='new';

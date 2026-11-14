@@ -1459,10 +1459,8 @@ impl Catalog {
             if let Some(category) = region_category {
                 pairs.push(("category".into(), category.into()));
             }
-            if tmdb {
-                if let Some(region) = selected("region") {
-                    pairs.push(("region".into(), region.to_owned()));
-                }
+            if tmdb && let Some(region) = selected("region") {
+                pairs.push(("region".into(), region.to_owned()));
             }
             if skip && (cursor.offset > 0 || !filter.is_empty()) {
                 pairs.push(("skip".into(), cursor.offset.to_string()));
@@ -1641,6 +1639,14 @@ impl Catalog {
             .join(value)
             .map_err(|_| upstream("Stremio image URL is invalid"))?;
         http_url(url.as_str(), false)?;
+        // Service image paths are relative to the real service, while addon
+        // manifests use an internal host that must never reach public DNS.
+        let (url, headers) = if url.host_str() == Some(crate::service::HOST) {
+            let service = crate::service::current()?;
+            (service.image_url(&url)?, service.auth_headers()?)
+        } else {
+            (url, HeaderMap::new())
+        };
         let id = identity(
             "http_image",
             &[
@@ -1683,7 +1689,7 @@ impl Catalog {
         output.images.push(Image {
             reference: reference.clone(),
             url: url.to_string(),
-            headers: HeaderMap::new(),
+            headers,
         });
         Ok(reference)
     }
