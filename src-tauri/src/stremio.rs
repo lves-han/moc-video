@@ -1641,6 +1641,13 @@ impl Catalog {
             .join(value)
             .map_err(|_| upstream("Stremio image URL is invalid"))?;
         http_url(url.as_str(), false)?;
+        // Service image paths are relative to the real service, while addon
+        // manifests use an internal host that must never reach public DNS.
+        let url = if url.host_str() == Some(crate::service::HOST) {
+            crate::service::current()?.image_url(&url)?
+        } else {
+            url
+        };
         let id = identity(
             "http_image",
             &[

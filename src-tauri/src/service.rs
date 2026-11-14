@@ -61,6 +61,32 @@ impl Config {
         }
         Ok(url)
     }
+    pub(crate) fn image_url(&self, virtual_url: &Url) -> Result<Url, ApiError> {
+        let parts: Vec<_> = virtual_url
+            .path_segments()
+            .ok_or_else(|| ApiError::bad("Invalid service image route"))?
+            .collect();
+        if virtual_url.scheme() != "https"
+            || virtual_url.host_str() != Some(HOST)
+            || virtual_url.port().is_some()
+            || virtual_url.query().is_some()
+            || virtual_url.fragment().is_some()
+            || parts.len() != 4
+            || parts[0] != "stremio"
+            || parts[2] != "image"
+            || parts[3].len() != 64
+            || !parts[3]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || !percent_encoding::percent_decode_str(parts[1])
+                .decode_utf8()
+                .is_ok_and(|token| token == self.token)
+        {
+            return Err(ApiError::bad("Invalid service image route"));
+        }
+        self.endpoint(&["stremio", &self.token, "image", parts[3]])
+    }
+
     async fn request(
         &self,
         method: Method,
@@ -509,6 +535,39 @@ mod tests {
     use super::*;
     use crate::{history::History, host::Host, settings, source_dispatch::identity};
     use std::{net::TcpListener, sync::Arc};
+
+    #[test]
+    fn service_image_url_preserves_base_and_checks_route() {
+        let key = "a".repeat(64);
+        let path = format!("/stremio/private%20token/image/{key}");
+        let virtual_url = Url::parse(&format!("https://{HOST}{path}")).unwrap();
+        for base in ["https://service.test", "https://service.test/prefix/"] {
+            let config = Config::parse(base, "private token").unwrap();
+            assert_eq!(
+                config.image_url(&virtual_url).unwrap().as_str(),
+                format!("{}{path}", base.trim_end_matches('/'))
+            );
+            for invalid in [
+                format!("https://other.test{path}"),
+                format!("http://{HOST}{path}"),
+                format!("https://{HOST}:8443{path}"),
+                format!("https://{HOST}{path}?token=other"),
+                format!("https://{HOST}{path}#image"),
+                format!("https://{HOST}/stremio/other-token/image/{key}"),
+                format!("https://{HOST}/stremio/private%20token/image/invalid"),
+                format!(
+                    "https://{HOST}/stremio/private%20token/image/{}",
+                    "A".repeat(64)
+                ),
+                format!("https://{HOST}/stremio/private%20token/meta/{key}"),
+            ] {
+                assert!(
+                    config.image_url(&Url::parse(&invalid).unwrap()).is_err(),
+                    "{invalid}"
+                );
+            }
+        }
+    }
 
     fn call(host: &Arc<Host>, command: &str, input: Value) -> Value {
         let result = host.invoke(

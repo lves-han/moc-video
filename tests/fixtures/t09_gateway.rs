@@ -1536,6 +1536,103 @@ fn t09_local_addresses_and_dns_refresh() {
 }
 
 #[test]
+fn t15_service_images_use_configured_origin_and_native_gateway() {
+    use crate::{host::Host, settings};
+    let key = "a".repeat(64);
+    let image_path = format!("/stremio/test-token/image/{key}");
+    let expected_path = format!("/service{image_path}");
+    let mut png = Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 3)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let bytes = png.into_inner();
+    let expected_bytes = bytes.clone();
+    let image_endpoint = expected_path.clone();
+    let fixture = Fixture::new(move |request, _| {
+        if request.target == image_endpoint {
+            return Reply::body(bytes.clone(), "image/png");
+        }
+        let meta = json!({"id":"tt001","type":"movie","name":"Service image fixture","poster":image_path,"background":image_path});
+        let value = if request.target.ends_with("/manifest.json") {
+            json!({"id":"tmdb-addon","version":"1.0.0","name":"Service fixture","description":"Synthetic service image fixture","types":["movie"],"resources":["catalog","meta"],"catalogs":[{"id":"featured","type":"movie","name":"Featured"}]})
+        } else if request.target.contains("/catalog/") {
+            json!({"metas":[meta]})
+        } else if request.target.contains("/meta/") {
+            json!({"meta":meta})
+        } else {
+            panic!("Unexpected service fixture request: {}", request.target);
+        };
+        Reply::body(value.to_string(), "application/json")
+    });
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("settings.json");
+    let mut saved = settings::defaults();
+    saved["playback_service"] = json!({"enabled":true,"url":format!("http://127.0.0.1:{}/service",fixture.port),"token":"test-token","groups":[]});
+    settings::SettingsFile { path: path.clone() }
+        .save(&saved)
+        .unwrap();
+    let host = Host::open(path).unwrap();
+    let call = |command: &str, input: Value| {
+        let result = host.invoke(
+            command,
+            json!({"request_id":Uuid::new_v4().to_string(),"input":input}),
+            true,
+        );
+        assert!(result.get("error").is_none(), "{command}: {result}");
+        result["data"].clone()
+    };
+    call("runtime_prepare", json!({}));
+    call(
+        "sync_catalog",
+        json!({"kind":"stremio","config_id":settings::TMDB_CONFIG_ID}),
+    );
+    let providers = call("get_sources", json!({}));
+    let source = providers["providers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|source| source["origin"]["config_id"] == settings::TMDB_CONFIG_ID)
+        .unwrap();
+    let home = call(
+        "get_home",
+        json!({"source_id":source["id"],"source_revision":source["source_revision"],"page":1}),
+    );
+    let card = &home["page"]["sections"][0]["items"][0];
+    let details = call("get_details", json!({"ref":card["ref"]}));
+    for data in [&home, &details] {
+        assert!(!data.to_string().contains("test-token"));
+        assert!(!data.to_string().contains("moc-service.invalid"));
+        assert!(!data.to_string().contains(&expected_path));
+        let images = data["images"].as_object().unwrap();
+        assert!(!images.is_empty());
+        for access in images.values() {
+            let url = access["url"].as_str().unwrap();
+            assert_eq!(url::Url::parse(url).unwrap().host_str(), Some("127.0.0.1"));
+            let response = fetch(url, "GET", &[]);
+            assert_eq!(
+                response.status,
+                200,
+                "{}",
+                String::from_utf8_lossy(&response.body)
+            );
+            assert_eq!(response.headers["content-type"], "image/png");
+            assert_eq!(response.body, expected_bytes);
+            assert_eq!(fetch(url, "HEAD", &[]).status, 200);
+        }
+    }
+    assert!(
+        fixture
+            .state
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|request| request.target == expected_path)
+    );
+    crate::service::configure(&settings::defaults());
+}
+
+#[test]
 fn detail_image_cache_survives_gateway_restart() {
     let mut png = Cursor::new(Vec::new());
     image::DynamicImage::new_rgb8(1, 1).write_to(&mut png, image::ImageFormat::Png).unwrap();
