@@ -12,7 +12,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -103,6 +103,82 @@ pub struct Call {
     resolve_sequence: Option<u64>,
 }
 
+fn remove_legacy_cache_path(path: &Path) -> std::io::Result<()> {
+    let info = match std::fs::symlink_metadata(path) {
+        Ok(info) => info,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if info.file_type().is_symlink() { return Err(std::io::Error::other("Legacy cache path is redirected")); }
+    if info.is_dir() { std::fs::remove_dir_all(path) } else { std::fs::remove_file(path) }
+}
+
+fn clear_legacy_cache(settings_path: &Path) -> std::io::Result<()> {
+    let media = settings_path.with_file_name("media-cache");
+    match std::fs::symlink_metadata(&media) {
+        Ok(info) if info.is_dir() && !info.file_type().is_symlink() => {
+            let lock_path = media.join(".lock");
+            if std::fs::symlink_metadata(&lock_path).is_ok_and(|info| info.file_type().is_symlink()) {
+                return Err(std::io::Error::other("Legacy cache lock is redirected"));
+            }
+            let lock = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lock_path)?;
+            lock.try_lock().map_err(std::io::Error::other)?;
+            for item in std::fs::read_dir(&media)? {
+                let item = item?;
+                if item.file_name() != ".lock" { remove_legacy_cache_path(&item.path())?; }
+            }
+        }
+        Ok(_) => return Err(std::io::Error::other("Legacy media cache is not a directory")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+        Err(error) => return Err(error),
+    }
+    for name in ["source-cache", "detail-images.sqlite3", "detail-images.sqlite3-wal", "detail-images.sqlite3-shm", "detail-images.sqlite3-journal"] {
+        remove_legacy_cache_path(&settings_path.with_file_name(name))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod legacy_cache_cleanup_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn deletes_only_old_caches_and_is_idempotent() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path();
+        fs::write(path.join("settings.json"), b"settings").unwrap();
+        fs::write(path.join("moc-video.db"), b"history").unwrap();
+        fs::create_dir(path.join("media-cache")).unwrap();
+        fs::write(path.join("media-cache/old.cache"), b"old").unwrap();
+        fs::create_dir(path.join("source-cache")).unwrap();
+        fs::write(path.join("source-cache/old.json"), b"old").unwrap();
+        fs::write(path.join("detail-images.sqlite3"), b"old").unwrap();
+        fs::create_dir(path.join("cache-v2")).unwrap();
+        fs::write(path.join("cache-v2/new.cache"), b"new").unwrap();
+        clear_legacy_cache(&path.join("settings.json")).unwrap();
+        clear_legacy_cache(&path.join("settings.json")).unwrap();
+        assert!(!path.join("media-cache/old.cache").exists());
+        assert!(!path.join("source-cache").exists());
+        assert!(!path.join("detail-images.sqlite3").exists());
+        assert_eq!(fs::read(path.join("cache-v2/new.cache")).unwrap(), b"new");
+        assert_eq!(fs::read(path.join("settings.json")).unwrap(), b"settings");
+        assert_eq!(fs::read(path.join("moc-video.db")).unwrap(), b"history");
+    }
+
+    #[test]
+    fn refuses_to_clean_a_locked_old_cache() {
+        let root = tempfile::tempdir().unwrap();
+        let media = root.path().join("media-cache");
+        fs::create_dir(&media).unwrap();
+        fs::write(media.join("old.cache"), b"old").unwrap();
+        let lock = fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(media.join(".lock")).unwrap();
+        lock.try_lock().unwrap();
+        assert!(clear_legacy_cache(&root.path().join("settings.json")).is_err());
+        assert!(media.join("old.cache").exists());
+    }
+}
+
 fn cache_episode_owner(context: &Value) -> Option<String> {
     let metadata = &context["metadata_ref"]["identity"];
     Some(identity(
@@ -118,26 +194,54 @@ fn cache_episode_owner(context: &Value) -> Option<String> {
 }
 
 impl Host {
+    pub(crate) fn web_cache(&self, action: &str, store: &str, key: &str, row: Option<Value>) -> Result<Value, ApiError> {
+        if !matches!(store, "catalog" | "details") || key.len() > 65536 {
+            return Err(ApiError::bad("Invalid cache request"));
+        }
+        let id = format!("web:{store}:{key}");
+        match action {
+            "ready" => { self.media_cache.enable_after_legacy_cleanup(); Ok(Value::Null) },
+            "read" => match self.media_cache.get_blob(&id) {
+                Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| ApiError::internal("Cache value is invalid")),
+                None => Ok(Value::Null),
+            },
+            "write" => {
+                let row = row.ok_or_else(|| ApiError::bad("Missing cache value"))?;
+                if row["key"].as_str() != Some(key) { return Err(ApiError::bad("Cache identity differs")); }
+                let at = row["savedAt"].as_u64().unwrap_or(0) / 1000;
+                let created = if row["invalidated"] == true { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() } else { at };
+                let bytes = serde_json::to_vec(&row).map_err(|_| ApiError::bad("Invalid cache value"))?;
+                self.media_cache.put_blob_at(&id, &bytes, created)?;
+                Ok(Value::Null)
+            },
+            "delete" => { self.media_cache.delete_blob(&id)?; Ok(Value::Null) },
+            "list" => Ok(Value::Array(self.media_cache.web_rows(store)?)),
+            _ => Err(ApiError::bad("Unknown cache action")),
+        }
+    }
+
     pub fn open(path: PathBuf) -> Result<Arc<Self>, ApiError> {
         Self::with_clock(path, Arc::new(MonotonicClock::default()))
     }
 
     pub fn with_clock(path: PathBuf, clock: Arc<dyn Clock>) -> Result<Arc<Self>, ApiError> {
         let history_path = path.with_file_name("moc-video.db");
-        let cache_path = path.with_file_name("media-cache");
-        let source_cache_path = path.with_file_name("source-cache");
+        clear_legacy_cache(&path).map_err(|error| ApiError::internal(&format!("Legacy cache cleanup failed: {error}")))?;
+        let cache_path = path.with_file_name("cache-v2");
         let (store, settings) = SettingsFile::load(path)?;
         tmdb_api::configure(&settings);
         crate::service::configure(&settings);
         let mut sources = SourceDispatch::default();
         sources.replace_configs(&crate::settings::source_configs(&settings));
+        let media_cache = MediaCache::for_app(cache_path);
+        let source_cache = source_cache::SourceCache::new(media_cache.clone());
         Ok(Arc::new(Self {
             host_epoch: Uuid::new_v4().to_string(),
             requests: Arc::default(),
             clock,
             store,
-            media_cache: MediaCache::for_episodes(cache_path),
-            source_cache: source_cache::SourceCache::new(source_cache_path),
+            media_cache,
+            source_cache,
             committed: Mutex::new(Committed {
                 settings,
                 sources,
@@ -471,7 +575,9 @@ impl Host {
                 committed.local = table.into_iter().collect();
                 return Ok(view);
             }
-            "get_media_cache" => return self.media_cache.status_checked(|| job.check()),
+            "get_media_cache" => {
+                return self.media_cache.status_checked(|| job.check());
+            }
             "clear_media_cache" => {
                 job.check()?;
                 return self.media_cache.clear_checked(|| job.check());

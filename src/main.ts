@@ -9,6 +9,7 @@ import { locale } from "./i18n";
 import { palette, normalizePalette } from "./ui/theme";
 import type { EngineStateChanged } from "./models";
 import { resetRecoveryInfo } from './resetRecovery';
+import { prepareNativeCache } from "./data/indexed-cache";
 
 const recovery = resetRecoveryInfo();
 if (!recovery && location.hash !== "#/prototype") {
@@ -37,6 +38,8 @@ if (!recovery && location.hash !== "#/prototype") {
   } catch (cause) {
     appController.diagnostics.push({ code: "INTERNAL_ERROR", message: `Settings: ${String(cause)}`, retryable: true });
   }
+  try { await prepareNativeCache(); }
+  catch (cause) { appController.diagnostics.push({ code: "INTERNAL_ERROR", message: `Cache cleanup: ${String(cause)}`, retryable: true }); }
   try { await appController.refreshRuntime(); void appController.loadSources(); }
   catch (cause) { appController.diagnostics.push({ code: "ENGINE_NOT_READY", message: String(cause), retryable: true }); }
   if (window.__TAURI__) {

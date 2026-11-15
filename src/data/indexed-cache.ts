@@ -3,6 +3,34 @@ type CacheRow = { key: string; savedAt: number; touchedAt?: number; invalidated?
 let opening: Promise<IDBDatabase> | undefined;
 let lastTouch = 0;
 const touch = () => lastTouch = Math.max(Date.now(), lastTouch + 1);
+type NativeCore = { invoke(command: string, args: Record<string, unknown>): Promise<unknown> };
+const nativeCore = () => (globalThis as typeof globalThis & { __TAURI__?: { core?: NativeCore } }).__TAURI__?.core;
+export const nativeCacheEnabled = () => Boolean(nativeCore());
+const nativeCall = (action: string, store: StoreName, key = '', row: CacheRow | null = null) =>
+  nativeCore()!.invoke('app_cache', { action, store, key, row });
+let migration: Promise<void> | undefined;
+
+// New native writes remain disabled until both legacy WebView caches are removed.
+async function cleanupLegacy(): Promise<void> {
+  return migration ??= (async () => {
+    localStorage.removeItem('moc-video.catalog.v1');
+    localStorage.removeItem('moc-video.metadata.v1');
+    localStorage.removeItem('moc-video.source-checks.v1');
+    if (typeof globalThis.indexedDB !== 'undefined') {
+      if (opening) { const db = await opening; db.close(); opening = undefined; }
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase('moc-video-cache');
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error ?? new Error('Legacy cache cleanup failed'));
+        request.onblocked = () => reject(new Error('Legacy cache cleanup blocked'));
+      });
+    }
+    await nativeCall('ready', 'catalog');
+  })().catch(error => { migration = undefined; throw error; });
+}
+export async function prepareNativeCache(): Promise<void> {
+  if (nativeCacheEnabled()) await cleanupLegacy();
+}
 function database(): Promise<IDBDatabase> {
   return opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open('moc-video-cache', 2);
@@ -18,8 +46,9 @@ function database(): Promise<IDBDatabase> {
     request.onblocked = () => reject(new Error('Cache database upgrade blocked'));
   }).catch(error => { opening = undefined; throw error; });
 }
-export const hasIndexedCache = () => typeof globalThis.indexedDB !== 'undefined';
+export const hasIndexedCache = () => nativeCacheEnabled() || typeof globalThis.indexedDB !== 'undefined';
 export async function cacheRead<T>(store: StoreName, key: string): Promise<T | null> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); return await nativeCall('read', store, key) as T | null; }
   const db = await database();
   return await new Promise((resolve, reject) => {
     const tx = db.transaction(store, store === 'details' ? 'readwrite' : 'readonly');
@@ -34,6 +63,7 @@ export async function cacheRead<T>(store: StoreName, key: string): Promise<T | n
   });
 }
 export async function cacheRows<T>(store: StoreName): Promise<T[]> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); return await nativeCall('list', store) as T[]; }
   const db = await database();
   return await new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readonly'), request = tx.objectStore(store).getAll();
@@ -42,6 +72,7 @@ export async function cacheRows<T>(store: StoreName): Promise<T[]> {
   });
 }
 export async function pruneCatalogCache(cutoff: number): Promise<void> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); return; }
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction('catalog', 'readwrite');
@@ -52,20 +83,17 @@ export async function pruneCatalogCache(cutoff: number): Promise<void> {
   });
 }
 export async function cacheWrite(store: StoreName, row: CacheRow): Promise<void> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); await nativeCall('write', store, row.key, row); return; }
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite'), bucket = tx.objectStore(store);
     bucket.put(store === 'details' ? { ...row, touchedAt: touch() } : row);
-    if (store === 'details') {
-      let count = 0;
-      const cursor = bucket.index('touched').openCursor(null, 'prev');
-      cursor.onsuccess = () => { const value = cursor.result; if (!value) return; if (++count > 200) value.delete(); value.continue(); };
-    }
     tx.oncomplete = () => resolve();
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Cache write failed'));
   });
 }
 export async function cacheDelete(store: StoreName, key: string): Promise<void> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); await nativeCall('delete', store, key); return; }
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');
@@ -76,6 +104,7 @@ export async function cacheDelete(store: StoreName, key: string): Promise<void> 
 }
 // A tombstone prevents legacy fallback after an unsuccessful legacy cleanup.
 export async function cacheInvalidate(store: StoreName, key: string): Promise<void> {
+  if (nativeCacheEnabled()) { await cleanupLegacy(); await nativeCall('write', store, key, { key, savedAt: Date.now(), invalidated: true }); return; }
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(store, 'readwrite');

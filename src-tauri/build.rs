@@ -98,6 +98,7 @@ fn main() {
         "app_service_import",
         "app_service_delete",
         "app_playback_sources",
+        "app_cache",
         #[cfg(feature = "t01-automation")]
         "t01_control",
     ];

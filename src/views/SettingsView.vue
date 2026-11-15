@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { NRadioGroup, NRadioButton, NSwitch, NTag, NButton, NAlert, NModal, useOsTheme } from "naive-ui";
 import { api, ApiFailure, describeError, settingsQueue } from "../api";
 import { appController, appState } from "../state";
 import type { MediaCacheStatus, Settings } from "../models";
 import Icon from "../components/Icon.vue";
-import SourceSettings from "./SourceSettings.vue";
+import { prepareNativeCache } from "../data/indexed-cache";
 import { fontOptions, setAppFont, setFontScale } from '../ui/fonts';
 import sansLicense from '../../licenses/fonts/notosanssc-OFL.txt?raw';
 import serifLicense from '../../licenses/fonts/notoserifsc-OFL.txt?raw';
@@ -20,6 +20,24 @@ const props = defineProps<{ preview?: boolean }>();
 const autoNext = defineModel<boolean>("autoNext", { required: true });
 const emit = defineEmits<{ notice: [message: string]; language: [value: string]; palette: [value: string]; select: [id: string, role: "metadata" | "playback"] }>();
 const word = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en;
+const serviceDraft = reactive({ url: appState.settings.playback_service?.url ?? 'http://127.0.0.1:8787', token: '' });
+const serviceBusy = ref(false), serviceError = ref('');
+async function connectService() {
+  const url = serviceDraft.url.trim().replace(/\/+$/, ''), token = serviceDraft.token.trim();
+  if (!url || (!token && !appState.settings.playback_service?.token_configured)) {
+    serviceError.value = word('请输入服务地址和令牌。', 'Enter the service address and token.'); return;
+  }
+  serviceBusy.value = true; serviceError.value = '';
+  try { await appController.connectPlaybackService(url, token); serviceDraft.token = ''; }
+  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
+  finally { serviceBusy.value = false; }
+}
+async function disconnectService() {
+  serviceBusy.value = true; serviceError.value = '';
+  try { await appController.disconnectPlaybackService(); }
+  catch (error) { serviceError.value = error instanceof Error ? error.message : String(error); }
+  finally { serviceBusy.value = false; }
+}
 const osTheme = useOsTheme();
 const languageOptions = [
   { value: "en", label: "English" },
@@ -80,6 +98,7 @@ const cacheBusy = ref(false), cacheError = ref(''), cacheNotice = ref('');
 const cacheSize = (bytes: number) => `${(bytes / 1048576).toLocaleString(locale.value, { maximumFractionDigits: 2 })} MiB`;
 function cacheFailure(error: unknown) { return error instanceof ApiFailure ? describeError(error.error) : String(error); }
 async function readCache() {
+  await prepareNativeCache();
   cache.value = await api.call('get_media_cache', {});
   cacheError.value = cache.value.last_error ? describeError(cache.value.last_error) : '';
 }
@@ -92,8 +111,11 @@ async function refreshCache() {
 async function clearCache() {
   cacheBusy.value = true; cacheError.value = ''; cacheNotice.value = '';
   try {
+    await prepareNativeCache();
     cache.value = await api.call('clear_media_cache', {});
-    cacheNotice.value = t(cache.value.pending_bytes ? 'Cache cleared. In-use data will be released when playback finishes reading it.' : 'Media cache cleared.');
+    cacheNotice.value = cache.value.pending_bytes
+      ? word('缓存已清理，正在使用的数据将在播放读取结束后释放。', 'Cache cleared. In-use data will be released when playback finishes reading it.')
+      : word('本地缓存已清理。', 'Local cache cleared.');
   } catch (error) {
     const message = cacheFailure(error);
     try { await readCache(); } catch { /* Preserve the clear failure when the status query also fails. */ }
@@ -115,9 +137,13 @@ onMounted(() => { void refreshCache(); });
     </div>
   </div>
   <section v-if="!preview" class="settings-group service-settings">
-    <h2>{{ t('Source manager') }}</h2>
-    <div class="settings-panel"><SourceSettings section="metadata" @select="(id, role) => emit('select', id, role)" /></div>
-    <div class="settings-panel"><SourceSettings section="playback" @select="(id, role) => emit('select', id, role)" /></div>
+    <h2>{{ word('服务连接', 'Service connection') }}</h2>
+    <div class="settings-panel">
+      <div class="setting-row"><label for="service-address">{{ word('服务地址', 'Service address') }}</label><input id="service-address" v-model="serviceDraft.url" class="setting-select" :disabled="serviceBusy" /></div>
+      <div class="setting-row"><label for="service-token">{{ word('访问令牌', 'Access token') }}</label><input id="service-token" v-model="serviceDraft.token" type="password" autocomplete="off" :placeholder="appState.settings.playback_service?.token_configured ? word('已配置，留空保持不变', 'Configured; leave blank to keep') : ''" class="setting-select" :disabled="serviceBusy" /></div>
+      <div class="setting-row"><span>{{ appState.settings.playback_service?.enabled ? word('已配置', 'Configured') : word('未连接', 'Disconnected') }}</span><div class="cache-limit-controls"><NButton type="primary" :disabled="serviceBusy" @click="connectService">{{ word('连接', 'Connect') }}</NButton><NButton v-if="appState.settings.playback_service?.enabled" :disabled="serviceBusy" @click="disconnectService">{{ word('断开', 'Disconnect') }}</NButton></div></div>
+      <NAlert v-if="serviceError" type="error" role="alert">{{ serviceError }}</NAlert>
+    </div>
   </section>
   <section class="settings-group appearance-panel">
     <h2>{{ t("Appearance") }}</h2>
@@ -214,11 +240,11 @@ onMounted(() => { void refreshCache(); });
   </section>
   <details class="settings-group storage-settings"><summary>{{ word('存储与数据', 'Storage and data') }}</summary>
   <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
-    <h2>{{ t('Media cache') }}</h2>
+    <h2>{{ word('本地缓存', 'Local cache') }}</h2>
     <div class="settings-panel">
-    <p>{{ word('播放数据保留最近 15 集，较早的缓存会自动清理。', 'Playback data is kept for the 15 most recent episodes.') }}</p>
+    <p>{{ word('缓存最多保留 7 天，总容量上限为 1 GiB。', 'Cache is kept for up to 7 days, with a total limit of 1 GiB.') }}</p>
     <p v-if="preview">{{ t('Manage media cache in the desktop app.') }}</p>
-    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ t('Clear media cache') }}</NButton></div></div>
+    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ word('清除本地缓存', 'Clear local cache') }}</NButton></div></div>
     <NAlert v-if="cacheError" type="error" class="media-cache-error">{{ cacheError }}</NAlert>
     <p v-if="cacheNotice" role="status" class="media-cache-notice">{{ cacheNotice }}</p>
       </div>

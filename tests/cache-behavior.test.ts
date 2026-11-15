@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { metadataCache, METADATA_TTL } from '../src/metadata-cache.ts';
 import { sourceChecks, SOURCE_CHECK_INTERVAL } from '../src/source-health.ts';
-import { catalogCache } from '../src/catalog-cache.ts';
+import { catalogCache, CATALOG_TTL } from '../src/catalog-cache.ts';
 import { BackgroundRefresh } from '../src/background-refresh.ts';
 
 function storage() {
@@ -46,7 +46,7 @@ test('film details survive restart for seven days without saving gateway URLs', 
   assert.equal(cached?.value.details.title, 'Film');
   assert.deepEqual(cached?.value.images, {});
   assert.equal(cached?.stale, false);
-  assert.equal(reopened.get(ref, 'zh-CN', 'host-two', 1000 + METADATA_TTL)?.stale, true);
+  assert.equal(reopened.get(ref, 'zh-CN', 'host-two', 1000 + METADATA_TTL), null);
   assert.deepEqual(reopened.due('zh-CN', 1000 + METADATA_TTL - 1), []);
   assert.deepEqual(reopened.due('zh-CN', 1000 + METADATA_TTL), [ref]);
   assert.equal(reopened.get({ ...ref, source_revision: 'changed' }, 'zh-CN', 'host-two'), null);
@@ -63,6 +63,9 @@ test('catalog rows reuse safe cards, isolate filters and refresh image access af
   const reopened = catalogCache(() => store);
   const value = reopened.get(source, 'section', { genre: 'drama' }, 'en', 'host-two', 1001);
   assert.equal(value?.items[0]?.title, 'Film');
+  assert.equal(reopened.get(source, 'section', { genre: 'drama' }, 'en', 'host-two', 1000 + CATALOG_TTL - 1)?.stale, false);
+  assert.equal(reopened.get(source, 'section', { genre: 'drama' }, 'en', 'host-two', 1000 + CATALOG_TTL)?.stale, true);
+  assert.equal(CATALOG_TTL, 7 * 24 * 60 * 60 * 1000);
   assert.equal(value?.hasNext, false);
   assert.equal(value?.imagesReady, false);
   assert.equal(reopened.get(source, 'section', { genre: 'comedy' }, 'en', 'host-two'), null);
@@ -105,7 +108,7 @@ test('cache invalidation reports storage write failures', async () => {
   assert.equal(cache.get(source, 'section', {}, 'en', 'host', 2001)?.items[0]?.title, 'https://example.invalid/new');
 });
 
-test('film details retain the latest 200 titles', () => {
+test('film details do not evict entries solely because their count exceeds 200', () => {
   const store = storage(), cache = metadataCache(() => store);
   for (let index = 0; index <= 200; index++) {
     const ref = { source_id: 's', source_revision: 'r', data: `${index}` };
@@ -114,9 +117,9 @@ test('film details retain the latest 200 titles', () => {
     cache.put(ref, 'en', 'host', value, index);
   }
   const reopened = metadataCache(() => store);
-  assert.equal(reopened.get({ source_id: 's', source_revision: 'r', data: '0' }, 'en', 'host'), null);
-  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '1' }, 'en', 'host'));
-  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '200' }, 'en', 'host'));
+  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '0' }, 'en', 'host', 201));
+  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '1' }, 'en', 'host', 201));
+  assert.ok(reopened.get({ source_id: 's', source_revision: 'r', data: '200' }, 'en', 'host', 201));
 });
 
 test('background refresh waits for idle and never runs two updates together', async t => {

@@ -1243,7 +1243,8 @@ async fn transfer(
                 );
                 headers.insert(
                     "cache-control",
-                    "private, max-age=60".parse().expect("static header"),
+                    // MediaCache owns the durable copy and its shared budget.
+                    "no-store".parse().expect("static header"),
                 );
                 *sent = true;
                 return watched(
@@ -1711,7 +1712,7 @@ async fn transfer(
         output.insert("content-type", mime.parse().expect("Static image MIME"));
         output.insert(
             "cache-control",
-            "private, max-age=60".parse().expect("Static cache header"),
+            "no-store".parse().expect("Static cache header"),
         );
         *sent = true;
         return watched(

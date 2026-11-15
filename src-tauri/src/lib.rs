@@ -54,6 +54,16 @@ fn app_reset(window: WebviewWindow) -> Result<(), String> {
 
 #[cfg(not(mobile))]
 #[tauri::command]
+async fn app_cache(window: WebviewWindow, host: tauri::State<'_, std::sync::Arc<host::Host>>, action: String, store: String, key: String, row: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    require_main(&window)?;
+    let host = host.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || host.web_cache(&action, &store, &key, row))
+        .await.map_err(|_| "Cache worker failed".to_owned())?
+        .map_err(|error| error.message)
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
 fn app_reset_recovery(window: WebviewWindow, action: String) -> Result<(), String> {
     require_main(&window)?;
     if window.try_state::<reset::RecoveryState>().is_none() {
@@ -247,6 +257,7 @@ pub fn run() {
         app_service_import,
         app_service_delete,
         app_playback_sources,
+        app_cache,
         automation::t01_control
     ];
     #[cfg(all(not(mobile), not(feature = "t01-automation")))]
@@ -260,7 +271,8 @@ pub fn run() {
         app_reset_recovery,
         app_service_import,
         app_service_delete,
-        app_playback_sources
+        app_playback_sources,
+        app_cache
     ];
     #[cfg(mobile)]
     let prototype: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = |_| false;
@@ -356,7 +368,10 @@ pub fn run() {
                     return Ok(());
                 }
             }
-            let settings_path = app.path().app_data_dir()?.join("settings.json");
+            let data_path = app.path().app_data_dir()?;
+            #[cfg(not(mobile))]
+            reset::clear_runtime_cache(&app.path().app_cache_dir()?, &data_path)?;
+            let settings_path = data_path.join("settings.json");
             let host = host::Host::open(settings_path)
                 .map_err(|error| std::io::Error::other(error.message))?;
             // The ordinary entry queries runtime_status before mounting. Prepare

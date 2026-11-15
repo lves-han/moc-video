@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 pub const DEFAULT_LIMIT: u64 = 256 * 1024 * 1024;
 const HEADER: u64 = 4096;
-const MAX_ENTRIES: usize = 4096;
+const CACHE_TTL: u64 = 7 * 24 * 60 * 60;
 const HEADERS: &[&str] = &[
     "content-type",
     "content-range",
@@ -202,9 +202,11 @@ struct Reservation {
 struct State {
     limit: u64,
     episode_mode: bool,
+    ready: bool,
     episode_order: Vec<String>,
     generation: u64,
     sequence: u64,
+    last_sweep: u64,
     initialized: bool,
     available: bool,
     directory_lock: Option<File>,
@@ -240,13 +242,164 @@ impl State {
 pub struct MediaCache {
     root: Option<PathBuf>,
     state: Mutex<State>,
+    blob_lock: Mutex<()>,
+    image_lock: Mutex<()>,
 }
 impl MediaCache {
+    /// Store an application-owned cache value in the same budget as media bytes.
+    pub(crate) fn put_blob(self: &Arc<Self>, key: &str, bytes: &[u8]) -> Result<(), ApiError> {
+        self.put_blob_at(key, bytes, now())
+    }
+
+    pub(crate) fn put_blob_at(
+        self: &Arc<Self>,
+        key: &str,
+        bytes: &[u8],
+        created: u64,
+    ) -> Result<(), ApiError> {
+        let _guard = self
+            .blob_lock
+            .lock()
+            .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+        let at = now();
+        if created > at || created.saturating_add(CACHE_TTL) <= at {
+            return Err(ApiError::bad("Cache value has expired"));
+        }
+        let cache_key = format!("{:x}", Sha256::digest(key.as_bytes()));
+        let owner = format!("blob-{cache_key}");
+        {
+            let mut state = self.state.lock().expect("cache lock");
+            if !state.ready {
+                return Err(ApiError::internal("Legacy cache cleanup is pending"));
+            }
+            if !self.prepare(&mut state) {
+                return Err(state
+                    .last_error
+                    .clone()
+                    .unwrap_or_else(|| ApiError::internal("Cache unavailable")));
+            }
+            self.prune_expired(&mut state);
+            if state.entries.contains_key(&cache_key) && !self.remove(&mut state, &cache_key) {
+                return Err(ApiError::internal("Cache value is in use"));
+            }
+        }
+        let headers = HeaderMap::new();
+        let mut writer = self
+            .begin_episode_at(
+                cache_key.clone(),
+                200,
+                &headers,
+                &headers,
+                Some(bytes.len() as u64),
+                self.generation(),
+                Some(&owner),
+            )
+            .ok_or_else(|| ApiError::internal("Cache capacity unavailable"))?;
+        writer.metadata.created = created;
+        writer.metadata.expires = created + CACHE_TTL;
+        if key.starts_with("web:catalog:") {
+            writer.metadata.resource = Some("web:catalog".to_owned());
+        } else if key.starts_with("web:details:") {
+            writer.metadata.resource = Some("web:details".to_owned());
+        }
+        if !writer.append(bytes) {
+            return Err(ApiError::internal("Cache write failed"));
+        }
+        writer.finish();
+        if self.get(&cache_key).is_none() {
+            return Err(ApiError::internal("Cache publish failed"));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn get_blob(self: &Arc<Self>, key: &str) -> Option<Vec<u8>> {
+        let cache_key = format!("{:x}", Sha256::digest(key.as_bytes()));
+        let mut reader = self.get(&cache_key)?;
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).ok()?;
+        Some(bytes)
+    }
+
+    pub(crate) fn delete_blob(&self, key: &str) -> Result<(), ApiError> {
+        let _guard = self
+            .blob_lock
+            .lock()
+            .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+        let cache_key = format!("{:x}", Sha256::digest(key.as_bytes()));
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+        if !self.prepare(&mut state) {
+            return Err(state
+                .last_error
+                .clone()
+                .unwrap_or_else(|| ApiError::internal("Cache unavailable")));
+        }
+        if let Some(entry) = state.entries.get_mut(&cache_key) {
+            entry.retired = true;
+        }
+        if !self.remove(&mut state, &cache_key)
+            && state
+                .entries
+                .get(&cache_key)
+                .is_some_and(|entry| entry.readers == 0)
+        {
+            return Err(state
+                .last_error
+                .clone()
+                .unwrap_or_else(|| ApiError::internal("Cache deletion failed")));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn web_rows(self: &Arc<Self>, store: &str) -> Result<Vec<Value>, ApiError> {
+        let tag = format!("web:{store}");
+        let keys = {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+            if !self.prepare(&mut state) {
+                return Err(state
+                    .last_error
+                    .clone()
+                    .unwrap_or_else(|| ApiError::internal("Cache unavailable")));
+            }
+            state
+                .entries
+                .iter()
+                .filter(|(_, entry)| entry.metadata.resource.as_deref() == Some(tag.as_str()))
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>()
+        };
+        let mut rows = Vec::new();
+        for key in keys {
+            if let Some(mut reader) = self.get(&key) {
+                let mut bytes = Vec::new();
+                if reader.read_to_end(&mut bytes).is_ok() {
+                    if let Ok(row) = serde_json::from_slice(&bytes) {
+                        rows.push(row);
+                    }
+                }
+            }
+        }
+        Ok(rows)
+    }
+
     pub fn new(root: PathBuf, limit: u64) -> Arc<Self> {
         Self::build(Some(root), limit, false)
     }
     pub fn for_episodes(root: PathBuf) -> Arc<Self> {
-        Self::build(Some(root), 9_007_199_254_740_991, true)
+        Self::build(Some(root), 1024 * 1024 * 1024, true)
+    }
+    pub fn for_app(root: PathBuf) -> Arc<Self> {
+        let cache = Self::for_episodes(root);
+        cache.state.lock().expect("cache lock").ready = false;
+        cache
+    }
+    pub(crate) fn enable_after_legacy_cleanup(&self) {
+        self.state.lock().expect("cache lock").ready = true;
     }
     pub fn disabled() -> Arc<Self> {
         Self::build(None, 0, false)
@@ -254,12 +407,16 @@ impl MediaCache {
     fn build(root: Option<PathBuf>, limit: u64, episode_mode: bool) -> Arc<Self> {
         Arc::new(Self {
             root,
+            blob_lock: Mutex::new(()),
+            image_lock: Mutex::new(()),
             state: Mutex::new(State {
                 limit,
                 episode_mode,
+                ready: true,
                 episode_order: Vec::new(),
                 generation: 0,
                 sequence: 0,
+                last_sweep: 0,
                 initialized: false,
                 available: false,
                 directory_lock: None,
@@ -269,89 +426,47 @@ impl MediaCache {
             }),
         })
     }
-    fn image_database(&self) -> Result<Option<rusqlite::Connection>, ApiError> {
-        let Some(root) = &self.root else {
-            return Ok(None);
-        };
-        let parent = root
-            .parent()
-            .ok_or_else(|| ApiError::internal("Image cache directory missing"))?;
-        fs::create_dir_all(parent).map_err(|e| io_error("image directory", &e))?;
-        let path = parent.join("detail-images.sqlite3");
-        let mut options = fs::OpenOptions::new();
-        options.write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        drop(
-            options
-                .open(&path)
-                .map_err(|e| io_error("image database", &e))?,
-        );
-        let db = rusqlite::Connection::open(path)
-            .map_err(|_| ApiError::internal("Image cache database unavailable"))?;
-        db.busy_timeout(std::time::Duration::from_secs(3))
-            .map_err(|_| ApiError::internal("Image cache unavailable"))?;
-        db.execute_batch("CREATE TABLE IF NOT EXISTS owners(id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT UNIQUE NOT NULL); CREATE TABLE IF NOT EXISTS images(image_key TEXT PRIMARY KEY, body BLOB, mime TEXT); CREATE TABLE IF NOT EXISTS image_owners(owner TEXT NOT NULL, image_key TEXT NOT NULL, PRIMARY KEY(owner,image_key));").map_err(|_| ApiError::internal("Image cache initialization failed"))?;
-        Ok(Some(db))
-    }
     pub fn register_images(&self, owner: &str, keys: &[String]) -> Result<(), ApiError> {
-        let Some(mut db) = self.image_database()? else {
-            return Ok(());
-        };
-        let tx = db
-            .transaction()
-            .map_err(|_| ApiError::internal("Image cache transaction failed"))?;
-        tx.execute("INSERT OR REPLACE INTO owners(owner) VALUES(?1)", [owner])
-            .map_err(|_| ApiError::internal("Image cache update failed"))?;
-        for key in keys {
-            tx.execute("INSERT OR IGNORE INTO images(image_key) VALUES(?1)", [key])
-                .map_err(|_| ApiError::internal("Image cache update failed"))?;
-            tx.execute(
-                "INSERT OR IGNORE INTO image_owners(owner,image_key) VALUES(?1,?2)",
-                rusqlite::params![owner, key],
-            )
-            .map_err(|_| ApiError::internal("Image cache update failed"))?;
-        }
-        tx.execute("DELETE FROM image_owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 200)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
-        tx.execute("DELETE FROM owners WHERE owner IN (SELECT owner FROM owners ORDER BY id DESC LIMIT -1 OFFSET 200)", []).map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
-        tx.execute(
-            "DELETE FROM images WHERE image_key NOT IN (SELECT image_key FROM image_owners)",
-            [],
-        )
-        .map_err(|_| ApiError::internal("Image cache cleanup failed"))?;
-        tx.commit()
-            .map_err(|_| ApiError::internal("Image cache commit failed"))
-    }
-    pub fn touch_image_owner(&self, owner: &str) -> Result<(), ApiError> {
-        let Some(db) = self.image_database()? else {
-            return Ok(());
-        };
-        db.execute(
-            "UPDATE owners SET id=(SELECT COALESCE(MAX(id),0)+1 FROM owners) WHERE owner=?1",
-            [owner],
-        )
-        .map_err(|_| ApiError::internal("Image cache recency update failed"))?;
+        let _ = (owner, keys);
         Ok(())
     }
-    pub fn cached_image(&self, key: &str) -> Result<Option<(Vec<u8>, String)>, ApiError> {
-        use rusqlite::OptionalExtension;
-        let Some(db) = self.image_database()? else {
+    pub fn touch_image_owner(&self, owner: &str) -> Result<(), ApiError> {
+        let _ = owner;
+        Ok(())
+    }
+    pub fn cached_image(
+        self: &Arc<Self>,
+        key: &str,
+    ) -> Result<Option<(Vec<u8>, String)>, ApiError> {
+        let _guard = self
+            .image_lock
+            .lock()
+            .map_err(|_| ApiError::internal("Image cache lock unavailable"))?;
+        let Some(bytes) = self.get_blob(&format!("image:{key}")) else {
             return Ok(None);
         };
-        db.query_row("SELECT body,mime FROM images WHERE image_key=?1 AND body IS NOT NULL AND mime IS NOT NULL", [key], |row| Ok((row.get(0)?,row.get(1)?))).optional().map_err(|_| ApiError::internal("Image cache read failed"))
-    }
-    pub fn save_image(&self, key: &str, body: &[u8], mime: &str) -> Result<(), ApiError> {
-        let Some(db) = self.image_database()? else {
-            return Ok(());
+        let Some(split) = bytes.iter().position(|byte| *byte == 0) else {
+            return Ok(None);
         };
-        db.execute(
-            "UPDATE images SET body=?2,mime=?3 WHERE image_key=?1",
-            rusqlite::params![key, body, mime],
-        )
-        .map_err(|_| ApiError::internal("Image cache write failed"))?;
+        let Ok(mime) = std::str::from_utf8(&bytes[..split]) else {
+            return Ok(None);
+        };
+        Ok(Some((bytes[split + 1..].to_vec(), mime.to_owned())))
+    }
+    pub fn save_image(
+        self: &Arc<Self>,
+        key: &str,
+        body: &[u8],
+        mime: &str,
+    ) -> Result<(), ApiError> {
+        let _guard = self
+            .image_lock
+            .lock()
+            .map_err(|_| ApiError::internal("Image cache lock unavailable"))?;
+        let mut blob = mime.as_bytes().to_vec();
+        blob.push(0);
+        blob.extend_from_slice(body);
+        self.put_blob(&format!("image:{key}"), &blob)?;
         Ok(())
     }
     fn path(&self, key: &str) -> PathBuf {
@@ -412,8 +527,14 @@ impl MediaCache {
                     None
                 };
                 let at = now();
-                if let Some((metadata, size)) =
-                    metadata.filter(|(m, _)| m.created <= at && m.expires > at)
+                if let Some((metadata, size)) = metadata
+                    .map(|(mut m, size)| {
+                        if m.episode.is_some() {
+                            m.expires = m.expires.min(m.created.saturating_add(CACHE_TTL));
+                        }
+                        (m, size)
+                    })
+                    .filter(|(m, _)| m.created <= at && m.expires > at)
                 {
                     let modified = item.metadata()?.modified().unwrap_or(UNIX_EPOCH);
                     files.push((modified, key.to_owned(), metadata, size));
@@ -428,8 +549,10 @@ impl MediaCache {
                         .episode
                         .get_or_insert_with(|| "legacy".to_owned())
                         .clone();
-                    state.episode_order.retain(|existing| existing != &owner);
-                    state.episode_order.push(owner);
+                    if !owner.starts_with("blob-") {
+                        state.episode_order.retain(|existing| existing != &owner);
+                        state.episode_order.push(owner);
+                    }
                 }
                 state.sequence += 1;
                 state.entries.insert(
@@ -448,8 +571,15 @@ impl MediaCache {
         match result {
             Ok(()) => {
                 state.available = true;
-                self.make_room(state, 0);
-                true
+                if self.make_room(state, 0) {
+                    true
+                } else {
+                    state.available = false;
+                    if state.last_error.is_none() {
+                        state.last_error = Some(ApiError::internal("Cache exceeds the configured limit"));
+                    }
+                    false
+                }
             }
             Err(error) => {
                 state.last_error = Some(io_error("open", &error));
@@ -479,16 +609,31 @@ impl MediaCache {
             }
         }
     }
-    fn make_room(&self, state: &mut State, extra: u64) -> bool {
-        if state.episode_mode {
-            return true;
+    fn prune_expired(&self, state: &mut State) {
+        let at = now();
+        if state.last_sweep <= at && at - state.last_sweep < 3600 {
+            return;
         }
+        state.last_sweep = at;
+        let expired: Vec<_> = state
+            .entries
+            .iter()
+            .filter(|(_, entry)| entry.metadata.created > at || entry.metadata.expires <= at)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in expired {
+            if let Some(entry) = state.entries.get_mut(&key) {
+                entry.retired = true;
+            }
+            self.remove(state, &key);
+        }
+    }
+    fn make_room(&self, state: &mut State, extra: u64) -> bool {
         let mut attempted: Vec<String> = Vec::new();
         while state
             .used()
             .checked_add(extra)
             .is_none_or(|n| n > state.limit)
-            || state.entries.len() + state.pending.len() >= MAX_ENTRIES
         {
             let candidate = state
                 .entries
@@ -518,6 +663,9 @@ impl MediaCache {
             state.initialized = false;
         }
         self.prepare(&mut state);
+        if state.available {
+            self.prune_expired(&mut state);
+        }
         check()?;
         Ok(state.status())
     }
@@ -802,6 +950,7 @@ impl MediaCache {
                 .clone()
                 .unwrap_or_else(|| ApiError::internal("Media cache is unavailable")));
         }
+        self.prune_expired(&mut state);
         state.episode_order.retain(|item| item != owner);
         state.episode_order.push(owner.to_owned());
         let existing: Vec<_> = state
@@ -813,21 +962,6 @@ impl MediaCache {
         for key in existing {
             if let Ok(file) = fs::OpenOptions::new().write(true).open(self.path(&key)) {
                 let _ = file.set_times(fs::FileTimes::new().set_modified(SystemTime::now()));
-            }
-        }
-        while state.episode_order.len() > 15 {
-            let oldest = state.episode_order.remove(0);
-            let keys: Vec<_> = state
-                .entries
-                .iter()
-                .filter(|(_, entry)| entry.metadata.episode.as_deref() == Some(oldest.as_str()))
-                .map(|(key, _)| key.clone())
-                .collect();
-            for key in keys {
-                if let Some(entry) = state.entries.get_mut(&key) {
-                    entry.retired = true;
-                }
-                self.remove(&mut state, &key);
             }
         }
         Ok(())
@@ -870,9 +1004,8 @@ impl MediaCache {
             return None;
         }
         let at = now();
-        // Explicit episode caching retains media until the episode is evicted.
         let ttl = if episode.is_some() {
-            u64::MAX.saturating_sub(at)
+            CACHE_TTL
         } else {
             freshness(upstream, at)?
         };
@@ -898,10 +1031,13 @@ impl MediaCache {
             return None;
         }
         let mut state = self.state.lock().expect("cache lock");
-        if state.generation != expected_generation
+        if !state.ready
+            || state.generation != expected_generation
             || (state.episode_mode
-                && episode
-                    .is_none_or(|owner| !state.episode_order.iter().any(|item| item == owner)))
+                && episode.is_none_or(|owner| {
+                    !owner.starts_with("blob-")
+                        && !state.episode_order.iter().any(|item| item == owner)
+                }))
         {
             return None;
         }
@@ -1120,11 +1256,9 @@ impl CacheWrite {
         if reservation.generation != state.generation
             || state.entries.contains_key(&self.key)
             || (state.episode_mode
-                && self
-                    .metadata
-                    .episode
-                    .as_ref()
-                    .is_none_or(|owner| !state.episode_order.contains(owner)))
+                && self.metadata.episode.as_ref().is_none_or(|owner| {
+                    !owner.starts_with("blob-") && !state.episode_order.contains(owner)
+                }))
         {
             return;
         }
@@ -1271,7 +1405,7 @@ mod tests {
     }
 
     #[test]
-    fn media_cache_retains_last_fifteen_episodes_across_restart() {
+    fn media_cache_retains_more_than_fifteen_episodes_across_restart() {
         let root = tempfile::tempdir().unwrap();
         let cache = MediaCache::for_episodes(root.path().join("media-cache"));
         let headers = headers();
@@ -1298,18 +1432,50 @@ mod tests {
         cache.register_episode("episode-0").unwrap();
         put("episode-15");
         assert!(cache.get(&id("episode-0")).is_some());
-        assert!(cache.get(&id("episode-1")).is_none());
+        assert!(cache.get(&id("episode-1")).is_some());
         assert!(cache.get(&id("episode-15")).is_some());
         drop(cache);
         let cache = MediaCache::for_episodes(root.path().join("media-cache"));
         cache.register_episode("episode-16").unwrap();
         assert!(cache.get(&id("episode-0")).is_some());
-        assert!(cache.get(&id("episode-2")).is_none());
+        assert!(cache.get(&id("episode-2")).is_some());
     }
 
     #[test]
-    fn detail_images_retain_the_most_recent_200_titles_across_restart() {
-        let (root, cache) = cache(0);
+    fn episode_cache_evicts_by_bytes_and_expires_after_seven_days() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::build(
+            Some(root.path().join("media-cache")),
+            2 * (HEADER + 8),
+            true,
+        );
+        let headers = headers();
+        for owner in ["first", "second", "third"] {
+            cache.register_episode(owner).unwrap();
+            let mut writer = cache
+                .begin_episode_at(
+                    id(owner),
+                    200,
+                    &headers,
+                    &headers,
+                    Some(8),
+                    cache.generation(),
+                    Some(owner),
+                )
+                .unwrap();
+            assert_eq!(writer.metadata.expires - writer.metadata.created, CACHE_TTL);
+            assert!(writer.append(&[7; 8]));
+            writer.finish();
+        }
+        assert!(cache.get(&id("first")).is_none());
+        assert!(cache.get(&id("second")).is_some());
+        assert!(cache.get(&id("third")).is_some());
+        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= 2 * (HEADER + 8));
+    }
+
+    #[test]
+    fn detail_images_retain_more_than_200_titles_across_restart() {
+        let (root, cache) = cache(4 * 1024 * 1024);
         for id in 0..200 {
             let image = format!("image-{id}");
             cache
@@ -1324,13 +1490,280 @@ mod tests {
             .register_images("title-200", &["image-200".into()])
             .unwrap();
         assert!(cache.cached_image("image-0").unwrap().is_some());
-        assert!(cache.cached_image("image-1").unwrap().is_none());
+        assert!(cache.cached_image("image-1").unwrap().is_some());
         drop(cache);
-        let restarted = MediaCache::new(root.path().join("media-cache"), 0);
+        let restarted = MediaCache::new(root.path().join("media-cache"), 4 * 1024 * 1024);
         assert_eq!(
             restarted.cached_image("image-0").unwrap().unwrap().0,
             vec![0; 8]
         );
+    }
+
+    #[test]
+    fn detail_images_expire_after_seven_days() {
+        let (_, cache) = cache(1024 * 1024);
+        cache.register_images("title", &["image".into()]).unwrap();
+        cache.save_image("image", b"image", "image/png").unwrap();
+        let blob_key = format!("{:x}", Sha256::digest(b"image:image"));
+        cache
+            .state
+            .lock()
+            .unwrap()
+            .entries
+            .get_mut(&blob_key)
+            .unwrap()
+            .metadata
+            .expires = now();
+        assert!(cache.cached_image("image").unwrap().is_none());
+    }
+
+    #[test]
+    fn concurrent_writers_share_the_media_budget() {
+        use std::sync::Barrier;
+        let root = tempfile::tempdir().unwrap();
+        let budget = 4 * (HEADER + 128);
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), budget, true);
+        let barrier = Arc::new(Barrier::new(12));
+        let threads: Vec<_> = (0..12)
+            .map(|n| {
+                let cache = cache.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    let owner = format!("episode-{n}");
+                    cache.register_episode(&owner).unwrap();
+                    barrier.wait();
+                    let headers = headers();
+                    if let Some(mut writer) = cache.begin_episode_at(
+                        id(&owner),
+                        200,
+                        &headers,
+                        &headers,
+                        Some(128),
+                        cache.generation(),
+                        Some(&owner),
+                    ) {
+                        if writer.append(&[1; 128]) {
+                            writer.finish();
+                        }
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        let status = cache.status();
+        assert!(status["used_bytes"].as_u64().unwrap() <= budget);
+        assert!(status["entry_count"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn source_blobs_and_playback_share_the_same_budget() {
+        let root = tempfile::tempdir().unwrap();
+        let budget = 2 * (HEADER + 128);
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), budget, true);
+        let headers = headers();
+        cache.register_episode("playing").unwrap();
+        let mut writer = cache
+            .begin_episode_at(
+                id("playing"),
+                200,
+                &headers,
+                &headers,
+                Some(128),
+                cache.generation(),
+                Some("playing"),
+            )
+            .unwrap();
+        assert!(writer.append(&[7; 128]));
+        writer.finish();
+        let mut reader = cache.get(&id("playing")).unwrap();
+        cache.put_blob("source:first", &[1; 128]).unwrap();
+        cache.put_blob("source:second", &[2; 128]).unwrap();
+        assert!(cache.get_blob("source:first").is_none());
+        assert_eq!(cache.get_blob("source:second"), Some(vec![2; 128]));
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, vec![7; 128]);
+        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= budget);
+    }
+
+    #[test]
+    fn image_source_and_playback_writes_share_the_same_budget() {
+        use std::sync::Barrier;
+        let root = tempfile::tempdir().unwrap();
+        let budget = 2 * (HEADER + 256);
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), budget, true);
+        let headers = headers();
+        cache.register_episode("playing").unwrap();
+        let mut writer = cache
+            .begin_episode_at(
+                id("playing"),
+                200,
+                &headers,
+                &headers,
+                Some(128),
+                cache.generation(),
+                Some("playing"),
+            )
+            .unwrap();
+        assert!(writer.append(&[7; 128]));
+        writer.finish();
+        let mut reader = cache.get(&id("playing")).unwrap();
+        cache.register_images("title", &["poster".into()]).unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let source = {
+            let cache = cache.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                cache.put_blob("source:example", &[1; 128])
+            })
+        };
+        barrier.wait();
+        cache.save_image("poster", &[2; 128], "image/png").unwrap();
+        source.join().unwrap().unwrap();
+        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= budget);
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, vec![7; 128]);
+    }
+
+    #[test]
+    fn web_rows_share_budget_and_survive_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("media-cache");
+        let cache = MediaCache::build(Some(dir.clone()), 3 * (HEADER + 256), true);
+        cache
+            .put_blob("web:catalog:one", br#"{"key":"one","savedAt":1}"#)
+            .unwrap();
+        cache
+            .put_blob("web:details:two", br#"{"key":"two","savedAt":1}"#)
+            .unwrap();
+        cache.put_blob("source:three", b"snapshot").unwrap();
+        assert_eq!(cache.web_rows("details").unwrap()[0]["key"], "two");
+        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= 3 * (HEADER + 256));
+        drop(cache);
+        let cache = MediaCache::build(Some(dir), 3 * (HEADER + 256), true);
+        assert_eq!(cache.web_rows("catalog").unwrap()[0]["key"], "one");
+        cache
+            .put_blob("web:catalog:one", br#"{"key":"updated","savedAt":2}"#)
+            .unwrap();
+        assert_eq!(cache.web_rows("catalog").unwrap()[0]["key"], "updated");
+        cache.delete_blob("web:catalog:one").unwrap();
+        assert!(cache.get_blob("web:catalog:one").is_none());
+        assert!(cache.web_rows("catalog").unwrap().is_empty());
+    }
+
+    #[test]
+    fn web_source_image_and_active_playback_share_one_budget() {
+        use std::sync::Barrier;
+        let root = tempfile::tempdir().unwrap();
+        let budget = 2 * (HEADER + 512);
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), budget, true);
+        let headers = headers();
+        cache.register_episode("playing").unwrap();
+        let mut writer = cache
+            .begin_episode_at(
+                id("playing"),
+                200,
+                &headers,
+                &headers,
+                Some(128),
+                cache.generation(),
+                Some("playing"),
+            )
+            .unwrap();
+        assert!(writer.append(&[7; 128]));
+        writer.finish();
+        let mut reader = cache.get(&id("playing")).unwrap();
+        let barrier = Arc::new(Barrier::new(3));
+        let source = {
+            let cache = cache.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                cache.put_blob("source:sample", &[1; 128])
+            })
+        };
+        let web = {
+            let cache = cache.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                cache.put_blob("web:details:sample", br#"{"key":"sample","savedAt":1}"#)
+            })
+        };
+        barrier.wait();
+        cache.save_image("poster", &[2; 128], "image/png").unwrap();
+        source.join().unwrap().unwrap();
+        web.join().unwrap().unwrap();
+        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= budget);
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, vec![7; 128]);
+    }
+
+    #[test]
+    fn desktop_cache_budget_is_one_gibibyte() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::for_episodes(root.path().join("media-cache"));
+        assert_eq!(cache.status()["max_bytes"], 1024_u64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn desktop_does_not_write_until_legacy_web_cache_is_cleared() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::for_app(root.path().join("cache-v2"));
+        assert!(cache.put_blob("source:test", b"value").is_err());
+        cache.register_episode("playing").unwrap();
+        let headers = headers();
+        assert!(
+            cache
+                .begin_episode_at(
+                    id("playing"),
+                    200,
+                    &headers,
+                    &headers,
+                    Some(3),
+                    cache.generation(),
+                    Some("playing")
+                )
+                .is_none()
+        );
+        cache.enable_after_legacy_cleanup();
+        cache.put_blob("source:test", b"value").unwrap();
+        assert_eq!(cache.get_blob("source:test"), Some(b"value".to_vec()));
+    }
+
+    #[test]
+    fn clearing_episode_cache_keeps_active_reader_and_releases_it_afterwards() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), HEADER + 32, true);
+        let headers = headers();
+        cache.register_episode("playing").unwrap();
+        let mut writer = cache
+            .begin_episode_at(
+                id("playing"),
+                200,
+                &headers,
+                &headers,
+                Some(16),
+                cache.generation(),
+                Some("playing"),
+            )
+            .unwrap();
+        assert!(writer.append(&[7; 16]));
+        writer.finish();
+        let mut reader = cache.get(&id("playing")).unwrap();
+        let cleared = cache.clear().unwrap();
+        assert_eq!(cleared["pending_bytes"], HEADER + 16);
+        assert!(cache.get(&id("playing")).is_none());
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, vec![7; 16]);
+        drop(reader);
+        assert_eq!(cache.status()["used_bytes"], 0);
     }
 
     #[test]

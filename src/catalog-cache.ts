@@ -1,7 +1,7 @@
 import type { Bridge_HomeSection, Bridge_MediaCard, ImageAccessMap, SourceKey } from './models.ts';
-import { cacheDelete, cacheInvalidate, cacheRead, cacheWrite, hasIndexedCache, pruneCatalogCache } from './data/indexed-cache.ts';
+import { cacheDelete, cacheInvalidate, cacheRead, cacheWrite, hasIndexedCache, nativeCacheEnabled, pruneCatalogCache } from './data/indexed-cache.ts';
 
-export const CATALOG_TTL = 24 * 60 * 60 * 1000;
+export const CATALOG_TTL = 7 * 24 * 60 * 60 * 1000;
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -48,7 +48,7 @@ export function catalogCache(store: () => Store = () => localStorage) {
       }
       const saved = hasIndexedCache() ? await cacheRead<Row>('catalog', id) : null;
       if (saved?.invalidated) return null;
-      const row = saved ?? read().find(item => item.key === id);
+      const row = saved ?? (nativeCacheEnabled() ? undefined : read().find(item => item.key === id));
       if (!row || now < row.savedAt || now - row.savedAt >= CATALOG_TTL || row.items.some(item => !item || typeof item.id !== 'string' || typeof item.title !== 'string'
         || item.ref?.source_id !== source.source_id || item.ref?.source_revision !== source.source_revision || typeof item.ref.data !== 'string')) return null;
       const validPage = Number.isSafeInteger(row.page) && (row.page ?? 0) >= 1;

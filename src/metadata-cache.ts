@@ -1,11 +1,10 @@
 import type { Bridge_MediaRef, DetailsViewData } from './models.ts';
-import { cacheDelete, cacheInvalidate, cacheRead, cacheRows, cacheWrite, hasIndexedCache } from './data/indexed-cache.ts';
+import { cacheDelete, cacheInvalidate, cacheRead, cacheRows, cacheWrite, hasIndexedCache, nativeCacheEnabled } from './data/indexed-cache.ts';
 
 export const METADATA_TTL = 7 * 24 * 60 * 60 * 1000;
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const KEY = 'moc-video.metadata.v1';
-const MAX_ENTRIES = 200;
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 type Entry = { key: string; savedAt: number; value: DetailsViewData; invalidated?: boolean };
 const sameRef = (a: Bridge_MediaRef | undefined, b: Bridge_MediaRef) => Boolean(a && a.source_id === b.source_id
@@ -42,7 +41,8 @@ export function metadataCache(store: () => Store = () => localStorage) {
         } catch { return false; }
       }).sort((a, b) => a.savedAt - b.savedAt).map(row => row.value.details.ref);
   const restore = (item: Entry | undefined | null, ref: Bridge_MediaRef, now: number) => {
-    if (!item || !sameRef(item.value.details.ref, ref) || !sameRef(item.value.metadata_ref?.content_ref, ref)
+    if (!item || now < item.savedAt || now - item.savedAt >= METADATA_TTL
+        || !sameRef(item.value.details.ref, ref) || !sameRef(item.value.metadata_ref?.content_ref, ref)
         || !item.value.metadata_ref?.identity || !['config_id', 'addon_key', 'namespace', 'type', 'meta_id', 'canonical_id']
           .every(field => typeof (item.value.metadata_ref!.identity as unknown as Record<string, unknown>)[field] === 'string')
         || typeof item.value.details.title !== 'string' || !Array.isArray(item.value.details.groups)
@@ -59,28 +59,34 @@ export function metadataCache(store: () => Store = () => localStorage) {
     },
     get(ref: Bridge_MediaRef, locale: string, host: string, now = Date.now()) {
       const id = key(ref, locale), active = memory.get(id);
-      if (active && active.host === host) return { value: copy(active.value), stale: now < active.savedAt || now - active.savedAt >= METADATA_TTL, imagesReady: true };
+      if (active && (now < active.savedAt || now - active.savedAt >= METADATA_TTL)) memory.delete(id);
+      else if (active && active.host === host) return { value: copy(active.value), stale: false, imagesReady: true };
       if (hasIndexedCache()) return null;
       const item = read().find(row => row.key === id);
       return restore(item, ref, now);
     },
     async getPersistent(ref: Bridge_MediaRef, locale: string, host: string, now = Date.now()) {
       const id = key(ref, locale), active = memory.get(id);
-      if (active && active.host === host) {
+      if (active && (now < active.savedAt || now - active.savedAt >= METADATA_TTL)) memory.delete(id);
+      else if (active && active.host === host) {
         memory.delete(id); memory.set(id, active);
         if (hasIndexedCache()) await cacheRead<Entry>('details', id);
         return { value: copy(active.value), stale: now < active.savedAt || now - active.savedAt >= METADATA_TTL, imagesReady: true };
       }
       const saved = hasIndexedCache() ? await cacheRead<Entry>('details', id) : null;
       if (saved?.invalidated) return null;
-      const item = saved ?? read().find(row => row.key === id);
+      const item = saved ?? (nativeCacheEnabled() ? undefined : read().find(row => row.key === id));
+      if (item && (now < item.savedAt || now - item.savedAt >= METADATA_TTL)) {
+        invalidateLegacy(id);
+        if (saved) await cacheDelete('details', id);
+        return null;
+      }
       return restore(item, ref, now);
     },
     put(ref: Bridge_MediaRef, locale: string, host: string, value: DetailsViewData, now = Date.now()) {
       const id = key(ref, locale);
       memory.delete(id);
       memory.set(id, { host, value: copy(value), savedAt: now });
-      if (memory.size > MAX_ENTRIES) memory.delete(memory.keys().next().value!);
       // Gateway URLs and media URLs contain short-lived credentials. Keep only
       // display DTOs and opaque references; image access is reacquired later.
       const safe = { ...copy(value), images: {} };
@@ -91,7 +97,6 @@ export function metadataCache(store: () => Store = () => localStorage) {
       }
       const rows = read().filter(row => row.key !== id);
       rows.push({ key: id, savedAt: now, value: safe });
-      while (rows.length > MAX_ENTRIES) rows.shift();
       if (!hasIndexedCache()) { try { store().setItem(KEY, JSON.stringify(rows)); } catch { /* The live response remains usable. */ } }
     },
     async putPersistent(ref: Bridge_MediaRef, locale: string, host: string, value: DetailsViewData, now = Date.now()) {

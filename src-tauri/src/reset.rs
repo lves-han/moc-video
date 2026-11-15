@@ -10,6 +10,20 @@ use tauri::{Manager, Runtime};
 
 const MARKER: &[u8] = b"moc-video-reset-v1\n";
 
+/// Clear the application-owned WebView/network cache before opening a WebView.
+pub(crate) fn clear_runtime_cache(cache: &Path, data: &Path) -> io::Result<()> {
+    if !cache.is_absolute() || !data.is_absolute() || cache == data || data.starts_with(cache) {
+        return Err(io::Error::other("Runtime cache path overlaps application data"));
+    }
+    match fs::symlink_metadata(cache) {
+        Ok(info) if info.file_type().is_symlink() => Err(io::Error::other("Runtime cache path is redirected")),
+        Ok(info) if info.is_dir() => fs::remove_dir_all(cache),
+        Ok(_) => Err(io::Error::other("Runtime cache path is not a directory")),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 /// Validate before scheduling deletion: macOS relaunch can reject symlinked
 /// executables, while a Linux AppImage may have been moved or made non-executable.
 pub(crate) fn check_relaunch_path(path: &Path) -> io::Result<()> {
@@ -312,6 +326,23 @@ impl ResetPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_cache_cleanup_keeps_settings_and_history() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("data");
+        let cache = root.path().join("cache");
+        fs::create_dir(&data).unwrap();
+        fs::create_dir(&cache).unwrap();
+        fs::write(data.join("settings.json"), b"settings").unwrap();
+        fs::write(data.join("moc-video.db"), b"history").unwrap();
+        fs::write(cache.join("network-cache"), b"cached").unwrap();
+        clear_runtime_cache(&cache, &data).unwrap();
+        assert!(!cache.exists());
+        assert_eq!(fs::read(data.join("settings.json")).unwrap(), b"settings");
+        assert_eq!(fs::read(data.join("moc-video.db")).unwrap(), b"history");
+        assert!(clear_runtime_cache(root.path(), &data).is_err());
+    }
 
     const ID: &str = "app.moc.video.reset-test";
     fn plan(temp: &Path) -> ResetPlan {

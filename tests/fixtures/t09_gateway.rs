@@ -1167,7 +1167,7 @@ fn t09_image_decoders_byte_pixel_limits_and_mime() {
             response.headers["content-length"],
             response.body.len().to_string()
         );
-        assert_eq!(response.headers["cache-control"], "private, max-age=60");
+        assert_eq!(response.headers["cache-control"], "no-store");
         assert_eq!(
             response.headers["etag"],
             format!("\"{:x}\"", Sha256::digest(&response.body))
@@ -1644,7 +1644,7 @@ fn detail_image_cache_survives_gateway_restart() {
     let root = dir.path().join("media-cache");
     let image = image_record(fixture.url("/persistent-image"));
     let key = crate::media_cache::key("source", "image", &image.url, &image.headers);
-    let cache = crate::media_cache::MediaCache::new(root.clone(), 0);
+    let cache = crate::media_cache::MediaCache::new(root.clone(), 1024 * 1024);
     cache
         .register_images("title", std::slice::from_ref(&key))
         .unwrap();
@@ -1658,17 +1658,15 @@ fn detail_image_cache_survives_gateway_restart() {
             Some("title".into()),
         )
         .unwrap();
-    assert_eq!(
-        fetch(access["url"].as_str().unwrap(), "GET", &[]).status,
-        200
-    );
-    assert_eq!(
-        fetch(access["url"].as_str().unwrap(), "GET", &[]).status,
-        200
-    );
+    let first = fetch(access["url"].as_str().unwrap(), "GET", &[]);
+    assert_eq!(first.status, 200);
+    assert_eq!(first.headers["cache-control"], "no-store");
+    let cached = fetch(access["url"].as_str().unwrap(), "GET", &[]);
+    assert_eq!(cached.status, 200);
+    assert_eq!(cached.headers["cache-control"], "no-store");
     assert_eq!(fixture.state.requests.lock().unwrap().len(), 1);
     drop(gateway);
-    let cache = crate::media_cache::MediaCache::new(root, 0);
+    let cache = crate::media_cache::MediaCache::new(root, 1024 * 1024);
     cache
         .register_images("title", std::slice::from_ref(&key))
         .unwrap();
