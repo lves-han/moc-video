@@ -36,6 +36,7 @@ pub struct Line {
     pub quality: Option<String>,
     pub size_bytes: Option<u64>,
     pub description: Option<String>,
+    pub playlist: Option<Value>,
     pub availability: String,
     pub availability_key: Option<String>,
     pub latency_ms: Option<u64>,

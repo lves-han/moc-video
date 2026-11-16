@@ -1670,7 +1670,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Why the line has no play field: needs_sniffing, unsupported_media_format, unsupported_protocol_or_script, a JSON parser failure (parser_request_failed, parser_invalid_response, parser_url_missing, parser_url_invalid, parser_headers_invalid, parser_config_invalid), or an adapter reason such as external_url_unsupported."
+            "description": "Why the line is unavailable, including recent_playback_failure, needs_sniffing, unsupported_media_format, unsupported_protocol_or_script, a JSON parser failure (parser_request_failed, parser_invalid_response, parser_url_missing, parser_url_invalid, parser_headers_invalid, parser_config_invalid), or an adapter reason such as external_url_unsupported."
           },
           "size_bytes": {
             "type": "integer",
@@ -1678,6 +1678,18 @@
             "maximum": 9007199254740991,
             "nullable": true,
             "description": "Video size in bytes when supplied by the source."
+          },
+          "playlist": {
+            "type": "object",
+            "nullable": true,
+            "description": "完整 HLS 媒体清单的检测摘要。",
+            "required": ["segment_count", "duration_ms", "complete", "first_segment_decoded"],
+            "properties": {
+              "segment_count": { "type": "integer", "minimum": 1 },
+              "duration_ms": { "type": "integer", "minimum": 1 },
+              "complete": { "type": "boolean" },
+              "first_segment_decoded": { "type": "boolean", "nullable": true }
+            }
           },
           "description": {
             "type": "string",

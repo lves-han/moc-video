@@ -14,7 +14,7 @@ async fn template_key(state: &AppState, target: &Value, source: &Value) -> Resul
         .map(|p| json!([p["id"], p["revision"], p["enabled"]]))
         .collect();
     Ok(format!(
-        "line-info:v2:{:x}",
+        "line-info:v3:{:x}",
         Sha256::digest(
             json!([target, source["id"], source["revision"], versions])
                 .to_string()
@@ -81,7 +81,7 @@ pub async fn store(state: &AppState, target: &Value, template: &Template) -> Res
             "file"
         };
         lines.push(json!({"flag":item["flag"], "episode":{"label":episode["label"], "locator":episode["locator"], "url":"", "resolved":true,
-            "cached_kind":kind, "requires_parse":episode["requires_parse"], "unsupported_reason":episode["unsupported_reason"],
+            "cached_kind":kind, "requires_parse":episode["requires_parse"], "unsupported_reason":episode["unsupported_reason"], "playlist":episode["playlist"],
             "quality":episode["quality"], "description":episode["description"], "size_bytes":episode["size_bytes"],
             "availability":episode["availability"], "availability_key":episode["availability_key"], "latency_ms":episode["latency_ms"],
             "availability_checked_at":episode["availability_checked_at"], "availability_expires_at":episode["availability_expires_at"]}}));
@@ -118,7 +118,7 @@ fn probe_key(
     versions: &[Value],
 ) -> String {
     format!(
-        "availability:v2:{:x}",
+        "availability:v3:{:x}",
         Sha256::digest(
             json!([
                 target,
@@ -144,7 +144,7 @@ pub async fn invalidate_line(state: &AppState, line: &crate::state::Line) -> Res
     if let Some(key) = line
         .availability_key
         .as_deref()
-        .filter(|key| key.starts_with("availability:v2:"))
+        .filter(|key| key.starts_with("availability:v3:"))
     {
         return state
             .cache
@@ -243,13 +243,20 @@ pub async fn inspect(
             let result = crate::metadata::http::probe(url, header_map, hls).await;
             drop(permit);
             let now = crate::metadata::cache::now();
-            let item_ttl = if result.is_ok() { TTL } else { FAILED_TTL };
-            let value = json!({"status":if result.is_ok() {"ready"} else {"failed"},"latency_ms":if result.is_ok() {Some(start.elapsed().as_millis() as u64)} else {None},"size_bytes":line["episode"]["size_bytes"].as_u64().or_else(|| result.ok().flatten()),"quality":line["episode"]["quality"],"description":line["episode"]["description"],"checked_at":now,"expires_at":now+item_ttl});
+            let status = match &result {
+                Ok(probe) if probe.playlist.as_ref().is_none_or(|playlist| playlist.complete && playlist.first_segment_decoded == Some(true)) => "ready",
+                Ok(probe) if probe.playlist.as_ref().is_some_and(|playlist| playlist.first_segment_decoded == Some(false)) => "failed",
+                Ok(_) | Err(crate::metadata::http::Error::DecoderUnavailable | crate::metadata::http::Error::Timeout | crate::metadata::http::Error::SampleIncomplete) => "unknown",
+                Err(_) => "failed",
+            };
+            if matches!(&result, Err(crate::metadata::http::Error::DecoderUnavailable)) { eprintln!("HLS decoder unavailable; availability remains unknown"); }
+            let item_ttl = if status == "ready" { TTL } else { FAILED_TTL };
+            let value = json!({"status":status,"latency_ms":if result.is_ok() {Some(start.elapsed().as_millis() as u64)} else {None},"size_bytes":line["episode"]["size_bytes"].as_u64().or_else(|| result.as_ref().ok().and_then(|probe| probe.size)),"playlist":result.as_ref().ok().and_then(|probe| probe.playlist.as_ref()),"quality":line["episode"]["quality"],"description":line["episode"]["description"],"checked_at":now,"expires_at":now+item_ttl});
             cache.put_async(&key, &value, item_ttl).await.map_err(|_| "availability cache failed")?;
             Ok::<_, &'static str>((index,value))
         });
     }
-    let deadline = tokio::time::sleep(std::time::Duration::from_secs(8));
+    let deadline = tokio::time::sleep(std::time::Duration::from_secs(18));
     tokio::pin!(deadline);
     loop {
         tokio::select! {
@@ -275,7 +282,7 @@ fn apply(item: &mut Value, cached: &Value) {
     item["episode"]["latency_ms"] = cached["latency_ms"].clone();
     item["episode"]["availability_checked_at"] = cached["checked_at"].clone();
     item["episode"]["availability_expires_at"] = cached["expires_at"].clone();
-    for field in ["size_bytes", "quality", "description"] {
+    for field in ["size_bytes", "quality", "description", "playlist"] {
         if item["episode"][field].is_null() {
             item["episode"][field] = cached[field].clone();
         }

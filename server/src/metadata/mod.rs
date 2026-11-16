@@ -6,3 +6,5 @@ pub mod stremio;
 pub mod tmdb;
 
 pub mod media;
+
+mod hls_probe;

@@ -112,6 +112,9 @@ fn shared_client() -> Result<&'static reqwest::Client, Error> {
 pub enum Error {
     Unauthorized,
     Failed,
+    DecoderUnavailable,
+    Timeout,
+    SampleIncomplete,
 }
 
 pub fn valid(url: &Url) -> bool {
@@ -128,7 +131,7 @@ pub(crate) fn allowed_header(name: &reqwest::header::HeaderName) -> bool {
     )
 }
 
-fn redirect(url: &Url, next: &Url, headers: &mut HeaderMap) -> Result<(), Error> {
+pub(super) fn redirect(url: &Url, next: &Url, headers: &mut HeaderMap) -> Result<(), Error> {
     if !valid(next) || (url.scheme() == "https" && next.scheme() != "https") {
         return Err(Error::Failed);
     }
@@ -188,14 +191,22 @@ pub async fn post_json(url: Url, headers: HeaderMap, body: &Value) -> Result<Val
     serde_json::from_slice(&bytes).map_err(|_| Error::Failed)
 }
 
-pub async fn probe(url: Url, mut headers: HeaderMap, hls: bool) -> Result<Option<u64>, Error> {
-    headers.insert(
-        reqwest::header::RANGE,
-        "bytes=0-65535".parse().map_err(|_| Error::Failed)?,
-    );
-    tokio::time::timeout(Duration::from_secs(7), probe_inner(url, headers, hls))
-        .await
-        .map_err(|_| Error::Failed)?
+#[derive(Clone, Debug)]
+pub struct Probe {
+    pub size: Option<u64>,
+    pub playlist: Option<super::hls_probe::PlaylistSummary>,
+}
+
+pub async fn probe(url: Url, mut headers: HeaderMap, hls: bool) -> Result<Probe, Error> {
+    if hls {
+        tokio::time::timeout(Duration::from_secs(15), super::hls_probe::inspect(url, headers))
+            .await.map_err(|_| Error::Timeout)?
+            .map(|playlist| Probe { size: None, playlist: Some(playlist) })
+    } else {
+        headers.insert(reqwest::header::RANGE, "bytes=0-65535".parse().map_err(|_| Error::Failed)?);
+        tokio::time::timeout(Duration::from_secs(7), probe_file(url, headers))
+            .await.map_err(|_| Error::Failed)?
+    }
 }
 
 fn media_body(body: &[u8], headers: &HeaderMap, encrypted: bool) -> Result<(), Error> {
@@ -233,129 +244,31 @@ fn media_body(body: &[u8], headers: &HeaderMap, encrypted: bool) -> Result<(), E
     }
 }
 
-fn attribute<'a>(line: &'a str, name: &str) -> Option<&'a str> {
-    let (_, mut rest) = line.split_once(':')?;
-    while !rest.is_empty() {
-        let (key, value) = rest.split_once('=')?;
-        if value.starts_with('"') {
-            let quoted = &value[1..];
-            let end = quoted.find('"')?;
-            let found = &quoted[..end];
-            rest = quoted[end + 1..].strip_prefix(',').unwrap_or("");
-            if key == name {
-                return Some(found);
-            }
-        } else {
-            let (found, next) = value.split_once(',').unwrap_or((value, ""));
-            rest = next;
-            if key == name {
-                return Some(found);
-            }
-        }
-    }
-    None
-}
-
-async fn probe_inner(
-    mut url: Url,
-    mut headers: HeaderMap,
-    hls: bool,
-) -> Result<Option<u64>, Error> {
-    if !hls {
-        let (body, response_headers, _, _) = fetch(url, headers, None, true).await?;
-        media_body(&body, &response_headers, false)?;
-        return Ok(response_headers
-            .get(reqwest::header::CONTENT_RANGE)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("bytes "))
-            .and_then(|v| v.split_once('/'))
-            .and_then(|(_, size)| size.parse::<u64>().ok())
-            .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991));
-    }
-    for _ in 0..3 {
-        let (body, _, final_url, effective_headers) =
-            fetch(url, headers.clone(), None, true).await?;
-        headers = effective_headers;
-        let text = std::str::from_utf8(&body).map_err(|_| Error::Failed)?;
-        if text.lines().next().map(str::trim_end) != Some("#EXTM3U") {
-            return Err(Error::Failed);
-        }
-        let mut variant = false;
-        let mut selected = None;
-        let mut key = None;
-        let mut encrypted = false;
-        let mut init = None;
-        for line in text.lines().map(str::trim) {
-            if line.starts_with("#EXT-X-STREAM-INF:") {
-                variant = true;
-                continue;
-            }
-            if line.starts_with("#EXT-X-KEY:") {
-                match attribute(line, "METHOD") {
-                    Some("NONE") => {
-                        encrypted = false;
-                        key = None;
-                    }
-                    Some("AES-128")
-                        if attribute(line, "KEYFORMAT").is_none_or(|value| value == "identity") =>
-                    {
-                        encrypted = true;
-                        key = Some(
-                            attribute(line, "URI")
-                                .filter(|value| !value.is_empty())
-                                .ok_or(Error::Failed)?,
-                        );
-                    }
-                    _ => return Err(Error::Failed),
-                }
-            }
-            if line.starts_with("#EXT-X-MAP:") {
-                init = Some(
-                    attribute(line, "URI")
-                        .filter(|value| !value.is_empty())
-                        .ok_or(Error::Failed)?,
-                );
-            }
-            if !line.is_empty() && !line.starts_with('#') {
-                selected = Some((line, variant));
-                break;
-            }
-        }
-        let (next, is_variant) = selected.ok_or(Error::Failed)?;
-        if let Some(key) = key {
-            let key_url = final_url.join(key).map_err(|_| Error::Failed)?;
-            let mut key_headers = headers.clone();
-            redirect(&final_url, &key_url, &mut key_headers)?;
-            key_headers.remove(reqwest::header::RANGE);
-            let (bytes, _, _, _) = fetch(key_url, key_headers, None, true).await?;
-            if bytes.len() != 16 {
-                return Err(Error::Failed);
-            }
-        }
-        if let Some(init) = init {
-            let init_url = final_url.join(init).map_err(|_| Error::Failed)?;
-            let mut init_headers = headers.clone();
-            redirect(&final_url, &init_url, &mut init_headers)?;
-            let (bytes, hdrs, _, _) = fetch(init_url, init_headers, None, true).await?;
-            media_body(&bytes, &hdrs, encrypted)?;
-        }
-        let next_url = final_url.join(next).map_err(|_| Error::Failed)?;
-        redirect(&final_url, &next_url, &mut headers)?;
-        if !is_variant {
-            let (bytes, hdrs, _, _) = fetch(next_url, headers, None, true).await?;
-            media_body(&bytes, &hdrs, encrypted)?;
-            return Ok(None);
-        }
-        url = next_url;
-    }
-    Err(Error::Failed)
+async fn probe_file(url: Url, headers: HeaderMap) -> Result<Probe, Error> {
+    let (body, response_headers, _, _) = fetch(url, headers, None, true).await?;
+    media_body(&body, &response_headers, false)?;
+    let size = response_headers.get(reqwest::header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("bytes "))
+        .and_then(|v| v.split_once('/')).and_then(|(_, size)| size.parse::<u64>().ok())
+        .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991);
+    Ok(Probe { size, playlist: None })
 }
 
 async fn fetch(
+    url: Url,
+    headers: HeaderMap,
+    body: Option<&Value>,
+    probe: bool,
+) -> Result<(Vec<u8>, HeaderMap, Url, HeaderMap), Error> {
+    fetch_limited(url, headers, body, if probe { 65_536 } else { 8 * 1024 * 1024 }, probe).await
+}
+
+pub(super) async fn fetch_limited(
     mut url: Url,
     mut headers: HeaderMap,
     body: Option<&Value>,
-    probe: bool,
+    limit: usize,
+    truncate: bool,
 ) -> Result<(Vec<u8>, HeaderMap, Url, HeaderMap), Error> {
     for _ in 0..=5 {
         if !valid(&url) {
@@ -371,7 +284,7 @@ async fn fetch(
             .headers(headers.clone())
             .send()
             .await
-            .map_err(|_| Error::Failed)?;
+            .map_err(|error| if error.is_timeout() { Error::Timeout } else { Error::Failed })?;
         if response.status().is_redirection() {
             let location = response
                 .headers()
@@ -400,15 +313,15 @@ async fn fetch(
         }
         let response_headers = response.headers().clone();
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|_| Error::Failed)? {
-            if probe {
-                let remaining = 65_536usize.saturating_sub(bytes.len());
+        while let Some(chunk) = response.chunk().await.map_err(|error| if error.is_timeout() { Error::Timeout } else { Error::Failed })? {
+            if truncate {
+                let remaining = limit.saturating_sub(bytes.len());
                 bytes.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
-                if bytes.len() >= 65_536 {
+                if bytes.len() >= limit {
                     break;
                 }
             } else {
-                if bytes.len() + chunk.len() > 8 * 1024 * 1024 {
+                if bytes.len().saturating_add(chunk.len()) > limit {
                     return Err(Error::Failed);
                 }
                 bytes.extend_from_slice(&chunk);
@@ -486,7 +399,7 @@ mod tests {
             )
             .route(
                 "/segment",
-                get(|| async { ([("content-type", "video/mp2t")], vec![0x47; 376]) }),
+                get(|| async { ([("content-type", "video/mp2t")], include_bytes!("testdata/video.mpegts").to_vec()) }),
             );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -502,10 +415,10 @@ mod tests {
                 .await
                 .is_ok()
         );
-        assert!(
+        assert_eq!(
             probe(endpoint("/bad-playlist"), HeaderMap::new(), true)
-                .await
-                .is_err()
+                .await.unwrap().playlist.unwrap().first_segment_decoded,
+            Some(false)
         );
         assert!(
             probe(endpoint("/master"), HeaderMap::new(), true)
@@ -543,7 +456,7 @@ mod tests {
                         seen.lock()
                             .unwrap()
                             .push(headers.contains_key(reqwest::header::AUTHORIZATION));
-                        vec![0x47; 376]
+                        include_bytes!("testdata/video.mpegts").to_vec()
                     }
                 }),
             );

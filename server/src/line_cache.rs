@@ -46,6 +46,12 @@ pub fn cache_key(target: &Value, source: &Value, parser_generation: u64) -> Stri
     )
 }
 
+/// A recent actual playback failure takes precedence over an older server probe.
+pub fn recent_failure(value: &Value, revision: u64, now: i64) -> bool {
+    value["last_outcome"] == "failed" && value["outcome_source_revision"].as_u64() == Some(revision)
+        && value["reported_at"].as_i64().is_some_and(|reported| reported <= now && now - reported < 300)
+}
+
 pub fn output(line_id: &str, line: &Line, history: &HashMap<String, Value>) -> Value {
     let url = Url::parse(&line.url)
         .ok()
@@ -72,7 +78,10 @@ pub fn output(line_id: &str, line: &Line, history: &HashMap<String, Value>) -> V
     let playable = kind != "unsupported";
     let mut value = json!({"line_id":line_id,"source_id":line.source_id,"source_revision":line.source_revision,
         "line_name":line.flag,"episode_label":line.episode_label,"kind":kind,"quality":line.quality,"size_bytes":line.size_bytes,"description":line.description,"availability":line.availability,"latency_ms":line.latency_ms,"availability_checked_at":line.availability_checked_at,"availability_expires_at":line.availability_expires_at,"target":line.target,
-        "expires_at":line.play_expires_at,"history":history.get(&line.logical_key).cloned().unwrap_or_else(||json!({"ok":0,"failed":0,"last_ok_at":null}))});
+        "expires_at":line.play_expires_at,"playlist":line.playlist,"history":history.get(&line.logical_key).cloned().unwrap_or_else(||json!({"ok":0,"failed":0,"last_ok_at":null}))});
+    if line.availability == "failed" && history.get(&line.logical_key).is_some_and(|value| recent_failure(value, line.source_revision, crate::metadata::cache::now())) {
+        value["reason"] = json!("recent_playback_failure");
+    }
     if !playable {
         value["reason"] = json!(if let Some(reason) = line.unsupported_reason.as_deref() {
             reason
@@ -125,13 +134,15 @@ pub fn issue(
             .get("locator")
             .filter(|v| !v.is_null())
             .cloned();
+        let logical_key = key(target, &template.source, &template.content_id, &locator);
+        let recently_failed = history.get(&logical_key).is_some_and(|value| recent_failure(value, revision, now));
         let line = Line {
             source_id: source_id.clone(),
             source_revision: revision,
             parser_generation: registry.parser_generation,
             content_id: template.content_id.clone(),
             target: target.clone(),
-            logical_key: key(target, &template.source, &template.content_id, &locator),
+            logical_key,
             locator,
             flag: item["flag"].as_str().unwrap_or("").to_owned(),
             episode_label: item["episode"]["label"].as_str().unwrap_or("").to_owned(),
@@ -142,13 +153,11 @@ pub fn issue(
                 .unwrap_or_else(|| template.source["headers"].clone()),
             quality: item["episode"]["quality"].as_str().map(str::to_owned),
             description: item["episode"]["description"].as_str().map(str::to_owned),
+            playlist: item["episode"].get("playlist").filter(|value| value.is_object()).cloned(),
             availability_key: item["episode"]["availability_key"]
                 .as_str()
                 .map(str::to_owned),
-            availability: item["episode"]["availability"]
-                .as_str()
-                .unwrap_or("unknown")
-                .to_owned(),
+            availability: if recently_failed { "failed" } else { item["episode"]["availability"].as_str().unwrap_or("unknown") }.to_owned(),
             latency_ms: item["episode"]["latency_ms"].as_u64(),
             availability_checked_at: item["episode"]["availability_checked_at"].as_i64(),
             availability_expires_at: item["episode"]["availability_expires_at"].as_i64(),
@@ -175,6 +184,29 @@ pub fn issue(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn actual_failure_temporarily_overrides_ready_probe_for_same_revision() {
+        let dir = tempfile::tempdir().unwrap(); crate::db::initialize(dir.path()).unwrap();
+        let reports = crate::reports::Store::new(dir.path()); let rt = tokio::runtime::Runtime::new().unwrap();
+        let runtime = Runtime { registry: Arc::new(Mutex::new(Registry::default())), lookup: Arc::new(std::sync::RwLock::new(crate::config::Lookup::default())) };
+        let target = json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:1","video_id":"tmdb:1"});
+        let template = |revision| Template { source: json!({"id":"s","revision":revision,"headers":{}}), content_id:"c".into(), lines: vec![json!({"flag":"hls","episode":{"label":"full","url":"https://media.test/a.m3u8","availability":"ready","locator":{"flag":"hls","episode":"full"}}})] };
+        let mut registry = Registry::default();
+        let first = issue(&mut registry, &runtime, &target, &template(2), &HashMap::new()).unwrap();
+        let line = registry.lines[ first[0]["line_id"].as_str().unwrap() ].clone();
+        reports.record(&line, "failed", None).unwrap();
+        let history = rt.block_on(reports.get_many(vec![line.logical_key.clone()])).unwrap();
+        let failed = issue(&mut registry, &runtime, &target, &template(2), &history).unwrap();
+        assert_eq!(failed[0]["availability"], "failed"); assert_eq!(failed[0]["reason"], "recent_playback_failure");
+        let changed = issue(&mut registry, &runtime, &target, &template(3), &history).unwrap();
+        assert_eq!(changed[0]["availability"], "ready");
+        assert!(!recent_failure(&json!({"last_outcome":"failed","reported_at":100,"outcome_source_revision":2}), 2, 400));
+        reports.record(&line, "playing", None).unwrap();
+        let history = rt.block_on(reports.get_many(vec![line.logical_key.clone()])).unwrap();
+        let recovered = issue(&mut registry, &runtime, &target, &template(2), &history).unwrap();
+        assert_eq!(recovered[0]["availability"], "ready");
+    }
 
     #[test]
     fn statistics_follow_the_line_across_source_revisions() {

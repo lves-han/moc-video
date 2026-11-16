@@ -40,7 +40,7 @@ docker compose -f packaging/playback-service.compose.yml up -d --build
 curl -fsS -H "Authorization: Bearer $SERVICE_TOKEN" -H 'Content-Type: application/json' --data-binary @sources.json "$SERVICE_URL/v1/sources/import"
 ```
 
-查找时服务端访问来源并检测线路，状态、清晰度、描述和大小保存到数据库，缓存期为一天。App 先取得展示信息，用户选择后调用 `POST /v1/lines/{id}/play` 获取播放地址及请求头。地址与请求头保留在短期内存中；可重新解析的缓存线路在选中时获取最新地址。缺少稳定身份的线路保留检测信息缓存，重查时重新访问来源以确保选中正确。
+服务端负责来源访问和线路检测。HLS 会完整读取清单，统计可用分片数量与总时长，并通过 FFmpeg 解码首个视频分片；完整点播清单通过检测后才标为可播放。检测结果包含 `playlist.segment_count`、`duration_ms`、`complete` 和 `first_segment_decoded`。解码器缺失、检测超时或清单尚未结束时状态为未知。镜像已包含 FFmpeg；直接运行二进制时需自行安装 `ffmpeg` 并确保其可通过 PATH 找到。稳定线路最近一次实际播放失败后，五分钟内降为失败并重新检测；同一来源的其他线路和新配置版本独立判断。App 先取得展示信息，用户选择后调用 `POST /v1/lines/{id}/play` 获取播放地址及请求头。地址与请求头保留在短期内存中；可重新解析的缓存线路在选中时获取最新地址。缺少稳定身份的线路保留检测信息缓存，重查时重新访问来源以确保选中正确。
 
 接口定义见 `protocol/service.openapi.json`；`/v1/parsers` 支持配置 JSON 解析接口的请求头、页面 URL 参数名及响应 URL 字段路径。
 

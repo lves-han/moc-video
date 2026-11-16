@@ -242,6 +242,17 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         ok_count INTEGER NOT NULL DEFAULT 0, fail_count INTEGER NOT NULL DEFAULT 0,
         last_ok_at INTEGER, last_latency_ms INTEGER);",
     )?;
+    // Add feedback fields in place so existing statistics remain intact.
+    let columns: Vec<String> = {
+        let mut statement = conn.prepare("PRAGMA table_info(line_stats)")?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(1))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    for (column, kind) in [("last_outcome", "TEXT"), ("reported_at", "INTEGER"), ("outcome_source_revision", "INTEGER")] {
+        if !columns.iter().any(|existing| existing == column) {
+            conn.execute_batch(&format!("ALTER TABLE line_stats ADD COLUMN {column} {kind};"))?;
+        }
+    }
     conn.execute_batch("CREATE TABLE IF NOT EXISTS source_playback_stats (
         target_key TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL,
         last_outcome TEXT NOT NULL, reported_at INTEGER NOT NULL,
@@ -253,6 +264,19 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn playback_feedback_columns_upgrade_existing_rows_and_are_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("service.sqlite3");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE line_stats (logical_key TEXT PRIMARY KEY, source_id TEXT NOT NULL, content_id TEXT NOT NULL, ok_count INTEGER NOT NULL DEFAULT 0, fail_count INTEGER NOT NULL DEFAULT 0, last_ok_at INTEGER, last_latency_ms INTEGER); INSERT INTO line_stats(logical_key,source_id,content_id,ok_count,fail_count) VALUES ('line','source','movie',2,7);").unwrap();
+        drop(conn);
+        initialize(dir.path()).unwrap(); initialize(dir.path()).unwrap();
+        let conn = rusqlite::Connection::open(path).unwrap();
+        let row: (u64, u64, Option<String>, Option<i64>, Option<u64>) = conn.query_row("SELECT ok_count,fail_count,last_outcome,reported_at,outcome_source_revision FROM line_stats WHERE logical_key='line'", [], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?))).unwrap();
+        assert_eq!(row, (2, 7, None, None, None));
+    }
 
     #[test]
     fn mappings_gain_season_key_and_keep_rows() {

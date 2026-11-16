@@ -21,15 +21,15 @@ impl Store {
         crate::db::sync_with(&self.path, |conn| Self::get_conn(conn, &key))
     }
     fn get_conn(conn: &rusqlite::Connection, key: &str) -> rusqlite::Result<Value> {
-        let data: Option<(u64, u64, Option<i64>, Option<u64>)> = conn
+        let data: Option<(u64, u64, Option<i64>, Option<u64>, Option<String>, Option<i64>, Option<u64>)> = conn
             .query_row(
-                "SELECT ok_count,fail_count,last_ok_at,last_latency_ms FROM line_stats WHERE logical_key=?1",
+                "SELECT ok_count,fail_count,last_ok_at,last_latency_ms,last_outcome,reported_at,outcome_source_revision FROM line_stats WHERE logical_key=?1",
                 [key],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
             )
             .optional()?;
-        let (ok, failed, last, latency) = data.unwrap_or((0, 0, None, None));
-        Ok(json!({"ok":ok,"failed":failed,"last_ok_at":last,"last_latency_ms":latency}))
+        let (ok, failed, last, latency, outcome, reported_at, revision) = data.unwrap_or((0, 0, None, None, None, None, None));
+        Ok(json!({"ok":ok,"failed":failed,"last_ok_at":last,"last_latency_ms":latency,"last_outcome":outcome,"reported_at":reported_at,"outcome_source_revision":revision}))
     }
     pub async fn get_async(&self, key: &str) -> rusqlite::Result<Value> {
         let key = key.to_owned();
@@ -42,16 +42,16 @@ impl Store {
         crate::db::run_sqlite(self.path.clone(), move |conn| {
             let mut map = HashMap::with_capacity(keys.len());
             let mut stmt = conn.prepare_cached(
-                "SELECT ok_count,fail_count,last_ok_at,last_latency_ms FROM line_stats WHERE logical_key=?1",
+                "SELECT ok_count,fail_count,last_ok_at,last_latency_ms,last_outcome,reported_at,outcome_source_revision FROM line_stats WHERE logical_key=?1",
             )?;
             for key in keys {
-                let data: Option<(u64, u64, Option<i64>, Option<u64>)> = stmt
-                    .query_row([&key], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                let data: Option<(u64, u64, Option<i64>, Option<u64>, Option<String>, Option<i64>, Option<u64>)> = stmt
+                    .query_row([&key], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)))
                     .optional()?;
-                let (ok, failed, last, latency) = data.unwrap_or((0, 0, None, None));
+                let (ok, failed, last, latency, outcome, reported_at, revision) = data.unwrap_or((0, 0, None, None, None, None, None));
                 map.insert(
                     key,
-                    json!({"ok":ok,"failed":failed,"last_ok_at":last,"last_latency_ms":latency}),
+                    json!({"ok":ok,"failed":failed,"last_ok_at":last,"last_latency_ms":latency,"last_outcome":outcome,"reported_at":reported_at,"outcome_source_revision":revision}),
                 );
             }
             Ok(map)
@@ -140,7 +140,7 @@ impl Store {
         let last = (outcome == "playing").then(crate::metadata::cache::now);
         let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         if stable {
-            tx.execute("INSERT INTO line_stats(logical_key,source_id,content_id,ok_count,fail_count,last_ok_at,last_latency_ms) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(logical_key) DO UPDATE SET ok_count=ok_count+excluded.ok_count,fail_count=fail_count+excluded.fail_count,last_ok_at=COALESCE(excluded.last_ok_at,line_stats.last_ok_at),last_latency_ms=COALESCE(excluded.last_latency_ms,line_stats.last_latency_ms)",params![logical_key,source_id,content_id,ok,failed,last,latency])?;
+            tx.execute("INSERT INTO line_stats(logical_key,source_id,content_id,ok_count,fail_count,last_ok_at,last_latency_ms,last_outcome,reported_at,outcome_source_revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(logical_key) DO UPDATE SET ok_count=ok_count+excluded.ok_count,fail_count=fail_count+excluded.fail_count,last_ok_at=COALESCE(excluded.last_ok_at,line_stats.last_ok_at),last_latency_ms=COALESCE(excluded.last_latency_ms,line_stats.last_latency_ms),last_outcome=excluded.last_outcome,reported_at=excluded.reported_at,outcome_source_revision=excluded.outcome_source_revision",params![logical_key,source_id,content_id,ok,failed,last,latency,outcome,crate::metadata::cache::now(),source_revision])?;
         }
         tx.execute("INSERT INTO source_playback_stats(target_key,source_id,source_revision,last_outcome,reported_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(target_key,source_id,source_revision) DO UPDATE SET last_outcome=excluded.last_outcome,reported_at=excluded.reported_at",params![target_key,source_id,source_revision,outcome,crate::metadata::cache::now()])?;
         tx.commit()?;

@@ -794,7 +794,7 @@ async fn register_lines(
             .reports
             .get_many(history_keys(&target, template))
             .await
-            .unwrap_or_default()
+            .map_err(|_| "line history unavailable")?
     } else {
         HashMap::new()
     };
@@ -1005,11 +1005,10 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
     if let Err(message) = crate::availability::store(&state, &target, &template).await {
         return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
     }
-    let history = state
-        .reports
-        .get_many(history_keys(&target, &template))
-        .await
-        .unwrap_or_default();
+    let history = match state.reports.get_many(history_keys(&target, &template)).await {
+        Ok(value) => value,
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Line history unavailable"),
+    };
     let output = {
         let mut reg = state
             .lookup_runtime
@@ -1270,11 +1269,10 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
             return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", message);
         }
     }
-    let history = state
-        .reports
-        .get_many(vec![line.logical_key.clone()])
-        .await
-        .unwrap_or_default();
+    let history = match state.reports.get_many(vec![line.logical_key.clone()]).await {
+        Ok(value) => value,
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Line history unavailable"),
+    };
     let mut reg = state
         .lookup_runtime
         .registry
@@ -1301,14 +1299,14 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
         .unwrap_or_else(|| source["headers"].clone());
     current.quality = episode["quality"].as_str().map(str::to_owned);
     current.description = episode["description"].as_str().map(str::to_owned);
+    current.playlist = episode.get("playlist").filter(|value| value.is_object()).cloned();
     current.size_bytes = episode["size_bytes"]
         .as_u64()
         .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991);
     current.availability_key = episode["availability_key"].as_str().map(str::to_owned);
-    current.availability = episode["availability"]
-        .as_str()
-        .unwrap_or("unknown")
-        .to_owned();
+    current.availability = if history.get(&line.logical_key).is_some_and(|value| line_cache::recent_failure(value, line.source_revision, now)) {
+        "failed"
+    } else { episode["availability"].as_str().unwrap_or("unknown") }.to_owned();
     current.latency_ms = episode["latency_ms"].as_u64();
     current.availability_checked_at = episode["availability_checked_at"].as_i64();
     current.availability_expires_at = episode["availability_expires_at"].as_i64();
@@ -1376,6 +1374,13 @@ pub async fn play(State(state): State<AppState>, Path(id): Path<String>) -> Resp
             .expect("lookup registry");
         registry.lines.remove(&id);
         return expired("source_changed");
+    }
+    let history = match state.reports.get_many(vec![line.logical_key.clone()]).await {
+        Ok(value) => value,
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Line history unavailable"),
+    };
+    if history.get(&line.logical_key).is_some_and(|value| line_cache::recent_failure(value, line.source_revision, crate::metadata::cache::now())) {
+        return error(StatusCode::CONFLICT, "RECENT_PLAYBACK_FAILURE", "Recent playback failed; retry after the cooldown");
     }
     if line.availability != "ready" || line.needs_sniffing || line.unsupported_reason.is_some() {
         return error(

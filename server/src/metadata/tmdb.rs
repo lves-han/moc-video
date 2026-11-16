@@ -103,7 +103,7 @@ impl Tmdb {
             .await
             .map_err(|error| match error {
                 super::http::Error::Unauthorized => "TMDB API key was rejected",
-                super::http::Error::Failed => "TMDB upstream request failed",
+                super::http::Error::Failed | super::http::Error::DecoderUnavailable | super::http::Error::Timeout | super::http::Error::SampleIncomplete => "TMDB upstream request failed",
             })
     }
 

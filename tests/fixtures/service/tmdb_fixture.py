@@ -82,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
             if "ids" in query and query["ids"] != ["201"]: return self.send_json({"list":[]})
             if "wd" in query and query["wd"] != ["Show"]: return self.send_json({"list":[]})
             return self.send_json({"list":[video]})
-        if url.path == "/maccms":
+        if url.path in ("/maccms", "/maccms-long"):
             movie = {"vod_id":1,"vod_name":"Film","type_name":"电影","vod_year":"2020","vod_play_from":"fixture","vod_play_url":"Film$"+STATE["media_url"]}
             return self.send_json({"code":1,"page":1,"pagecount":1,"limit":20,"total":1,"list":[movie]})
         if url.path in ("/maccms-json", "/maccms-xml", "/maccms-invalid", "/maccms-match", "/maccms-slow"):
@@ -129,15 +129,21 @@ class Handler(BaseHTTPRequestHandler):
                 while STATE["hold_probe"] and time.monotonic() < deadline: time.sleep(.02)
                 STATE["slow_finished"] = True
             time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
-            payload = bytes([0x47]) * 376 if url.path.endswith('.ts') else b"\x00\x00\x00\x18ftypisomcontrolled-media-bytes"
+            payload = Path('/probe.ts').read_bytes() if url.path.endswith('.ts') else b"\x00\x00\x00\x18ftypisomcontrolled-media-bytes"
             self.send_response(206 if self.headers.get("Range") else 200)
             self.send_header("Content-Length", str(len(payload)))
             if self.headers.get("Range"): self.send_header("Content-Range", f"bytes 0-{len(payload)-1}/{len(payload)}")
             self.end_headers()
             self.wfile.write(payload)
             return
+        if url.path == "/hls/long.m3u8":
+            payload = ("#EXTM3U\n" + "".join(f"#EXTINF:1.5,\n/hls/segment.ts?i={i}&padding={'x'*40}\n" for i in range(1500)) + "#EXT-X-ENDLIST\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers(); self.wfile.write(payload); return
         if url.path in ("/hls/master.m3u8", "/hls/variant.m3u8"):
-            payload = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant.m3u8\n" if url.path.endswith("master.m3u8") else "#EXTM3U\n#EXTINF:1,\nsegment.ts\n").encode()
+            payload = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant.m3u8\n" if url.path.endswith("master.m3u8") else "#EXTM3U\n#EXTINF:1,\nsegment.ts\n#EXT-X-ENDLIST\n").encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
