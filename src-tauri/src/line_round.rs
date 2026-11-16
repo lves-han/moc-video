@@ -257,7 +257,8 @@ pub fn event(
             state.lookup_id = Some(id.to_owned());
             for source in value["sources"].as_array().into_iter().flatten() {
                 if let Some(id) = source["source_id"].as_str() {
-                    state.sources.insert(id.into(),json!({"source_id":id,"name":source["name"],"kind":source["kind"],"status":"pending"}));
+                    let last_playback = source["last_playback"].as_str().filter(|status| matches!(*status, "playing" | "failed"));
+                    state.sources.insert(id.into(),json!({"source_id":id,"name":source["name"],"kind":source["kind"],"status":"pending","last_playback":last_playback}));
                 }
             }
             if state.stop.load(Ordering::SeqCst) {

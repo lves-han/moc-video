@@ -62,7 +62,7 @@ async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
 }
 
 async fn manifest(state: &AppState, lang: &str) -> Result<serde_json::Value, &'static str> {
-    let key = state.cache.key("tmdb", "manifest", lang, "");
+    let key = state.cache.key("tmdb", "manifest-v2", lang, "");
     if let Some(value) = state.cache.get_async(&key).await.map_err(|_| "metadata cache read failed")? {
         return Ok(value);
     }
@@ -98,7 +98,7 @@ async fn catalog(
     }
     let key = state.cache.key(
         "tmdb",
-        "catalog",
+        "catalog-v2",
         lang,
         &serde_json::json!([kind, id, extra]).to_string(),
     );
@@ -128,7 +128,7 @@ async fn meta(
 ) -> Result<serde_json::Value, &'static str> {
     let key = state.cache.key(
         "tmdb",
-        "meta",
+        "meta-v2",
         lang,
         &serde_json::json!([kind, id]).to_string(),
     );
@@ -1068,30 +1068,21 @@ async fn stremio_options() -> impl IntoResponse {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::Config::load()?;
     db::initialize(&config.data_dir)?;
-    let token = Arc::<str>::from(config.token);
-    let tmdb = Arc::new(metadata::tmdb::Tmdb::from_env(&config.data_dir)?);
+    config.watch();
+    let token = Arc::<str>::from(config.token.clone());
+    let tmdb = Arc::new(metadata::tmdb::Tmdb::new(&config.data_dir, &config.tmdb_url, config.tmdb_key.clone())?);
     let cache = metadata::cache::Cache::new(&config.data_dir, tmdb.revision());
     cache.prepare_details()?;
     let sources = metadata::sources::Store::new(&config.data_dir);
     let playback_sources = sources::Store::new(&config.data_dir);
     let parsers = parsers::Store::new(&config.data_dir);
     let mappings = mappings::Store::new(&config.data_dir);
-    let lookup_runtime = state::Runtime::from_env()?;
+    let lookup_runtime = state::Runtime::new(config.lookup.clone());
     let reports = reports::Store::new(&config.data_dir);
     let home = Arc::new(tokio::sync::RwLock::new(metadata::home::initialize(
         &cache,
     )?));
-    let zone: chrono_tz::Tz = std::env::var("TZ")
-        .unwrap_or_else(|_| "Asia/Shanghai".into())
-        .parse()
-        .map_err(|_| "invalid TZ")?;
-    let poll = std::env::var("MOC_HOME_POLL_SECONDS")
-        .unwrap_or_else(|_| "60".into())
-        .parse::<u64>()?;
-    if poll == 0 {
-        return Err("MOC_HOME_POLL_SECONDS must be positive".into());
-    }
-    metadata::home::start(cache.clone(), tmdb.clone(), home.clone(), zone, poll);
+    metadata::home::start(cache.clone(), tmdb.clone(), home.clone(), config.timezone, config.home_poll_seconds);
     let app = Router::new()
         .route("/v1/health", get(health))
         .route(

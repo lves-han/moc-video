@@ -1272,7 +1272,7 @@ class ServerAvailability(LookupLifecycle):
         line=lines[0];self.assertEqual(line['availability'],'ready');self.assertNotIn('play',line)
         self.assertTrue(any(e.get('source_id')==disabled['id'] and e.get('status')=='disabled' for e in events))
         self.assertEqual(self.fixture_request('/stats')['counts'].get('/disabled-fixture',0),0)
-        self.assertEqual(line['size_bytes'],len(b'controlled-media-bytes'))
+        self.assertEqual(line['size_bytes'],len(b'\x00\x00\x00\x18ftypisomcontrolled-media-bytes'))
         self.assertEqual(line['availability_expires_at']-line['availability_checked_at'],86400)
         self.assertNotIn(media,json.dumps(events));type(self).first=line
         before=self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0);self.assertEqual(before,1)
@@ -1282,6 +1282,19 @@ class ServerAvailability(LookupLifecycle):
         selected=next(e['line'] for e in again if e['event']=='line')
         status,play=self.native('POST','/v1/lines/'+selected['line_id']+'/play',{})
         self.assertEqual(status,200,play);self.assertEqual(play['play']['url'],media)
+        self.assertEqual(self.native('POST','/v1/reports',{'line_id':selected['line_id'],'outcome':'playing'})[0],200)
+        _,verified=self.ndjson('/v1/lookups',request)
+        started=next(event for event in verified if event['event']=='started')
+        self.assertEqual(started['sources'][0]['source_id'],source['id'])
+        self.assertEqual(started['sources'][0]['last_playback'],'playing')
+        verified_line=next(event['line'] for event in verified if event['event']=='line')
+        self.assertEqual(self.native('POST','/v1/reports',{'line_id':verified_line['line_id'],'outcome':'failed'})[0],200)
+        before_retry=self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0)
+        _,retried=self.ndjson('/v1/lookups',request)
+        started=next(event for event in retried if event['event']=='started')
+        observed=next(item for item in started['sources'] if item['source_id']==source['id'])
+        self.assertEqual(observed['last_playback'],'failed')
+        self.assertGreater(self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0),before_retry)
 
     def test_2_cache_persists_and_expires(self):
         counts=self.fixture_request('/stats')['counts'];before=counts.get('/probe-fast.mp4',0);source_before=counts.get('/maccms',0)
@@ -1292,14 +1305,14 @@ class ServerAvailability(LookupLifecycle):
         counts=self.fixture_request('/stats')['counts']
         self.assertEqual(counts.get('/probe-fast.mp4',0),before)
         self.assertEqual(counts.get('/maccms',0),source_before)
-        database=docker('exec',self.fixture,'python','-c','import sqlite3,json; c=sqlite3.connect(\'/service-data/service.sqlite3\'); print(json.dumps(c.execute("select payload from metadata_cache where cache_key like \'line-info:v1:%\'").fetchall()))')
+        database=docker('exec',self.fixture,'python','-c','import sqlite3,json; c=sqlite3.connect(\'/service-data/service.sqlite3\'); print(json.dumps(c.execute("select payload from metadata_cache where cache_key like \'line-info:v2:%\'").fetchall()))')
         self.assertNotIn(self.media,database)
         status,play=self.native('POST','/v1/lines/'+line['line_id']+'/play',{})
         self.assertEqual(status,200,play);self.assertEqual(play['play']['url'],self.media)
         self.assertGreater(self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0),before)
         _,events=self.ndjson('/v1/lookups',self.lookup_request)
         before=self.fixture_request('/stats')['counts'].get('/probe-fast.mp4',0)
-        docker('exec',self.fixture,'python','-c','import sqlite3; c=sqlite3.connect(\'/service-data/service.sqlite3\'); c.execute("update metadata_cache set expires_at=0 where cache_key like \'line-info:v1:%\' or cache_key like \'availability:v1:%\'"); c.commit()')
+        docker('exec',self.fixture,'python','-c','import sqlite3; c=sqlite3.connect(\'/service-data/service.sqlite3\'); c.execute("update metadata_cache set expires_at=0 where cache_key like \'line-info:v2:%\' or cache_key like \'availability:v2:%\'"); c.commit()')
         self.start('app-token',self.fixture_env)
         _,events=self.ndjson('/v1/lookups',self.lookup_request)
         self.assertTrue(any(e['event']=='line' and e['line']['availability']=='ready' for e in events))
@@ -1395,6 +1408,38 @@ class ServerAvailability(LookupLifecycle):
             self.assertEqual(after.get(path), 1)
 
 
+    def test_9_toml_reload_and_environment_override(self):
+        def write_config(contents):
+            docker("exec", self.container, "sh", "-c", "printf '%s' \"$1\" > /data/service.toml", "sh", contents)
+
+        write_config('[service]\ntoken = "app-token"\n[lookup]\nhandle_ttl_seconds = 17\nline_cache_seconds = 23\n')
+        self.start(None, {**self.fixture_env, "MOC_SERVICE_CONFIG": "/data/service.toml"})
+        self.assertEqual(self.request("app-token")[0], 200)
+        request = self.input([], kind="movie")
+        def lifetime():
+            before = int(time.time())
+            status, events = self.ndjson("/v1/lookups", request)
+            self.assertEqual(status, 200, events)
+            return events[0]["lease_expires_at"] - before
+        self.assertIn(lifetime(), range(16, 19))
+        write_config('[service]\ntoken = "app-token"\n[lookup]\nhandle_ttl_seconds = 37\nline_cache_seconds = 41\n')
+        deadline = time.monotonic() + 9
+        while time.monotonic() < deadline and lifetime() not in range(36, 39):
+            time.sleep(.25)
+        self.assertIn(lifetime(), range(36, 39))
+        write_config('[lookup]\nhandle_ttl_seconds = 0\n')
+        time.sleep(6)
+        self.assertIn(lifetime(), range(36, 39))
+        self.assertEqual(self.request("app-token")[0], 200)
+        write_config('[service]\ntoken = "app-token"\n[lookup]\nhandle_ttl_seconds = 37\n')
+        self.start("environment-token", {**self.fixture_env, "MOC_SERVICE_CONFIG": "/data/service.toml", "MOC_HANDLE_TTL_SECONDS": "51"})
+        self.assertEqual(self.request("app-token")[0], 401)
+        self.assertEqual(self.request("environment-token")[0], 200)
+        self.start("app-token", {**self.fixture_env, "MOC_SERVICE_CONFIG": "/data/service.toml", "MOC_HANDLE_TTL_SECONDS": "51"})
+        self.assertIn(lifetime(), range(50, 53))
+        self.assertNotIn("app-token", docker("logs", self.container))
+
+
 class TmdbRegion(LookupLifecycle):
     test_1_stream_partial_failure = None
     test_2_confirm_cancel = None
@@ -1405,6 +1450,7 @@ class TmdbRegion(LookupLifecycle):
     def test_1_regions_are_declared(self):
         self.start('app-token',self.fixture_env)
         status,manifest=self.resource('zh-CN/manifest.json');self.assertEqual(status,200,manifest)
+        self.assertTrue(manifest.get('mocDiscoverFilters'))
         for kind in ('movie','series'):
             for id in ('tmdb.top','tmdb.latest','tmdb.year','tmdb.language'):
                 catalog=next(c for c in manifest['catalogs'] if c['type']==kind and c['id']==id)
@@ -1417,13 +1463,19 @@ class TmdbRegion(LookupLifecycle):
         for route in ('en-US/catalog/movie/tmdb.top/genre=Drama&region=HK&skip=20.json',
                       'en-US/catalog/series/tmdb.year/genre=2024&region=JP&skip=20.json',
                       'en-US/catalog/series/tmdb.language/genre=English&region=US.json',
-                      'zh-CN/catalog/movie/tmdb.latest/region=CN.json'):
+                      'zh-CN/catalog/movie/tmdb.latest/region=CN.json',
+                      'en-US/catalog/movie/tmdb.latest/moc_year=2024&moc_language=English&moc_genre=Drama&region=JP.json'):
             status,data=self.resource(route);self.assertEqual(status,200,data)
+        self.assertEqual(data['metas'][0]['released'], '2020-01-01T00:00:00Z')
+        status, detail = self.resource('en-US/meta/movie/tmdb:42.json')
+        self.assertEqual(status, 200, detail)
+        self.assertEqual(detail['meta']['released'], '2020-01-01T00:00:00Z')
         rows=self.fixture_request('/stats')['tmdb_requests']
         self.assertTrue(any(r['path']=='/3/discover/movie' and r['query'].get('with_origin_country')==['HK'] and r['query'].get('with_genres')==['18'] and r['query'].get('page')==['2'] for r in rows),rows)
         self.assertTrue(any(r['path']=='/3/discover/tv' and r['query'].get('with_origin_country')==['JP'] and r['query'].get('first_air_date_year')==['2024'] and r['query'].get('page')==['2'] for r in rows),rows)
         self.assertTrue(any(r['path']=='/3/discover/tv' and r['query'].get('with_origin_country')==['US'] and r['query'].get('with_original_language')==['en'] for r in rows),rows)
         self.assertTrue(any(r['path']=='/3/discover/movie' and r['query'].get('with_origin_country')==['CN'] and r['query'].get('language')==['zh-CN'] and r['query'].get('sort_by')==['primary_release_date.desc'] for r in rows),rows)
+        self.assertTrue(any(r['path']=='/3/discover/movie' and r['query'].get('primary_release_year')==['2024'] and r['query'].get('with_original_language')==['en'] and r['query'].get('with_genres')==['18'] and r['query'].get('with_origin_country')==['JP'] and r['query'].get('sort_by')==['primary_release_date.desc'] for r in rows), rows)
         status,error=self.resource('en-US/catalog/movie/tmdb.top/region=invalid.json')
         self.assertGreaterEqual(status,400,error)
 
@@ -1438,6 +1490,8 @@ class TmdbRegion(LookupLifecycle):
         self.assert_budget(fixture=True)
 
 
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--suite", required=True, choices=["service-core", "tmdb-metadata", "metadata-cache-home", "stremio-metadata", "app-metadata", "app-metadata-app", "playback-sources", "source-matching", "lookup-lifecycle", "native-line-round", "app-source-selection", "app-source-selection-app", "t4-query-adapters", "t4-rest-adapter", "stremio-stream-adapter", "json-parser", "provider-import-integration", "provider-import-integration-app", "server-availability", "tmdb-region"])
@@ -1446,7 +1500,7 @@ def main():
     args = parser.parse_args()
     test_class = {"service-core":ServiceCore, "tmdb-metadata":TmdbMetadata, "metadata-cache-home":CacheHome, "stremio-metadata":StremioMetadata, "app-metadata":AppMetadata, "app-metadata-app":AppMetadataApp, "playback-sources":PlaybackSources, "source-matching":SourceMatching, "lookup-lifecycle":LookupLifecycle, "native-line-round":NativeLineRound, "app-source-selection":AppSourceSelection, "app-source-selection-app":AppSourceSelectionApp, "t4-query-adapters":T4QueryAdapters, "t4-rest-adapter":T4RestAdapter, "stremio-stream-adapter":StremioStreamAdapter, "json-parser":JsonParser, "provider-import-integration":ProviderImportIntegration, "provider-import-integration-app":ProviderImportIntegrationApp, "server-availability":ServerAvailability, "tmdb-region":TmdbRegion}[args.suite]
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(test_class))
-    case_ids = {"tmdb-region":["tmdb-region-options", "tmdb-region-query", "tmdb-region-category"],"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed", "server-progressive-probes", "server-lookup-metadata-cache", "server-manifest-cache"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
+    case_ids = {"tmdb-region":["tmdb-region-options", "tmdb-region-query", "tmdb-region-category"],"server-availability":["server-cache-and-select", "server-cache-restart", "server-stremio-info", "server-stremio-cache-revision", "server-refresh-failed", "server-progressive-probes", "server-lookup-metadata-cache", "server-manifest-cache", "server-config-reload"],"provider-import-integration-app":["REQ-SERVICE-PROVIDERS/provider-app-t4-play", "REQ-SERVICE-PROVIDERS/provider-app-stremio-play"],"provider-import-integration":["REQ-SERVICE-PROVIDERS/provider-import-type-mapping", "REQ-SERVICE-PROVIDERS/provider-import-idempotent-skip", "REQ-SERVICE-PROVIDERS/provider-settings-contract"],"json-parser":["REQ-SERVICE-PROVIDERS/parser-config-flags", "REQ-SERVICE-PROVIDERS/parser-url-headers-result", "REQ-SERVICE-PROVIDERS/parser-failure-cache-revision"],"service-core":["REQ-SERVICE-META/core-config-auth", "REQ-SERVICE-META/core-token-restart", "REQ-SERVICE-META/core-redaction-resources"],
                 "tmdb-metadata":["REQ-SERVICE-META/tmdb-routes-fields", "REQ-SERVICE-META/tmdb-identity-language", "REQ-SERVICE-META/tmdb-auth-errors"],
                 "metadata-cache-home":["REQ-SERVICE-META/home-cold-start-daily", "REQ-SERVICE-META/cache-isolation-expiry", "REQ-SERVICE-META/home-failure-retains-snapshot"],
                 "stremio-metadata":["REQ-SERVICE-META/metadata-manifest-proxy", "REQ-SERVICE-META/metadata-source-identity-import", "REQ-SERVICE-META/metadata-capabilities-fallback", "REQ-SERVICE-META/metadata-multi-manifest-import"],
@@ -1463,7 +1517,7 @@ def main():
                 "lookup-lifecycle":["REQ-SERVICE-PLAY/lookup-stream-partial-failure", "REQ-SERVICE-PLAY/lookup-confirm-cancel", "REQ-SERVICE-PLAY/line-refresh-identity", "REQ-SERVICE-PLAY/line-cache-refresh-expiry", "REQ-SERVICE-PLAY/line-report-isolation"]}[args.suite]
     failures = {getattr(test, "_testMethodName", "setup"): message for test, message in result.failures + result.errors}
     suite = ET.Element("testsuite", tests=str(result.testsRun), failures=str(len(result.failures)), errors=str(len(result.errors)))
-    methods = {"tmdb-region":("test_1_regions_are_declared", "test_2_region_queries_and_combinations", "test_3_region_preserves_special_category"),"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line", "test_6_fast_line_is_visible_before_slow_probe_finishes", "test_7_lookup_reuses_cached_tmdb_details", "test_8_manifest_reuses_successful_configuration"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
+    methods = {"tmdb-region":("test_1_regions_are_declared", "test_2_region_queries_and_combinations", "test_3_region_preserves_special_category"),"server-availability":("test_1_server_probe_and_select", "test_2_cache_persists_and_expires", "test_3_stremio_descriptions", "test_4_stremio_cache_and_revision", "test_5_refresh_failed_line", "test_6_fast_line_is_visible_before_slow_probe_finishes", "test_7_lookup_reuses_cached_tmdb_details", "test_8_manifest_reuses_successful_configuration", "test_9_toml_reload_and_environment_override"),"provider-import-integration-app":("test_1_t4_play", "test_2_stremio_play"),"provider-import-integration":("test_1_type_mapping", "test_2_idempotent_skip", "test_3_settings_contract"),"json-parser":("test_1_config_flags", "test_2_url_headers_result", "test_3_failure_cache_revision"),"service-core":("test_1_config_auth", "test_2_token_restart_and_env_priority", "test_3_redaction_and_resources"),
                "tmdb-metadata":("test_1_routes_fields", "test_2_identity_language", "test_3_auth_errors"),
                "metadata-cache-home":("test_1_home_cold_start_daily", "test_2_cache_isolation_expiry", "test_3_home_failure_retains_snapshot"),
                "stremio-metadata":("test_1_manifest_proxy", "test_2_source_identity_import", "test_3_capabilities_fallback", "test_4_multi_manifest_import"),

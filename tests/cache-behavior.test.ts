@@ -141,3 +141,15 @@ test('background refresh waits for idle and never runs two updates together', as
   assert.equal(maximum, 1);
   queue.clear();
 });
+
+test('upcoming catalog cards refresh after the UTC date changes while remaining cached', () => {
+  const store = storage(), cache = catalogCache(() => store);
+  const source = { source_id: 's', source_revision: 'r' }, ref = { ...source, data: 'film' };
+  const section = { id: 's', title: 'Films', section_ref: 'handle', items: [{ id: 'film', title: 'Film', ref, kind: 'movie', status: 'upcoming' }], page: 1, index: 0, has_next: false, next_page: null } as never;
+  const saved = Date.UTC(2026, 10, 16, 23, 0);
+  cache.put(source, 's', {}, 'en', 'host', section, {}, saved);
+  assert.equal(cache.get(source, 's', {}, 'en', 'host', saved + 1000)?.stale, false);
+  const nextDay = cache.get(source, 's', {}, 'en', 'host', saved + 2 * 3600000);
+  assert.equal(nextDay?.stale, true);
+  assert.equal(nextDay?.items[0]?.title, 'Film');
+});

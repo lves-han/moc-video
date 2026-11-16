@@ -57,6 +57,8 @@ export function createPlaybackController(root: AppState = appState, client: Pick
   let player: Player | undefined;
   let video: HTMLVideoElement | undefined;
   let tail: Promise<void> = Promise.resolve();
+  let reportTail: Promise<void> = Promise.resolve();
+  const reported = new Map<string, 'playing' | 'failed'>();
   let pendingResume: ResumeSnapshot | null = null;
   let pendingLocalResume: number | null = null;
   let pendingLocalSession: PlaybackViewSession | null = null;
@@ -108,9 +110,21 @@ export function createPlaybackController(root: AppState = appState, client: Pick
     ui.action = error.code === "UNAUTHORIZED" ? "reconnect" : error.retryable || ["SESSION_EXPIRED", "UPSTREAM_FAILED", "UPSTREAM_TIMEOUT"].includes(error.code) ? "retry" : "";
   }
   function reportService(session: string, epoch: number, outcome: 'playing' | 'failed', errorCode?: string) {
-    void request('report_line_playback', { session_id: session, playback_epoch: epoch, outcome, ...(errorCode ? { error_code: errorCode } : {}) })
-      .then(result => { if (!result.reported && result.diagnostic && current(epoch)) ui.diagnostic = result.diagnostic; })
-      .catch(cause => { if (current(epoch)) ui.diagnostic = failure(cause).message; });
+    const key = `${session}:${epoch}`;
+    if (reported.get(key) === outcome) return;
+    reported.set(key, outcome);
+    reportTail = reportTail.then(async () => {
+      try {
+        const result = await client.call('report_line_playback', { session_id: session, playback_epoch: epoch, outcome, ...(errorCode ? { error_code: errorCode } : {}) });
+        if (!result.reported && result.diagnostic) {
+          if (reported.get(key) === outcome) reported.delete(key);
+          if (current(epoch)) ui.diagnostic = result.diagnostic;
+        }
+      } catch (cause) {
+        if (reported.get(key) === outcome) reported.delete(key);
+        if (current(epoch)) ui.diagnostic = failure(cause).message;
+      }
+    });
   }
 
   function snapshot(): ResumeSnapshot | null {
@@ -312,7 +326,7 @@ export function createPlaybackController(root: AppState = appState, client: Pick
         if (wasPlaying) void play();
       }
     } else if (event.type === "failed") {
-      if (serviceContext(state.context)) reportService(state.session.session_id, event.playback_epoch, 'failed', event.error.code);
+      if (serviceContext(state.context) && event.error.details?.reason !== "AUTOPLAY_BLOCKED") reportService(state.session.session_id, event.playback_epoch, 'failed', event.error.code);
       if (event.error.details?.reason === "AUTOPLAY_BLOCKED") { fail(event.error); ui.autoplayBlocked = true; ui.action = ""; }
       else if (event.error.details?.resource_kind) void diagnose(event.error, event.playback_epoch, state.session!);
       else { fail(event.error); if (state.context && serviceContext(state.context)) recoverService(structuredCloneContext(state.context), 'failed'); }
@@ -603,10 +617,20 @@ export function mergeHome(current: HomeViewData | null, incoming: HomeViewData, 
 
 
 type Ticket = { id: string; source: SourceKey | null; host: string | null; guest: string | null | undefined; locale: string; epoch: number };
-type ServiceLine = { line_id: string; source_id: string; source_name: string | null; line_name: string; episode_label: string; kind: string; quality: string | null; description: string | null; size_bytes: number | null; availability_checked_at: number | null; availability_expires_at: number | null; reason: string | null; probe_status: string; latency_ms: number | null };
+type ServiceLine = { line_id: string; source_id: string; source_name: string | null; line_name: string; episode_label: string; kind: string; quality: string | null; description: string | null; size_bytes: number | null; availability_checked_at: number | null; availability_expires_at: number | null; reason: string | null; probe_status: string; latency_ms: number | null; history?: { ok?: number; failed?: number; last_ok_at?: number | null } };
 type ServiceLinePreference = Pick<ServiceLine, "source_id" | "line_name" | "quality">;
 type ServiceCandidate = { candidate_id: string; source_id: string; title: string; year: string | number | null; kind: string | null };
-type ServiceRoundView = { round_id: string; lookup_id: string | null; query_done: boolean; pending: number; pending_confirm: number; selected_line_id: string | null; lines: ServiceLine[]; sources: { source_id: string; name: string; status: string }[]; candidates: ServiceCandidate[]; error: string | null };
+type ServiceRoundView = { round_id: string; lookup_id: string | null; query_done: boolean; pending: number; pending_confirm: number; selected_line_id: string | null; lines: ServiceLine[]; sources: { source_id: string; name: string; status: string; last_playback?: 'playing' | 'failed' | null }[]; candidates: ServiceCandidate[]; error: string | null };
+export function playableSourceGroups(snapshot: ServiceRoundView | null) {
+  return (snapshot?.sources ?? []).flatMap(source => {
+    const lines = (snapshot?.lines ?? []).filter(line => line.source_id === source.source_id && line.probe_status === 'ready')
+      .sort((a, b) => (source.last_playback === 'playing' ? (b.history?.last_ok_at ?? 0) - (a.history?.last_ok_at ?? 0) : 0)
+        || (a.latency_ms ?? Number.MAX_SAFE_INTEGER) - (b.latency_ms ?? Number.MAX_SAFE_INTEGER)
+        || a.line_id.localeCompare(b.line_id));
+    return lines.length ? [{ ...source, lines: [lines[0]!] }] : [];
+  }).sort((a, b) => (a.last_playback === 'playing' ? 0 : a.last_playback === 'failed' ? 2 : 1)
+    - (b.last_playback === 'playing' ? 0 : b.last_playback === 'failed' ? 2 : 1));
+}
 export type ServiceSource = { id: string; client_config_id: string | null; name: string; kind: string; api: string; ext: unknown; headers: Record<string, string>; enabled: boolean; parse_ids: string[]; revision: number; status: string };
 type LocalRequest = { request_id: string | null; phase: "loading" | "ready" | "failed"; error: Bridge_ApiError | null };
 export type HomeFilter = NonNullable<Bridge_HomeRequest["filter"]>;

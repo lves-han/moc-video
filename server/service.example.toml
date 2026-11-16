@@ -1,0 +1,18 @@
+# 环境变量优先于此文件；密钥也可通过环境变量提供。
+[service]
+listen = "127.0.0.1:8787"
+data_dir = "./data"
+# token = "填写非空服务令牌；省略时自动生成并保存在数据目录"
+
+[tmdb]
+api_url = "https://api.themoviedb.org/3"
+# key = "填写 TMDB API key 或 read token"
+
+[home]
+timezone = "Asia/Shanghai"
+poll_seconds = 60
+
+# 以下两项约 5 秒内自动重载，影响新建的线路和查找。
+[lookup]
+handle_ttl_seconds = 900
+line_cache_seconds = 60

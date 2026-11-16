@@ -14,7 +14,7 @@ async fn template_key(state: &AppState, target: &Value, source: &Value) -> Resul
         .map(|p| json!([p["id"], p["revision"], p["enabled"]]))
         .collect();
     Ok(format!(
-        "line-info:v1:{:x}",
+        "line-info:v2:{:x}",
         Sha256::digest(
             json!([target, source["id"], source["revision"], versions])
                 .to_string()
@@ -118,7 +118,7 @@ fn probe_key(
     versions: &[Value],
 ) -> String {
     format!(
-        "availability:v1:{:x}",
+        "availability:v2:{:x}",
         Sha256::digest(
             json!([
                 target,
@@ -144,7 +144,7 @@ pub async fn invalidate_line(state: &AppState, line: &crate::state::Line) -> Res
     if let Some(key) = line
         .availability_key
         .as_deref()
-        .filter(|key| key.starts_with("availability:v1:"))
+        .filter(|key| key.starts_with("availability:v2:"))
     {
         return state
             .cache

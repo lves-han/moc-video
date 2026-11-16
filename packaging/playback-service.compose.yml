@@ -6,9 +6,11 @@ services:
     ports:
       - "127.0.0.1:8787:8787"
     environment:
-      MOC_TMDB_KEY: ${MOC_TMDB_KEY:-}
+      - MOC_TMDB_KEY
+    working_dir: /config
     volumes:
       - playback-data:/data
+      - ../config:/config:ro
     restart: unless-stopped
 
 volumes:

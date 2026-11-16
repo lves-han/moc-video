@@ -244,6 +244,13 @@ fn meta_year(meta: &Value) -> Option<u64> {
         .filter(|y| (1000..=9999).contains(y))
 }
 
+fn upcoming(meta: &Value, now: OffsetDateTime) -> bool {
+    text(&meta["released"])
+        .and_then(|value| OffsetDateTime::parse(value, &Rfc3339).ok())
+        .map(|released| released.date() > now.to_offset(time::UtcOffset::UTC).date())
+        .unwrap_or_else(|| meta_year(meta).is_some_and(|year| year > now.year() as u64))
+}
+
 fn genre_options(catalog: &Value) -> Vec<String> {
     extra_options(catalog, "genre")
 }
@@ -1277,7 +1284,8 @@ impl Catalog {
                 .collect();
             facets[dimension] = json!({"available":!values.is_empty(),"options":values});
         }
-        if tmdb && input["filter"]["language"].is_null() && input["filter"]["year"].is_null() {
+        let combined = tmdb && addon.manifest["mocDiscoverFilters"] == true;
+        if tmdb && (combined || input["filter"]["language"].is_null() && input["filter"]["year"].is_null()) {
             let mut sorts = Vec::new();
             for (value, id, extra, en, zh) in [
                 (
@@ -1297,12 +1305,12 @@ impl Catalog {
                 ("popular", "tmdb.top", None, "Popular", "热门"),
                 ("latest", "tmdb.latest", None, "Latest", "最新"),
             ] {
-                if !input["filter"]["region"].is_null()
+                if (!input["filter"]["region"].is_null() || !input["filter"]["year"].is_null() || !input["filter"]["language"].is_null())
                     && matches!(value, "trending_day" | "trending_week")
                 {
                     continue;
                 }
-                if value == "popular" && section.kind == "series" {
+                if !combined && value == "popular" && section.kind == "series" {
                     continue;
                 }
                 if self
@@ -1358,11 +1366,15 @@ impl Catalog {
         let selected = |key: &str| filter.get(key).and_then(Value::as_str);
         let addon = &self.addons[section.addon];
         let tmdb = addon.manifest["id"] == "tmdb-addon" && addon.tmdb;
+        let combined = tmdb && addon.manifest["mocDiscoverFilters"] == true;
+        let use_discover = combined && !matches!(selected("sort"), Some("trending_day" | "trending_week"));
         let mut catalog_id = section.catalog_id.as_str();
         let mut server_genre = None;
         let mut server_dimension = "";
         if tmdb {
-            if let Some(value) = selected("language") {
+            if use_discover && !filter.is_empty() {
+                catalog_id = if selected("sort") == Some("latest") { "tmdb.latest" } else { "tmdb.top" };
+            } else if let Some(value) = selected("language") {
                 catalog_id = "tmdb.language";
                 server_genre = Some(value);
                 server_dimension = "language";
@@ -1392,7 +1404,7 @@ impl Catalog {
                 };
             }
         }
-        let region_category = if tmdb && selected("region").is_some() {
+        let region_category = if tmdb && (selected("region").is_some() || use_discover && !filter.is_empty()) {
             match section.catalog_id.as_str() {
                 "tmdb.animation" => Some("animation"),
                 "tmdb.documentary" => Some("documentary"),
@@ -1409,7 +1421,7 @@ impl Catalog {
         let definition = self
             .catalog_definition(section, catalog_id)
             .ok_or_else(|| ApiError::bad("Filter catalog is unavailable"))?;
-        if server_genre.is_none()
+        if !use_discover && server_genre.is_none()
             && region_category.is_none()
             && let Some(genre) = selected("genre")
             && genre_options(definition).iter().any(|o| o == genre)
@@ -1424,8 +1436,8 @@ impl Catalog {
             .as_u64()
             .filter(|n| (1..=4096).contains(n))
             .unwrap_or(20) as usize;
-        let client_filter = selected("genre").is_some() && server_dimension != "genre"
-            || selected("year").is_some() && server_dimension != "year";
+        let client_filter = !use_discover && (selected("genre").is_some() && server_dimension != "genre"
+            || selected("year").is_some() && server_dimension != "year");
         let mut cursor = if page == 1 {
             Cursor {
                 offset: 0,
@@ -1459,6 +1471,11 @@ impl Catalog {
             if let Some(category) = region_category {
                 pairs.push(("category".into(), category.into()));
             }
+            if use_discover {
+                for (key, parameter) in [("year", "moc_year"), ("language", "moc_language"), ("genre", "moc_genre")] {
+                    if let Some(value) = selected(key) { pairs.push((parameter.into(), value.into())); }
+                }
+            }
             if tmdb && let Some(region) = selected("region") {
                 pairs.push(("region".into(), region.to_owned()));
             }
@@ -1489,13 +1506,13 @@ impl Catalog {
                 if !cursor.seen.insert(key) {
                     continue;
                 }
-                if selected("genre").is_some_and(|genre| {
+                if !use_discover && (selected("genre").is_some_and(|genre| {
                     !meta["genres"]
                         .as_array()
                         .is_some_and(|genres| genres.iter().any(|v| v == genre))
                 }) || selected("year").is_some_and(|year| {
                     meta_year(meta).map(|y| y.to_string()).as_deref() != Some(year)
-                }) {
+                })) {
                     continue;
                 }
                 let local = response["metas"]
@@ -1621,7 +1638,7 @@ impl Catalog {
         };
         Ok(
             json!({"id": id, "ref": self.media_ref(data), "title": plain(text(&meta["name"]).ok_or_else(|| upstream("Stremio title is missing"))?),
-            "kind": kind, "poster": poster, "backdrop":backdrop, "plot":plot, "genres":genres, "year": year, "rating": rating, "status": "unknown", "update_label": null, "provider_type": meta["type"], "episode_count": null}),
+            "kind": kind, "poster": poster, "backdrop":backdrop, "plot":plot, "genres":genres, "year": year, "rating": rating, "status": if upcoming(meta, OffsetDateTime::now_utc()) { "upcoming" } else { "unknown" }, "update_label": null, "provider_type": meta["type"], "episode_count": null}),
         )
     }
 
@@ -1858,7 +1875,8 @@ impl Catalog {
         details["duration_ms"] = json!(duration_ms(&meta["runtime"]));
         // releaseInfo explicitly distinguishes running and completed series.
         // Other display strings carry no reliable completion information.
-        if matches!(meta["type"].as_str(), Some("series" | "anime"))
+        if details["status"] != "upcoming"
+            && matches!(meta["type"].as_str(), Some("series" | "anime"))
             && let Some((start, end)) = text(&meta["releaseInfo"]).and_then(|s| s.split_once('-'))
             && valid_year(start)
         {

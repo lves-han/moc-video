@@ -6,6 +6,7 @@ export const CATALOG_TTL = 7 * 24 * 60 * 60 * 1000;
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const KEY = 'moc-video.catalog.v1';
+const releaseStatusStale = (items: Bridge_MediaCard[], savedAt: number, now: number) => items.some(item => item.status === 'upcoming') && Math.floor(savedAt / 86400000) !== Math.floor(now / 86400000);
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 type Row = { key: string; savedAt: number; items: Bridge_MediaCard[]; invalidated?: boolean; page?: number; hasNext?: boolean; nextPage?: number | null };
 
@@ -31,12 +32,12 @@ export function catalogCache(store: () => Store = () => localStorage) {
   return {
     get(source: SourceKey, section: string, filter: unknown, locale: string, host: string, now = Date.now()) {
       const id = key(source, section, filter, locale), live = memory.get(id);
-      if (live && live.host === host) return { items: copy(live.section.items), images: copy(live.images), stale: now < live.savedAt || now - live.savedAt >= CATALOG_TTL, imagesReady: true, sectionRef: live.section.section_ref, page: live.section.page, hasNext: live.section.has_next, nextPage: live.section.next_page };
+      if (live && live.host === host) return { items: copy(live.section.items), images: copy(live.images), stale: now < live.savedAt || now - live.savedAt >= CATALOG_TTL || releaseStatusStale(live.section.items, live.savedAt, now), imagesReady: true, sectionRef: live.section.section_ref, page: live.section.page, hasNext: live.section.has_next, nextPage: live.section.next_page };
       if (hasIndexedCache()) return null;
       const row = read().find(item => item.key === id);
       if (!row || row.items.some(item => !item || typeof item.id !== 'string' || typeof item.title !== 'string'
         || item.ref?.source_id !== source.source_id || item.ref?.source_revision !== source.source_revision || typeof item.ref.data !== 'string')) return null;
-      return { items: copy(row.items), images: {}, stale: now < row.savedAt || now - row.savedAt >= CATALOG_TTL, imagesReady: false, sectionRef: null, hasNext: false, nextPage: null };
+      return { items: copy(row.items), images: {}, stale: now < row.savedAt || now - row.savedAt >= CATALOG_TTL || releaseStatusStale(row.items, row.savedAt, now), imagesReady: false, sectionRef: null, hasNext: false, nextPage: null };
     },
     async getPersistent(source: SourceKey, section: string, filter: unknown, locale: string, host: string, now = Date.now()) {
       const id = key(source, section, filter, locale), live = memory.get(id);
@@ -53,7 +54,7 @@ export function catalogCache(store: () => Store = () => localStorage) {
         || item.ref?.source_id !== source.source_id || item.ref?.source_revision !== source.source_revision || typeof item.ref.data !== 'string')) return null;
       const validPage = Number.isSafeInteger(row.page) && (row.page ?? 0) >= 1;
       const validNext = row.hasNext === true && Number.isSafeInteger(row.nextPage) && row.nextPage === (row.page ?? 0) + 1;
-      return { items: copy(row.items), images: {}, stale: false, imagesReady: false, sectionRef: null,
+      return { items: copy(row.items), images: {}, stale: releaseStatusStale(row.items, row.savedAt, now), imagesReady: false, sectionRef: null,
         page: validPage ? row.page! : 1, hasNext: validNext, nextPage: validNext ? row.nextPage! : null };
     },
     put(source: SourceKey, section: string, filter: unknown, locale: string, host: string, data: Bridge_HomeSection, images: ImageAccessMap, now = Date.now()) {

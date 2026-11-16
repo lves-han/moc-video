@@ -321,7 +321,7 @@ pub async fn create(State(state): State<AppState>, Json(input): Json<Value>) -> 
             id.clone(),
             Lookup {
                 metadata: metadata.clone(),
-                expires_at: now + state.lookup_runtime.handle_ttl,
+                expires_at: now + state.lookup_runtime.handle_ttl(),
                 cancelled: cancel,
                 candidates: HashMap::new(),
                 active: true,
@@ -339,17 +339,34 @@ async fn run(
     state: AppState,
     id: String,
     metadata: Value,
-    sources: Vec<Value>,
+    mut sources: Vec<Value>,
     refresh: bool,
     now: i64,
     mut cancel: watch::Receiver<bool>,
     tx: mpsc::Sender<Value>,
 ) {
+    let outcomes = match state.reports.source_outcomes(&target(&metadata)).await {
+        Ok(outcomes) => outcomes,
+        Err(_) => { eprintln!("Playback source history could not be read"); HashMap::new() }
+    };
+    let outcome = |source: &Value| {
+        let id = source["id"].as_str().unwrap_or("").to_owned();
+        let revision = source["revision"].as_u64().unwrap_or(0);
+        outcomes.get(&(id, revision))
+    };
+    sources.sort_by(|a, b| {
+        let rank = |source: &Value| match outcome(source) {
+            Some((status, time)) if status == "playing" => (0, -*time),
+            Some(_) => (2, 0),
+            None => (1, 0),
+        };
+        rank(a).cmp(&rank(b)).then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
+    });
     let summaries: Vec<_> = sources
         .iter()
-        .map(|s| json!({"source_id":s["id"],"name":s["name"],"kind":s["kind"]}))
+        .map(|s| json!({"source_id":s["id"],"name":s["name"],"kind":s["kind"],"last_playback":outcome(s).map(|(status,_)| status.as_str())}))
         .collect();
-    if !send(&tx,json!({"event":"started","lookup_id":id,"lease_expires_at":now+state.lookup_runtime.handle_ttl,"sources":summaries})).await{return;}
+    if !send(&tx,json!({"event":"started","lookup_id":id,"lease_expires_at":now+state.lookup_runtime.handle_ttl(),"sources":summaries})).await{return;}
     let mut jobs = JoinSet::new();
     let mut pending = HashMap::new();
     let limit = std::sync::Arc::new(tokio::sync::Semaphore::new(16));
@@ -419,7 +436,7 @@ fn finish(state: &AppState, id: &str) -> Option<i64> {
     reg.prune(now);
     reg.lookups.get_mut(id).map(|lookup| {
         lookup.active = false;
-        lookup.expires_at = now + state.lookup_runtime.handle_ttl;
+        lookup.expires_at = now + state.lookup_runtime.handle_ttl();
         lookup.expires_at
     })
 }
@@ -804,7 +821,7 @@ async fn register_lines(
             registry.cache.insert(
                 line_cache::cache_key(&target, &template.source, parser_generation),
                 crate::state::CacheEntry {
-                    expires_at: now + state.lookup_runtime.cache_ttl,
+                    expires_at: now + state.lookup_runtime.cache_ttl(),
                     template: template.clone(),
                 },
             );
@@ -1071,12 +1088,12 @@ pub async fn confirm(State(state): State<AppState>, Json(input): Json<Value>) ->
         reg.cache.insert(
             line_cache::cache_key(&target, &candidate.source, parser_generation),
             crate::state::CacheEntry {
-                expires_at: crate::metadata::cache::now() + state.lookup_runtime.cache_ttl,
+                expires_at: crate::metadata::cache::now() + state.lookup_runtime.cache_ttl(),
                 template,
             },
         );
         let lease = reg.lookups.get_mut(lookup_id).map(|lookup| {
-            lookup.expires_at = crate::metadata::cache::now() + state.lookup_runtime.handle_ttl;
+            lookup.expires_at = crate::metadata::cache::now() + state.lookup_runtime.handle_ttl();
             lookup.expires_at
         });
         (output, lease)
@@ -1299,7 +1316,7 @@ async fn refresh_line(state: AppState, id: String, invalidate_cache: bool) -> Re
     current.kind_hint = episode["kind_hint"].as_str().map(str::to_owned);
     current.cached_kind = None;
     current.unsupported_reason = episode["unsupported_reason"].as_str().map(str::to_owned);
-    current.play_expires_at = now + state.lookup_runtime.cache_ttl;
+    current.play_expires_at = now + state.lookup_runtime.cache_ttl();
     Json(line_cache::output(&id, current, &history)).into_response()
 }
 
@@ -1446,6 +1463,16 @@ pub async fn report(State(state): State<AppState>, Json(input): Json<Value>) -> 
             "INTERNAL_ERROR",
             "Report could not be saved",
         );
+    }
+    if outcome == "failed" {
+        let source = json!({"id":line.source_id,"revision":line.source_revision});
+        if crate::availability::invalidate_line(&state, &line).await.is_err()
+            || crate::availability::invalidate(&state, &line.target, &source).await.is_err() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Playback cache could not be invalidated");
+        }
+        let mut registry = state.lookup_runtime.registry.lock().expect("lookup registry");
+        let key = line_cache::cache_key(&line.target, &source, registry.parser_generation);
+        registry.cache.remove(&key);
     }
     Json(json!({"ok":true})).into_response()
 }

@@ -134,6 +134,87 @@ async fn app_playback_sources(
 }
 
 #[cfg(not(mobile))]
+#[tauri::command(rename_all = "snake_case")]
+async fn app_probe_availability(
+    window: WebviewWindow,
+    metadata_source_id: String,
+    kind: String,
+    meta_id: String,
+    video_id: String,
+    lang: String,
+) -> Result<String, String> {
+    require_main(&window)?;
+    if !matches!(kind.as_str(), "movie" | "series")
+        || !matches!(lang.as_str(), "zh-CN" | "en-US")
+        || [&metadata_source_id, &meta_id, &video_id].iter().any(|s| s.is_empty() || s.len() > 512 || s.chars().any(char::is_control))
+    { return Err("Invalid playback target".into()); }
+    static GATE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+    let _permit = GATE.acquire().await.map_err(|_| "Availability queue closed")?;
+    let service = service::current().map_err(|e| e.message)?;
+    let body = serde_json::json!({"metadata_source_id":metadata_source_id,"type":kind,"meta_id":meta_id,"video_id":video_id,"lang":lang});
+    let mut lookup = None::<String>;
+    let mut sources = std::collections::HashMap::<String, String>::new();
+    let mut available = false;
+    let mut seen_line = false;
+    let mut ambiguous = false;
+    let result = service.events(&["v1", "lookups"], body.clone(), |event| {
+        match event["event"].as_str() {
+            Some("started") => {
+                lookup = event["lookup_id"].as_str().filter(|id| uuid::Uuid::parse_str(id).is_ok()).map(str::to_owned);
+                for source in event["sources"].as_array().into_iter().flatten() {
+                    if let Some(id) = source["source_id"].as_str() { sources.insert(id.into(), "pending".into()); }
+                }
+                if lookup.is_none() { ambiguous = true; }
+            }
+            Some("source") => {
+                if let (Some(id), Some(status)) = (event["source_id"].as_str(), event["status"].as_str()) {
+                    if let Some(value) = sources.get_mut(id) { *value = status.into(); } else { ambiguous = true; }
+                } else { ambiguous = true; }
+            }
+            Some("line") => {
+                seen_line = true;
+                let line = &event["line"];
+                let target = &line["target"];
+                if ["metadata_source_id", "type", "meta_id", "video_id"].iter().any(|field| target[field] != body[field]) { ambiguous = true; }
+                else if matches!(line["kind"].as_str(), Some("file" | "hls")) && line["availability"] == "ready" { available = true; }
+                else if !matches!(line["availability"].as_str(), Some("failed" | "unsupported" | "ready")) { ambiguous = true; }
+            }
+            Some("confirm") => ambiguous = true,
+            Some("done") => {},
+            _ => ambiguous = true,
+        }
+        Ok(())
+    }, std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))).await;
+    if let Some(id) = lookup { let _ = service.cancel_lookup(&id).await; }
+    if service::current().map(|current| current.fingerprint()).ok().as_deref() != Some(service.fingerprint().as_str()) { return Err("Playback service changed".into()); }
+    if !available { result.map_err(|e| e.message)?; }
+    Ok(card_probe_outcome(available, ambiguous, seen_line, &sources).into())
+}
+
+#[cfg(not(mobile))]
+fn card_probe_outcome(available: bool, ambiguous: bool, seen_line: bool, sources: &std::collections::HashMap<String, String>) -> &'static str {
+    if available { "available" }
+    else if ambiguous || sources.values().any(|s| !matches!(s.as_str(), "done" | "disabled" | "not_found" | "no_episode" | "unsupported")) { "unknown" }
+    else if !seen_line && sources.values().all(|s| matches!(s.as_str(), "not_found" | "disabled")) { "unavailable_title" }
+    else { "unavailable" }
+}
+
+#[cfg(all(test, not(mobile)))]
+mod card_probe_tests {
+    use super::card_probe_outcome;
+    use std::collections::HashMap;
+    #[test]
+    fn failed_and_ambiguous_sources_do_not_claim_unavailability() {
+        let states = |status: &str| HashMap::from([("source".to_owned(), status.to_owned())]);
+        assert_eq!(card_probe_outcome(false, false, false, &states("timeout")), "unknown");
+        assert_eq!(card_probe_outcome(false, true, false, &states("not_found")), "unknown");
+        assert_eq!(card_probe_outcome(false, false, false, &states("not_found")), "unavailable_title");
+        assert_eq!(card_probe_outcome(false, false, true, &states("done")), "unavailable");
+        assert_eq!(card_probe_outcome(true, true, true, &states("failed")), "available");
+    }
+}
+
+#[cfg(not(mobile))]
 #[tauri::command]
 async fn player_fullscreen(
     window: WebviewWindow,
@@ -257,6 +338,7 @@ pub fn run() {
         app_service_import,
         app_service_delete,
         app_playback_sources,
+        app_probe_availability,
         app_cache,
         automation::t01_control
     ];
@@ -272,6 +354,7 @@ pub fn run() {
         app_service_import,
         app_service_delete,
         app_playback_sources,
+        app_probe_availability,
         app_cache
     ];
     #[cfg(mobile)]

@@ -827,3 +827,27 @@ fn tv3_same_reference_filters_concurrent_and_pagination() {
     );
     trace(&fixture, "tv3-filter-isolation");
 }
+
+#[test]
+fn tv2_combined_discovery_filters_are_sent_to_service() {
+    let fixture = Fixture::new(|request| {
+        if request.target.ends_with("manifest.json") {
+            let mut manifest = tv_manifest(request.target.contains("/zh-CN/"));
+            manifest["mocDiscoverFilters"] = json!(true);
+            Reply::json(manifest)
+        } else { tv_reply(request, false) }
+    });
+    let (_temp, host) = setup(vec![fixture.url("/tmdb/zh-CN/manifest.json")]);
+    let source = sync(&host);
+    let data = ok(&host, "get_home", home_input(&source));
+    let section = &data["page"]["sections"][0];
+    let result = filtered(&host, &source, section, json!({"year":"2024","language":"Mandarin","genre":"Drama","region":"JP","sort":"latest"}), 1);
+    assert!(!result["items"].as_array().unwrap().is_empty());
+    assert!(result["filters"]["sort"]["options"].as_array().unwrap().iter().any(|option| option["value"] == "latest"));
+    let requests = fixture.requests.lock().unwrap();
+    assert!(requests.iter().filter(|r| r.target.contains("/catalog/")).map(route).any(|(_, id, extra)|
+        id == "tmdb.latest" && extra.get("moc_year").map(String::as_str) == Some("2024")
+        && extra.get("moc_language").map(String::as_str) == Some("Mandarin")
+        && extra.get("moc_genre").map(String::as_str) == Some("Drama")
+        && extra.get("region").map(String::as_str) == Some("JP")));
+}

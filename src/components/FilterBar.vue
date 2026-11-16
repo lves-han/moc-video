@@ -10,15 +10,21 @@ const dimensions: Dimension[] = ['genre', 'year', 'language', 'region', 'sort'];
 const labels = computed(() => locale.value === 'zh-CN' ? ['类型', '年份', '语言', '地区', '排序'] : ['Genre', 'Year', 'Language', 'Region', 'Sort']);
 const open = ref<Dimension | null>(null), root = ref<HTMLElement>(), notice = ref('');
 const zh = computed(() => locale.value === 'zh-CN');
-const disabled = (key: Dimension) => !props.facets?.[key].available || key === 'genre' && !!props.lockedGenre || key === 'sort' && !!(props.modelValue.year || props.modelValue.language);
-const reason = (key: Dimension) => key === 'sort' && (props.modelValue.year || props.modelValue.language) ? (zh.value ? '清除年份和语言后可排序' : 'Clear year and language to sort') : key === 'genre' && props.lockedGenre ? (zh.value ? '由当前分类确定' : 'Set by this category') : (zh.value ? '当前来源未提供此筛选' : 'Unavailable from this source');
+const disabled = (key: Dimension) => !props.facets?.[key].available || key === 'genre' && !!props.lockedGenre;
+const reason = (key: Dimension) => key === 'genre' && props.lockedGenre ? (zh.value ? '由当前分类确定' : 'Set by this category') : (zh.value ? '当前来源未提供此筛选' : 'Unavailable from this source');
 function optionsFor(key: Dimension) {
   const options = props.facets?.[key].options ?? [];
-  return key === 'sort' && props.modelValue.region
-    ? options.filter(option => !['trending_day', 'trending_week'].includes(option.value))
-    : options;
+  if (key === 'sort' && (props.modelValue.region || props.modelValue.year || props.modelValue.language))
+    return options.filter(option => !['trending_day', 'trending_week'].includes(option.value));
+  if (key === 'language') {
+    const preferred = ['Mandarin', 'Cantonese', 'English', 'Japanese', 'Korean', 'French', 'Spanish', 'German'];
+    const rank = (value: string) => { const index = preferred.indexOf(value); return index < 0 ? preferred.length : index; };
+    return [...options].sort((a, b) => rank(a.value) - rank(b.value) || a.name.localeCompare(b.name, locale.value));
+  }
+  return options;
 }
 function optionName(key: Dimension, value: string, fallback: string) {
+  if (key === 'language' && zh.value) return ({ Mandarin: '普通话', Cantonese: '粤语', English: '英语', Japanese: '日语', Korean: '韩语', French: '法语', Spanish: '西班牙语', German: '德语' } as Record<string, string>)[value] ?? fallback;
   if (key !== 'region' || !/^[A-Z]{2}$/.test(value)) return fallback;
   if (zh.value && value === 'CN') return '中国大陆';
   if (zh.value && value === 'HK') return '中国香港';
@@ -31,7 +37,7 @@ function choose(key: Dimension, value?: string) {
   if (value === next[key]) delete next[key];
   else if (value) Object.assign(next, { [key]: value });
   else delete next[key];
-  if (value && next.sort && ((key === 'year' || key === 'language') || (key === 'region' && ['trending_day', 'trending_week'].includes(next.sort)))) { delete next.sort; notice.value = zh.value ? '已清除排序，以应用筛选条件' : 'Sort cleared to apply filters'; }
+  if (value && next.sort && ['year', 'language', 'region'].includes(key) && ['trending_day', 'trending_week'].includes(next.sort)) { delete next.sort; notice.value = zh.value ? '已清除排序，以应用筛选条件' : 'Sort cleared to apply filters'; }
   emit('update:modelValue', next); open.value = null;
   void nextTick(() => root.value?.querySelector<HTMLButtonElement>(`[data-dimension="${key}"]`)?.focus());
 }

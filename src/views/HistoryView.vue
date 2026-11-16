@@ -3,12 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { NAlert, NButton, NEmpty, NModal, NProgress, NSkeleton, NTag } from 'naive-ui';
 import Icon from '../components/Icon.vue';
 import WatchlistRow from '../components/WatchlistRow.vue';
+import CardStatus from '../components/CardStatus.vue';
 import { films, localizeFilm, initialSources, sourceText } from '../data/demo';
 import { locale, t } from '../i18n';
-import { historyRepository, historyPoster } from '../data/history';
+import { historyRepository, historyPoster, metadataReference } from '../data/history';
 import { appState } from '../state';
 import { api } from '../api';
-import type { Bridge_MediaRef } from '../models';
+import type { Bridge_MediaCard, Bridge_MediaRef } from '../models';
 import { historyContentId, historyProgress, historyTime, type HistoryEntry } from '../data/history-model';
 
 const native = Boolean(window.__TAURI__);
@@ -25,6 +26,10 @@ const busy = ref(false);
 const deletion = ref<HistoryEntry | 'all' | null>(null);
 const clock = ref(Date.now());
 let loadSequence = 0;
+function historyCard(entry: HistoryEntry): Bridge_MediaCard | null {
+  const ref = entry.record && metadataReference(entry.record, appState.sources.data?.providers ?? []);
+  return ref ? { id: entry.content_id, ref, title: entry.title, kind: entry.kind } : null;
+}
 function displayTitle(entry: HistoryEntry) {
   const film = films.find(item => historyContentId(item.kind,item.id) === entry.content_id);
   return film ? localizeFilm(film).title : entry.title;
@@ -105,7 +110,7 @@ onBeforeUnmount(() => { ++loadSequence; desktop.removeEventListener('change',lay
     <p v-if="entries.length" class="history-count">{{ entries.length === 1 ? t('1 watched title') : t('{count} watched titles', { count: entries.length }) }}</p>
     <section v-for="group in visibleGroups" :key="group.label" class="history-group"><h2>{{ group.label }}</h2><div class="history-wall" data-focus-row>
       <article v-for="entry in group.items" :key="entry.content_id" class="history-card">
-        <img class="history-poster" :src="entry.poster" alt="" loading="lazy" @error="entry.poster = '/mark.svg'" />
+        <div class="history-poster-wrap"><img class="history-poster" :src="entry.poster" alt="" loading="lazy" @error="entry.poster = '/mark.svg'" /><CardStatus v-if="historyCard(entry)" :card="historyCard(entry)!" /></div>
         <div class="history-copy"><div class="history-title"><h3>{{ displayTitle(entry) }}</h3><NTag v-if="entry.completed" size="small" :bordered="false">{{ t(entry.kind !== 'movie' ? 'Episode finished' : 'Completed') }}</NTag></div><p>{{ entry.kind !== 'movie' ? t('Episode {number}', { number: entry.episode }) : t('Feature') }}<span>·</span>{{ displaySource(entry) }}</p><NProgress type="line" :percentage="entry.completed ? 100 : historyProgress(entry)" :height="4" :show-indicator="false" /><div class="history-progress"><span>{{ historyTime(entry.position_ms) }} / {{ historyTime(entry.duration_ms) }}</span><time :datetime="new Date(entry.updated_at).toISOString()">{{ formatDate(entry.updated_at) }}</time></div></div>
         <div class="history-actions"><NButton type="primary" :disabled="busy" @click="emit('resume',entry)"><template #icon><Icon :name="entry.completed ? 'repeat' : 'play'" :size="16" /></template>{{ t(entry.completed ? 'Play again' : 'Continue watching') }}</NButton><NButton class="history-delete" quaternary :aria-label="t('Remove {title} from history', { title: displayTitle(entry) })" :disabled="busy" @click="deletion = entry"><template #icon><Icon name="trash" :size="18" /></template></NButton></div>
       </article>
@@ -115,3 +120,9 @@ onBeforeUnmount(() => { ++loadSequence; desktop.removeEventListener('change',lay
   </div>
   <NModal :show="deletion !== null" preset="dialog" type="warning" class="tv-dialog history-confirmation" :aria-label="t(deletion === 'all' ? 'Clear history' : 'Remove from history')" :title="t(deletion === 'all' ? 'Clear history' : 'Remove from history')" :content="deletion === 'all' ? t('Clear all watch history? This removes saved progress from this device.') : deletion ? t('Remove {title} and its saved progress from this device?', { title: displayTitle(deletion) }) : ''" :positive-text="t(deletion === 'all' ? 'Clear history' : 'Remove')" :negative-text="t('Cancel')" :loading="busy" :mask-closable="false" @positive-click="confirmDeletion" @negative-click="deletion = null" @update:show="value => { if (!value) deletion = null; }" />
 </template>
+
+<style scoped>
+.history-poster-wrap { position: relative; width: 74px; height: 108px; overflow: hidden; border-radius: 5px; }
+@media (max-width: 959px) { .history-poster-wrap { width: 64px; height: 94px; } }
+@media (min-width: 960px) { .history-poster-wrap { width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 12px; } .library-continue .history-poster-wrap { aspect-ratio: 16 / 9; } }
+</style>

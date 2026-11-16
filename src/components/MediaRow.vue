@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "./Icon.vue";
-import { t } from "../i18n";
+import { observeAvailability } from "../card-availability";
+import { appState } from "../state";
+import { locale, t } from "../i18n";
 import type { Bridge_MediaCard, Bridge_MediaRef, ImageAccessMap } from "../models";
 
 const props = withDefaults(defineProps<{ title: string; items: Bridge_MediaCard[]; images?: ImageAccessMap; href?: string; landscape?: boolean; loading?: boolean }>(), { images: () => ({}) });
@@ -9,6 +11,28 @@ const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; imageError: [id: string
 const track = ref<HTMLElement>();
 const atStart = ref(true), atEnd = ref(false);
 const loaded = ref(new Set<string>()), broken = ref(new Set<string>());
+const unavailable = ref(new Set<string>()), upcoming = ref(new Set<string>());
+let availabilityObserver: IntersectionObserver | undefined;
+let availabilityTimer: ReturnType<typeof setInterval> | undefined;
+const availabilitySubscriptions = new Map<Element, () => void>();
+async function observeCards() {
+  await nextTick();
+  availabilityObserver?.disconnect();
+  for (const unsubscribe of availabilitySubscriptions.values()) unsubscribe();
+  availabilitySubscriptions.clear(); unavailable.value.clear(); upcoming.value.clear();
+  availabilityObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) { availabilitySubscriptions.get(entry.target)?.(); availabilitySubscriptions.delete(entry.target); continue; }
+      if (availabilitySubscriptions.has(entry.target)) continue;
+      const card = props.items.find(item => item.id === (entry.target as HTMLElement).dataset.cardId);
+      if (card) availabilitySubscriptions.set(entry.target, observeAvailability(card, status => {
+        if (status === 'unavailable') unavailable.value.add(card.id); else unavailable.value.delete(card.id);
+        if (status === 'upcoming') upcoming.value.add(card.id); else upcoming.value.delete(card.id);
+      }));
+    }
+  }, { threshold: .1 });
+  track.value?.querySelectorAll('.media-card[data-card-id]').forEach(element => availabilityObserver!.observe(element));
+}
 const poster = (card: Bridge_MediaCard) => card.poster && !broken.value.has(card.poster.resource_id) ? props.images[card.poster.resource_id]?.url : undefined;
 const maccms = (card: Bridge_MediaCard) => card.ref.data.startsWith('["maccms",');
 function edges() {
@@ -48,10 +72,10 @@ watch(() => props.images, (images, previous) => {
   for (const id of loaded.value) if (images[id]?.url !== previous[id]?.url) loaded.value.delete(id);
   broken.value.clear();
 });
-watch(() => props.items, async () => { await nextTick(); edges(); });
+watch([() => props.items, () => props.items.length, () => props.loading, () => appState.runtime.engine_epoch, () => appState.settings.playback_service?.url, () => appState.settings.playback_service?.token, () => appState.settings.playback_service?.enabled, () => JSON.stringify(appState.settings.playback_service?.groups ?? [])], async () => { await nextTick(); edges(); void observeCards(); });
 let observer: ResizeObserver | undefined;
-onMounted(() => { observer = new ResizeObserver(edges); if (track.value) observer.observe(track.value); edges(); });
-onBeforeUnmount(() => observer?.disconnect());
+onMounted(() => { observer = new ResizeObserver(edges); if (track.value) observer.observe(track.value); edges(); void observeCards(); availabilityTimer = setInterval(() => void observeCards(), 5 * 60 * 1000); });
+onBeforeUnmount(() => { observer?.disconnect(); availabilityObserver?.disconnect(); clearInterval(availabilityTimer); for (const unsubscribe of availabilitySubscriptions.values()) unsubscribe(); });
 </script>
 
 <template>
@@ -61,9 +85,10 @@ onBeforeUnmount(() => observer?.disconnect());
       <div ref="track" class="media-row-track" data-focus-row @scroll.passive="edges">
         <template v-if="loading"><div v-for="n in 8" :key="n" class="media-card media-loading" aria-hidden="true"><div class="media-poster" /><span /></div></template>
         <article v-for="card in loading ? [] : items" :key="card.id" class="media-card home-card" :data-card-id="card.id">
-          <a class="media-poster poster-link" :href="`#/details/${encodeURIComponent(JSON.stringify(card.ref))}`" :aria-label="t('View details for {title}', { title: card.title })" @click.prevent="emit('open', card.ref)" @pointermove="highlight" @pointerleave="reset">
+          <a class="media-poster poster-link" :href="`#/details/${encodeURIComponent(JSON.stringify(card.ref))}`" :aria-label="[t('View details for {title}', { title: card.title }), (card.status === 'upcoming' || upcoming.has(card.id)) ? (locale === 'zh-CN' ? '未上映' : 'Coming soon') : unavailable.has(card.id) ? (locale === 'zh-CN' ? '无可播放源' : 'No playable source') : ''].filter(Boolean).join(' · ')" @click.prevent="emit('open', card.ref)" @pointermove="highlight" @pointerleave="reset">
             <img v-if="poster(card)" :src="poster(card)" alt="" loading="lazy" :class="{ loaded: loaded.has(card.poster!.resource_id) }" @load="loaded.add(card.poster!.resource_id)" @error="failed(card)" />
             <span v-else class="media-poster-missing">{{ card.title }}</span>
+            <span v-if="card.status === 'upcoming' || upcoming.has(card.id) || unavailable.has(card.id)" class="media-status-watermark">{{ (card.status === 'upcoming' || upcoming.has(card.id)) ? (locale === 'zh-CN' ? '未上映' : 'Coming soon') : (locale === 'zh-CN' ? '无可播放源' : 'No playable source') }}</span>
             <span v-if="maccms(card) && card.update_label" class="media-update-label">{{ card.update_label }}</span>
           </a>
           <p class="media-card-title card-title" :title="card.title">{{ card.title }}</p>
@@ -77,6 +102,7 @@ onBeforeUnmount(() => observer?.disconnect());
 </template>
 
 <style scoped>
+.media-status-watermark { position: absolute; inset-inline: 0; top: 42%; z-index: 2; padding: 9px 4px; background: rgba(25, 25, 30, .82); color: #fff; font-size: clamp(15px, 1.3vw, 20px); font-weight: 700; line-height: 1.3; text-align: center; letter-spacing: .08em; pointer-events: none; }
 @media (min-width: 960px) {
   .media-row { margin-block: 40px; min-width: 0; }
   .media-row-heading { height: 28px; margin-bottom: 12px; }

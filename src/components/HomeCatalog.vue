@@ -6,12 +6,13 @@ import FilterBar from './FilterBar.vue';
 import MediaRow from './MediaRow.vue';
 import Icon from './Icon.vue';
 import WatchlistRow from './WatchlistRow.vue';
+import CardStatus from './CardStatus.vue';
 import { appController as app, appState as state, type HomeFilter } from '../state';
-import { historyRepository, historyPoster } from '../data/history';
+import { historyRepository, historyPoster, metadataReference } from '../data/history';
 import type { HistoryEntry } from '../data/history-model';
 import { api } from '../api';
 import { locale, t } from '../i18n';
-import type { Bridge_HomeSection, Bridge_MediaRef } from '../models';
+import type { Bridge_HomeSection, Bridge_MediaCard, Bridge_MediaRef } from '../models';
 const props = withDefaults(defineProps<{ category?: string; query?: string }>(), { category: '', query: '' });
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef]; resume: [entry: HistoryEntry] }>();
 const zh = computed(() => locale.value === 'zh-CN');
@@ -33,7 +34,7 @@ const wallFilter = computed(() => ({ ...selected.value, ...(lockedGenre.value ? 
 const wallRow = computed(() => wallRef.value ? app.catalogRow(wallRef.value, wallFilter.value) : null);
 const wallSection = computed(() => wallRow.value?.data?.page.sections[0]);
 function href(category: string, section: string, filter: HomeFilter) { const params = new URLSearchParams({ section }); for (const [key, value] of Object.entries(filter)) params.set(key, value); return `#/browse/${category}?${params}`; }
-function filters(value: HomeFilter) { const params = new URLSearchParams(); for (const [key, text] of Object.entries(value)) params.set(key, text); location.hash = `#/browse/${props.category}${params.size ? '?' + params : ''}`; }
+function filters(value: HomeFilter) { const params = new URLSearchParams(), section = new URLSearchParams(props.query).get('section'); if (section) params.set('section', section); for (const [key, text] of Object.entries(value)) params.set(key, text); location.hash = `#/browse/${props.category}${params.size ? '?' + params : ''}`; }
 type Row = { title: string; section: Bridge_HomeSection; filter: HomeFilter; category: string };
 const rows = computed<Row[]>(() => {
   const result: Row[] = [];
@@ -70,6 +71,10 @@ const heroData = computed(() => heroRow.value ? app.catalogRow(heroRow.value.sec
 function imageError(sectionRef: string, filter: HomeFilter, id: string) {
   void app.rowImageError(sectionRef, filter, id).catch(error => app.diagnostics.push({ code: 'UPSTREAM_FAILED', message: String(error), retryable: true }));
 }
+function historyCard(entry: HistoryEntry): Bridge_MediaCard | null {
+  const ref = entry.record && metadataReference(entry.record, state.sources.data?.providers ?? []);
+  return ref ? { id: entry.content_id, ref, title: entry.title, kind: entry.kind } : null;
+}
 const history = ref<HistoryEntry[]>([]), posters = ref<Record<string, string>>({}), historyError = ref('');
 let historyGeneration = 0;
 async function loadHistory() {
@@ -102,7 +107,7 @@ onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => 
     <p v-if="state.home.phase === 'loading'" class="catalog-status catalog-loading" role="status">{{ t('Loading catalog') }}</p>
     <p v-if="state.home.error" class="home-failed" role="alert">{{ state.home.error.message }} <button class="home-retry glass-pill" @click="app.loadCatalog()">{{ t('Retry') }}</button></p>
     <p v-if="state.home.phase === 'empty'" class="home-empty">{{ word('该来源暂无栏目', 'No catalogs from this source') }}</p>
-    <FilterBar v-if="category" :model-value="selected" :facets="base?.filters" :locked-genre="lockedGenre" @update:model-value="filters" />
+    <FilterBar v-if="category" :model-value="selected" :facets="wallSection?.filters ?? base?.filters" :locked-genre="lockedGenre" @update:model-value="filters" />
     <div v-if="wall" class="catalog-wall-container">
       <p class="wall-progress" role="status">{{ word('已查找', 'Scanned') }} {{ wallSection?.scanned_count ?? 0 }} · {{ word('找到', 'Found') }} {{ wallSection?.matched_count ?? 0 }}</p>
       <div :key="JSON.stringify(wallFilter)" class="poster-wall home-grid"><MediaRow :title="categoryTitle" :items="wallSection?.items ?? []" :images="wallRow?.data?.images" :loading="wallRow?.phase === 'loading' && !wallSection" @open="emit('open', $event)" @image-error="wallRef && imageError(wallRef, wallFilter, $event)" /></div>
@@ -111,7 +116,7 @@ onMounted(() => { void loadHistory(); void observe(); }); onBeforeUnmount(() => 
       <div v-if="wallSection?.has_next" class="wall-sentinel"><button class="glass-pill wall-more" :disabled="wallRow?.phase === 'loading'" @click="loadWall(true)">{{ word('继续查找', 'Keep looking') }}</button></div>
     </div>
     <div v-else class="home-content-rows">
-      <section v-if="!category && (history.length || historyError)" class="continue-watching home-section"><h2>{{ word('继续观看', 'Continue watching') }}</h2><p v-if="historyError" role="alert">{{ historyError }} <button class="glass-pill" @click="loadHistory">{{ t('Retry') }}</button></p><div class="continue-track" data-focus-row><article v-for="entry in history" :key="entry.content_id" class="continue-card"><button class="continue-poster" :aria-label="entry.title" @click="emit('resume', entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]" alt="" /><span class="continue-episode">{{ word(`第 ${entry.episode} 集`, `Episode ${entry.episode}`) }}</span><span class="continue-play"><Icon name="play" :size="28" /></span><span class="continue-progress"><span :style="{ width: `${Math.min(100, entry.position_ms / (entry.duration_ms || 1) * 100)}%` }" /></span></button><p>{{ entry.title }}</p><p class="continue-remaining">{{ entry.duration_ms ? word(`剩 ${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} 分钟`, `${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} min left`) : word('继续观看', 'Continue watching') }}</p></article></div></section>
+      <section v-if="!category && (history.length || historyError)" class="continue-watching home-section"><h2>{{ word('继续观看', 'Continue watching') }}</h2><p v-if="historyError" role="alert">{{ historyError }} <button class="glass-pill" @click="loadHistory">{{ t('Retry') }}</button></p><div class="continue-track" data-focus-row><article v-for="entry in history" :key="entry.content_id" class="continue-card"><button class="continue-poster" :aria-label="entry.title" @click="emit('resume', entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]" alt="" /><CardStatus v-if="historyCard(entry)" :card="historyCard(entry)!" /><span class="continue-episode">{{ word(`第 ${entry.episode} 集`, `Episode ${entry.episode}`) }}</span><span class="continue-play"><Icon name="play" :size="28" /></span><span class="continue-progress"><span :style="{ width: `${Math.min(100, entry.position_ms / (entry.duration_ms || 1) * 100)}%` }" /></span></button><p>{{ entry.title }}</p><p class="continue-remaining">{{ entry.duration_ms ? word(`剩 ${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} 分钟`, `${Math.max(0, Math.ceil((entry.duration_ms - entry.position_ms) / 60000))} min left`) : word('继续观看', 'Continue watching') }}</p></article></div></section>
       <WatchlistRow v-if="!category" @open="emit('open', $event)" />
       <CatalogRow v-for="row in rows" :key="app.rowKey(row.section.section_ref, row.filter)" :title="row.title" :section-ref="row.section.section_ref" :filter="row.filter" :href="href(row.category, row.section.section_ref, row.filter)" @open="emit('open', $event)" />
       <p v-if="category && !rows.length && state.home.phase === 'ready'" class="catalog-empty">{{ word('当前来源未提供此分类', 'This category is unavailable from this source') }}</p>

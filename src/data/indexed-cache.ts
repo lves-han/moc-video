@@ -31,6 +31,11 @@ async function cleanupLegacy(): Promise<void> {
 export async function prepareNativeCache(): Promise<void> {
   if (nativeCacheEnabled()) await cleanupLegacy();
 }
+export async function nativeCacheControl<T>(action: 'video_status' | 'video_clear' | 'metadata_clear'): Promise<T> {
+  if (!nativeCacheEnabled()) throw new Error('Desktop cache is unavailable');
+  await prepareNativeCache();
+  return await nativeCall(action, 'catalog') as T;
+}
 function database(): Promise<IDBDatabase> {
   return opening ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open('moc-video-cache', 2);

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
+import CardStatus from './CardStatus.vue';
 import { appController as app, appState as state } from '../state';
 import { metadataReference } from '../data/history';
 import { loadWatchlistPosters } from '../data/watchlist-posters';
 import { locale, t } from '../i18n';
-import type { Bridge_MediaRef, WatchlistEntry } from '../models';
+import type { Bridge_MediaCard, Bridge_MediaRef, WatchlistEntry } from '../models';
 
 const emit = defineEmits<{ open: [ref: Bridge_MediaRef] }>();
 defineProps<{ wall?:boolean }>();
@@ -13,6 +14,10 @@ const entries = ref<WatchlistEntry[]>([]), posters = ref<Record<string, { id: st
 const refreshed = new Set<string>();
 const opening = ref(false);
 let generation = 0, mounted = true;
+function card(entry: WatchlistEntry): Bridge_MediaCard | null {
+  const ref = metadataReference(entry, state.sources.data?.providers ?? []);
+  return ref ? { id: entry.content_id, ref, title: entry.title, kind: entry.kind } : null;
+}
 function detailsHref(entry: WatchlistEntry) {
   const ref = metadataReference(entry, state.sources.data?.providers ?? []);
   return ref ? `#/details/${encodeURIComponent(JSON.stringify(ref))}` : '#/home';
@@ -76,7 +81,7 @@ onBeforeUnmount(() => { mounted = false; generation++; });
     <p v-if="wall && !entries.length && !error" class="library-empty" role="status">{{ locale === 'zh-CN' ? '添加影片到待播清单，稍后观看。' : 'Add titles to your watchlist to watch later.' }}</p>
     <div class="watchlist-track" data-focus-row>
       <article v-for="entry in entries" :key="entry.content_id" class="watchlist-card home-card" :data-content-id="entry.content_id">
-        <a class="poster-link watchlist-poster" :aria-disabled="opening" :href="detailsHref(entry)" :aria-label="entry.title" @click.prevent="open(entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]!.url" alt="" loading="lazy" @error="imageFailed(entry, $event)" /><span v-else>{{ entry.title }}</span></a>
+        <a class="poster-link watchlist-poster" :aria-disabled="opening" :href="detailsHref(entry)" :aria-label="entry.title" @click.prevent="open(entry)"><img v-if="posters[entry.content_id]" :src="posters[entry.content_id]!.url" alt="" loading="lazy" @error="imageFailed(entry, $event)" /><span v-else>{{ entry.title }}</span><CardStatus v-if="card(entry)" :card="card(entry)!" /></a>
         <p class="card-title">{{ entry.title }}</p>
       </article>
     </div>

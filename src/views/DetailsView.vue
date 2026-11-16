@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { NAlert, NButton, NEmpty, NModal } from "naive-ui";
-import { appState as state, appController as app, metadataVideoId as videoId } from "../state";
+import { appState as state, appController as app, metadataVideoId as videoId, playableSourceGroups } from "../state";
 import { api } from "../api";
 import Icon from '../components/Icon.vue';
 import MediaRow from '../components/MediaRow.vue';
@@ -107,11 +107,9 @@ function updateServiceModal(show: boolean) {
   if (state.route.name === 'details') location.hash = `#/details/${encodeURIComponent(JSON.stringify(state.route.ref))}`;
 }
 function retryServiceRound() { void app.startServiceRound(app.serviceRound.videoId); }
-const sourceGroups = computed(() => (app.serviceRound.snapshot?.sources ?? []).map(source => ({
-  ...source,
-  lines: (app.serviceRound.snapshot?.lines ?? []).filter(line => line.source_id === source.source_id && line.probe_status === 'ready'),
-})).filter(source => source.lines.length));
+const sourceGroups = computed(() => playableSourceGroups(app.serviceRound.snapshot));
 function sourceStatus(source: (typeof sourceGroups.value)[number]) {
+  if (source.last_playback === 'playing') return word('已播放验证', 'Previously played');
   if (source.lines.some(line => line.probe_status === 'ready')) return word('可播放', 'Available');
   if (source.lines.some(line => line.probe_status === 'testing') || ['pending', 'searching'].includes(source.status)) return word('检测中', 'Checking');
   if (source.status === 'disabled') return word('已停用', 'Disabled');
@@ -200,7 +198,7 @@ onBeforeUnmount(() => { observer?.disconnect(); savedGeneration++; });
         <button class="line-choice" :disabled="line.probe_status !== 'ready' || app.serviceRound.busy" @click="app.chooseServiceLine(line.line_id)">
           <span class="line-choice-name">{{ line.line_name }}</span>
           <span v-if="line.description" class="line-choice-description">{{ line.description }}</span>
-          <span class="line-choice-meta"><span v-if="line.quality">{{ line.quality }}</span><span v-if="formatSize(line.size_bytes)">{{ formatSize(line.size_bytes) }}</span><span>{{ lineReason(line.reason) || lineStatus(line.probe_status) }}</span><span v-if="line.latency_ms !== null">{{ word('服务端', 'Server') }} {{ line.latency_ms }} ms</span><span v-if="line.availability_expires_at">{{ word('缓存至', 'Cached until') }} {{ new Date(line.availability_expires_at * 1000).toLocaleString(locale) }}</span></span>
+          <span class="line-choice-meta"><span v-if="line.quality">{{ line.quality }}</span><span v-if="formatSize(line.size_bytes)">{{ formatSize(line.size_bytes) }}</span><span>{{ lineReason(line.reason) || lineStatus(line.probe_status) }}</span><span v-if="line.latency_ms !== null">{{ word('服务端', 'Server') }} {{ line.latency_ms }} ms</span></span>
         </button>
         <NButton v-if="line.kind !== 'unsupported'" size="small" :disabled="app.serviceRound.busy" :aria-label="word('刷新线路', 'Refresh line') + ' ' + line.line_name" @click="app.refreshServiceLine(line.line_id)">{{ word('刷新', 'Refresh') }}</NButton>
       </div>

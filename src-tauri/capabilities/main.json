@@ -55,6 +55,7 @@
     "allow-app-service-import",
     "allow-app-service-delete",
     "allow-app-playback-sources",
+    "allow-app-probe-availability",
     "allow-app-cache"
   ]
 }

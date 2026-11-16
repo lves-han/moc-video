@@ -1735,7 +1735,15 @@
               "sources": {
                 "type": "array",
                 "items": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "last_playback": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": ["playing", "failed", null],
+                      "description": "Latest reported playback outcome for this video, source, and source revision."
+                    }
+                  }
                 }
               }
             }

@@ -134,29 +134,14 @@ impl Registry {
 #[derive(Clone)]
 pub struct Runtime {
     pub registry: Arc<Mutex<Registry>>,
-    pub handle_ttl: i64,
-    pub cache_ttl: i64,
+    pub lookup: Arc<std::sync::RwLock<crate::config::Lookup>>,
 }
 impl Runtime {
-    pub fn from_env() -> Result<Self, &'static str> {
-        fn value(name: &str, default: i64) -> Result<i64, &'static str> {
-            let parsed = std::env::var(name)
-                .ok()
-                .map(|v| v.parse::<i64>())
-                .transpose()
-                .map_err(|_| "invalid lookup lifetime")?
-                .unwrap_or(default);
-            if !(1..=86_400).contains(&parsed) {
-                return Err("invalid lookup lifetime");
-            }
-            Ok(parsed)
-        }
-        Ok(Self {
-            registry: Arc::new(Mutex::new(Registry::default())),
-            handle_ttl: value("MOC_HANDLE_TTL_SECONDS", 900)?,
-            cache_ttl: value("MOC_LINE_CACHE_SECONDS", 60)?,
-        })
+    pub fn new(lookup: Arc<std::sync::RwLock<crate::config::Lookup>>) -> Self {
+        Self { registry: Arc::new(Mutex::new(Registry::default())), lookup }
     }
+    pub fn handle_ttl(&self) -> i64 { self.lookup.read().expect("lookup configuration").handle_ttl_seconds }
+    pub fn cache_ttl(&self) -> i64 { self.lookup.read().expect("lookup configuration").line_cache_seconds }
 }
 
 #[cfg(test)]
@@ -179,8 +164,7 @@ mod tests {
         );
         let runtime = Runtime {
             registry: Arc::new(Mutex::new(Registry::default())),
-            handle_ttl: 900,
-            cache_ttl: 60,
+            lookup: Arc::new(std::sync::RwLock::new(crate::config::Lookup::default())),
         };
         let template = Template {
             source: json!({"id":"s","revision":1,"headers":{}}),

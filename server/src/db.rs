@@ -242,6 +242,10 @@ pub fn initialize(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         ok_count INTEGER NOT NULL DEFAULT 0, fail_count INTEGER NOT NULL DEFAULT 0,
         last_ok_at INTEGER, last_latency_ms INTEGER);",
     )?;
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS source_playback_stats (
+        target_key TEXT NOT NULL, source_id TEXT NOT NULL, source_revision INTEGER NOT NULL,
+        last_outcome TEXT NOT NULL, reported_at INTEGER NOT NULL,
+        PRIMARY KEY(target_key, source_id, source_revision));")?;
     Ok(())
 }
 

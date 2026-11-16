@@ -70,10 +70,11 @@ impl Resolve for FallbackDns {
             for resolver in public {
                 let fqdn = fqdn.clone();
                 set.spawn(async move {
-                    resolver
-                        .lookup_ip(fqdn)
-                        .await
-                        .map(|ips| ips.iter().map(|ip| SocketAddr::new(ip, 0)).collect::<Vec<_>>())
+                    resolver.lookup_ip(fqdn).await.map(|ips| {
+                        ips.iter()
+                            .map(|ip| SocketAddr::new(ip, 0))
+                            .collect::<Vec<_>>()
+                    })
                 });
             }
             while let Some(result) = set.join_next().await {
@@ -170,7 +171,7 @@ pub async fn bytes(url: Url, headers: HeaderMap) -> Result<Vec<u8>, Error> {
     tokio::time::timeout(Duration::from_secs(8), fetch(url, headers, None, false))
         .await
         .map_err(|_| Error::Failed)?
-        .map(|(body, _)| body)
+        .map(|(body, _, _, _)| body)
 }
 
 pub async fn post_json(url: Url, headers: HeaderMap, body: &Value) -> Result<Value, Error> {
@@ -192,20 +193,162 @@ pub async fn probe(url: Url, mut headers: HeaderMap, hls: bool) -> Result<Option
         reqwest::header::RANGE,
         "bytes=0-65535".parse().map_err(|_| Error::Failed)?,
     );
-    let (body, response_headers) =
-        tokio::time::timeout(Duration::from_secs(5), fetch(url, headers, None, true))
-            .await
-            .map_err(|_| Error::Failed)??;
-    if body.is_empty() || (hls && !body.starts_with(b"#EXTM3U")) {
+    tokio::time::timeout(Duration::from_secs(7), probe_inner(url, headers, hls))
+        .await
+        .map_err(|_| Error::Failed)?
+}
+
+fn media_body(body: &[u8], headers: &HeaderMap, encrypted: bool) -> Result<(), Error> {
+    let mime = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let prefix = String::from_utf8_lossy(&body[..body.len().min(512)])
+        .trim_start()
+        .to_ascii_lowercase();
+    if body.is_empty()
+        || mime.contains("text/html")
+        || mime.contains("application/json")
+        || prefix.starts_with("<!doctype")
+        || prefix.starts_with("<html")
+        || prefix.starts_with("<?xml")
+        || prefix.starts_with('{')
+    {
         return Err(Error::Failed);
     }
-    Ok(response_headers
-        .get(reqwest::header::CONTENT_RANGE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("bytes "))
-        .and_then(|v| v.split_once('/'))
-        .and_then(|(_, size)| size.parse::<u64>().ok())
-        .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991))
+    let known = (body.len() >= 8 && matches!(&body[4..8], b"ftyp" | b"styp" | b"moof" | b"moov"))
+        || body.starts_with(b"FLV")
+        || body.starts_with(b"OggS")
+        || body.starts_with(b"ID3")
+        || body.starts_with(b"RIFF")
+        || body.starts_with(&[0x1a, 0x45, 0xdf, 0xa3])
+        || body.starts_with(&[0, 0, 1, 0xba])
+        || (body[0] == 0x47 && (body.len() < 189 || body[188] == 0x47))
+        || (body.len() > 1 && body[0] == 0xff && body[1] & 0xe0 == 0xe0);
+    if known || (encrypted && body.len() >= 16) {
+        Ok(())
+    } else {
+        Err(Error::Failed)
+    }
+}
+
+fn attribute<'a>(line: &'a str, name: &str) -> Option<&'a str> {
+    let (_, mut rest) = line.split_once(':')?;
+    while !rest.is_empty() {
+        let (key, value) = rest.split_once('=')?;
+        if value.starts_with('"') {
+            let quoted = &value[1..];
+            let end = quoted.find('"')?;
+            let found = &quoted[..end];
+            rest = quoted[end + 1..].strip_prefix(',').unwrap_or("");
+            if key == name {
+                return Some(found);
+            }
+        } else {
+            let (found, next) = value.split_once(',').unwrap_or((value, ""));
+            rest = next;
+            if key == name {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+async fn probe_inner(
+    mut url: Url,
+    mut headers: HeaderMap,
+    hls: bool,
+) -> Result<Option<u64>, Error> {
+    if !hls {
+        let (body, response_headers, _, _) = fetch(url, headers, None, true).await?;
+        media_body(&body, &response_headers, false)?;
+        return Ok(response_headers
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("bytes "))
+            .and_then(|v| v.split_once('/'))
+            .and_then(|(_, size)| size.parse::<u64>().ok())
+            .filter(|size| *size > 0 && *size <= 9_007_199_254_740_991));
+    }
+    for _ in 0..3 {
+        let (body, _, final_url, effective_headers) =
+            fetch(url, headers.clone(), None, true).await?;
+        headers = effective_headers;
+        let text = std::str::from_utf8(&body).map_err(|_| Error::Failed)?;
+        if text.lines().next().map(str::trim_end) != Some("#EXTM3U") {
+            return Err(Error::Failed);
+        }
+        let mut variant = false;
+        let mut selected = None;
+        let mut key = None;
+        let mut encrypted = false;
+        let mut init = None;
+        for line in text.lines().map(str::trim) {
+            if line.starts_with("#EXT-X-STREAM-INF:") {
+                variant = true;
+                continue;
+            }
+            if line.starts_with("#EXT-X-KEY:") {
+                match attribute(line, "METHOD") {
+                    Some("NONE") => {
+                        encrypted = false;
+                        key = None;
+                    }
+                    Some("AES-128")
+                        if attribute(line, "KEYFORMAT").is_none_or(|value| value == "identity") =>
+                    {
+                        encrypted = true;
+                        key = Some(
+                            attribute(line, "URI")
+                                .filter(|value| !value.is_empty())
+                                .ok_or(Error::Failed)?,
+                        );
+                    }
+                    _ => return Err(Error::Failed),
+                }
+            }
+            if line.starts_with("#EXT-X-MAP:") {
+                init = Some(
+                    attribute(line, "URI")
+                        .filter(|value| !value.is_empty())
+                        .ok_or(Error::Failed)?,
+                );
+            }
+            if !line.is_empty() && !line.starts_with('#') {
+                selected = Some((line, variant));
+                break;
+            }
+        }
+        let (next, is_variant) = selected.ok_or(Error::Failed)?;
+        if let Some(key) = key {
+            let key_url = final_url.join(key).map_err(|_| Error::Failed)?;
+            let mut key_headers = headers.clone();
+            redirect(&final_url, &key_url, &mut key_headers)?;
+            key_headers.remove(reqwest::header::RANGE);
+            let (bytes, _, _, _) = fetch(key_url, key_headers, None, true).await?;
+            if bytes.len() != 16 {
+                return Err(Error::Failed);
+            }
+        }
+        if let Some(init) = init {
+            let init_url = final_url.join(init).map_err(|_| Error::Failed)?;
+            let mut init_headers = headers.clone();
+            redirect(&final_url, &init_url, &mut init_headers)?;
+            let (bytes, hdrs, _, _) = fetch(init_url, init_headers, None, true).await?;
+            media_body(&bytes, &hdrs, encrypted)?;
+        }
+        let next_url = final_url.join(next).map_err(|_| Error::Failed)?;
+        redirect(&final_url, &next_url, &mut headers)?;
+        if !is_variant {
+            let (bytes, hdrs, _, _) = fetch(next_url, headers, None, true).await?;
+            media_body(&bytes, &hdrs, encrypted)?;
+            return Ok(None);
+        }
+        url = next_url;
+    }
+    Err(Error::Failed)
 }
 
 async fn fetch(
@@ -213,7 +356,7 @@ async fn fetch(
     mut headers: HeaderMap,
     body: Option<&Value>,
     probe: bool,
-) -> Result<(Vec<u8>, HeaderMap), Error> {
+) -> Result<(Vec<u8>, HeaderMap, Url, HeaderMap), Error> {
     for _ in 0..=5 {
         if !valid(&url) {
             return Err(Error::Failed);
@@ -271,7 +414,7 @@ async fn fetch(
                 bytes.extend_from_slice(&chunk);
             }
         }
-        return Ok((bytes, response_headers));
+        return Ok((bytes, response_headers, url, headers));
     }
     Err(Error::Failed)
 }
@@ -310,5 +453,132 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn playback_probe_rejects_html_and_checks_nested_hls_segments() {
+        use axum::{Router, routing::get};
+        let app = Router::new()
+            .route(
+                "/html",
+                get(|| async { ([("content-type", "video/mp4")], "<html>blocked</html>") }),
+            )
+            .route(
+                "/movie",
+                get(|| async {
+                    (
+                        [("content-type", "application/octet-stream")],
+                        b"\0\0\0\x18ftypisom".to_vec(),
+                    )
+                }),
+            )
+            .route(
+                "/master",
+                get(|| async { "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n/nested\n" }),
+            )
+            .route(
+                "/nested",
+                get(|| async { "#EXTM3U\n#EXTINF:1,\n/segment\n#EXT-X-ENDLIST\n" }),
+            )
+            .route(
+                "/bad-playlist",
+                get(|| async { "#EXTM3U\n#EXTINF:1,\n/html\n#EXT-X-ENDLIST\n" }),
+            )
+            .route(
+                "/segment",
+                get(|| async { ([("content-type", "video/mp2t")], vec![0x47; 376]) }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let endpoint = |path: &str| Url::parse(&format!("http://{address}{path}")).unwrap();
+        assert!(
+            probe(endpoint("/html"), HeaderMap::new(), false)
+                .await
+                .is_err()
+        );
+        assert!(
+            probe(endpoint("/movie"), HeaderMap::new(), false)
+                .await
+                .is_ok()
+        );
+        assert!(
+            probe(endpoint("/bad-playlist"), HeaderMap::new(), true)
+                .await
+                .is_err()
+        );
+        assert!(
+            probe(endpoint("/master"), HeaderMap::new(), true)
+                .await
+                .is_ok()
+        );
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn redirected_manifest_does_not_forward_credentials_to_child_requests() {
+        use axum::{Router, routing::get};
+        use std::sync::{Arc, Mutex};
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let manifest_seen = seen.clone();
+        let segment_seen = seen.clone();
+        let target = Router::new()
+            .route(
+                "/playlist",
+                get(move |headers: HeaderMap| {
+                    let seen = manifest_seen.clone();
+                    async move {
+                        seen.lock()
+                            .unwrap()
+                            .push(headers.contains_key(reqwest::header::AUTHORIZATION));
+                        "#EXTM3U\n#EXTINF:1,\n/segment\n#EXT-X-ENDLIST\n"
+                    }
+                }),
+            )
+            .route(
+                "/segment",
+                get(move |headers: HeaderMap| {
+                    let seen = segment_seen.clone();
+                    async move {
+                        seen.lock()
+                            .unwrap()
+                            .push(headers.contains_key(reqwest::header::AUTHORIZATION));
+                        vec![0x47; 376]
+                    }
+                }),
+            );
+        let target_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target_addr = target_listener.local_addr().unwrap();
+        let target_task =
+            tokio::spawn(async move { axum::serve(target_listener, target).await.unwrap() });
+        let redirect_url = format!("http://{target_addr}/playlist");
+        let source = Router::new().route(
+            "/redirect",
+            get(move || {
+                let url = redirect_url.clone();
+                async move { axum::response::Redirect::temporary(&url) }
+            }),
+        );
+        let source_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let source_addr = source_listener.local_addr().unwrap();
+        let source_task =
+            tokio::spawn(async move { axum::serve(source_listener, source).await.unwrap() });
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            "Bearer private".parse().unwrap(),
+        );
+        assert!(
+            probe(
+                Url::parse(&format!("http://{source_addr}/redirect")).unwrap(),
+                headers,
+                true
+            )
+            .await
+            .is_ok()
+        );
+        assert_eq!(*seen.lock().unwrap(), vec![false, false]);
+        source_task.abort();
+        target_task.abort();
     }
 }

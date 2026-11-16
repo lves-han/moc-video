@@ -284,24 +284,27 @@ fn sync(host: &Host) -> Value {
 fn source_bootstrap_cache_restores_manifest_without_network_and_refreshes() {
     let fixture = Fixture::new(standard);
     let (temp, host) = setup(vec![fixture.url("/manifest.json")]);
+    host.web_cache("ready", "catalog", "", None).unwrap();
     let first = sync(&host);
     assert_eq!(fixture.requests.lock().unwrap().len(), 1);
     drop(host);
     let restarted = Host::open(temp.path().join("settings.json")).unwrap();
+    restarted.web_cache("ready", "catalog", "", None).unwrap();
     let restored = sync(&restarted);
     assert_eq!(restored["source_revision"], first["source_revision"]);
     assert_eq!(fixture.requests.lock().unwrap().len(), 1);
     sync(&restarted);
     assert_eq!(fixture.requests.lock().unwrap().len(), 2);
     drop(restarted);
-    let cache = std::fs::read_dir(temp.path().join("source-cache"))
+    let cache = std::fs::read_dir(temp.path().join("cache-v2"))
         .unwrap()
-        .next()
-        .unwrap()
-        .unwrap()
-        .path();
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|extension| extension == "cache"))
+        .expect("source snapshot cache");
     std::fs::write(cache, b"damaged cache").unwrap();
     let recovered = Host::open(temp.path().join("settings.json")).unwrap();
+    recovered.web_cache("ready", "catalog", "", None).unwrap();
     sync(&recovered);
     assert_eq!(fixture.requests.lock().unwrap().len(), 3);
 }
@@ -1619,4 +1622,13 @@ fn t20_tmdb_opaque_configuration_is_preserved() {
             .path()
             .ends_with("/zh-CN/manifest.json")
     );
+}
+
+#[test]
+fn upcoming_status_uses_full_release_date_and_future_year() {
+    let now = OffsetDateTime::parse("2026-11-16T12:00:00Z", &Rfc3339).unwrap();
+    assert!(upcoming(&json!({"released":"2026-11-17T00:00:00Z","year":"2026"}), now));
+    assert!(!upcoming(&json!({"released":"2026-11-16T00:00:00Z","year":"2026"}), now));
+    assert!(upcoming(&json!({"year":"2027"}), now));
+    assert!(!upcoming(&json!({"year":"2026"}), now));
 }

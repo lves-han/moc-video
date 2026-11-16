@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                 while STATE["hold_probe"] and time.monotonic() < deadline: time.sleep(.02)
                 STATE["slow_finished"] = True
             time.sleep(0.05 if url.path == "/probe-fast.mp4" else 0.4 if url.path == "/probe-slow.mp4" else 0)
-            payload = b"controlled-media-bytes"
+            payload = bytes([0x47]) * 376 if url.path.endswith('.ts') else b"\x00\x00\x00\x18ftypisomcontrolled-media-bytes"
             self.send_response(206 if self.headers.get("Range") else 200)
             self.send_header("Content-Length", str(len(payload)))
             if self.headers.get("Range"): self.send_header("Content-Range", f"bytes 0-{len(payload)-1}/{len(payload)}")

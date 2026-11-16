@@ -161,8 +161,8 @@ pub fn issue(
             unsupported_reason: item["episode"]["unsupported_reason"]
                 .as_str()
                 .map(str::to_owned),
-            expires_at: now + runtime.handle_ttl,
-            play_expires_at: now + runtime.cache_ttl,
+            expires_at: now + runtime.handle_ttl(),
+            play_expires_at: now + runtime.cache_ttl(),
         };
         let id = uuid::Uuid::new_v4().to_string();
         output_lines.push(output(&id, &line, history));
@@ -184,8 +184,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let runtime = Runtime {
             registry: Arc::new(Mutex::new(Registry::default())),
-            handle_ttl: 900,
-            cache_ttl: 60,
+            lookup: Arc::new(std::sync::RwLock::new(crate::config::Lookup::default())),
         };
         let target =
             json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:1","video_id":"tt1"});
@@ -214,13 +213,15 @@ mod tests {
             }
         }
         let history = rt
-            .block_on(reports.get_many(
-                registry
-                    .lines
-                    .values()
-                    .map(|l| l.logical_key.clone())
-                    .collect(),
-            ))
+            .block_on(
+                reports.get_many(
+                    registry
+                        .lines
+                        .values()
+                        .map(|l| l.logical_key.clone())
+                        .collect(),
+                ),
+            )
             .unwrap();
         let issued = issue(&mut registry, &runtime, &target, &template(3), &history).unwrap();
         assert_eq!(issued[0]["history"]["ok"], 2);
@@ -230,5 +231,39 @@ mod tests {
         })
         .unwrap();
         assert_eq!(rows, 1, "lines without a locator leave no statistics rows");
+        let outcomes = rt.block_on(reports.source_outcomes(&target)).unwrap();
+        assert_eq!(
+            outcomes.get(&("source".to_owned(), 2)).unwrap().0,
+            "playing"
+        );
+        let line = registry
+            .lines
+            .values()
+            .find(|line| line.source_revision == 2)
+            .unwrap();
+        reports.record(line, "failed", None).unwrap();
+        let outcomes = rt.block_on(reports.source_outcomes(&target)).unwrap();
+        assert_eq!(outcomes.get(&("source".to_owned(), 2)).unwrap().0, "failed");
+        assert_eq!(
+            outcomes.get(&("source".to_owned(), 1)).unwrap().0,
+            "playing"
+        );
+        let other =
+            json!({"metadata_source_id":"tmdb","type":"movie","meta_id":"tmdb:2","video_id":"tt2"});
+        assert!(
+            rt.block_on(reports.source_outcomes(&other))
+                .unwrap()
+                .is_empty()
+        );
+        drop(reports);
+        let reopened = crate::reports::Store::new(dir.path());
+        assert_eq!(
+            rt.block_on(reopened.source_outcomes(&target))
+                .unwrap()
+                .get(&("source".to_owned(), 2))
+                .unwrap()
+                .0,
+            "failed"
+        );
     }
 }

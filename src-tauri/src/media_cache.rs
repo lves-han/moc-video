@@ -196,6 +196,8 @@ struct Entry {
 struct Reservation {
     bytes: u64,
     generation: u64,
+    partition_generation: u64,
+    video: bool,
     path: PathBuf,
     active: bool,
 }
@@ -205,6 +207,8 @@ struct State {
     ready: bool,
     episode_order: Vec<String>,
     generation: u64,
+    video_generation: u64,
+    metadata_generation: u64,
     sequence: u64,
     last_sweep: u64,
     initialized: bool,
@@ -215,28 +219,73 @@ struct State {
     last_error: Option<ApiError>,
 }
 impl State {
-    fn used(&self) -> u64 {
+    fn is_video(&self, metadata: &Metadata) -> bool {
+        self.episode_mode
+            && metadata
+                .episode
+                .as_deref()
+                .is_some_and(|owner| !owner.starts_with("blob-"))
+    }
+    fn partition_generation(&self, video: bool) -> u64 {
+        if video {
+            self.video_generation
+        } else {
+            self.metadata_generation
+        }
+    }
+    fn used_partition(&self, video: bool) -> u64 {
         self.entries
             .values()
+            .filter(|e| self.is_video(&e.metadata) == video)
             .map(|e| e.size)
-            .chain(self.pending.values().map(|p| p.bytes))
+            .chain(
+                self.pending
+                    .values()
+                    .filter(|p| p.video == video)
+                    .map(|p| p.bytes),
+            )
             .fold(0, u64::saturating_add)
     }
     fn status(&self) -> Value {
         let pending: u64 = self
             .entries
             .values()
-            .filter(|e| e.retired)
+            .filter(|e| e.retired && !self.is_video(&e.metadata))
             .map(|e| e.size)
             .chain(
                 self.pending
                     .values()
-                    .filter(|p| p.generation != self.generation || !p.active)
+                    .filter(|p| {
+                        !p.video
+                            && (p.generation != self.generation
+                                || p.partition_generation != self.partition_generation(false)
+                                || !p.active)
+                    })
                     .map(|p| p.bytes),
             )
             .sum();
-        json!({"max_bytes":self.limit,"used_bytes":self.used(),"pending_bytes":pending,
-            "entry_count":self.entries.values().filter(|e|!e.retired).count(),"last_error":self.last_error})
+        json!({"max_bytes":self.limit,"used_bytes":self.used_partition(false),"pending_bytes":pending,
+            "entry_count":self.entries.values().filter(|e|!e.retired && !self.is_video(&e.metadata)).count(),"last_error":self.last_error})
+    }
+    fn video_status(&self) -> Value {
+        let pending = self
+            .entries
+            .values()
+            .filter(|e| e.retired && self.is_video(&e.metadata))
+            .map(|e| e.size)
+            .chain(
+                self.pending
+                    .values()
+                    .filter(|p| {
+                        p.video
+                            && (p.generation != self.generation
+                                || p.partition_generation != self.partition_generation(true)
+                                || !p.active)
+                    })
+                    .map(|p| p.bytes),
+            )
+            .fold(0, u64::saturating_add);
+        json!({"used_bytes":self.used_partition(true),"pending_bytes":pending})
     }
 }
 pub struct MediaCache {
@@ -415,6 +464,8 @@ impl MediaCache {
                 ready: true,
                 episode_order: Vec::new(),
                 generation: 0,
+                video_generation: 0,
+                metadata_generation: 0,
                 sequence: 0,
                 last_sweep: 0,
                 initialized: false,
@@ -576,7 +627,8 @@ impl MediaCache {
                 } else {
                     state.available = false;
                     if state.last_error.is_none() {
-                        state.last_error = Some(ApiError::internal("Cache exceeds the configured limit"));
+                        state.last_error =
+                            Some(ApiError::internal("Cache exceeds the configured limit"));
                     }
                     false
                 }
@@ -631,14 +683,16 @@ impl MediaCache {
     fn make_room(&self, state: &mut State, extra: u64) -> bool {
         let mut attempted: Vec<String> = Vec::new();
         while state
-            .used()
+            .used_partition(false)
             .checked_add(extra)
             .is_none_or(|n| n > state.limit)
         {
             let candidate = state
                 .entries
                 .iter()
-                .filter(|(key, e)| e.readers == 0 && !attempted.contains(*key))
+                .filter(|(key, e)| {
+                    !state.is_video(&e.metadata) && e.readers == 0 && !attempted.contains(*key)
+                })
                 .min_by_key(|(_, e)| (!e.retired, e.used))
                 .map(|(key, _)| key.clone());
             let Some(key) = candidate else {
@@ -668,6 +722,75 @@ impl MediaCache {
         }
         check()?;
         Ok(state.status())
+    }
+    pub(crate) fn video_status(&self) -> Result<Value, ApiError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+        if !self.prepare(&mut state) {
+            return Err(state
+                .last_error
+                .clone()
+                .unwrap_or_else(|| ApiError::internal("Cache unavailable")));
+        }
+        self.prune_expired(&mut state);
+        Ok(state.video_status())
+    }
+    pub(crate) fn clear_partition(&self, video: bool) -> Result<Value, ApiError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ApiError::internal("Cache lock unavailable"))?;
+        if !self.prepare(&mut state) {
+            return Err(state
+                .last_error
+                .clone()
+                .unwrap_or_else(|| ApiError::internal("Cache unavailable")));
+        }
+        if video {
+            state.video_generation += 1;
+        } else {
+            state.metadata_generation += 1;
+        }
+        state.last_error = None;
+        let keys: Vec<_> = state
+            .entries
+            .iter()
+            .filter(|(_, entry)| state.is_video(&entry.metadata) == video)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in keys {
+            if let Some(entry) = state.entries.get_mut(&key) {
+                entry.retired = true;
+            }
+            self.remove(&mut state, &key);
+        }
+        let orphans: Vec<_> = state
+            .pending
+            .iter()
+            .filter(|(_, p)| p.video == video && !p.active)
+            .map(|(id, p)| (*id, p.path.clone()))
+            .collect();
+        for (id, path) in orphans {
+            match fs::remove_file(path) {
+                Ok(()) => {
+                    state.pending.remove(&id);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    state.pending.remove(&id);
+                }
+                Err(error) => state.last_error = Some(io_error("remove", &error)),
+            }
+        }
+        if let Some(error) = &state.last_error {
+            return Err(error.clone());
+        }
+        Ok(if video {
+            state.video_status()
+        } else {
+            state.status()
+        })
     }
     pub fn configure(&self, limit: u64) {
         let mut state = self.state.lock().expect("cache lock");
@@ -743,10 +866,13 @@ impl MediaCache {
     pub fn get(self: &Arc<Self>, key: &str) -> Option<CachedRead> {
         owned_key(&format!("{key}.cache"))?;
         let mut state = self.state.lock().expect("cache lock");
-        if state.limit == 0 || !self.prepare(&mut state) {
+        if !self.prepare(&mut state) {
             return None;
         }
         let entry = state.entries.get(key)?;
+        if state.limit == 0 && !state.is_video(&entry.metadata) {
+            return None;
+        }
         if entry.retired || entry.metadata.created > now() || entry.metadata.expires <= now() {
             if let Some(entry) = state.entries.get_mut(key) {
                 entry.retired = true;
@@ -1041,10 +1167,12 @@ impl MediaCache {
         {
             return None;
         }
-        if state.limit <= HEADER
-            || length.is_some_and(|n| n > state.limit - HEADER)
-            || !self.prepare(&mut state)
-            || !self.make_room(&mut state, HEADER)
+        let video = state.is_video(&metadata);
+        if !self.prepare(&mut state)
+            || (!video
+                && (state.limit <= HEADER
+                    || length.is_some_and(|n| n > state.limit - HEADER)
+                    || !self.make_room(&mut state, HEADER)))
         {
             return None;
         }
@@ -1064,11 +1192,14 @@ impl MediaCache {
         }
         let id = Uuid::new_v4();
         let generation = state.generation;
+        let partition_generation = state.partition_generation(video);
         state.pending.insert(
             id,
             Reservation {
                 bytes: HEADER,
                 generation,
+                partition_generation,
+                video,
                 path: file.path().into(),
                 active: true,
             },
@@ -1200,11 +1331,19 @@ impl CacheWrite {
     }
     pub fn append(&mut self, bytes: &[u8]) -> bool {
         let mut state = self.cache.state.lock().expect("cache lock");
-        let valid = state
+        let reservation = state
             .pending
             .get(&self.id)
-            .is_some_and(|p| p.generation == state.generation);
-        if self.file.is_none() || !valid || !self.cache.make_room(&mut state, bytes.len() as u64) {
+            .map(|p| (p.generation, p.partition_generation, p.video));
+        let Some((generation, partition_generation, video)) = reservation else {
+            return false;
+        };
+        let valid = generation == state.generation
+            && partition_generation == state.partition_generation(video);
+        if self.file.is_none()
+            || !valid
+            || (!video && !self.cache.make_room(&mut state, bytes.len() as u64))
+        {
             return false;
         }
         if let Some(pending) = state.pending.get_mut(&self.id) {
@@ -1254,6 +1393,7 @@ impl CacheWrite {
             return;
         };
         if reservation.generation != state.generation
+            || reservation.partition_generation != state.partition_generation(reservation.video)
             || state.entries.contains_key(&self.key)
             || (state.episode_mode
                 && self.metadata.episode.as_ref().is_none_or(|owner| {
@@ -1442,7 +1582,7 @@ mod tests {
     }
 
     #[test]
-    fn episode_cache_evicts_by_bytes_and_expires_after_seven_days() {
+    fn episode_cache_ignores_metadata_size_limit_and_expires_after_seven_days() {
         let root = tempfile::tempdir().unwrap();
         let cache = MediaCache::build(
             Some(root.path().join("media-cache")),
@@ -1467,10 +1607,14 @@ mod tests {
             assert!(writer.append(&[7; 8]));
             writer.finish();
         }
-        assert!(cache.get(&id("first")).is_none());
+        assert!(cache.get(&id("first")).is_some());
         assert!(cache.get(&id("second")).is_some());
         assert!(cache.get(&id("third")).is_some());
-        assert!(cache.status()["used_bytes"].as_u64().unwrap() <= 2 * (HEADER + 8));
+        assert_eq!(cache.status()["used_bytes"], 0);
+        assert_eq!(
+            cache.video_status().unwrap()["used_bytes"],
+            3 * (HEADER + 8)
+        );
     }
 
     #[test]
@@ -1518,7 +1662,7 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_writers_share_the_media_budget() {
+    fn concurrent_video_writers_do_not_consume_metadata_budget() {
         use std::sync::Barrier;
         let root = tempfile::tempdir().unwrap();
         let budget = 4 * (HEADER + 128);
@@ -1554,11 +1698,15 @@ mod tests {
         }
         let status = cache.status();
         assert!(status["used_bytes"].as_u64().unwrap() <= budget);
-        assert!(status["entry_count"].as_u64().unwrap() > 0);
+        assert_eq!(status["entry_count"], 0);
+        assert_eq!(
+            cache.video_status().unwrap()["used_bytes"],
+            12 * (HEADER + 128)
+        );
     }
 
     #[test]
-    fn source_blobs_and_playback_share_the_same_budget() {
+    fn source_blobs_and_playback_have_separate_budgets() {
         let root = tempfile::tempdir().unwrap();
         let budget = 2 * (HEADER + 128);
         let cache = MediaCache::build(Some(root.path().join("media-cache")), budget, true);
@@ -1580,7 +1728,7 @@ mod tests {
         let mut reader = cache.get(&id("playing")).unwrap();
         cache.put_blob("source:first", &[1; 128]).unwrap();
         cache.put_blob("source:second", &[2; 128]).unwrap();
-        assert!(cache.get_blob("source:first").is_none());
+        assert_eq!(cache.get_blob("source:first"), Some(vec![1; 128]));
         assert_eq!(cache.get_blob("source:second"), Some(vec![2; 128]));
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).unwrap();
@@ -1589,7 +1737,7 @@ mod tests {
     }
 
     #[test]
-    fn image_source_and_playback_writes_share_the_same_budget() {
+    fn image_and_source_use_metadata_budget_independently_of_playback() {
         use std::sync::Barrier;
         let root = tempfile::tempdir().unwrap();
         let budget = 2 * (HEADER + 256);
@@ -1624,6 +1772,7 @@ mod tests {
         cache.save_image("poster", &[2; 128], "image/png").unwrap();
         source.join().unwrap().unwrap();
         assert!(cache.status()["used_bytes"].as_u64().unwrap() <= budget);
+        assert_eq!(cache.video_status().unwrap()["used_bytes"], HEADER + 128);
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, vec![7; 128]);
@@ -1656,7 +1805,7 @@ mod tests {
     }
 
     #[test]
-    fn web_source_image_and_active_playback_share_one_budget() {
+    fn web_source_and_image_share_metadata_budget_independently_of_playback() {
         use std::sync::Barrier;
         let root = tempfile::tempdir().unwrap();
         let budget = 2 * (HEADER + 512);
@@ -1699,6 +1848,7 @@ mod tests {
         source.join().unwrap().unwrap();
         web.join().unwrap().unwrap();
         assert!(cache.status()["used_bytes"].as_u64().unwrap() <= budget);
+        assert_eq!(cache.video_status().unwrap()["used_bytes"], HEADER + 128);
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, vec![7; 128]);
@@ -1709,6 +1859,56 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let cache = MediaCache::for_episodes(root.path().join("media-cache"));
         assert_eq!(cache.status()["max_bytes"], 1024_u64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn video_larger_than_one_gib_does_not_evict_metadata_after_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("media-cache");
+        let cache = MediaCache::for_episodes(dir.clone());
+        cache.put_blob("web:details:movie", b"metadata").unwrap();
+        cache.register_episode("movie").unwrap();
+        let headers = headers();
+        let size = 1024_u64 * 1024 * 1024 + 1;
+        let writer = cache.begin_episode_at(
+            id("future"),
+            200,
+            &headers,
+            &headers,
+            Some(size),
+            cache.generation(),
+            Some("movie"),
+        );
+        assert!(writer.is_some());
+        drop(writer);
+        drop(cache);
+        let metadata = Metadata {
+            status: 200,
+            body_len: size,
+            created: now(),
+            expires: now() + CACHE_TTL,
+            headers: BTreeMap::new(),
+            episode: Some("movie".into()),
+            resource: None,
+        };
+        let header = serde_json::to_vec(&metadata).unwrap();
+        let path = dir.join(format!("{}.cache", id("large")));
+        let mut file = File::create(path).unwrap();
+        file.write_all(&(header.len() as u32).to_be_bytes())
+            .unwrap();
+        file.write_all(&header).unwrap();
+        file.set_len(HEADER + size).unwrap();
+        drop(file);
+        let restarted = MediaCache::for_episodes(dir);
+        assert_eq!(
+            restarted.get_blob("web:details:movie"),
+            Some(b"metadata".to_vec())
+        );
+        assert_eq!(
+            restarted.video_status().unwrap()["used_bytes"],
+            HEADER + size
+        );
+        assert!(restarted.status()["used_bytes"].as_u64().unwrap() < 1024 * 1024 * 1024);
     }
 
     #[test]
@@ -1756,14 +1956,68 @@ mod tests {
         assert!(writer.append(&[7; 16]));
         writer.finish();
         let mut reader = cache.get(&id("playing")).unwrap();
-        let cleared = cache.clear().unwrap();
+        let cleared = cache.clear_partition(true).unwrap();
         assert_eq!(cleared["pending_bytes"], HEADER + 16);
         assert!(cache.get(&id("playing")).is_none());
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, vec![7; 16]);
         drop(reader);
-        assert_eq!(cache.status()["used_bytes"], 0);
+        assert_eq!(cache.video_status().unwrap()["used_bytes"], 0);
+    }
+
+    #[test]
+    fn separate_clears_preserve_other_partition_and_its_active_writer() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = MediaCache::build(Some(root.path().join("media-cache")), HEADER * 8, true);
+        let headers = headers();
+        cache.put_blob("web:details:movie", b"metadata").unwrap();
+        cache.register_episode("playing").unwrap();
+        let mut video = cache
+            .begin_episode_at(
+                id("video"),
+                200,
+                &headers,
+                &headers,
+                Some(4),
+                cache.generation(),
+                Some("playing"),
+            )
+            .unwrap();
+        let mut metadata = cache
+            .begin_episode_at(
+                id("pending-meta"),
+                200,
+                &headers,
+                &headers,
+                Some(4),
+                cache.generation(),
+                Some("blob-pending"),
+            )
+            .unwrap();
+        assert!(video.append(b"ab"));
+        assert!(metadata.append(b"ab"));
+        cache.clear_partition(false).unwrap();
+        assert!(cache.get_blob("web:details:movie").is_none());
+        assert!(!metadata.append(b"cd"));
+        assert!(video.append(b"cd"));
+        video.finish();
+        assert_eq!(body(&cache, &id("video")), Some(b"abcd".to_vec()));
+        drop(metadata);
+        cache.put_blob("web:details:movie", b"fresh").unwrap();
+        let mut reader = cache.get(&id("video")).unwrap();
+        assert!(
+            cache.clear_partition(true).unwrap()["pending_bytes"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
+        assert_eq!(cache.get_blob("web:details:movie"), Some(b"fresh".to_vec()));
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"abcd");
+        drop(reader);
+        assert_eq!(cache.video_status().unwrap()["used_bytes"], 0);
     }
 
     #[test]

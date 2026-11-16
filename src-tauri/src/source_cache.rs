@@ -41,9 +41,22 @@ impl SourceCache {
 mod tests {
     use super::*;
     #[test]
+    fn initialized_source_snapshot_survives_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let cache_dir = root.path().join("media-cache");
+        let config = json!({"kind":"stremio","name":"metadata"});
+        let media = crate::media_cache::MediaCache::new(cache_dir.clone(), 10_000);
+        media.enable_after_legacy_cleanup();
+        SourceCache::new(media).save(&config, json!(["manifest"])).unwrap();
+        let reopened = crate::media_cache::MediaCache::new(cache_dir, 10_000);
+        reopened.enable_after_legacy_cleanup();
+        assert_eq!(SourceCache::new(reopened).load(&config), Some(json!(["manifest"])));
+    }
+    #[test]
     fn snapshots_share_the_media_size_limit() {
         let root = tempfile::tempdir().unwrap();
         let media = crate::media_cache::MediaCache::new(root.path().join("media-cache"), 5000);
+        media.enable_after_legacy_cleanup();
         let cache = SourceCache::new(media.clone());
         let first = json!({"kind":"stremio","name":"first"});
         let second = json!({"kind":"stremio","name":"second"});

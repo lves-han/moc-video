@@ -30,7 +30,7 @@ pub fn summary(base: &str, kind: &str, item: &Value, genres: &[(u64, String)]) -
     json!({"id": format!("tmdb:{}", item["id"]), "type": kind,
         "name": item[if kind == "movie" { "title" } else { "name" }], "poster": image(base, "w342", &item["poster_path"]),
         "background": image(base, "w1280", &item["backdrop_path"]), "description": item["overview"],
-        "year": year, "releaseInfo": year, "genres": names, "genre": names,
+        "year": year, "releaseInfo": year, "released": if date.len() == 10 { Some(format!("{date}T00:00:00Z")) } else { None }, "genres": names, "genre": names,
         "imdbRating": item["vote_average"].as_f64().filter(|v| *v > 0.0).map(|v| format!("{v:.1}"))})
 }
 
@@ -39,5 +39,17 @@ pub fn runtime(minutes: Option<u64>) -> Value {
         Some(minutes) if minutes >= 60 => json!(format!("{}h{}min", minutes / 60, minutes % 60)),
         Some(minutes) => json!(format!("{minutes}min")),
         None => Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn summary_preserves_release_date_for_upcoming_cards() {
+        let data = summary("https://images.test", "movie", &json!({"id":1,"title":"Test","release_date":"2027-02-14"}), &[]);
+        assert_eq!(data["released"], "2027-02-14T00:00:00Z");
+        let unknown = summary("https://images.test", "movie", &json!({"id":2,"title":"Test","release_date":""}), &[]);
+        assert!(unknown["released"].is_null());
     }
 }

@@ -201,6 +201,9 @@ impl Host {
         let id = format!("web:{store}:{key}");
         match action {
             "ready" => { self.media_cache.enable_after_legacy_cleanup(); Ok(Value::Null) },
+            "video_status" => self.media_cache.video_status(),
+            "video_clear" => self.media_cache.clear_partition(true),
+            "metadata_clear" => self.media_cache.clear_partition(false),
             "read" => match self.media_cache.get_blob(&id) {
                 Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| ApiError::internal("Cache value is invalid")),
                 None => Ok(Value::Null),
@@ -2411,6 +2414,7 @@ impl Host {
             if !service.reported.insert(outcome.to_owned()) {
                 return Ok(json!({"ok":true,"reported":false}));
             }
+            service.reported.remove(if outcome == "playing" { "failed" } else { "playing" });
             service.clone()
         };
         let payload = json!({"line_id":binding.line_id,"outcome":outcome,"latency_ms":binding.latency_ms,"error_code":input["error_code"]});
@@ -2423,9 +2427,16 @@ impl Host {
         );
         match result {
             Ok(_) => Ok(json!({"ok":true,"reported":true})),
-            Err(_) => Ok(
-                json!({"ok":true,"reported":false,"diagnostic":"Playback service report failed"}),
-            ),
+            Err(_) => {
+                let mut committed = self.committed.lock().expect("Host commit lock");
+                if let Some(current) = committed.session_bindings.get_mut(session)
+                    .and_then(|binding| binding.service.as_mut())
+                    .filter(|current| current.line_id == binding.line_id)
+                {
+                    current.reported.remove(outcome);
+                }
+                Ok(json!({"ok":true,"reported":false,"diagnostic":"Playback service report failed"}))
+            },
         }
     }
 

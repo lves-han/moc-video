@@ -22,6 +22,10 @@ test('settings keep the service connection without source management controls', 
       assert.match(html, /服务地址/);
       assert.match(html, /访问令牌/);
       assert.match(html, enabled ? /已配置，留空保持不变/ : /未连接/);
+      assert.match(html, /资料缓存最多保留 7 天，上限为 1 GiB/);
+      assert.match(html, /视频缓存最多保留 7 天，数量和容量不限/);
+      assert.match(html, /清除资料缓存/);
+      assert.match(html, /清除视频缓存/);
       for (const entry of ['来源管理', '播放源', 'Stremio 扩展', '添加扩展', 'TMDB']) {
         assert.ok(!html.includes(entry), `unexpected settings entry: ${entry}`);
       }

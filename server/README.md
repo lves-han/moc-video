@@ -1,18 +1,32 @@
 # 播放服务
 
-在项目根目录执行 `docker compose -f packaging/playback-service.compose.yml up -d --build`。
-默认仅监听本机 `127.0.0.1:8787`；容器的数据卷保存 SQLite 和自动生成的访问令牌。
-从容器的数据目录 `/data/service-token` 读取令牌后填入 App，切勿将其写入日志。
-启动前设置 `MOC_TMDB_KEY` 环境变量，Compose 会传递给服务。
-其他变量可在 Compose 覆盖文件中设置，或直接传给 `docker run`。
+在项目根目录准备可选配置，然后启动服务：
 
-- `MOC_SERVICE_LISTEN`：监听地址，容器默认为 `0.0.0.0:8787`。
-- `MOC_SERVICE_DATA_DIR`：持久数据目录，容器默认为 `/data`。
-- `MOC_SERVICE_TOKEN`：可选访问令牌；设置时优先于令牌文件。
-- `MOC_TMDB_KEY`：TMDB v3 API key 或 v4 读取令牌，由服务持有。
-- `MOC_TMDB_API_URL`：可选 TMDB v3 接口地址，默认 `https://api.themoviedb.org/3`。
-- `TZ`：首页每日更新时区，默认 `Asia/Shanghai`；在当地时间 04:00 更新。
-- `MOC_HOME_POLL_SECONDS`：检查更新的间隔，默认 60 秒。
+```sh
+mkdir -p config
+cp server/service.example.toml config/service.toml
+# 编辑 config/service.toml，填写 [tmdb] 的 key
+chmod 600 config/service.toml
+docker compose -f packaging/playback-service.compose.yml up -d --build
+```
+
+服务配置位于主机 `config/service.toml`，该目录已加入 Git 忽略列表。首次启动会在数据卷内生成访问令牌；从容器 `/data/service-token` 读取后填入 App。默认仅监听 `127.0.0.1:8787`。
+
+| TOML 配置 | 环境变量（优先） | 默认值 | 生效方式 |
+| --- | --- | --- | --- |
+| `service.listen` | `MOC_SERVICE_LISTEN` | `127.0.0.1:8787` | 重启 |
+| `service.data_dir` | `MOC_SERVICE_DATA_DIR` | `./data` | 重启 |
+| `service.token` | `MOC_SERVICE_TOKEN` | 自动生成 | 重启 |
+| `tmdb.api_url` | `MOC_TMDB_API_URL` | `https://api.themoviedb.org/3` | 重启 |
+| `tmdb.key` | `MOC_TMDB_KEY` | 空 | 重启 |
+| `home.timezone` | `TZ` | `Asia/Shanghai` | 重启 |
+| `home.poll_seconds` | `MOC_HOME_POLL_SECONDS` | 60 秒 | 重启 |
+| `lookup.handle_ttl_seconds` | `MOC_HANDLE_TTL_SECONDS` | 900 秒 | 自动重载 |
+| `lookup.line_cache_seconds` | `MOC_LINE_CACHE_SECONDS` | 60 秒 | 自动重载 |
+
+容器镜像通过环境变量固定监听 `0.0.0.0:8787` 和数据目录 `/data`。在工作目录启动程序时默认读取 `service.toml`；可用 `MOC_SERVICE_CONFIG` 指定文件路径，指定文件必须存在。环境变量优先于 TOML，旧部署继续沿用现有变量。Compose 会在设置了 `MOC_TMDB_KEY` 时传入该值；未设置时使用 TOML。其他环境变量可通过 Compose 覆盖文件设置。
+
+服务约每 5 秒检查配置文件；两项线路有效期的范围为 1 至 86400 秒，新值影响后续创建或续期的对象。配置无效或文件暂时缺失时保留当前值并记录日志。首页按配置的时区在当地时间 04:00 更新。请限制配置文件访问权限，备份时同时保存 `config/` 和数据卷；令牌与 TMDB 密钥不要提交到仓库。
 
 需要远程访问时使用 HTTPS 反向代理；`packaging/playback-service.nginx.conf` 提供关闭访问日志的示例。
 
@@ -30,4 +44,4 @@ curl -fsS -H "Authorization: Bearer $SERVICE_TOKEN" -H 'Content-Type: applicatio
 
 接口定义见 `protocol/service.openapi.json`；`/v1/parsers` 支持配置 JSON 解析接口的请求头、页面 URL 参数名及响应 URL 字段路径。
 
-TMDB 地区选项取自其国家和地区配置，电影与剧集按 `with_origin_country` 筛选作品来源地。地区可与类型、年份和语言组合；地区筛选下可使用当前栏目支持的热门或最新排序。
+TMDB 地区选项取自其国家和地区配置，电影与剧集按 `with_origin_country` 筛选作品来源地。类型、年份、语言、地区可与热门或最新排序组合，服务会将条件一并传给 TMDB 查询。

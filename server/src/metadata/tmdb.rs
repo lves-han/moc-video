@@ -46,6 +46,14 @@ mod tests {
     }
 }
 
+pub fn validate_base(endpoint: &str) -> Result<Url, &'static str> {
+    let base = Url::parse(&format!("{}/", endpoint.trim_end_matches('/'))).map_err(|_| "invalid TMDB endpoint")?;
+    if !matches!(base.scheme(), "http" | "https") || base.host_str().is_none() || !base.username().is_empty() || base.password().is_some() {
+        return Err("invalid TMDB endpoint");
+    }
+    Ok(base)
+}
+
 impl Tmdb {
     pub fn revision(&self) -> String {
         use sha2::{Digest, Sha256};
@@ -59,19 +67,8 @@ impl Tmdb {
         !self.key.trim().is_empty()
     }
 
-    pub fn from_env(data_dir: &Path) -> Result<Self, &'static str> {
-        let base = std::env::var("MOC_TMDB_API_URL")
-            .unwrap_or_else(|_| "https://api.themoviedb.org/3".into());
-        let base = Url::parse(&format!("{}/", base.trim_end_matches('/')))
-            .map_err(|_| "invalid TMDB endpoint")?;
-        if !matches!(base.scheme(), "http" | "https")
-            || base.host_str().is_none()
-            || !base.username().is_empty()
-            || base.password().is_some()
-        {
-            return Err("invalid TMDB endpoint");
-        }
-        let key = std::env::var("MOC_TMDB_KEY").unwrap_or_default();
+    pub fn new(data_dir: &Path, endpoint: &str, key: String) -> Result<Self, &'static str> {
+        let base = validate_base(endpoint)?;
         use sha2::{Digest, Sha256};
         let revision = format!("{:x}", Sha256::digest(format!("{}\0{}", base, key)));
         Ok(Self {
@@ -227,7 +224,7 @@ impl Tmdb {
             }
         }
         Ok(
-            json!({"id":"tmdb-addon","version":"1.0.0","name":"TMDB API","description":"TMDB official API","resources":["catalog","meta"],"types":["movie","series"],"idPrefixes":["tmdb:"],"catalogs":catalogs}),
+            json!({"id":"tmdb-addon","version":"1.0.0","name":"TMDB API","description":"TMDB official API","mocDiscoverFilters":true,"resources":["catalog","meta"],"types":["movie","series"],"idPrefixes":["tmdb:"],"catalogs":catalogs}),
         )
     }
 
@@ -345,6 +342,24 @@ impl Tmdb {
             }
             _ => return Err("unknown TMDB catalog"),
         };
+        if ["moc_year", "moc_language", "moc_genre"].iter().any(|key| extras.contains_key(*key)) {
+            if !path.starts_with("/discover/") { return Err("invalid TMDB filter combination"); }
+            if let Some(year) = extras.get("moc_year") {
+                if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) { return Err("invalid TMDB year"); }
+                query.push((if media == "movie" { "primary_release_year" } else { "first_air_date_year" }, year.clone()));
+            }
+            if let Some(language) = extras.get("moc_language") {
+                let languages = self.api("/configuration/languages", &[]).await?;
+                let code = languages.as_array().into_iter().flatten().find(|v| v["english_name"] == *language)
+                    .and_then(|v| v["iso_639_1"].as_str()).ok_or("unknown TMDB language")?;
+                query.push(("with_original_language", code.to_owned()));
+            }
+            if let Some(filter) = extras.get("moc_genre") {
+                let english = self.genres(kind, "en-US").await?;
+                let genre = genres.iter().chain(english.iter()).find(|(_, name)| name == filter).ok_or("unknown TMDB genre")?;
+                query.push(("with_genres", genre.0.to_string()));
+            }
+        }
         if let Some(category) = extras.get("category") {
             if !path.starts_with("/discover/") {
                 return Err("invalid TMDB category");
@@ -355,10 +370,9 @@ impl Tmdb {
                 ("variety", "tv") => "10764|10767",
                 _ => return Err("invalid TMDB category"),
             };
-            if query.iter().any(|(key, _)| *key == "with_genres") {
-                return Err("invalid TMDB category combination");
-            }
-            query.push(("with_genres", genre.to_owned()));
+            if let Some((_, existing)) = query.iter_mut().find(|(key, _)| *key == "with_genres") {
+                if existing != genre { existing.push(','); existing.push_str(genre); }
+            } else { query.push(("with_genres", genre.to_owned())); }
         }
         if let Some(region) = extras.get("region") {
             if !path.starts_with("/discover/")
@@ -443,7 +457,7 @@ impl Tmdb {
             "original_title":item[if media == "movie" {"original_title"} else {"original_name"}],"aliases":aliases,
             "poster":image("w500",&item["poster_path"]),"background":image("original",&item["backdrop_path"]),
             "description":item["overview"],"genres":genres,"genre":genres,"year":start.get(..4).unwrap_or(""),
-            "releaseInfo":start.get(..4).unwrap_or(""),"imdb_id":imdb,
+            "releaseInfo":start.get(..4).unwrap_or(""),"released":if start.len() == 10 { Some(format!("{start}T00:00:00Z")) } else { None },"imdb_id":imdb,
             "imdbRating":item["vote_average"].as_f64().filter(|v| *v>0.0).map(|v|format!("{v:.1}")),
             "country":item["production_countries"].as_array().into_iter().flatten().filter_map(|v| v["name"].as_str()).collect::<Vec<_>>().join(", "),
             "cast":cast.iter().map(|v| v["name"].clone()).collect::<Vec<_>>(),

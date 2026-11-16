@@ -5,7 +5,7 @@ import { api, ApiFailure, describeError, settingsQueue } from "../api";
 import { appController, appState } from "../state";
 import type { MediaCacheStatus, Settings } from "../models";
 import Icon from "../components/Icon.vue";
-import { prepareNativeCache } from "../data/indexed-cache";
+import { nativeCacheControl, prepareNativeCache } from "../data/indexed-cache";
 import { fontOptions, setAppFont, setFontScale } from '../ui/fonts';
 import sansLicense from '../../licenses/fonts/notosanssc-OFL.txt?raw';
 import serifLicense from '../../licenses/fonts/notoserifsc-OFL.txt?raw';
@@ -55,6 +55,7 @@ function changePalette(value: string | number | boolean) {
   emit("palette", String(value));
 }
 const cache = ref<MediaCacheStatus | null>(null);
+const videoCache = ref<{ used_bytes: number; pending_bytes: number } | null>(null);
 const resetConfirm = ref(false), resetBusy = ref(false), resetError = ref('');
 async function resetApp() {
   if (resetBusy.value || props.preview) return false;
@@ -100,6 +101,7 @@ function cacheFailure(error: unknown) { return error instanceof ApiFailure ? des
 async function readCache() {
   await prepareNativeCache();
   cache.value = await api.call('get_media_cache', {});
+  videoCache.value = await nativeCacheControl('video_status');
   cacheError.value = cache.value.last_error ? describeError(cache.value.last_error) : '';
 }
 async function refreshCache() {
@@ -108,14 +110,16 @@ async function refreshCache() {
   try { await readCache(); } catch (error) { cacheError.value = cacheFailure(error); }
   finally { cacheBusy.value = false; }
 }
-async function clearCache() {
+async function clearCache(video = false) {
   cacheBusy.value = true; cacheError.value = ''; cacheNotice.value = '';
   try {
     await prepareNativeCache();
-    cache.value = await api.call('clear_media_cache', {});
-    cacheNotice.value = cache.value.pending_bytes
+    if (video) videoCache.value = await nativeCacheControl('video_clear');
+    else cache.value = await nativeCacheControl('metadata_clear');
+    const pending = video ? videoCache.value!.pending_bytes : cache.value!.pending_bytes;
+    cacheNotice.value = pending
       ? word('缓存已清理，正在使用的数据将在播放读取结束后释放。', 'Cache cleared. In-use data will be released when playback finishes reading it.')
-      : word('本地缓存已清理。', 'Local cache cleared.');
+      : video ? word('视频缓存已清理。', 'Video cache cleared.') : word('资料缓存已清理。', 'Metadata cache cleared.');
   } catch (error) {
     const message = cacheFailure(error);
     try { await readCache(); } catch { /* Preserve the clear failure when the status query also fails. */ }
@@ -240,11 +244,12 @@ onMounted(() => { void refreshCache(); });
   </section>
   <details class="settings-group storage-settings"><summary>{{ word('存储与数据', 'Storage and data') }}</summary>
   <section class="settings-group media-cache-settings" :aria-busy="cacheBusy">
-    <h2>{{ word('本地缓存', 'Local cache') }}</h2>
+    <h2>{{ word('缓存管理', 'Cache management') }}</h2>
     <div class="settings-panel">
-    <p>{{ word('缓存最多保留 7 天，总容量上限为 1 GiB。', 'Cache is kept for up to 7 days, with a total limit of 1 GiB.') }}</p>
+    <p>{{ word('资料缓存最多保留 7 天，上限为 1 GiB。视频缓存最多保留 7 天，数量和容量不限。', 'Metadata cache is kept for up to 7 days with a 1 GiB limit. Video cache is kept for up to 7 days with no count or size limit.') }}</p>
     <p v-if="preview">{{ t('Manage media cache in the desktop app.') }}</p>
-    <div class="setting-row"><div><h3>{{ t('Cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache">{{ word('清除本地缓存', 'Clear local cache') }}</NButton></div></div>
+    <div class="setting-row"><div><h3>{{ word('资料缓存占用', 'Metadata cache used') }}</h3><output v-if="cache" class="media-cache-used" :data-bytes="cache.used_bytes">{{ cacheSize(cache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="cache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(cache.pending_bytes) }}</p></div><div class="cache-limit-controls"><NButton data-action="cache-refresh" :disabled="preview || cacheBusy" @click="refreshCache">{{ t('Refresh') }}</NButton><NButton data-action="cache-clear" :disabled="preview || cacheBusy" @click="clearCache(false)">{{ word('清除资料缓存', 'Clear metadata cache') }}</NButton></div></div>
+    <div class="setting-row"><div><h3>{{ word('视频缓存占用', 'Video cache used') }}</h3><output v-if="videoCache" :data-bytes="videoCache.used_bytes">{{ cacheSize(videoCache.used_bytes) }}</output><p v-else>{{ t('Cache usage unavailable') }}</p><p v-if="videoCache?.pending_bytes">{{ t('Waiting to release') }}: {{ cacheSize(videoCache.pending_bytes) }}</p></div><NButton data-action="video-cache-clear" :disabled="preview || cacheBusy" @click="clearCache(true)">{{ word('清除视频缓存', 'Clear video cache') }}</NButton></div>
     <NAlert v-if="cacheError" type="error" class="media-cache-error">{{ cacheError }}</NAlert>
     <p v-if="cacheNotice" role="status" class="media-cache-notice">{{ cacheNotice }}</p>
       </div>
